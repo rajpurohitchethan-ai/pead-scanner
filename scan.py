@@ -73,6 +73,39 @@ def fin(s, sym):
 
 def pct(a, b): return round((a / b - 1) * 100, 2) if b else None
 
+SECTOR_IDX = {"IT": "^CNXIT", "Bank": "^NSEBANK", "Fin": "^CNXFIN", "Auto": "^CNXAUTO", "Pharma": "^CNXPHARMA",
+              "FMCG": "^CNXFMCG", "Metal": "^CNXMETAL", "Realty": "^CNXREALTY", "Energy": "^CNXENERGY", "Infra": "^CNXINFRA"}
+idx_cache = {}
+
+def pick_index(sector, industry):
+    s = (sector or "").lower(); i = (industry or "").lower()
+    if "bank" in i: return "Bank"
+    if s == "technology": return "IT"
+    if s == "financial services": return "Fin"
+    if s == "healthcare": return "Pharma"
+    if s == "consumer defensive": return "FMCG"
+    if "auto" in i: return "Auto"
+    if any(k in i for k in ("steel", "aluminum", "copper", "metal", "coal")): return "Metal"
+    if s == "real estate": return "Realty"
+    if s in ("energy", "utilities"): return "Energy"
+    if s == "industrials" or any(k in i for k in ("cement", "construction", "building")): return "Infra"
+    return None
+
+def idx_trend(key):
+    if key not in SECTOR_IDX: return None
+    if key in idx_cache: return idx_cache[key]
+    try:
+        h = yf.Ticker(SECTOR_IDX[key]).history(period="1y").dropna(subset=["Close"])
+        p = float(h["Close"].iloc[-1]); n = 0; have = 0
+        for k in (10, 20, 50, 200):
+            if len(h) >= k:
+                have += 1; n += 1 if p > float(h["Close"].tail(k).mean()) else 0
+        out = {"index": key, "price": round(p, 1), "above": n, "all": bool(have == 4 and n == 4)}
+    except Exception:
+        out = None
+    idx_cache[key] = out
+    return out
+
 try:
     s = session(); disc = discover(s)
 except Exception as e:
@@ -103,6 +136,15 @@ for o in universe:
             o[f"dma{n}"] = round(float(h["Close"].tail(n).mean()), 2) if len(h) >= n else None
         o["aboveDma"] = sum(1 for n in (10, 20, 50, 200) if o[f"dma{n}"] and o["price"] > o[f"dma{n}"])
         o["volRatio"] = round(float(last["Volume"] / h["Volume"].tail(21).iloc[:-1].mean()), 2) if len(h) > 21 else None
+        key = o.get("sectorIndex")
+        if not key:
+            try:
+                inf = tk.info
+                key = pick_index(inf.get("sector"), inf.get("industry"))
+                if o.get("auto") and inf.get("sector"): o["sector"] = inf.get("sector")
+            except Exception:
+                key = None
+        o["sectorTrend"] = idx_trend(key) if key else None
         rd = pd.Timestamp(o["resultDate"]); o["nseDate"] = disc.get(sym, {}).get("date")
         if today < rd.date(): o["phase"] = "Upcoming"
         else:
@@ -133,6 +175,7 @@ for o in universe:
 
 bad = sum(1 for r in res if r["error"])
 if bad: status["yahoo"] = f"{bad} of {len(res)} symbols failed"
+status["sectorIdx"] = f"{sum(1 for v in idx_cache.values() if v)} of {len(idx_cache)} sector indices loaded"
 status["discovered"] = f"{sum(1 for r in res if r.get('auto'))} auto-added"
 if res and bad == len(res): print("all symbols failed", file=sys.stderr); sys.exit(1)
 json.dump({"generatedAt": now.isoformat(), "status": status, "companies": res}, open("data.json", "w"), indent=1)
