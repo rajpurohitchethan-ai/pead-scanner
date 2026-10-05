@@ -364,5 +364,6 @@ function openModal(item) {
   activeModalStock = item;
   const modal = document.getElementById('stockModal');
   if (!modal) return;
+  <script src="app.js?v=3"></script>
 
   const setT 
