@@ -1,57 +1,34 @@
-/* PEAD Qualification Radar — resilient data loader/render layer.
- *
- * Fixes the zero-stock problem by:
- * 1) loading data.json on page load and manual refresh,
- * 2) accepting both {companies:[...]} and {stocks:[...]} output shapes,
- * 3) accepting both sym/resultDate and symbol/result_date row keys,
- * 4) restoring the global functions referenced by index.html.
- */
-
 'use strict';
-
-let fullRadarData = [];
-let currentStageTab = 'ALL';
-let activeModalStock = null;
-let lastPayload = null;
 
 const MIN_MCAP_CR = 1000;
 
-function $(id) {
-  return document.getElementById(id);
-}
+let allStocks = [];
+let currentStageTab = 'ALL';
+let activeModalStock = null;
 
-function text(v, fallback = '—') {
-  return (v === null || v === undefined || v === '') ? fallback : String(v);
-}
+const $ = id => document.getElementById(id);
 
 function num(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function esc(v) {
-  return text(v, '').replace(
-    /[&<>'"]/g,
-    ch =>
-      ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        "'": '&#39;',
-        '"': '&quot;'
-      })[ch]
-  );
+  const x = Number(v);
+  return Number.isFinite(x) ? x : null;
 }
 
 function pick(obj, ...keys) {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (v !== undefined && v !== null && v !== '') return v;
+  for (const key of keys) {
+    if (
+      obj &&
+      obj[key] !== undefined &&
+      obj[key] !== null &&
+      obj[key] !== ''
+    ) {
+      return obj[key];
+    }
   }
+
   return null;
 }
 
-function boolish(v) {
+function boolValue(v) {
   if (v === true || v === false) return v;
 
   if (typeof v === 'number') return v !== 0;
@@ -61,12 +38,12 @@ function boolish(v) {
 
     if (
       [
-        'yes',
         'true',
+        'yes',
         'pass',
         'passed',
-        'satisfied',
         'qualified',
+        'satisfied',
         'ok',
         'green'
       ].includes(s)
@@ -76,8 +53,8 @@ function boolish(v) {
 
     if (
       [
-        'no',
         'false',
+        'no',
         'fail',
         'failed',
         'not satisfied',
@@ -91,10 +68,78 @@ function boolish(v) {
   return null;
 }
 
-function extractRows(payload) {
-  if (Array.isArray(payload)) return payload;
+function esc(v) {
+  return String(v ?? '').replace(
+    /[&<>"']/g,
+    ch =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[ch]
+  );
+}
 
-  if (!payload || typeof payload !== 'object') {
+function parseDate(v) {
+  if (!v) return null;
+
+  const d = new Date(v);
+
+  return Number.isNaN(d.getTime())
+    ? null
+    : d;
+}
+
+function formatDate(v) {
+  const d = parseDate(v);
+
+  if (!d) {
+    return v
+      ? String(v)
+      : '—';
+  }
+
+  return d.toLocaleDateString(
+    'en-IN',
+    {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    }
+  );
+}
+
+function formatDateTime(v) {
+  const d = parseDate(v);
+
+  if (!d) {
+    return 'unavailable';
+  }
+
+  return d.toLocaleString(
+    'en-IN',
+    {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    }
+  );
+}
+
+
+/* --------------------------------------------------
+   DATA
+-------------------------------------------------- */
+
+function extractStocks(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!payload) {
     return [];
   }
 
@@ -110,301 +155,253 @@ function extractRows(payload) {
     return payload.data;
   }
 
-  if (Array.isArray(payload.data?.companies)) {
+  if (
+    payload.data &&
+    Array.isArray(
+      payload.data.companies
+    )
+  ) {
     return payload.data.companies;
-  }
-
-  if (Array.isArray(payload.data?.stocks)) {
-    return payload.data.stocks;
   }
 
   return [];
 }
 
-function normalizeChecks(raw) {
-  if (Array.isArray(raw?.checks)) {
-    return raw.checks.map((c, i) => {
-      if (typeof c === 'string') {
-        return {
-          label: c,
-          value: null,
-          note: ''
-        };
-      }
 
-      return {
-        label: pick(c, 'label', 'name', 'title') || `Check ${i + 1}`,
-        value: boolish(
-          pick(
-            c,
-            'value',
-            'pass',
-            'passed',
-            'satisfied',
-            'status'
-          )
-        ),
-        note:
-          pick(
-            c,
-            'note',
-            'detail',
-            'reason',
-            'evidence'
-          ) || ''
-      };
-    });
-  }
+function inferStage(row) {
+  const raw = String(
+    pick(
+      row,
+      'view',
+      'peadStatus',
+      'bucket',
+      'stage',
+      'status'
+    ) ?? ''
+  ).toLowerCase();
 
-  return [
-    {
-      label: 'Market cap > ₹1,000 Cr',
-      value: boolish(
-        pick(raw, 'marketCapPass', 'mcapPass')
-      ),
-      note: ''
-    },
-
-    {
-      label: 'Revenue / PAT acceleration',
-      value: boolish(
-        pick(
-          raw,
-          'revenuePatPass',
-          'revenueAcceleration',
-          'earningsAcceleration'
-        )
-      ),
-      note: text(
-        pick(
-          raw,
-          'revenuePatNote',
-          'revenueGrowth',
-          'patGrowth'
-        ),
-        ''
-      )
-    },
-
-    {
-      label: 'Earnings quality',
-      value: boolish(
-        pick(
-          raw,
-          'earningsQualityPass',
-          'earningsQuality'
-        )
-      ),
-      note: text(
-        pick(raw, 'earningsQualityNote'),
-        ''
-      )
-    },
-
-    {
-      label: 'Cash flow / surprise',
-      value: boolish(
-        pick(
-          raw,
-          'cashFlowPass',
-          'surprisePass',
-          'cashFlowSurprise'
-        )
-      ),
-      note: text(
-        pick(
-          raw,
-          'cashFlowNote',
-          'surpriseNote'
-        ),
-        ''
-      )
-    },
-
-    {
-      label: 'Price / volume confirmation',
-      value: boolish(
-        pick(
-          raw,
-          'priceVolumePass',
-          'technicalPass',
-          'priceConfirmation'
-        )
-      ),
-      note: text(
-        pick(raw, 'technicalNote'),
-        ''
-      )
-    },
-
-    {
-      label: 'Sector tailwind',
-      value: boolish(
-        pick(
-          raw,
-          'sectorTailwind',
-          'sectorPass'
-        )
-      ),
-      note: text(
-        pick(raw, 'sectorNote'),
-        ''
-      )
-    },
-
-    {
-      label: 'Entry trigger defined',
-      value: boolish(
-        pick(
-          raw,
-          'entryTriggerPass',
-          'entryConfirmed'
-        )
-      ),
-      note: text(
-        pick(
-          raw,
-          'entry',
-          'entryPrice'
-        ),
-        ''
-      )
-    },
-
-    {
-      label: 'Invalidation / stop defined',
-      value:
-        pick(
-          raw,
-          'sl',
-          'stopLoss',
-          'invalidation'
-        ) != null
-          ? true
-          : null,
-      note: text(
-        pick(
-          raw,
-          'sl',
-          'stopLoss',
-          'invalidation'
-        ),
-        ''
-      )
-    }
-  ];
-}
-
-function inferView(raw, resultDate, statusText) {
-  const s = statusText.toLowerCase();
-
-  if (
-    s.includes('qualified') ||
-    s.includes('entry confirmed') ||
-    s.includes('hold')
-  ) {
+  if (raw.includes('qualified')) {
     return 'Qualified';
   }
 
   if (
-    s.includes('caution') ||
-    s.includes('priced')
+    raw.includes('caution') ||
+    raw.includes('priced')
   ) {
     return 'Caution';
   }
 
   if (
-    s.includes('upcoming') ||
-    s.includes('awaiting')
+    raw.includes('upcoming') ||
+    raw.includes('awaiting')
   ) {
     return 'Upcoming';
   }
 
   if (
-    s.includes('post') ||
-    s.includes('review') ||
-    s.includes('declared')
+    raw.includes('post') ||
+    raw.includes('review') ||
+    raw.includes('declared')
   ) {
     return 'Post-results';
   }
 
-  if (resultDate) {
-    const d = new Date(resultDate);
+  const resultDate =
+    parseDate(
+      pick(
+        row,
+        'resultDate',
+        'result_date',
+        'resultsDate'
+      )
+    );
 
-    if (!Number.isNaN(d.getTime())) {
-      return d.getTime() > Date.now()
-        ? 'Upcoming'
-        : 'Post-results';
-    }
+  if (resultDate) {
+    const today =
+      new Date();
+
+    today.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    return resultDate >= today
+      ? 'Upcoming'
+      : 'Post-results';
   }
 
   return 'Post-results';
 }
 
-function mapScan(raw, index = 0) {
-  const symbol = text(
-    pick(
-      raw,
-      'symbol',
-      'sym',
-      'ticker',
-      'code'
-    ),
-    ''
-  ).replace(/\.NS$/i, '');
 
-  const resultDate = pick(
-    raw,
-    'resultDate',
-    'result_date',
-    'resultsDate',
-    'earningsDate'
-  );
-
-  const statusText = text(
+function criterion(
+  row,
+  keys
+) {
+  return boolValue(
     pick(
-      raw,
-      'peadStatus',
-      'stage',
-      'status',
-      'bucket'
-    ),
-    'In Review'
-  );
-
-  const marketCapCr = num(
-    pick(
-      raw,
-      'marketCapCr',
-      'mcapCr',
-      'market_cap_cr'
+      row,
+      ...keys
     )
   );
+}
 
-  const checks = normalizeChecks(raw);
 
-  const passedChecks = checks.filter(
-    c => c.value === true
-  ).length;
+function normalizeRow(
+  row,
+  index
+) {
 
-  const knownChecks = checks.filter(
-    c => c.value !== null
-  ).length;
-
-  const sourceScore = num(
-    pick(
-      raw,
-      'score',
-      'scoreValue',
-      'peadScore'
+  const symbol =
+    String(
+      pick(
+        row,
+        'symbol',
+        'sym',
+        'ticker',
+        'code'
+      ) ?? ''
     )
-  );
+      .replace(
+        /\.NS$/i,
+        ''
+      )
+      .trim();
+
+  const marketCapCr =
+    num(
+      pick(
+        row,
+        'marketCapCr',
+        'mcapCr',
+        'market_cap_cr'
+      )
+    );
+
+  const resultDate =
+    pick(
+      row,
+      'resultDate',
+      'result_date',
+      'resultsDate'
+    );
+
+  const revenue =
+    criterion(
+      row,
+      [
+        'revenuePatPass',
+        'revenueAcceleration',
+        'earningsAcceleration',
+        'revPatPass'
+      ]
+    );
+
+  const quality =
+    criterion(
+      row,
+      [
+        'earningsQualityPass',
+        'earningsQuality',
+        'qualityPass'
+      ]
+    );
+
+  const cash =
+    criterion(
+      row,
+      [
+        'cashFlowPass',
+        'surprisePass',
+        'cashFlowSurprise'
+      ]
+    );
+
+  const technical =
+    criterion(
+      row,
+      [
+        'priceVolumePass',
+        'technicalPass',
+        'priceConfirmation'
+      ]
+    );
+
+  const sectorTailwind =
+    criterion(
+      row,
+      [
+        'sectorTailwind',
+        'sectorPass'
+      ]
+    );
+
+  const entryTrigger =
+    criterion(
+      row,
+      [
+        'entryTriggerPass',
+        'entryConfirmed'
+      ]
+    );
+
+  const stopDefined =
+    pick(
+      row,
+      'sl',
+      'stopLoss'
+    ) != null
+      ? true
+      : null;
+
+  const marketCapPass =
+    boolValue(
+      pick(
+        row,
+        'marketCapPass',
+        'mcapPass'
+      )
+    ) ??
+    (
+      marketCapCr == null
+        ? null
+        : marketCapCr >=
+          MIN_MCAP_CR
+    );
+
+  const gates = [
+    marketCapPass,
+    revenue,
+    quality,
+    cash,
+    technical,
+    sectorTailwind,
+    entryTrigger,
+    stopDefined
+  ];
+
+  const passed =
+    gates.filter(
+      x => x === true
+    ).length;
+
+  const explicitScore =
+    num(
+      pick(
+        row,
+        'score',
+        'scoreValue',
+        'peadScore'
+      )
+    );
 
   const score =
-    sourceScore ?? passedChecks;
+    explicitScore ?? passed;
 
   return {
-    ...raw,
+    ...row,
 
     _id:
       symbol ||
@@ -412,516 +409,650 @@ function mapScan(raw, index = 0) {
 
     symbol,
 
-    name: text(
-      pick(
-        raw,
-        'name',
-        'company',
-        'companyName'
+    name:
+      String(
+        pick(
+          row,
+          'name',
+          'company',
+          'companyName'
+        ) ??
+        symbol
       ),
-      symbol || 'Unknown'
-    ),
 
-    sector: text(
-      pick(
-        raw,
-        'sector',
-        'industry'
+    sector:
+      String(
+        pick(
+          row,
+          'sector',
+          'industry'
+        ) ??
+        '—'
       ),
-      '—'
-    ),
 
-    earningsPeriod: text(
-      pick(
-        raw,
-        'earningsPeriod',
-        'quarter',
-        'period'
+    quarter:
+      String(
+        pick(
+          row,
+          'quarter',
+          'earningsPeriod',
+          'period'
+        ) ??
+        '—'
       ),
-      '—'
-    ),
 
     resultDate,
+
     marketCapCr,
 
-    marketCapPass:
-      boolish(
+    marketCapPass,
+
+    stageView:
+      inferStage(row),
+
+    statusText:
+      String(
         pick(
-          raw,
-          'marketCapPass',
-          'mcapPass'
-        )
-      ) ??
-      (
-        marketCapCr == null
-          ? null
-          : marketCapCr >= MIN_MCAP_CR
+          row,
+          'bucket',
+          'peadStatus',
+          'stage',
+          'status'
+        ) ??
+        'In Review'
       ),
 
-    peadStatus: statusText,
-
-    view: inferView(
-      raw,
-      resultDate,
-      statusText
-    ),
+    revenue,
+    quality,
+    cash,
+    technical,
+    sectorTailwind,
+    entryTrigger,
+    stopDefined,
 
     score,
 
-    scoreText: text(
-      pick(
-        raw,
-        'scoreText'
+    scoreText:
+      String(
+        pick(
+          row,
+          'scoreText'
+        ) ??
+        `${score}/8`
       ),
-      `${score}/${checks.length || 8}`
-    ),
 
-    checks,
-    knownChecks,
-
-    evidence: text(
-      pick(
-        raw,
-        'evidence',
-        'resultEvidence',
-        'source'
+    price:
+      num(
+        pick(
+          row,
+          'price',
+          'lastPrice',
+          'ltp'
+        )
       ),
-      '—'
-    ),
 
-    thesis:
-      pick(
-        raw,
-        'thesis',
-        'thesisItems',
-        'notes'
-      ) || [],
-
-    liveStatus: text(
-      pick(
-        raw,
-        'liveStatus'
+    previousClose:
+      num(
+        pick(
+          row,
+          'previousClose'
+        )
       ),
-      '—'
-    ),
+
+    changePct:
+      num(
+        pick(
+          row,
+          'changePct'
+        )
+      ),
+
+    liveStatus:
+      String(
+        pick(
+          row,
+          'liveStatus'
+        ) ??
+        ''
+      ),
 
     liveError:
       pick(
-        raw,
+        row,
         'liveError'
       ),
 
-    price: num(
+    priceTimestamp:
       pick(
-        raw,
-        'price',
-        'lastPrice',
-        'ltp'
-      )
-    ),
-
-    changePct: num(
-      pick(
-        raw,
-        'changePct',
-        'change_percent'
-      )
-    ),
+        row,
+        'priceTimestamp',
+        'marketTime'
+      ),
 
     entry:
       pick(
-        raw,
+        row,
         'entry',
         'entryPrice'
       ),
 
     sl:
       pick(
-        raw,
+        row,
         'sl',
         'stopLoss'
       ),
 
     tsl:
       pick(
-        raw,
+        row,
         'tsl',
         'trailingStopLoss'
+      ),
+
+    note:
+      String(
+        pick(
+          row,
+          'note',
+          'evidence'
+        ) ??
+        ''
       )
   };
 }
 
-function formatMcap(v) {
-  const n = num(v);
 
-  if (n == null) {
-    return 'Unverified';
-  }
+/* --------------------------------------------------
+   HEADER
+-------------------------------------------------- */
 
-  return `₹${n.toLocaleString(
-    'en-IN',
-    {
-      maximumFractionDigits: 0
-    }
-  )} Cr`;
-}
-
-function formatDate(v) {
-  if (!v) return '—';
-
-  const d = new Date(v);
-
-  return Number.isNaN(d.getTime())
-    ? text(v)
-    : d.toLocaleDateString(
-        'en-IN',
-        {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        }
-      );
-}
-
-function checkBadge(
-  value,
-  labelTrue = 'Satisfied',
-  labelFalse = 'Not satisfied'
+function setStatusByLabel(
+  label,
+  value
 ) {
-  if (value === true) {
-    return `
-      <span class="px-2 py-1 rounded text-xs bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-        ${labelTrue}
-      </span>
-    `;
-  }
 
-  if (value === false) {
-    return `
-      <span class="px-2 py-1 rounded text-xs bg-red-500/10 text-red-300 border border-red-500/20">
-        ${labelFalse}
-      </span>
-    `;
-  }
+  const wanted =
+    label.toUpperCase();
 
-  return `
-    <span class="px-2 py-1 rounded text-xs bg-slate-500/10 text-slate-300 border border-slate-500/20">
-      Unverified
-    </span>
-  `;
-}
+  const labels =
+    [
+      ...document.querySelectorAll(
+        'span'
+      )
+    ];
 
-function findCheck(item, terms) {
-  const lc =
-    terms.map(
-      x => x.toLowerCase()
+  const labelEl =
+    labels.find(
+      el =>
+        el.textContent
+          .trim()
+          .toUpperCase() ===
+        wanted
     );
 
-  return (
-    item.checks.find(
-      c =>
-        lc.some(
-          t =>
-            c.label
-              .toLowerCase()
-              .includes(t)
+  if (
+    !labelEl ||
+    !labelEl.parentElement
+  ) {
+    return;
+  }
+
+  const spans =
+    [
+      ...labelEl
+        .parentElement
+        .querySelectorAll(
+          'span'
         )
-    ) || {
-      value: null,
-      note: ''
-    }
+    ];
+
+  const valueEl =
+    spans.find(
+      el =>
+        el !== labelEl
+    );
+
+  if (valueEl) {
+    valueEl.textContent =
+      value;
+  }
+}
+
+
+function updateHeader(
+  payload
+) {
+
+  const generatedAt =
+    pick(
+      payload,
+      'generatedAt',
+      'last_scan',
+      'lastScanAt'
+    );
+
+  setStatusByLabel(
+    'LAST SCAN',
+    formatDateTime(
+      generatedAt
+    )
+  );
+
+  setStatusByLabel(
+    'NEXT SCAN',
+    'Hourly, weekdays'
+  );
+
+  setStatusByLabel(
+    'MODE',
+    'GitHub hourly'
+  );
+
+  const timestamps =
+    allStocks
+      .map(
+        s =>
+          parseDate(
+            s.priceTimestamp
+          )
+      )
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          b - a
+      );
+
+  setStatusByLabel(
+    'PRICE AT',
+    timestamps.length
+      ? timestamps[0]
+          .toLocaleTimeString(
+            'en-IN',
+            {
+              hour:
+                '2-digit',
+              minute:
+                '2-digit'
+            }
+          )
+      : 'Latest scan'
   );
 }
 
-function setCardCount(cardId, count) {
-  const card = $(cardId);
+
+/* --------------------------------------------------
+   COUNTS
+-------------------------------------------------- */
+
+function setCardCount(
+  id,
+  count
+) {
+
+  const card =
+    $(id);
 
   if (!card) return;
 
-  const target =
-    card.querySelector('.text-2xl') ||
-    card.querySelector('[data-count]');
+  const el =
+    card.querySelector(
+      '.text-2xl'
+    );
 
-  if (target) {
-    target.textContent =
+  if (el) {
+    el.textContent =
       String(count);
   }
 }
 
+
 function updateCounts() {
-  const count =
-    view =>
-      fullRadarData.filter(
-        x => x.view === view
-      ).length;
 
   setCardCount(
     'cardAll',
-    fullRadarData.length
+    allStocks.length
   );
 
   setCardCount(
     'cardPostResults',
-    count('Post-results')
+    allStocks.filter(
+      s =>
+        s.stageView ===
+        'Post-results'
+    ).length
   );
 
   setCardCount(
     'cardUpcoming',
-    count('Upcoming')
+    allStocks.filter(
+      s =>
+        s.stageView ===
+        'Upcoming'
+    ).length
   );
 
   setCardCount(
     'cardCaution',
-    count('Caution')
+    allStocks.filter(
+      s =>
+        s.stageView ===
+        'Caution'
+    ).length
   );
 
   setCardCount(
     'cardQualified',
-    count('Qualified')
+    allStocks.filter(
+      s =>
+        s.stageView ===
+        'Qualified'
+    ).length
   );
 }
 
-function setTabClasses() {
-  const ids = {
-    ALL: 'tabBtnAll',
-    Upcoming: 'tabBtnUpcoming',
-    'Post-results': 'tabBtnPost',
-    Caution: 'tabBtnCaution',
-    Qualified: 'tabBtnQualified'
-  };
 
-  Object.entries(ids).forEach(
-    ([tab, id]) => {
-      const el = $(id);
+/* --------------------------------------------------
+   FILTERS
+-------------------------------------------------- */
 
-      if (!el) return;
+function updateTabButtons() {
 
-      el.classList.toggle(
-        'tab-active',
-        currentStageTab === tab
-      );
-    }
-  );
+  const map = {
+    ALL:
+      'tabBtnAll',
 
-  const cards = {
-    ALL: 'cardAll',
-    'Post-results':
-      'cardPostResults',
     Upcoming:
-      'cardUpcoming',
+      'tabBtnUpcoming',
+
+    'Post-results':
+      'tabBtnPost',
+
     Caution:
-      'cardCaution',
+      'tabBtnCaution',
+
     Qualified:
-      'cardQualified'
+      'tabBtnQualified'
   };
 
-  Object.entries(cards).forEach(
-    ([tab, id]) => {
-      const el = $(id);
+  Object.entries(
+    map
+  ).forEach(
+    ([key, id]) => {
+
+      const el =
+        $(id);
 
       if (el) {
         el.classList.toggle(
-          'card-active',
-          currentStageTab === tab
+          'tab-active',
+          currentStageTab ===
+            key
         );
       }
     }
   );
 }
 
-function currentRows() {
+
+function filteredStocks() {
+
   const q =
-    (
-      $('searchInput')?.value ||
-      ''
+    String(
+      $('searchInput')
+        ?.value ??
+        ''
     )
       .trim()
       .toLowerCase();
 
-  return fullRadarData.filter(
-    item => {
-      const tabOk =
-        currentStageTab === 'ALL' ||
-        item.view ===
+  return allStocks.filter(
+    stock => {
+
+      const stageOK =
+        currentStageTab ===
+          'ALL' ||
+        stock.stageView ===
           currentStageTab;
 
-      const searchOk =
+      const searchOK =
         !q ||
         [
-          item.symbol,
-          item.name,
-          item.sector,
-          item.peadStatus
+          stock.symbol,
+          stock.name,
+          stock.sector,
+          stock.statusText
         ]
           .join(' ')
           .toLowerCase()
           .includes(q);
 
-      return tabOk && searchOk;
+      return (
+        stageOK &&
+        searchOK
+      );
     }
   );
 }
 
-function rowHtml(item) {
-  const revenue =
-    findCheck(
-      item,
-      ['revenue', 'pat']
-    );
 
-  const quality =
-    findCheck(
-      item,
-      ['earnings quality']
-    );
+/* --------------------------------------------------
+   TABLE
+-------------------------------------------------- */
 
-  const cash =
-    findCheck(
-      item,
-      [
-        'cash flow',
-        'surprise'
-      ]
-    );
+function pill(
+  value,
+  yes = 'YES',
+  no = 'NO'
+) {
 
-  const live =
-    item.liveStatus === 'ok'
-      ? `
-        <span class="text-xs text-emerald-300">
-          Live ₹${item.price ?? '—'}
-          ${
-            item.changePct == null
-              ? ''
-              : ` (${
-                  item.changePct > 0
-                    ? '+'
-                    : ''
-                }${item.changePct}%)`
-          }
-        </span>
-      `
-      : `
-        <span
-          class="text-xs text-amber-300"
-          title="${esc(
-            item.liveError || ''
-          )}"
-        >
-          ${
-            item.liveStatus ===
-            'unavailable'
-              ? 'Quote unavailable'
-              : esc(
-                  item.liveStatus
-                )
-          }
-        </span>
-      `;
+  if (value === true) {
+    return `
+      <span class="text-emerald-400 font-semibold">
+        ${yes}
+      </span>
+    `;
+  }
+
+  if (value === false) {
+    return `
+      <span class="text-rose-400 font-semibold">
+        ${no}
+      </span>
+    `;
+  }
 
   return `
-    <tr class="hover:bg-white/[0.025] transition-colors">
+    <span class="text-slate-500">
+      —
+    </span>
+  `;
+}
 
-      <td class="py-3 px-4 align-top">
 
-        <div class="font-semibold text-white">
+function marketCapText(
+  value
+) {
+
+  if (value == null) {
+    return '—';
+  }
+
+  return (
+    '₹' +
+    Math.round(value)
+      .toLocaleString(
+        'en-IN'
+      ) +
+    ' Cr'
+  );
+}
+
+
+function rowHtml(
+  stock
+) {
+
+  const resultDate =
+    parseDate(
+      stock.resultDate
+    );
+
+  let declared =
+    null;
+
+  if (resultDate) {
+
+    const today =
+      new Date();
+
+    today.setHours(
+      23,
+      59,
+      59,
+      999
+    );
+
+    declared =
+      resultDate <= today;
+  }
+
+  const priceText =
+    stock.price != null
+      ? (
+          `₹${stock.price}` +
+          (
+            stock.changePct !=
+            null
+              ? ` (${
+                  stock.changePct >
+                  0
+                    ? '+'
+                    : ''
+                }${stock.changePct}%)`
+              : ''
+          )
+        )
+      : 'Quote unavailable';
+
+  return `
+    <tr class="hover:bg-white/[0.025]">
+
+      <td class="py-3.5 px-4 align-top">
+
+        <div class="font-bold text-white">
           ${esc(
-            item.symbol ||
-            item.name
+            stock.symbol
           )}
         </div>
 
-        <div class="text-xs text-slate-400">
-          ${esc(item.name)}
+        <div class="text-[10px] text-slate-400 mt-1">
+          ${esc(
+            stock.name
+          )}
         </div>
 
-        <div class="text-xs text-slate-500 mt-1">
+        <div class="text-[10px] text-slate-500 mt-1">
           ${esc(
-            formatMcap(
-              item.marketCapCr
+            stock.sector
+          )}
+        </div>
+
+        <div class="text-[10px] text-slate-500">
+          ${esc(
+            marketCapText(
+              stock.marketCapCr
             )
           )}
         </div>
 
-        ${live}
-
-      </td>
-
-      <td class="py-3 px-4 align-top">
-
-        <div class="text-sm text-slate-200">
+        <div class="text-[10px] mt-1 ${
+          stock.liveStatus ===
+          'ok'
+            ? 'text-emerald-400'
+            : 'text-amber-400'
+        }">
           ${esc(
-            item.earningsPeriod
-          )}
-        </div>
-
-        <div class="text-xs text-slate-400 mt-1">
-          ${esc(
-            item.peadStatus
+            priceText
           )}
         </div>
 
       </td>
 
-      <td class="py-3 px-4 align-top text-sm text-slate-300">
+      <td class="py-3.5 px-4 align-top">
+
+        <div>
+          ${esc(
+            stock.quarter
+          )}
+        </div>
+
+        <div class="text-[10px] text-slate-400 mt-1">
+          ${esc(
+            stock.statusText
+          )}
+        </div>
+
+      </td>
+
+      <td class="py-3.5 px-4 align-top">
+        ${pill(
+          declared
+        )}
+      </td>
+
+      <td class="py-3.5 px-4 align-top">
+        ${pill(
+          stock.marketCapPass,
+          'PASS',
+          'FAIL'
+        )}
+      </td>
+
+      <td class="py-3.5 px-4 align-top">
+        ${pill(
+          stock.revenue
+        )}
+      </td>
+
+      <td class="py-3.5 px-4 align-top">
+        ${pill(
+          stock.quality
+        )}
+      </td>
+
+      <td class="py-3.5 px-4 align-top">
+        ${pill(
+          stock.cash
+        )}
+      </td>
+
+      <td class="py-3.5 px-4 text-center align-top">
         ${esc(
-          formatDate(
-            item.resultDate
-          )
+          stock.stageView
         )}
       </td>
 
-      <td class="py-3 px-4 align-top">
-        ${checkBadge(
-          item.marketCapPass,
-          'Yes',
-          'No'
-        )}
-      </td>
+      <td class="py-3.5 px-4 text-center align-top">
 
-      <td class="py-3 px-4 align-top">
-        ${checkBadge(
-          revenue.value
-        )}
-      </td>
-
-      <td class="py-3 px-4 align-top">
-        ${checkBadge(
-          quality.value
-        )}
-      </td>
-
-      <td class="py-3 px-4 align-top">
-        ${checkBadge(
-          cash.value
-        )}
-      </td>
-
-      <td class="py-3 px-4 align-top">
-        <span class="px-2 py-1 rounded text-xs border border-white/10">
+        <span class="font-mono font-bold">
           ${esc(
-            item.peadStatus
+            stock.scoreText
           )}
         </span>
+
       </td>
 
-      <td class="py-3 px-4 align-top">
-        <span class="font-mono font-semibold">
-          ${esc(
-            item.scoreText
-          )}
-        </span>
-      </td>
-
-      <td class="py-3 px-4 align-top">
+      <td class="py-3.5 px-4 text-right align-top">
 
         <button
           type="button"
-          class="px-3 py-1.5 rounded-md text-xs border border-white/10 hover:bg-white/5"
-          onclick="openModal('${esc(
-            item.symbol
-          )}')"
+          data-open-stock="${esc(
+            stock.symbol
+          )}"
+          class="px-3 py-1.5 rounded-lg border border-dark-700 hover:bg-dark-800"
         >
-          View checklist
+          View
         </button>
 
       </td>
@@ -930,28 +1061,108 @@ function rowHtml(item) {
   `;
 }
 
+
+function updateActiveBanner(
+  rows
+) {
+
+  const count =
+    $('currentViewCount');
+
+  if (count) {
+    count.textContent =
+      `${rows.length} records`;
+  }
+
+  const banner =
+    $('activeTabBanner');
+
+  if (!banner) return;
+
+  const labels = {
+    ALL:
+      'All Stocks',
+
+    Upcoming:
+      'Awaiting Results',
+
+    'Post-results':
+      'Results Declared / In Review',
+
+    Caution:
+      'Caution / Priced In',
+
+    Qualified:
+      'Fully Qualified'
+  };
+
+  const leaves =
+    [
+      ...banner.querySelectorAll(
+        'span'
+      )
+    ].filter(
+      el =>
+        !el.id &&
+        el.textContent.trim()
+    );
+
+  const labelEl =
+    leaves.find(
+      el =>
+        /loading|all stocks|awaiting|results|caution|qualified/i
+          .test(
+            el.textContent
+          )
+    );
+
+  if (labelEl) {
+    labelEl.textContent =
+      labels[
+        currentStageTab
+      ] ??
+      currentStageTab;
+  }
+}
+
+
 function renderTable() {
+
+  const rows =
+    filteredStocks();
+
   const tbody =
     $('stocksTableBody');
 
-  if (!tbody) return;
+  if (tbody) {
 
-  const rows =
-    currentRows();
+    tbody.innerHTML =
+      rows
+        .map(rowHtml)
+        .join('');
 
-  tbody.innerHTML =
-    rows
-      .map(rowHtml)
-      .join('');
+    tbody
+      .querySelectorAll(
+        '[data-open-stock]'
+      )
+      .forEach(
+        button => {
+
+          button.addEventListener(
+            'click',
+            () =>
+              openModal(
+                button.getAttribute(
+                  'data-open-stock'
+                )
+              )
+          );
+        }
+      );
+  }
 
   const table =
     $('stocksTable');
-
-  const empty =
-    $('emptyViewMessage');
-
-  const emptyDesc =
-    $('emptyViewDesc');
 
   if (table) {
     table.style.display =
@@ -960,267 +1171,228 @@ function renderTable() {
         : 'none';
   }
 
+  const empty =
+    $('emptyViewMessage');
+
   if (empty) {
-    empty.style.display =
-      rows.length
-        ? 'none'
-        : '';
+    empty.classList.toggle(
+      'hidden',
+      rows.length > 0
+    );
   }
 
-  if (emptyDesc) {
-    emptyDesc.textContent =
-      fullRadarData.length
-        ? 'No stocks match this view/search.'
-        : 'No scanner data loaded. Check data.json / GitHub Action status.';
+  const desc =
+    $('emptyViewDesc');
+
+  if (desc) {
+    desc.textContent =
+      allStocks.length
+        ? 'No stocks match this filter.'
+        : 'No stocks loaded from data.json.';
   }
 
-  if ($('currentViewCount')) {
-    $('currentViewCount')
-      .textContent =
-      String(rows.length);
-  }
-
-  if ($('currentViewTitle')) {
-    $('currentViewTitle')
-      .textContent =
-      currentStageTab === 'ALL'
-        ? 'All Stocks'
-        : currentStageTab;
-  }
-
-  if ($('activeTabBanner')) {
-    $('activeTabBanner')
-      .textContent =
-      currentStageTab === 'ALL'
-        ? 'All monitored stocks'
-        : currentStageTab;
-  }
+  updateActiveBanner(
+    rows
+  );
 }
+
 
 function renderAll() {
   updateCounts();
-  setTabClasses();
+  updateTabButtons();
   renderTable();
 }
 
+
+/* --------------------------------------------------
+   LOAD LIVE JSON
+-------------------------------------------------- */
+
 async function loadRadarData(
-  {
-    manual = false
-  } = {}
+  manual = false
 ) {
+
   const icon =
     $('refreshIcon');
 
-  if (manual && icon) {
-    icon.classList.add(
+  if (manual) {
+    icon?.classList.add(
       'animate-spin'
     );
   }
 
-  if ($('scanDiag')) {
-    $('scanDiag')
-      .textContent =
-      'Loading data.json…';
-  }
-
   try {
 
-    const res =
+    const response =
       await fetch(
-        `./data.json?v=${Date.now()}`,
+        `./data.json?t=${Date.now()}`,
         {
-          cache: 'no-store'
+          cache:
+            'no-store'
         }
       );
 
-    if (!res.ok) {
+    if (!response.ok) {
       throw new Error(
-        `data.json HTTP ${res.status}`
+        `data.json HTTP ${response.status}`
       );
     }
 
     const payload =
-      await res.json();
+      await response.json();
 
-    const rows =
-      extractRows(payload);
+    const rawStocks =
+      extractStocks(
+        payload
+      );
 
-    lastPayload =
-      payload;
+    allStocks =
+      rawStocks
+        .map(
+          normalizeRow
+        )
+        .filter(
+          stock =>
+            stock.symbol ||
+            stock.name
+        );
 
-    fullRadarData =
-      rows.map(mapScan);
-
-    renderAll();
-
-    const stamp =
-      pick(
-        payload,
-        'generatedAt',
-        'last_scan',
-        'lastScanAt'
-      ) ||
-      new Date()
-        .toISOString();
-
-    if ($('lastScanText')) {
-      $('lastScanText')
-        .textContent =
-        `Last scan: ${
-          new Date(
-            stamp
-          ).toLocaleString(
-            'en-IN'
-          )
-        }`;
-    }
-
-    if ($('scanDiag')) {
-
-      const errs =
-        num(
-          payload.errorCount
-        ) ??
-        rows.filter(
-          r =>
-            r.liveError
-        ).length;
-
-      $('scanDiag')
-        .textContent =
-        `Loaded ${
-          fullRadarData.length
-        } stocks${
-          errs
-            ? ` • ${errs} quote warnings`
-            : ''
-        }`;
-    }
-
-  } catch (err) {
-
-    console.error(
-      'PEAD radar load failed:',
-      err
+    console.log(
+      'PEAD loaded',
+      allStocks.length,
+      'stocks'
     );
 
-    fullRadarData = [];
+    updateHeader(
+      payload
+    );
 
     renderAll();
 
-    if ($('lastScanText')) {
-      $('lastScanText')
-        .textContent =
-        'Last scan: unavailable';
-    }
+  } catch (error) {
 
-    if ($('scanDiag')) {
-      $('scanDiag')
-        .textContent =
-        `Scanner data error: ${
-          err.message
-        }`;
+    console.error(
+      'PEAD load failed',
+      error
+    );
+
+    allStocks = [];
+
+    setStatusByLabel(
+      'LAST SCAN',
+      'Load error'
+    );
+
+    setStatusByLabel(
+      'PRICE AT',
+      'Unavailable'
+    );
+
+    renderAll();
+
+    const desc =
+      $('emptyViewDesc');
+
+    if (desc) {
+      desc.textContent =
+        'Could not load data.json: ' +
+        error.message;
     }
 
   } finally {
 
-    if (icon) {
-      icon.classList.remove(
-        'animate-spin'
-      );
-    }
+    icon?.classList.remove(
+      'animate-spin'
+    );
   }
 }
 
+
+/* --------------------------------------------------
+   BUTTON FUNCTIONS
+-------------------------------------------------- */
+
 function forceScanRefresh() {
-  return loadRadarData({
-    manual: true
-  });
+  return loadRadarData(
+    true
+  );
 }
 
+
 function selectStageTab(
-  tab,
+  tab = 'ALL',
   scroll = false
 ) {
-  currentStageTab =
-    tab || 'ALL';
 
-  setTabClasses();
+  currentStageTab =
+    tab;
+
+  updateTabButtons();
+
   renderTable();
 
   if (scroll) {
     $('radarTableContainer')
       ?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
+        behavior:
+          'smooth',
+        block:
+          'start'
       });
   }
 }
+
 
 function filterRadarTable() {
   renderTable();
 }
 
+
 function toggleSection(id) {
-  const el = $(id);
-
-  if (!el) return;
-
-  el.classList.toggle(
-    'hidden'
-  );
+  $(id)
+    ?.classList
+    .toggle(
+      'hidden'
+    );
 }
 
-function verdictStyle(item) {
-  if (
-    item.view ===
-    'Qualified'
-  ) {
-    return {
-      title:
-        'PEAD qualified / potential candidate',
-      cls:
-        'text-emerald-300'
-    };
+
+/* --------------------------------------------------
+   MODAL
+-------------------------------------------------- */
+
+function openModal(
+  symbol
+) {
+
+  const stock =
+    allStocks.find(
+      s =>
+        s.symbol ===
+          symbol ||
+        s._id ===
+          symbol
+    );
+
+  if (!stock) {
+    return;
   }
 
-  if (
-    item.view ===
-    'Caution'
-  ) {
-    return {
-      title:
-        'Caution / priced in',
-      cls:
-        'text-amber-300'
-    };
+  activeModalStock =
+    stock;
+
+  if ($('mSymbol')) {
+    $('mSymbol')
+      .textContent =
+      stock.symbol;
   }
 
-  if (
-    item.view ===
-    'Upcoming'
-  ) {
-    return {
-      title:
-        'Awaiting results',
-      cls:
-        'text-sky-300'
-    };
+  if ($('mStage')) {
+    $('mStage')
+      .textContent =
+      stock.stageView;
   }
 
-  return {
-    title:
-      'Post-results / in review',
-    cls:
-      'text-slate-200'
-  };
-}
-
-function renderChecklist(item) {
-  return item.checks
-    .map(c => {
-
-      const state =
-        c.value === true
-          ? '✓'
-          : c.val
+  if ($('mName')) {
+    $('mName')
+      .textCo
