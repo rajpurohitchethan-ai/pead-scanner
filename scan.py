@@ -7,7 +7,6 @@ import math
 import os
 import sys
 import traceback
-
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -17,18 +16,12 @@ BASE = Path(__file__).resolve().parent
 OUT = BASE / "data.json"
 
 MIN_MCAP_CR = 1000.0
-
-# Discover upcoming result meetings this far forward.
 UPCOMING_DAYS = 21
-
-# Pick up newly declared/filed results from this many days back.
 RECENT_DAYS = 10
-
-# Keep recent post-result stocks on the radar even after discovery moves on.
 KEEP_DAYS = 30
 
 
-def now_iso():
+def now_iso() -> str:
     return (
         datetime.now(timezone.utc)
         .replace(microsecond=0)
@@ -36,13 +29,15 @@ def now_iso():
     )
 
 
-def first(d, *keys, default=None):
-
+def first(
+    d: dict | None,
+    *keys: str,
+    default=None
+):
     if not isinstance(d, dict):
         return default
 
     for key in keys:
-
         value = d.get(key)
 
         if value not in (None, ""):
@@ -51,10 +46,11 @@ def first(d, *keys, default=None):
     return default
 
 
-def fnum(value):
+def fnum(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
 
     try:
-
         x = float(
             str(value)
             .replace(",", "")
@@ -72,9 +68,11 @@ def fnum(value):
         return None
 
 
-def pdate(value):
+def parse_date(
+    value: Any
+) -> date | None:
 
-    if not value:
+    if value in (None, ""):
         return None
 
     if isinstance(value, datetime):
@@ -83,32 +81,29 @@ def pdate(value):
     if isinstance(value, date):
         return value
 
-    value = str(value).strip()
+    text = str(value).strip()
 
-    formats = (
+    for fmt in (
         "%d-%b-%Y",
-        "%d-%m-%Y",
-        "%Y-%m-%d",
-        "%d/%m/%Y",
         "%d-%b-%Y %H:%M:%S",
-        "%d/%m/%Y %H:%M:%S",
-    )
-
-    for fmt in formats:
-
+        "%d-%m-%Y",
+        "%d/%m/%Y",
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%d-%b-%Y %H:%M",
+    ):
         try:
             return datetime.strptime(
-                value[:20],
+                text,
                 fmt
             ).date()
 
-        except Exception:
+        except ValueError:
             pass
 
     try:
-
         return datetime.fromisoformat(
-            value.replace(
+            text.replace(
                 "Z",
                 "+00:00"
             )
@@ -118,9 +113,13 @@ def pdate(value):
         return None
 
 
-def iso(value):
+def iso_date(
+    value: Any
+) -> str | None:
 
-    d = pdate(value)
+    d = parse_date(
+        value
+    )
 
     return (
         d.isoformat()
@@ -129,7 +128,9 @@ def iso(value):
     )
 
 
-def clean_symbol(value):
+def clean_symbol(
+    value: Any
+) -> str:
 
     symbol = (
         str(value or "")
@@ -137,14 +138,18 @@ def clean_symbol(value):
         .upper()
     )
 
-    if symbol.endswith(".NS"):
+    if symbol.endswith(
+        ".NS"
+    ):
         symbol = symbol[:-3]
 
     return symbol
 
 
-def get_method(obj, *names):
-
+def get_method(
+    obj: Any,
+    *names: str
+):
     for name in names:
 
         fn = getattr(
@@ -157,19 +162,20 @@ def get_method(obj, *names):
             return fn
 
     raise AttributeError(
-        "/".join(names)
+        "Missing method: "
+        +
+        " / ".join(names)
     )
 
 
 def safe_call(
-    label,
+    label: str,
     fn,
     *args,
     **kwargs
 ):
 
     try:
-
         return fn(
             *args,
             **kwargs
@@ -184,79 +190,11 @@ def safe_call(
         return None
 
 
-def extract_symbol(row):
-
-    return clean_symbol(
-        first(
-            row,
-            "symbol",
-            "SYMBOL",
-            "sm_symbol",
-            "smSymbol",
-            "nseSymbol",
-        )
-    )
-
-
-def extract_company(
-    row,
-    symbol
-):
-
-    return str(
-        first(
-            row,
-            "companyName",
-            "company",
-            "sm_name",
-            "smName",
-            "name",
-            default=symbol,
-        )
-    )
-
-
-def combined_text(row):
-
-    keys = (
-        "purpose",
-        "bmPurpose",
-        "subject",
-        "description",
-        "desc",
-        "remarks",
-        "relatingTo",
-    )
-
-    return " ".join(
-        str(
-            row.get(
-                key,
-                ""
-            )
-        )
-        for key in keys
-    ).lower()
-
-
-def is_result_meeting(row):
-
-    text = combined_text(row)
-
-    return (
-        "financial result" in text
-        or
-        "quarterly result" in text
-        or
-        "results" in text
-    )
-
-
 # ---------------------------------------------------------
 # Previous radar
 # ---------------------------------------------------------
 
-def previous_rows():
+def previous_rows() -> dict[str, dict]:
 
     if not OUT.exists():
         return {}
@@ -270,18 +208,14 @@ def previous_rows():
         )
 
         rows = (
-            payload.get(
-                "companies"
-            )
+            payload.get("stocks")
             or
-            payload.get(
-                "stocks"
-            )
+            payload.get("companies")
             or
             []
         )
 
-        result = {}
+        result: dict[str, dict] = {}
 
         for row in rows:
 
@@ -296,6 +230,7 @@ def previous_rows():
                     row,
                     "symbol",
                     "sym",
+                    "ticker"
                 )
             )
 
@@ -304,15 +239,88 @@ def previous_rows():
 
         return result
 
-    except Exception:
+    except Exception as exc:
+
+        print(
+            "[WARN] Could not read "
+            f"previous data.json: {exc}"
+        )
+
         return {}
+
+
+# ---------------------------------------------------------
+# Discovery helpers
+# ---------------------------------------------------------
+
+def result_meeting(
+    row: dict
+) -> bool:
+
+    text = str(
+        first(
+            row,
+            "bm_purpose",
+            "bmPurpose",
+            "purpose",
+            "description",
+            "bm_desc",
+            default=""
+        )
+    ).lower()
+
+    return (
+        "financial result"
+        in text
+        or
+        "quarterly result"
+        in text
+        or
+        "results"
+        in text
+    )
+
+
+def board_symbol(
+    row: dict
+) -> str:
+
+    return clean_symbol(
+        first(
+            row,
+            "bm_symbol",
+            "symbol",
+            "SYMBOL",
+            "sm_symbol"
+        )
+    )
+
+
+def financial_symbol(
+    row: dict
+) -> str:
+
+    return clean_symbol(
+        first(
+            row,
+            "symbol",
+            "SYMBOL",
+            "sm_symbol"
+        )
+    )
 
 
 # ---------------------------------------------------------
 # LIVE DISCOVERY
 # ---------------------------------------------------------
 
-def discover(nse):
+def discover(
+    nse
+) -> tuple[
+    dict[str, dict],
+    int,
+    int
+]:
 
     today = (
         datetime.now(
@@ -322,19 +330,24 @@ def discover(nse):
 
     recent_start = (
         today
-        - timedelta(
+        -
+        timedelta(
             days=RECENT_DAYS
         )
     )
 
     upcoming_end = (
         today
-        + timedelta(
+        +
+        timedelta(
             days=UPCOMING_DAYS
         )
     )
 
-    candidates = {}
+    candidates: dict[
+        str,
+        dict
+    ] = {}
 
     # ---------------------------------------------
     # UPCOMING RESULTS
@@ -343,22 +356,27 @@ def discover(nse):
     board_fn = get_method(
         nse,
         "board_meetings",
-        "boardMeetings",
+        "boardMeetings"
     )
 
     board_rows = (
         safe_call(
             "NSE board meetings",
             board_fn,
+
             index="equities",
-            from_date=datetime.combine(
-                today,
-                datetime.min.time()
-            ),
-            to_date=datetime.combine(
-                upcoming_end,
-                datetime.max.time()
-            ),
+
+            from_date=
+                datetime.combine(
+                    today,
+                    datetime.min.time()
+                ),
+
+            to_date=
+                datetime.combine(
+                    upcoming_end,
+                    datetime.max.time()
+                )
         )
         or
         []
@@ -372,25 +390,24 @@ def discover(nse):
         ):
             continue
 
-        if not is_result_meeting(
+        if not result_meeting(
             row
         ):
             continue
 
-        symbol = extract_symbol(
+        symbol = board_symbol(
             row
         )
 
         if not symbol:
             continue
 
-        result_date = iso(
+        result_date = iso_date(
             first(
                 row,
+                "bm_date",
                 "meetingDate",
-                "bmDate",
-                "date",
-                "meeting_date",
+                "date"
             )
         )
 
@@ -405,9 +422,24 @@ def discover(nse):
                 symbol,
 
             "name":
-                extract_company(
-                    row,
-                    symbol
+                str(
+                    first(
+                        row,
+                        "sm_name",
+                        "companyName",
+                        "name",
+                        default=symbol
+                    )
+                ),
+
+            "sector":
+                str(
+                    first(
+                        row,
+                        "sm_indusrty",
+                        "industry",
+                        default="—"
+                    )
                 ),
 
             "resultDate":
@@ -417,17 +449,12 @@ def discover(nse):
                 result_date,
 
             "quarter":
-                str(
-                    first(
-                        row,
-                        "relatingTo",
-                        "quarter",
-                        default=
-                        "Upcoming result",
-                    )
-                ),
+                "Upcoming result",
 
             "bucket":
+                "Upcoming",
+
+            "peadStatus":
                 "Upcoming",
 
             "discoverySource":
@@ -440,16 +467,19 @@ def discover(nse):
 
     results_fn = get_method(
         nse,
-        "financial_results",
-        "financialResults",
+        "financial_results"
     )
 
     result_rows = (
         safe_call(
             "NSE financial results",
             results_fn,
-            segment="equities",
-            period="quarterly",
+
+            segment=
+                "equities",
+
+            period=
+                "quarterly",
 
             from_date=
                 datetime.combine(
@@ -461,7 +491,7 @@ def discover(nse):
                 datetime.combine(
                     today,
                     datetime.max.time()
-                ),
+                )
         )
         or
         []
@@ -475,7 +505,7 @@ def discover(nse):
         ):
             continue
 
-        symbol = extract_symbol(
+        symbol = financial_symbol(
             row
         )
 
@@ -483,27 +513,28 @@ def discover(nse):
             continue
 
         result_date = (
-            iso(
+            iso_date(
                 first(
                     row,
+                    "broadCastDate",
                     "broadcastDate",
-                    "broadcastDateTime",
-                    "filingDate",
-                    "date",
+                    "filingDate"
                 )
             )
             or
             today.isoformat()
         )
 
+        existing = candidates.get(
+            symbol,
+            {}
+        )
+
         candidates[
             symbol
         ] = {
 
-            **candidates.get(
-                symbol,
-                {}
-            ),
+            **existing,
 
             "symbol":
                 symbol,
@@ -512,9 +543,31 @@ def discover(nse):
                 symbol,
 
             "name":
-                extract_company(
-                    row,
-                    symbol
+                str(
+                    first(
+                        row,
+                        "companyName",
+                        "company",
+                        "name",
+                        default=
+                            existing.get(
+                                "name",
+                                symbol
+                            )
+                    )
+                ),
+
+            "sector":
+                str(
+                    first(
+                        row,
+                        "industry",
+                        default=
+                            existing.get(
+                                "sector",
+                                "—"
+                            )
+                    )
                 ),
 
             "resultDate":
@@ -529,12 +582,16 @@ def discover(nse):
                         row,
                         "relatingTo",
                         "toDate",
-                        "periodEnded",
-                        default="Quarterly",
+                        "period",
+                        default=
+                            "Quarterly"
                     )
                 ),
 
             "bucket":
+                "Post-results",
+
+            "peadStatus":
                 "Post-results",
 
             "discoverySource":
@@ -544,7 +601,7 @@ def discover(nse):
     return (
         candidates,
         len(board_rows),
-        len(result_rows),
+        len(result_rows)
     )
 
 
@@ -553,14 +610,18 @@ def discover(nse):
 # ---------------------------------------------------------
 
 def carry_forward(
-    candidates,
-    old
-):
+    candidates: dict[str, dict],
+    old: dict[str, dict]
+) -> int:
 
-    cutoff = (
+    today = (
         datetime.now(
             timezone.utc
         ).date()
+    )
+
+    cutoff = (
+        today
         -
         timedelta(
             days=KEEP_DAYS
@@ -574,11 +635,11 @@ def carry_forward(
         if symbol in candidates:
             continue
 
-        result_date = pdate(
+        result_date = parse_date(
             first(
                 row,
                 "resultDate",
-                "result_date",
+                "result_date"
             )
         )
 
@@ -588,32 +649,34 @@ def carry_forward(
                 "bucket",
                 "peadStatus",
                 "stage",
-                default="",
+                default=""
             )
         ).lower()
 
-        keep = (
-
-            (
-                result_date
-                and
-                result_date >= cutoff
-            )
-
-            or
-
-            "qualified" in status
-
-            or
-
-            "caution" in status
-
-            or
-
-            "review" in status
+        recent_post_result = bool(
+            result_date
+            and
+            cutoff
+            <=
+            result_date
+            <=
+            today
         )
 
-        if not keep:
+        special_status = any(
+            word in status
+            for word in (
+                "qualified",
+                "caution",
+                "review"
+            )
+        )
+
+        if not (
+            recent_post_result
+            or
+            special_status
+        ):
             continue
 
         candidates[
@@ -627,6 +690,12 @@ def carry_forward(
 
             "sym":
                 symbol,
+
+            "discoverySource":
+                row.get(
+                    "discoverySource",
+                    "carry-forward"
+                ),
         }
 
         kept += 1
@@ -635,10 +704,12 @@ def carry_forward(
 
 
 # ---------------------------------------------------------
-# LIVE NSE MARKET DATA
+# NSE detailed quote
 # ---------------------------------------------------------
 
-def unpack_detailed(payload):
+def unpack_detailed(
+    payload: Any
+) -> dict:
 
     if not isinstance(
         payload,
@@ -670,8 +741,8 @@ def unpack_detailed(payload):
 
 def enrich_market(
     nse,
-    row
-):
+    row: dict
+) -> dict:
 
     symbol = row[
         "symbol"
@@ -680,13 +751,13 @@ def enrich_market(
     detailed_fn = get_method(
         nse,
         "get_detailed_scrip_data",
-        "getDetailedScripData",
+        "getDetailedScripData"
     )
 
     payload = safe_call(
-        f"{symbol} quote",
+        f"{symbol} detailed quote",
         detailed_fn,
-        symbol,
+        symbol
     )
 
     output = dict(
@@ -782,7 +853,7 @@ def enrich_market(
         first(
             meta,
             "previousClose",
-            "basePrice",
+            "basePrice"
         )
     )
 
@@ -798,7 +869,8 @@ def enrich_market(
         and
         price is not None
         and
-        previous_close not in (
+        previous_close
+        not in (
             None,
             0
         )
@@ -814,11 +886,9 @@ def enrich_market(
             previous_close
             *
             100,
-            2,
+            2
         )
 
-    # NSE returns totalMarketCap
-    # in rupees.
     total_market_cap = fnum(
         first(
             trade,
@@ -827,18 +897,15 @@ def enrich_market(
     )
 
     market_cap_cr = (
-
         round(
             total_market_cap
             /
             10_000_000,
             2
         )
-
         if
         total_market_cap
         is not None
-
         else
         None
     )
@@ -851,10 +918,10 @@ def enrich_market(
                     meta,
                     "companyName",
                     default=
-                    output.get(
-                        "name",
-                        symbol
-                    ),
+                        output.get(
+                            "name",
+                            symbol
+                        )
                 )
             ),
 
@@ -865,7 +932,11 @@ def enrich_market(
                     "sector",
                     "basicIndustry",
                     "industryInfo",
-                    default="—",
+                    default=
+                        output.get(
+                            "sector",
+                            "—"
+                        )
                 )
             ),
 
@@ -875,7 +946,7 @@ def enrich_market(
                     sec,
                     "industryInfo",
                     "basicIndustry",
-                    default="—",
+                    default="—"
                 )
             ),
 
@@ -899,11 +970,9 @@ def enrich_market(
                 market_cap_cr
                 >=
                 MIN_MCAP_CR
-
                 if
                 market_cap_cr
                 is not None
-
                 else
                 None
             ),
@@ -913,7 +982,7 @@ def enrich_market(
                 first(
                     trade,
                     "totalTradedVolume",
-                    "quantitytraded",
+                    "quantitytraded"
                 )
             ),
 
@@ -921,7 +990,7 @@ def enrich_market(
             fnum(
                 first(
                     trade,
-                    "deliveryToTradedQuantity",
+                    "deliveryToTradedQuantity"
                 )
             ),
 
@@ -935,7 +1004,9 @@ def enrich_market(
         "liveStatus":
             (
                 "ok"
-                if price is not None
+                if
+                price
+                is not None
                 else
                 "unavailable"
             ),
@@ -943,16 +1014,21 @@ def enrich_market(
         "liveError":
             (
                 None
-                if price is not None
+                if
+                price
+                is not None
                 else
                 "Price missing"
             ),
 
         "priceTimestamp":
-            first(
-                payload,
-                "lastUpdateTime",
-                default=now_iso(),
+            str(
+                first(
+                    data,
+                    "lastUpdateTime",
+                    default=
+                        now_iso()
+                )
             ),
     })
 
@@ -960,13 +1036,13 @@ def enrich_market(
 
 
 # ---------------------------------------------------------
-# Result comparison
+# Results comparison
 # ---------------------------------------------------------
 
 def growth(
-    current,
-    old
-):
+    current: float | None,
+    old: float | None
+) -> float | None:
 
     if (
         current is None
@@ -988,20 +1064,57 @@ def growth(
         abs(old)
         *
         100,
-        2,
+        2
+    )
+
+
+def row_value(
+    row: dict | None,
+    *keys: str
+) -> float | None:
+
+    return (
+        fnum(
+            first(
+                row,
+                *keys
+            )
+        )
+        if isinstance(
+            row,
+            dict
+        )
+        else
+        None
+    )
+
+
+def result_row_date(
+    row: dict
+) -> date:
+
+    return (
+        parse_date(
+            first(
+                row,
+                "re_to_dt",
+                "re_create_dt"
+            )
+        )
+        or
+        date.min
     )
 
 
 def enrich_results(
     nse,
-    row
-):
+    row: dict
+) -> dict:
 
     output = dict(
         row
     )
 
-    # Results have not happened yet.
     if (
         str(
             output.get(
@@ -1016,23 +1129,22 @@ def enrich_results(
 
     compare_fn = get_method(
         nse,
-        "results_comparison",
-        "resultsComparison",
+        "results_comparison"
     )
 
     payload = (
         safe_call(
+            (
+                output[
+                    "symbol"
+                ]
+                +
+                " results comparison"
+            ),
+            compare_fn,
             output[
                 "symbol"
             ]
-            +
-            " results",
-
-            compare_fn,
-
-            output[
-                "symbol"
-            ],
         )
         or
         {}
@@ -1042,8 +1154,7 @@ def enrich_results(
         payload.get(
             "resCmpData"
         )
-        if
-        isinstance(
+        if isinstance(
             payload,
             dict
         )
@@ -1054,162 +1165,4 @@ def enrich_results(
     if (
         not isinstance(
             rows,
-            list
-        )
-        or
-        not rows
-    ):
-        return output
-
-    def value(
-        result_row,
-        *keys
-    ):
-
-        return fnum(
-            first(
-                result_row,
-                *keys
-            )
-        )
-
-    latest = (
-        rows[0]
-        if
-        isinstance(
-            rows[0],
-            dict
-        )
-        else
-        {}
-    )
-
-    year_ago = (
-
-        rows[4]
-
-        if
-        len(rows) >= 5
-        and
-        isinstance(
-            rows[4],
-            dict
-        )
-
-        else
-        None
-    )
-
-    previous = (
-
-        rows[1]
-
-        if
-        len(rows) >= 2
-        and
-        isinstance(
-            rows[1],
-            dict
-        )
-
-        else
-        None
-    )
-
-    revenue = value(
-        latest,
-        "re_total_inc",
-        "totalIncome",
-        "revenue",
-        "total_revenue",
-    )
-
-    pat = value(
-        latest,
-        "re_net_profit",
-        "netProfit",
-        "pat",
-        "profitAfterTax",
-    )
-
-    revenue_yoy = (
-        growth(
-            revenue,
-            value(
-                year_ago,
-                "re_total_inc",
-                "totalIncome",
-                "revenue",
-                "total_revenue",
-            )
-        )
-        if year_ago
-        else None
-    )
-
-    pat_yoy = (
-        growth(
-            pat,
-            value(
-                year_ago,
-                "re_net_profit",
-                "netProfit",
-                "pat",
-                "profitAfterTax",
-            )
-        )
-        if year_ago
-        else None
-    )
-
-    revenue_qoq = (
-        growth(
-            revenue,
-            value(
-                previous,
-                "re_total_inc",
-                "totalIncome",
-                "revenue",
-                "total_revenue",
-            )
-        )
-        if previous
-        else None
-    )
-
-    pat_qoq = (
-        growth(
-            pat,
-            value(
-                previous,
-                "re_net_profit",
-                "netProfit",
-                "pat",
-                "profitAfterTax",
-            )
-        )
-        if previous
-        else None
-    )
-
-    output.update({
-
-        "latestRevenueLakh":
-            revenue,
-
-        "latestPatLakh":
-            pat,
-
-        "revenueYoY":
-            revenue_yoy,
-
-        "patYoY":
-            pat_yoy,
-
-        "revenueQoQ":
-            revenue_qoq,
-
-        "patQoQ":
-            pat_qoq,
-
-        "revenueP
+           
