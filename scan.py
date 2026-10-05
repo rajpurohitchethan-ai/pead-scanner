@@ -7,19 +7,18 @@ import sys
 import traceback
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
-
 
 BASE = Path(__file__).resolve().parent
-OUT = BASE / "data.json"
+DATA = BASE / "data.json"
+CACHE = BASE / ".nse-cache"
 
 MIN_MCAP_CR = 1000.0
-UPCOMING_DAYS = 21
-RECENT_DAYS = 10
-KEEP_DAYS = 30
+UPCOMING_DAYS = 30
+RECENT_DAYS = 14
+KEEP_POST_DAYS = 30
 
 
-def now_iso() -> str:
+def now_iso():
     return (
         datetime.now(timezone.utc)
         .replace(microsecond=0)
@@ -27,16 +26,12 @@ def now_iso() -> str:
     )
 
 
-def first(
-    d: dict | None,
-    *keys: str,
-    default=None
-):
-    if not isinstance(d, dict):
+def first(obj, *keys, default=None):
+    if not isinstance(obj, dict):
         return default
 
     for key in keys:
-        value = d.get(key)
+        value = obj.get(key)
 
         if value not in (None, ""):
             return value
@@ -44,7 +39,7 @@ def first(
     return default
 
 
-def fnum(value: Any) -> float | None:
+def number(value):
     if value in (None, ""):
         return None
 
@@ -62,15 +57,23 @@ def fnum(value: Any) -> float | None:
             else None
         )
 
-    except Exception:
+    except (TypeError, ValueError):
         return None
 
 
-def parse_date(
-    value: Any
-) -> date | None:
+def symbol(value):
+    s = str(
+        value or ""
+    ).strip().upper()
 
-    if value in (None, ""):
+    if s.endswith(".NS"):
+        return s[:-3]
+
+    return s
+
+
+def parse_date(value):
+    if not value:
         return None
 
     if isinstance(value, datetime):
@@ -81,7 +84,7 @@ def parse_date(
 
     text = str(value).strip()
 
-    for fmt in (
+    formats = (
         "%d-%b-%Y",
         "%d-%b-%Y %H:%M:%S",
         "%d-%m-%Y",
@@ -89,7 +92,9 @@ def parse_date(
         "%Y-%m-%d",
         "%Y/%m/%d",
         "%d-%b-%Y %H:%M",
-    ):
+    )
+
+    for fmt in formats:
         try:
             return datetime.strptime(
                 text,
@@ -107,17 +112,12 @@ def parse_date(
             )
         ).date()
 
-    except Exception:
+    except ValueError:
         return None
 
 
-def iso_date(
-    value: Any
-) -> str | None:
-
-    d = parse_date(
-        value
-    )
+def iso_date(value):
+    d = parse_date(value)
 
     return (
         d.isoformat()
@@ -126,30 +126,8 @@ def iso_date(
     )
 
 
-def clean_symbol(
-    value: Any
-) -> str:
-
-    symbol = (
-        str(value or "")
-        .strip()
-        .upper()
-    )
-
-    if symbol.endswith(
-        ".NS"
-    ):
-        symbol = symbol[:-3]
-
-    return symbol
-
-
-def get_method(
-    obj: Any,
-    *names: str
-):
+def method(obj, *names):
     for name in names:
-
         fn = getattr(
             obj,
             name,
@@ -160,19 +138,18 @@ def get_method(
             return fn
 
     raise AttributeError(
-        "Missing method: "
+        "Missing NSE method: "
         +
         " / ".join(names)
     )
 
 
-def safe_call(
-    label: str,
+def safe(
+    label,
     fn,
     *args,
     **kwargs
 ):
-
     try:
         return fn(
             *args,
@@ -180,153 +157,104 @@ def safe_call(
         )
 
     except Exception as exc:
-
         print(
-            f"[WARN] {label}: {exc}"
+            f"[WARN] {label}: "
+            f"{type(exc).__name__}: {exc}"
         )
 
         return None
 
 
 # ---------------------------------------------------------
-# Previous radar
+# Previous LIVE scan only
 # ---------------------------------------------------------
 
-def previous_rows() -> dict[str, dict]:
-
-    if not OUT.exists():
+def previous_live():
+    if not DATA.exists():
         return {}
 
     try:
-
         payload = json.loads(
-            OUT.read_text(
+            DATA.read_text(
                 encoding="utf-8"
             )
         )
 
-        rows = (
-            payload.get("stocks")
-            or
-            payload.get("companies")
-            or
-            []
-        )
-
-        result: dict[str, dict] = {}
-
-        for row in rows:
-
-            if not isinstance(
-                row,
-                dict
-            ):
-                continue
-
-            symbol = clean_symbol(
-                first(
-                    row,
-                    "symbol",
-                    "sym",
-                    "ticker"
-                )
-            )
-
-            if symbol:
-                result[symbol] = row
-
-        return result
-
-    except Exception as exc:
-
-        print(
-            "[WARN] Could not read "
-            f"previous data.json: {exc}"
-        )
-
+    except Exception:
         return {}
 
+    # IMPORTANT:
+    # Do not carry forward the old manually seeded 21-stock file.
+    if payload.get(
+        "scannerMode"
+    ) != "live-discovery":
+        return {}
 
-# ---------------------------------------------------------
-# Discovery helpers
-# ---------------------------------------------------------
+    out = {}
 
-def result_meeting(
-    row: dict
-) -> bool:
-
-    text = str(
-        first(
-            row,
-            "bm_purpose",
-            "bmPurpose",
-            "purpose",
-            "description",
-            "bm_desc",
-            default=""
-        )
-    ).lower()
-
-    return (
-        "financial result"
-        in text
+    rows = (
+        payload.get("stocks")
         or
-        "quarterly result"
-        in text
+        payload.get("companies")
         or
-        "results"
-        in text
+        []
     )
 
-
-def board_symbol(
-    row: dict
-) -> str:
-
-    return clean_symbol(
-        first(
+    for row in rows:
+        if not isinstance(
             row,
-            "bm_symbol",
-            "symbol",
-            "SYMBOL",
-            "sm_symbol"
+            dict
+        ):
+            continue
+
+        s = symbol(
+            first(
+                row,
+                "symbol",
+                "sym",
+                "ticker"
+            )
         )
-    )
 
+        if s:
+            out[s] = row
 
-def financial_symbol(
-    row: dict
-) -> str:
-
-    return clean_symbol(
-        first(
-            row,
-            "symbol",
-            "SYMBOL",
-            "sm_symbol"
-        )
-    )
+    return out
 
 
 # ---------------------------------------------------------
 # LIVE DISCOVERY
 # ---------------------------------------------------------
 
-def discover(
-    nse
-) -> tuple[
-    dict[str, dict],
-    int,
-    int
-]:
+def is_result_meeting(row):
+    text = " ".join(
+        str(
+            first(
+                row,
+                key,
+                default=""
+            )
+        )
+        for key in (
+            "bm_purpose",
+            "bmPurpose",
+            "purpose",
+            "bm_desc",
+            "description"
+        )
+    ).lower()
 
+    return "result" in text
+
+
+def discover(nse):
     today = (
         datetime.now(
             timezone.utc
         ).date()
     )
 
-    recent_start = (
+    recent = (
         today
         -
         timedelta(
@@ -334,7 +262,7 @@ def discover(
         )
     )
 
-    upcoming_end = (
+    future = (
         today
         +
         timedelta(
@@ -342,23 +270,20 @@ def discover(
         )
     )
 
-    candidates: dict[
-        str,
-        dict
-    ] = {}
+    found = {}
 
-    # ---------------------------------------------
-    # UPCOMING RESULTS
-    # ---------------------------------------------
+    # -----------------------------------------------------
+    # Upcoming board meetings / result dates
+    # -----------------------------------------------------
 
-    board_fn = get_method(
+    board_fn = method(
         nse,
         "board_meetings",
         "boardMeetings"
     )
 
     board_rows = (
-        safe_call(
+        safe(
             "NSE board meetings",
             board_fn,
 
@@ -372,9 +297,9 @@ def discover(
 
             to_date=
                 datetime.combine(
-                    upcoming_end,
+                    future,
                     datetime.max.time()
-                )
+                ),
         )
         or
         []
@@ -388,19 +313,25 @@ def discover(
         ):
             continue
 
-        if not result_meeting(
+        if not is_result_meeting(
             row
         ):
             continue
 
-        symbol = board_symbol(
-            row
+        s = symbol(
+            first(
+                row,
+                "bm_symbol",
+                "symbol",
+                "SYMBOL",
+                "sm_symbol"
+            )
         )
 
-        if not symbol:
+        if not s:
             continue
 
-        result_date = iso_date(
+        d = iso_date(
             first(
                 row,
                 "bm_date",
@@ -409,15 +340,13 @@ def discover(
             )
         )
 
-        candidates[
-            symbol
-        ] = {
+        found[s] = {
 
             "symbol":
-                symbol,
+                s,
 
             "sym":
-                symbol,
+                s,
 
             "name":
                 str(
@@ -426,7 +355,7 @@ def discover(
                         "sm_name",
                         "companyName",
                         "name",
-                        default=symbol
+                        default=s
                     )
                 ),
 
@@ -441,10 +370,10 @@ def discover(
                 ),
 
             "resultDate":
-                result_date,
+                d,
 
             "result_date":
-                result_date,
+                d,
 
             "quarter":
                 "Upcoming result",
@@ -459,29 +388,27 @@ def discover(
                 "NSE board meetings",
         }
 
-    # ---------------------------------------------
-    # NEWLY DECLARED RESULTS
-    # ---------------------------------------------
+    # -----------------------------------------------------
+    # Newly declared quarterly results
+    # -----------------------------------------------------
 
-    results_fn = get_method(
+    results_fn = method(
         nse,
         "financial_results"
     )
 
     result_rows = (
-        safe_call(
+        safe(
             "NSE financial results",
             results_fn,
 
-            segment=
-                "equities",
+            segment="equities",
 
-            period=
-                "quarterly",
+            period="quarterly",
 
             from_date=
                 datetime.combine(
-                    recent_start,
+                    recent,
                     datetime.min.time()
                 ),
 
@@ -489,7 +416,7 @@ def discover(
                 datetime.combine(
                     today,
                     datetime.max.time()
-                )
+                ),
         )
         or
         []
@@ -503,14 +430,19 @@ def discover(
         ):
             continue
 
-        symbol = financial_symbol(
-            row
+        s = symbol(
+            first(
+                row,
+                "symbol",
+                "SYMBOL",
+                "sm_symbol"
+            )
         )
 
-        if not symbol:
+        if not s:
             continue
 
-        result_date = (
+        d = (
             iso_date(
                 first(
                     row,
@@ -523,22 +455,21 @@ def discover(
             today.isoformat()
         )
 
-        existing = candidates.get(
-            symbol,
+        old = found.get(
+            s,
             {}
         )
 
-        candidates[
-            symbol
-        ] = {
+        # A filed result overrides an upcoming record.
+        found[s] = {
 
-            **existing,
+            **old,
 
             "symbol":
-                symbol,
+                s,
 
             "sym":
-                symbol,
+                s,
 
             "name":
                 str(
@@ -546,11 +477,10 @@ def discover(
                         row,
                         "companyName",
                         "company",
-                        "name",
                         default=
-                            existing.get(
+                            old.get(
                                 "name",
-                                symbol
+                                s
                             )
                     )
                 ),
@@ -561,7 +491,7 @@ def discover(
                         row,
                         "industry",
                         default=
-                            existing.get(
+                            old.get(
                                 "sector",
                                 "—"
                             )
@@ -569,10 +499,10 @@ def discover(
                 ),
 
             "resultDate":
-                result_date,
+                d,
 
             "result_date":
-                result_date,
+                d,
 
             "quarter":
                 str(
@@ -580,9 +510,7 @@ def discover(
                         row,
                         "relatingTo",
                         "toDate",
-                        "period",
-                        default=
-                            "Quarterly"
+                        default="Quarterly"
                     )
                 ),
 
@@ -597,20 +525,20 @@ def discover(
         }
 
     return (
-        candidates,
+        found,
         len(board_rows),
         len(result_rows)
     )
 
 
 # ---------------------------------------------------------
-# Keep recent tracked stocks
+# Carry forward recent post-result LIVE candidates
 # ---------------------------------------------------------
 
 def carry_forward(
-    candidates: dict[str, dict],
-    old: dict[str, dict]
-) -> int:
+    found,
+    old_rows
+):
 
     today = (
         datetime.now(
@@ -622,18 +550,18 @@ def carry_forward(
         today
         -
         timedelta(
-            days=KEEP_DAYS
+            days=KEEP_POST_DAYS
         )
     )
 
-    kept = 0
+    count = 0
 
-    for symbol, row in old.items():
+    for s, row in old_rows.items():
 
-        if symbol in candidates:
+        if s in found:
             continue
 
-        result_date = parse_date(
+        d = parse_date(
             first(
                 row,
                 "resultDate",
@@ -651,63 +579,57 @@ def carry_forward(
             )
         ).lower()
 
-        recent_post_result = bool(
-            result_date
+        recent_post = (
+            d is not None
             and
-            cutoff
-            <=
-            result_date
-            <=
-            today
+            cutoff <= d <= today
+            and
+            "upcoming"
+            not in status
         )
 
-        special_status = any(
-            word in status
-            for word in (
+        special = any(
+            x in status
+            for x in (
                 "qualified",
                 "caution",
                 "review"
             )
         )
 
-        if not (
-            recent_post_result
+        if (
+            recent_post
             or
-            special_status
+            special
         ):
-            continue
 
-        candidates[
-            symbol
-        ] = {
+            found[s] = {
 
-            **row,
+                **row,
 
-            "symbol":
-                symbol,
+                "symbol":
+                    s,
 
-            "sym":
-                symbol,
+                "sym":
+                    s,
 
-            "discoverySource":
-                row.get(
-                    "discoverySource",
-                    "carry-forward"
-                ),
-        }
+                "discoverySource":
+                    row.get(
+                        "discoverySource",
+                        "live carry-forward"
+                    ),
+            }
 
-        kept += 1
+            count += 1
 
-    return kept
+    return count
 
 
 # ---------------------------------------------------------
-# NSE detailed quote
+# LIVE QUOTE + MARKET CAP
 # ---------------------------------------------------------
 
-def unpack_detailed(
-    payload: Any
-) -> dict:
+def detailed_payload(payload):
 
     if not isinstance(
         payload,
@@ -737,54 +659,47 @@ def unpack_detailed(
     return payload
 
 
-def enrich_market(
+def quote(
     nse,
-    row: dict
-) -> dict:
+    row
+):
 
-    symbol = row[
+    s = row[
         "symbol"
     ]
 
-    detailed_fn = get_method(
+    fn = method(
         nse,
         "get_detailed_scrip_data",
         "getDetailedScripData"
     )
 
-    payload = safe_call(
-        f"{symbol} detailed quote",
-        detailed_fn,
-        symbol
+    payload = safe(
+        f"{s} quote",
+        fn,
+        s
     )
 
-    output = dict(
+    out = dict(
         row
     )
 
-    output.update({
+    out.update({
 
         "liveStatus":
             "unavailable",
 
         "liveError":
-            None,
+            "NSE quote unavailable",
 
         "priceTimestamp":
             now_iso(),
     })
 
     if not payload:
+        return out
 
-        output[
-            "liveError"
-        ] = (
-            "NSE quote unavailable"
-        )
-
-        return output
-
-    data = unpack_detailed(
+    data = detailed_payload(
         payload
     )
 
@@ -825,21 +740,21 @@ def enrich_market(
     )
 
     price = (
-        fnum(
+        number(
             first(
                 order,
                 "lastPrice"
             )
         )
         or
-        fnum(
+        number(
             first(
                 trade,
                 "lastPrice"
             )
         )
         or
-        fnum(
+        number(
             first(
                 meta,
                 "closePrice"
@@ -847,7 +762,7 @@ def enrich_market(
         )
     )
 
-    previous_close = fnum(
+    prev = number(
         first(
             meta,
             "previousClose",
@@ -855,7 +770,7 @@ def enrich_market(
         )
     )
 
-    change_pct = fnum(
+    pct = number(
         first(
             meta,
             "pChange"
@@ -863,52 +778,49 @@ def enrich_market(
     )
 
     if (
-        change_pct is None
+        pct is None
         and
         price is not None
         and
-        previous_close
-        not in (
+        prev not in (
             None,
             0
         )
     ):
-
-        change_pct = round(
+        pct = round(
             (
                 price
                 -
-                previous_close
+                prev
             )
             /
-            previous_close
+            prev
             *
             100,
             2
         )
 
-    total_market_cap = fnum(
+    raw_mcap = number(
         first(
             trade,
             "totalMarketCap"
         )
     )
 
-    market_cap_cr = (
+    mcap = (
         round(
-            total_market_cap
+            raw_mcap
             /
             10_000_000,
             2
         )
         if
-        total_market_cap
-        is not None
+        raw_mcap is not None
         else
         None
     )
 
-    output.update({
+    out.update({
 
         "name":
             str(
@@ -916,9 +828,9 @@ def enrich_market(
                     meta,
                     "companyName",
                     default=
-                        output.get(
+                        out.get(
                             "name",
-                            symbol
+                            s
                         )
                 )
             ),
@@ -931,7 +843,7 @@ def enrich_market(
                     "basicIndustry",
                     "industryInfo",
                     default=
-                        output.get(
+                        out.get(
                             "sector",
                             "—"
                         )
@@ -955,28 +867,27 @@ def enrich_market(
             price,
 
         "previousClose":
-            previous_close,
+            prev,
 
         "changePct":
-            change_pct,
+            pct,
 
         "marketCapCr":
-            market_cap_cr,
+            mcap,
 
         "marketCapPass":
             (
-                market_cap_cr
+                mcap
                 >=
                 MIN_MCAP_CR
                 if
-                market_cap_cr
-                is not None
+                mcap is not None
                 else
                 None
             ),
 
         "volume":
-            fnum(
+            number(
                 first(
                     trade,
                     "totalTradedVolume",
@@ -985,7 +896,7 @@ def enrich_market(
             ),
 
         "deliveryPct":
-            fnum(
+            number(
                 first(
                     trade,
                     "deliveryToTradedQuantity"
@@ -1003,8 +914,7 @@ def enrich_market(
             (
                 "ok"
                 if
-                price
-                is not None
+                price is not None
                 else
                 "unavailable"
             ),
@@ -1013,12 +923,12 @@ def enrich_market(
             (
                 None
                 if
-                price
-                is not None
+                price is not None
                 else
-                "Price missing"
+                "Price missing in NSE response"
             ),
 
+        # This fixes the earlier 12:00 AM problem.
         "priceTimestamp":
             str(
                 first(
@@ -1030,22 +940,30 @@ def enrich_market(
             ),
     })
 
-    return output
+    return out
 
 
 # ---------------------------------------------------------
-# Results comparison
+# FINANCIAL RESULTS
 # ---------------------------------------------------------
 
 def growth(
-    current: float | None,
-    old: float | None
-) -> float | None:
+    current,
+    old
+):
+
+    a = number(
+        current
+    )
+
+    b = number(
+        old
+    )
 
     if (
-        current is None
+        a is None
         or
-        old in (
+        b in (
             None,
             0
         )
@@ -1054,243 +972,776 @@ def growth(
 
     return round(
         (
-            current
+            a
             -
-            old
+            b
         )
         /
-        abs(old)
+        abs(b)
         *
         100,
         2
     )
 
 
-def row_value(
-    row: dict | None,
-    *keys: str
-) -> float | None:
+def enrich_results(
+    nse,
+    row
+):
 
-    return (
-        fnum(
-            first(
-                row,
-                *keys
+    out = dict(
+        row
+    )
+
+    if (
+        str(
+            out.get(
+                "bucket",
+                ""
             )
+        ).lower()
+        ==
+        "upcoming"
+    ):
+        return out
+
+    fn = method(
+        nse,
+        "results_comparison",
+        "resultsComparison"
+    )
+
+    payload = (
+        safe(
+            (
+                f"{out['symbol']} "
+                "results comparison"
+            ),
+            fn,
+            out[
+                "symbol"
+            ]
         )
-        if isinstance(
-            row,
+        or
+        {}
+    )
+
+    rows = (
+        payload.get(
+            "resCmpData"
+        )
+        if
+        isinstance(
+            payload,
             dict
         )
         else
         None
     )
 
-
-def result_row_date(
-    row: dict
-) -> date:
-
-    return (
-        parse_date(
-            first(
-                row,
-                "re_to_dt",
-                "re_create_dt"
-            )
-        )
-        or
-        date.min
-    )
-
-def enrich_results(nse, row: dict) -> dict:
-    output = dict(row)
-
-    if str(output.get("bucket", "")).lower() == "upcoming":
-        return output
-
-    try:
-        compare_fn = get_method(
-            nse,
-            "results_comparison",
-            "resultsComparison",
-        )
-    except Exception:
-        return output
-
-    payload = safe_call(
-        f'{output.get("symbol", "UNKNOWN")} results comparison',
-        compare_fn,
-        output.get("symbol"),
-    ) or {}
-
-    rows = (
-        payload.get("resCmpData")
-        if isinstance(payload, dict)
-        else None
-    )
-
-    if not isinstance(rows, list) or not rows:
-        return output
+    if not isinstance(
+        rows,
+        list
+    ):
+        return out
 
     rows = [
-        item
-        for item in rows
-        if isinstance(item, dict)
+        x
+        for x in rows
+        if isinstance(
+            x,
+            dict
+        )
     ]
 
-    if not rows:
-        return output
-
-    def item_date(item: dict):
-        return (
+    rows.sort(
+        key=
+            lambda x:
             parse_date(
                 first(
-                    item,
+                    x,
                     "re_to_dt",
-                    "re_create_dt",
-                    "toDate",
-                    "periodEnded",
+                    "re_create_dt"
                 )
             )
-            or date.min
-        )
+            or
+            date.min,
 
-    rows.sort(
-        key=item_date,
-        reverse=True
+        reverse=True,
     )
 
+    if not rows:
+        return out
+
     latest = rows[0]
+
     previous = (
         rows[1]
-        if len(rows) >= 2
-        else None
+        if
+        len(rows) > 1
+        else
+        None
     )
 
     year_ago = (
         rows[4]
-        if len(rows) >= 5
-        else None
+        if
+        len(rows) > 4
+        else
+        None
     )
 
-    def value(item, *keys):
-        if not isinstance(item, dict):
+    def metric(
+        item,
+        *keys
+    ):
+        if not isinstance(
+            item,
+            dict
+        ):
             return None
 
-        return fnum(
+        return number(
             first(
                 item,
                 *keys
             )
         )
 
-    revenue = value(
+    revenue = metric(
         latest,
         "re_total_inc",
-        "re_net_sale",
-        "totalIncome",
-        "revenue",
+        "re_net_sale"
     )
 
-    pat = value(
+    pat = metric(
         latest,
         "re_net_profit",
-        "re_proloss_ord_act",
-        "netProfit",
-        "pat",
+        "re_proloss_ord_act"
     )
 
-    revenue_qoq = (
-        growth(
+    revenue_qoq = growth(
+        revenue,
+        metric(
+            previous,
+            "re_total_inc",
+            "re_net_sale"
+        )
+    )
+
+    pat_qoq = growth(
+        pat,
+        metric(
+            previous,
+            "re_net_profit",
+            "re_proloss_ord_act"
+        )
+    )
+
+    revenue_yoy = growth(
+        revenue,
+        metric(
+            year_ago,
+            "re_total_inc",
+            "re_net_sale"
+        )
+    )
+
+    pat_yoy = growth(
+        pat,
+        metric(
+            year_ago,
+            "re_net_profit",
+            "re_proloss_ord_act"
+        )
+    )
+
+    out.update({
+
+        "latestRevenueLakh":
             revenue,
-            value(
-                previous,
-                "re_total_inc",
-                "re_net_sale",
-                "totalIncome",
-                "revenue",
-            ),
-        )
-        if previous
-        else None
-    )
 
-    pat_qoq = (
-        growth(
+        "latestPatLakh":
             pat,
-            value(
-                previous,
-                "re_net_profit",
-                "re_proloss_ord_act",
-                "netProfit",
-                "pat",
-            ),
-        )
-        if previous
-        else None
-    )
 
-    revenue_yoy = (
-        growth(
-            revenue,
-            value(
-                year_ago,
-                "re_total_inc",
-                "re_net_sale",
-                "totalIncome",
-                "revenue",
-            ),
-        )
-        if year_ago
-        else None
-    )
+        "revenueQoQ":
+            revenue_qoq,
 
-    pat_yoy = (
-        growth(
-            pat,
-            value(
-                year_ago,
-                "re_net_profit",
-                "re_proloss_ord_act",
-                "netProfit",
-                "pat",
-            ),
-        )
-        if year_ago
-        else None
-    )
+        "patQoQ":
+            pat_qoq,
 
-    output.update(
-        {
-            "latestRevenueLakh": revenue,
-            "latestPatLakh": pat,
-            "revenueYoY": revenue_yoy,
-            "patYoY": pat_yoy,
-            "revenueQoQ": revenue_qoq,
-            "patQoQ": pat_qoq,
+        "revenueYoY":
+            revenue_yoy,
 
-            "revenuePatPass": (
+        "patYoY":
+            pat_yoy,
+
+        "revenuePatPass":
+            (
                 revenue_yoy > 0
-                and pat_yoy > 0
-                if (
-                    revenue_yoy is not None
-                    and pat_yoy is not None
-                )
-                else None
+                and
+                pat_yoy > 0
+
+                if
+                revenue_yoy is not None
+                and
+                pat_yoy is not None
+
+                else
+                None
             ),
 
-            "earningsQualityPass": (
+        "earningsQualityPass":
+            (
                 revenue > 0
-                and pat > 0
-                if (
-                    revenue is not None
-                    and pat is not None
-                )
-                else None
+                and
+                pat > 0
+
+                if
+                revenue is not None
+                and
+                pat is not None
+
+                else
+                None
             ),
-        }
+    })
+
+    return out
+
+
+# ---------------------------------------------------------
+# PEAD GATES
+# ---------------------------------------------------------
+
+def finalize(row):
+
+    out = dict(
+        row
     )
 
-    return output
+    out.setdefault(
+        "cashFlowPass",
+        None
+    )
 
+    out.setdefault(
+        "priceVolumePass",
+        None
+    )
+
+    out.setdefault(
+        "sectorTailwind",
+        None
+    )
+
+    out.setdefault(
+        "entryTriggerPass",
+        None
+    )
+
+    out.setdefault(
+        "entry",
+        None
+    )
+
+    out.setdefault(
+        "sl",
+        None
+    )
+
+    out.setdefault(
+        "tsl",
+        None
+    )
+
+    checks = [
+
+        (
+            "Market cap > ₹1,000 Cr",
+            out.get(
+                "marketCapPass"
+            )
+        ),
+
+        (
+            "Revenue / PAT acceleration",
+            out.get(
+                "revenuePatPass"
+            )
+        ),
+
+        (
+            "Earnings quality",
+            out.get(
+                "earningsQualityPass"
+            )
+        ),
+
+        (
+            "Cash flow / surprise",
+            out.get(
+                "cashFlowPass"
+            )
+        ),
+
+        (
+            "Price / volume confirmation",
+            out.get(
+                "priceVolumePass"
+            )
+        ),
+
+        (
+            "Sector tailwind",
+            out.get(
+                "sectorTailwind"
+            )
+        ),
+
+        (
+            "Entry trigger defined",
+            out.get(
+                "entryTriggerPass"
+            )
+        ),
+
+        (
+            "Stop loss defined",
+            (
+                True
+                if
+                out.get(
+                    "sl"
+                )
+                is not None
+                else
+                None
+            )
+        ),
+    ]
+
+    out[
+        "checks"
+    ] = [
+
+        {
+            "label":
+                label,
+
+            "value":
+                value
+        }
+
+        for label, value
+        in checks
+    ]
+
+    out[
+        "score"
+    ] = sum(
+        value is True
+        for _, value
+        in checks
+    )
+
+    out[
+        "scoreText"
+    ] = (
+        f'{out["score"]}/8'
+    )
+
+    out[
+        "knownChecks"
+    ] = sum(
+        value is not None
+        for _, value
+        in checks
+    )
+
+    if all(
+        value is True
+        for _, value
+        in checks
+    ):
+        out[
+            "bucket"
+        ] = "Qualified"
+
+    out[
+        "peadStatus"
+    ] = out.get(
+        "bucket",
+        "In Review"
+    )
+
+    out[
+        "stage"
+    ] = out[
+        "peadStatus"
+    ]
+
+    out[
+        "scanTime"
+    ] = now_iso()
+
+    return out
+
+
+# ---------------------------------------------------------
+# NSE CLIENT
+# ---------------------------------------------------------
+
+def nse_client():
+
+    from nse import NSE
+
+    CACHE.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    # Current NSE library
+    try:
+        return NSE(
+            download_folder=
+                str(CACHE),
+
+            timeout=20
+        )
+
+    except TypeError:
+        pass
+
+    # Compatibility with older NSE versions
+    try:
+        return NSE(
+            download_folder=
+                str(CACHE),
+
+            server=True
+        )
+
+    except TypeError:
+        return NSE(
+            download_folder=
+                str(CACHE)
+        )
+
+
+# ---------------------------------------------------------
+# JSON WRITER
+# ---------------------------------------------------------
+
+def write_json(payload):
+
+    temp = DATA.with_suffix(
+        ".json.tmp"
+    )
+
+    temp.write_text(
+        json.dumps(
+            payload,
+            indent=2,
+            ensure_ascii=False
+        )
+        +
+        "\n",
+
+        encoding="utf-8"
+    )
+
+    os.replace(
+        temp,
+        DATA
+    )
+
+
+# ---------------------------------------------------------
+# MAIN SCAN
+# ---------------------------------------------------------
+
+def main():
+
+    old_rows = previous_live()
+
+    errors = []
+    published = []
+
+    rejected = 0
+    unknown_mcap = 0
+
+    with nse_client() as nse:
+
+        (
+            found,
+            board_count,
+            result_count
+        ) = discover(
+            nse
+        )
+
+        carried = carry_forward(
+            found,
+            old_rows
+        )
+
+        print(
+            "======================================"
+        )
+
+        print(
+            "PEAD LIVE DISCOVERY SCANNER"
+        )
+
+        print(
+            "======================================"
+        )
+
+        print(
+            f"Board meeting rows: {board_count}"
+        )
+
+        print(
+            f"Financial result rows: {result_count}"
+        )
+
+        print(
+            f"Unique live candidates: {len(found)}"
+        )
+
+        print(
+            f"Carried from prior LIVE scans: {carried}"
+        )
+
+        if not found:
+
+            raise RuntimeError(
+                "NSE live discovery returned "
+                "0 candidates. Existing "
+                "data.json was NOT overwritten."
+            )
+
+        symbols = sorted(
+            found
+        )
+
+        for i, s in enumerate(
+            symbols,
+            1
+        ):
+
+            print(
+                f"[{i}/{len(symbols)}] {s}"
+            )
+
+            try:
+
+                row = quote(
+                    nse,
+                    found[s]
+                )
+
+                mcap = number(
+                    row.get(
+                        "marketCapCr"
+                    )
+                )
+
+                if (
+                    mcap is not None
+                    and
+                    mcap
+                    <
+                    MIN_MCAP_CR
+                ):
+
+                    rejected += 1
+
+                    print(
+                        "  excluded: "
+                        f"₹{mcap:,.0f} Cr"
+                    )
+
+                    continue
+
+                if mcap is None:
+                    unknown_mcap += 1
+
+                row = enrich_results(
+                    nse,
+                    row
+                )
+
+                published.append(
+                    finalize(
+                        row
+                    )
+                )
+
+            except Exception as exc:
+
+                msg = (
+                    f"{s}: "
+                    f"{type(exc).__name__}: "
+                    f"{exc}"
+                )
+
+                errors.append(
+                    msg
+                )
+
+                print(
+                    f"  [WARN] {msg}"
+                )
+
+                if s in old_rows:
+
+                    fallback = dict(
+                        old_rows[s]
+                    )
+
+                    fallback[
+                        "liveStatus"
+                    ] = "unavailable"
+
+                    fallback[
+                        "liveError"
+                    ] = msg
+
+                    published.append(
+                        finalize(
+                            fallback
+                        )
+                    )
+
+    if not published:
+
+        raise RuntimeError(
+            "Candidates were found but "
+            "0 stocks could be published. "
+            "Existing data.json was NOT overwritten."
+        )
+
+    stamp = now_iso()
+
+    payload = {
+
+        "generatedAt":
+            stamp,
+
+        "last_scan":
+            stamp,
+
+        "lastScanAt":
+            stamp,
+
+        "scannerMode":
+            "live-discovery",
+
+        "source":
+            (
+                "NSE board meetings + "
+                "NSE financial results + "
+                "NSE detailed quotes"
+            ),
+
+        "minMarketCapCr":
+            MIN_MCAP_CR,
+
+        "upcomingWindowDays":
+            UPCOMING_DAYS,
+
+        "recentResultWindowDays":
+            RECENT_DAYS,
+
+        "keepPostResultDays":
+            KEEP_POST_DAYS,
+
+        "boardMeetingRows":
+            board_count,
+
+        "financialResultRows":
+            result_count,
+
+        "discoveredCandidateCount":
+            len(found),
+
+        "carriedForwardCount":
+            carried,
+
+        "scanCount":
+            len(published),
+
+        "stockCount":
+            len(published),
+
+        "marketCapRejectedCount":
+            rejected,
+
+        "marketCapUnavailableCount":
+            unknown_mcap,
+
+        "errorCount":
+            len(errors),
+
+        "errors":
+            errors[:50],
+
+        # Frontend compatibility
+        "companies":
+            published,
+
+        "stocks":
+            published,
+    }
+
+    write_json(
+        payload
+    )
+
+    print()
+
+    print(
+        "======================================"
+    )
+
+    print(
+        "LIVE SCAN COMPLETE"
+    )
+
+    print(
+        "======================================"
+    )
+
+    print(
+        f"Published: {len(published)}"
+    )
+
+    print(
+        f"Below ₹1,000 Cr: {rejected}"
+    )
+
+    print(
+        f"Unknown market cap: {unknown_mcap}"
+    )
+
+    print(
+        f"Errors: {len(errors)}"
+    )
+
+
+if __name__ == "__main__":
+
+    try:
+        main()
+
+    except Exception as exc:
+
+        print(
+            f"SCANNER FAILED: {exc}"
+        )
+
+        traceback.print_exc()
+
+        sys.exit(1)
