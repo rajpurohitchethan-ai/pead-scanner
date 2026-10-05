@@ -1105,74 +1105,34 @@ def result_row_date(
         date.min
     )
 
+def enrich_results(nse, row: dict) -> dict:
+    output = dict(row)
 
-def enrich_results(
-    nse,
-    row: dict
-) -> dict:
-
-    output = dict(
-        row
-    )
-
-    if (
-        str(
-            output.get(
-                "bucket",
-                ""
-            )
-        ).lower()
-        ==
-        "upcoming"
-    ):
+    if str(output.get("bucket", "")).lower() == "upcoming":
         return output
 
-    compare_fn = get_method(
-        nse,
-        "results_comparison"
-    )
-
-    payload = (
-        safe_call(
-            (
-                output[
-                    "symbol"
-                ]
-                +
-                " results comparison"
-            ),
-            compare_fn,
-            output[
-                "symbol"
-            ]
+    try:
+        compare_fn = get_method(
+            nse,
+            "results_comparison",
+            "resultsComparison",
         )
-        or
-        {}
-    )
+    except Exception:
+        return output
+
+    payload = safe_call(
+        f'{output.get("symbol", "UNKNOWN")} results comparison',
+        compare_fn,
+        output.get("symbol"),
+    ) or {}
 
     rows = (
-        payload.get(
-            "resCmpData"
-        )
-        if isinstance(
-            payload,
-            dict
-        )
-        else
-        None
-    )
-
-    if (
-        rows = (
         payload.get("resCmpData")
         if isinstance(payload, dict)
         else None
     )
 
-    if (
-        not isinstance(rows, list)
-        or not rows
-    ):
+    if not isinstance(rows, list) or not rows:
         return output
 
     rows = [
@@ -1183,4 +1143,156 @@ def enrich_results(
 
     if not rows:
         return output
-           
+
+    def item_date(item: dict):
+        return (
+            parse_date(
+                first(
+                    item,
+                    "re_to_dt",
+                    "re_create_dt",
+                    "toDate",
+                    "periodEnded",
+                )
+            )
+            or date.min
+        )
+
+    rows.sort(
+        key=item_date,
+        reverse=True
+    )
+
+    latest = rows[0]
+    previous = (
+        rows[1]
+        if len(rows) >= 2
+        else None
+    )
+
+    year_ago = (
+        rows[4]
+        if len(rows) >= 5
+        else None
+    )
+
+    def value(item, *keys):
+        if not isinstance(item, dict):
+            return None
+
+        return fnum(
+            first(
+                item,
+                *keys
+            )
+        )
+
+    revenue = value(
+        latest,
+        "re_total_inc",
+        "re_net_sale",
+        "totalIncome",
+        "revenue",
+    )
+
+    pat = value(
+        latest,
+        "re_net_profit",
+        "re_proloss_ord_act",
+        "netProfit",
+        "pat",
+    )
+
+    revenue_qoq = (
+        growth(
+            revenue,
+            value(
+                previous,
+                "re_total_inc",
+                "re_net_sale",
+                "totalIncome",
+                "revenue",
+            ),
+        )
+        if previous
+        else None
+    )
+
+    pat_qoq = (
+        growth(
+            pat,
+            value(
+                previous,
+                "re_net_profit",
+                "re_proloss_ord_act",
+                "netProfit",
+                "pat",
+            ),
+        )
+        if previous
+        else None
+    )
+
+    revenue_yoy = (
+        growth(
+            revenue,
+            value(
+                year_ago,
+                "re_total_inc",
+                "re_net_sale",
+                "totalIncome",
+                "revenue",
+            ),
+        )
+        if year_ago
+        else None
+    )
+
+    pat_yoy = (
+        growth(
+            pat,
+            value(
+                year_ago,
+                "re_net_profit",
+                "re_proloss_ord_act",
+                "netProfit",
+                "pat",
+            ),
+        )
+        if year_ago
+        else None
+    )
+
+    output.update(
+        {
+            "latestRevenueLakh": revenue,
+            "latestPatLakh": pat,
+            "revenueYoY": revenue_yoy,
+            "patYoY": pat_yoy,
+            "revenueQoQ": revenue_qoq,
+            "patQoQ": pat_qoq,
+
+            "revenuePatPass": (
+                revenue_yoy > 0
+                and pat_yoy > 0
+                if (
+                    revenue_yoy is not None
+                    and pat_yoy is not None
+                )
+                else None
+            ),
+
+            "earningsQualityPass": (
+                revenue > 0
+                and pat > 0
+                if (
+                    revenue is not None
+                    and pat is not None
+                )
+                else None
+            ),
+        }
+    )
+
+    return output
+
