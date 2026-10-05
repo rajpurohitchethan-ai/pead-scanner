@@ -1,234 +1,1215 @@
 #!/usr/bin/env python3
-"""PEAD scanner data builder.
-
-Compatibility goals:
-- Accept both old company keys: sym/resultDate and symbol/result_date.
-- Never collapse the whole feed to zero because one ticker/API request fails.
-- Emit both old and new top-level shapes so either frontend can read data.json:
-  {generatedAt, companies} and {last_scan, stocks}.
-- Keep the ₹1,000 crore market-cap rule, but retain unknown market-cap rows as
-  unverified rather than silently deleting the whole universe when live data fails.
-"""
 
 from __future__ import annotations
 
 import json
 import math
 import os
-import time
-from datetime import datetime, timezone
+import sys
+import traceback
+
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-import yfinance as yf
 
-ROOT = Path(__file__).resolve().parent
-INPUT = ROOT / "companies.json"
-OUTPUT = ROOT / "data.json"
-MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
+BASE = Path(__file__).resolve().parent
+OUT = BASE / "data.json"
+
+MIN_MCAP_CR = 1000.0
+
+# Discover upcoming result meetings this far forward.
+UPCOMING_DAYS = 21
+
+# Pick up newly declared/filed results from this many days back.
+RECENT_DAYS = 10
+
+# Keep recent post-result stocks on the radar even after discovery moves on.
+KEEP_DAYS = 30
 
 
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+def now_iso():
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+    )
 
 
-def pick(d: dict[str, Any], *keys: str, default: Any = None) -> Any:
+def first(d, *keys, default=None):
+
+    if not isinstance(d, dict):
+        return default
+
     for key in keys:
+
         value = d.get(key)
+
         if value not in (None, ""):
             return value
+
     return default
 
 
-def as_float(value: Any) -> float | None:
+def fnum(value):
+
     try:
-        x = float(value)
-        if math.isfinite(x):
-            return x
-    except (TypeError, ValueError):
-        pass
-    return None
 
+        x = float(
+            str(value)
+            .replace(",", "")
+            .replace("%", "")
+            .strip()
+        )
 
-def normalize_symbol(value: Any) -> str:
-    if value is None:
-        return ""
-    s = str(value).strip().upper()
-    return s.replace("NSE:", "").strip()
+        return (
+            x
+            if math.isfinite(x)
+            else None
+        )
 
-
-def yahoo_symbol(symbol: str) -> str:
-    if not symbol:
-        return symbol
-    if symbol.endswith((".NS", ".BO")):
-        return symbol
-    return f"{symbol}.NS"
-
-
-def load_companies() -> list[dict[str, Any]]:
-    with INPUT.open("r", encoding="utf-8") as f:
-        raw = json.load(f)
-
-    if isinstance(raw, list):
-        rows = raw
-    elif isinstance(raw, dict):
-        rows = raw.get("companies") or raw.get("stocks") or raw.get("data") or []
-    else:
-        rows = []
-
-    return [x for x in rows if isinstance(x, dict)]
-
-
-def safe_market_cap_cr(ticker: yf.Ticker, last_price: float | None) -> float | None:
-    market_cap = None
-    try:
-        fast = ticker.fast_info
-        market_cap = as_float(fast.get("market_cap") if hasattr(fast, "get") else None)
     except Exception:
-        market_cap = None
-
-    if not market_cap:
-        try:
-            info = ticker.info or {}
-            market_cap = as_float(info.get("marketCap"))
-            if not market_cap and last_price:
-                shares = as_float(info.get("sharesOutstanding"))
-                if shares:
-                    market_cap = shares * last_price
-        except Exception:
-            market_cap = None
-
-    return round(market_cap / 10_000_000, 2) if market_cap else None
-
-
-def moving_average(close: pd.Series, n: int) -> float | None:
-    if close is None or len(close) < n:
         return None
-    val = close.rolling(n).mean().iloc[-1]
-    return round(float(val), 2) if pd.notna(val) else None
 
 
-def fetch_live(company: dict[str, Any]) -> dict[str, Any]:
-    symbol = normalize_symbol(pick(company, "symbol", "sym", "ticker", "code"))
-    result_date = pick(company, "resultDate", "result_date", "resultsDate", "earningsDate")
+def pdate(value):
 
-    row = dict(company)
-    row.update(
-        {
-            "symbol": symbol,
-            "sym": symbol,
-            "resultDate": result_date,
-            "result_date": result_date,
-            "liveStatus": "unavailable",
-            "liveError": None,
-        }
+    if not value:
+        return None
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    if isinstance(value, date):
+        return value
+
+    value = str(value).strip()
+
+    formats = (
+        "%d-%b-%Y",
+        "%d-%m-%Y",
+        "%Y-%m-%d",
+        "%d/%m/%Y",
+        "%d-%b-%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M:%S",
     )
 
-    if not symbol:
-        row["liveError"] = "Missing symbol/sym in companies.json"
-        return row
+    for fmt in formats:
 
-    ys = yahoo_symbol(symbol)
+        try:
+            return datetime.strptime(
+                value[:20],
+                fmt
+            ).date()
+
+        except Exception:
+            pass
+
     try:
-        ticker = yf.Ticker(ys)
-        hist = ticker.history(period="1y", interval="1d", auto_adjust=False, actions=False)
-        if hist is None or hist.empty:
-            raise RuntimeError("No price history returned")
 
-        close = hist["Close"].dropna()
-        volume = hist["Volume"].dropna() if "Volume" in hist.columns else pd.Series(dtype=float)
-        if close.empty:
-            raise RuntimeError("No closing prices returned")
+        return datetime.fromisoformat(
+            value.replace(
+                "Z",
+                "+00:00"
+            )
+        ).date()
 
-        last = round(float(close.iloc[-1]), 2)
-        prev = round(float(close.iloc[-2]), 2) if len(close) > 1 else None
-        change_pct = round((last / prev - 1) * 100, 2) if prev else None
-        mcap_cr = safe_market_cap_cr(ticker, last)
+    except Exception:
+        return None
 
-        vol20 = float(volume.tail(20).mean()) if len(volume) else None
-        rel_vol = round(float(volume.iloc[-1]) / vol20, 2) if vol20 and vol20 > 0 else None
 
-        row.update(
-            {
-                "ticker": ys,
-                "price": last,
-                "lastPrice": last,
-                "previousClose": prev,
-                "changePct": change_pct,
-                "marketCapCr": mcap_cr if mcap_cr is not None else as_float(pick(company, "marketCapCr", "mcapCr")),
-                "ma10": moving_average(close, 10),
-                "ma20": moving_average(close, 20),
-                "ma50": moving_average(close, 50),
-                "ma200": moving_average(close, 200),
-                "relativeVolume": rel_vol,
-                "priceTimestamp": hist.index[-1].isoformat() if len(hist.index) else utc_now_iso(),
-                "liveStatus": "ok",
-                "liveError": None,
-            }
+def iso(value):
+
+    d = pdate(value)
+
+    return (
+        d.isoformat()
+        if d
+        else None
+    )
+
+
+def clean_symbol(value):
+
+    symbol = (
+        str(value or "")
+        .strip()
+        .upper()
+    )
+
+    if symbol.endswith(".NS"):
+        symbol = symbol[:-3]
+
+    return symbol
+
+
+def get_method(obj, *names):
+
+    for name in names:
+
+        fn = getattr(
+            obj,
+            name,
+            None
         )
+
+        if callable(fn):
+            return fn
+
+    raise AttributeError(
+        "/".join(names)
+    )
+
+
+def safe_call(
+    label,
+    fn,
+    *args,
+    **kwargs
+):
+
+    try:
+
+        return fn(
+            *args,
+            **kwargs
+        )
+
     except Exception as exc:
-        row["liveError"] = f"{type(exc).__name__}: {exc}"
-        # Keep source market cap if present so a temporary quote failure does not
-        # erase the row from the dashboard.
-        source_mcap = as_float(pick(company, "marketCapCr", "mcapCr", "market_cap_cr"))
-        if source_mcap is not None:
-            row["marketCapCr"] = source_mcap
 
-    mcap = as_float(row.get("marketCapCr"))
-    row["marketCapPass"] = None if mcap is None else mcap >= MIN_MCAP_CR
+        print(
+            f"[WARN] {label}: {exc}"
+        )
 
-    # Preserve strategy classifications already present in companies.json.
-    # Only add a neutral status when the source has none.
-    if not pick(row, "peadStatus", "stage", "status", "bucket"):
-        row["peadStatus"] = "In Review"
-
-    return row
+        return None
 
 
-def main() -> int:
-    started = utc_now_iso()
-    companies = load_companies()
+def extract_symbol(row):
 
-    scanned: list[dict[str, Any]] = []
-    errors: list[dict[str, str]] = []
-
-    for i, company in enumerate(companies):
-        row = fetch_live(company)
-        # Enforce ₹1,000 Cr only when market cap is actually known.
-        # Unknown rows remain visible as unverified rather than being dropped.
-        if row.get("marketCapPass") is not False:
-            scanned.append(row)
-        if row.get("liveError"):
-            errors.append({"symbol": row.get("symbol", ""), "error": row["liveError"]})
-        # Be kind to upstream quote endpoints.
-        if i and i % 20 == 0:
-            time.sleep(0.5)
-
-    payload = {
-        "generatedAt": started,
-        "last_scan": started,
-        "lastScanAt": started,
-        "minMarketCapCr": MIN_MCAP_CR,
-        "sourceCount": len(companies),
-        "scanCount": len(scanned),
-        "errorCount": len(errors),
-        "errors": errors,
-        # Compatibility aliases: old and new frontends can both consume this.
-        "companies": scanned,
-        "stocks": scanned,
-    }
-
-    tmp = OUTPUT.with_suffix(".json.tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
-        f.write("\n")
-    tmp.replace(OUTPUT)
-
-    print(f"PEAD scan complete: source={len(companies)} visible={len(scanned)} errors={len(errors)}")
-    return 0
+    return clean_symbol(
+        first(
+            row,
+            "symbol",
+            "SYMBOL",
+            "sm_symbol",
+            "smSymbol",
+            "nseSymbol",
+        )
+    )
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
-    
+def extract_company(
+    row,
+    symbol
+):
+
+    return str(
+        first(
+            row,
+            "companyName",
+            "company",
+            "sm_name",
+            "smName",
+            "name",
+            default=symbol,
+        )
+    )
+
+
+def combined_text(row):
+
+    keys = (
+        "purpose",
+        "bmPurpose",
+        "subject",
+        "description",
+        "desc",
+        "remarks",
+        "relatingTo",
+    )
+
+    return " ".join(
+        str(
+            row.get(
+                key,
+                ""
+            )
+        )
+        for key in keys
+    ).lower()
+
+
+def is_result_meeting(row):
+
+    text = combined_text(row)
+
+    return (
+        "financial result" in text
+        or
+        "quarterly result" in text
+        or
+        "results" in text
+    )
+
+
+# ---------------------------------------------------------
+# Previous radar
+# ---------------------------------------------------------
+
+def previous_rows():
+
+    if not OUT.exists():
+        return {}
+
+    try:
+
+        payload = json.loads(
+            OUT.read_text(
+                encoding="utf-8"
+            )
+        )
+
+        rows = (
+            payload.get(
+                "companies"
+            )
+            or
+            payload.get(
+                "stocks"
+            )
+            or
+            []
+        )
+
+        result = {}
+
+        for row in rows:
+
+            if not isinstance(
+                row,
+                dict
+            ):
+                continue
+
+            symbol = clean_symbol(
+                first(
+                    row,
+                    "symbol",
+                    "sym",
+                )
+            )
+
+            if symbol:
+                result[symbol] = row
+
+        return result
+
+    except Exception:
+        return {}
+
+
+# ---------------------------------------------------------
+# LIVE DISCOVERY
+# ---------------------------------------------------------
+
+def discover(nse):
+
+    today = (
+        datetime.now(
+            timezone.utc
+        ).date()
+    )
+
+    recent_start = (
+        today
+        - timedelta(
+            days=RECENT_DAYS
+        )
+    )
+
+    upcoming_end = (
+        today
+        + timedelta(
+            days=UPCOMING_DAYS
+        )
+    )
+
+    candidates = {}
+
+    # ---------------------------------------------
+    # UPCOMING RESULTS
+    # ---------------------------------------------
+
+    board_fn = get_method(
+        nse,
+        "board_meetings",
+        "boardMeetings",
+    )
+
+    board_rows = (
+        safe_call(
+            "NSE board meetings",
+            board_fn,
+            index="equities",
+            from_date=datetime.combine(
+                today,
+                datetime.min.time()
+            ),
+            to_date=datetime.combine(
+                upcoming_end,
+                datetime.max.time()
+            ),
+        )
+        or
+        []
+    )
+
+    for row in board_rows:
+
+        if not isinstance(
+            row,
+            dict
+        ):
+            continue
+
+        if not is_result_meeting(
+            row
+        ):
+            continue
+
+        symbol = extract_symbol(
+            row
+        )
+
+        if not symbol:
+            continue
+
+        result_date = iso(
+            first(
+                row,
+                "meetingDate",
+                "bmDate",
+                "date",
+                "meeting_date",
+            )
+        )
+
+        candidates[
+            symbol
+        ] = {
+
+            "symbol":
+                symbol,
+
+            "sym":
+                symbol,
+
+            "name":
+                extract_company(
+                    row,
+                    symbol
+                ),
+
+            "resultDate":
+                result_date,
+
+            "result_date":
+                result_date,
+
+            "quarter":
+                str(
+                    first(
+                        row,
+                        "relatingTo",
+                        "quarter",
+                        default=
+                        "Upcoming result",
+                    )
+                ),
+
+            "bucket":
+                "Upcoming",
+
+            "discoverySource":
+                "NSE board meetings",
+        }
+
+    # ---------------------------------------------
+    # NEWLY DECLARED RESULTS
+    # ---------------------------------------------
+
+    results_fn = get_method(
+        nse,
+        "financial_results",
+        "financialResults",
+    )
+
+    result_rows = (
+        safe_call(
+            "NSE financial results",
+            results_fn,
+            segment="equities",
+            period="quarterly",
+
+            from_date=
+                datetime.combine(
+                    recent_start,
+                    datetime.min.time()
+                ),
+
+            to_date=
+                datetime.combine(
+                    today,
+                    datetime.max.time()
+                ),
+        )
+        or
+        []
+    )
+
+    for row in result_rows:
+
+        if not isinstance(
+            row,
+            dict
+        ):
+            continue
+
+        symbol = extract_symbol(
+            row
+        )
+
+        if not symbol:
+            continue
+
+        result_date = (
+            iso(
+                first(
+                    row,
+                    "broadcastDate",
+                    "broadcastDateTime",
+                    "filingDate",
+                    "date",
+                )
+            )
+            or
+            today.isoformat()
+        )
+
+        candidates[
+            symbol
+        ] = {
+
+            **candidates.get(
+                symbol,
+                {}
+            ),
+
+            "symbol":
+                symbol,
+
+            "sym":
+                symbol,
+
+            "name":
+                extract_company(
+                    row,
+                    symbol
+                ),
+
+            "resultDate":
+                result_date,
+
+            "result_date":
+                result_date,
+
+            "quarter":
+                str(
+                    first(
+                        row,
+                        "relatingTo",
+                        "toDate",
+                        "periodEnded",
+                        default="Quarterly",
+                    )
+                ),
+
+            "bucket":
+                "Post-results",
+
+            "discoverySource":
+                "NSE financial results",
+        }
+
+    return (
+        candidates,
+        len(board_rows),
+        len(result_rows),
+    )
+
+
+# ---------------------------------------------------------
+# Keep recent tracked stocks
+# ---------------------------------------------------------
+
+def carry_forward(
+    candidates,
+    old
+):
+
+    cutoff = (
+        datetime.now(
+            timezone.utc
+        ).date()
+        -
+        timedelta(
+            days=KEEP_DAYS
+        )
+    )
+
+    kept = 0
+
+    for symbol, row in old.items():
+
+        if symbol in candidates:
+            continue
+
+        result_date = pdate(
+            first(
+                row,
+                "resultDate",
+                "result_date",
+            )
+        )
+
+        status = str(
+            first(
+                row,
+                "bucket",
+                "peadStatus",
+                "stage",
+                default="",
+            )
+        ).lower()
+
+        keep = (
+
+            (
+                result_date
+                and
+                result_date >= cutoff
+            )
+
+            or
+
+            "qualified" in status
+
+            or
+
+            "caution" in status
+
+            or
+
+            "review" in status
+        )
+
+        if not keep:
+            continue
+
+        candidates[
+            symbol
+        ] = {
+
+            **row,
+
+            "symbol":
+                symbol,
+
+            "sym":
+                symbol,
+        }
+
+        kept += 1
+
+    return kept
+
+
+# ---------------------------------------------------------
+# LIVE NSE MARKET DATA
+# ---------------------------------------------------------
+
+def unpack_detailed(payload):
+
+    if not isinstance(
+        payload,
+        dict
+    ):
+        return {}
+
+    rows = payload.get(
+        "equityResponse"
+    )
+
+    if (
+        isinstance(
+            rows,
+            list
+        )
+        and
+        rows
+        and
+        isinstance(
+            rows[0],
+            dict
+        )
+    ):
+        return rows[0]
+
+    return payload
+
+
+def enrich_market(
+    nse,
+    row
+):
+
+    symbol = row[
+        "symbol"
+    ]
+
+    detailed_fn = get_method(
+        nse,
+        "get_detailed_scrip_data",
+        "getDetailedScripData",
+    )
+
+    payload = safe_call(
+        f"{symbol} quote",
+        detailed_fn,
+        symbol,
+    )
+
+    output = dict(
+        row
+    )
+
+    output.update({
+
+        "liveStatus":
+            "unavailable",
+
+        "liveError":
+            None,
+
+        "priceTimestamp":
+            now_iso(),
+    })
+
+    if not payload:
+
+        output[
+            "liveError"
+        ] = (
+            "NSE quote unavailable"
+        )
+
+        return output
+
+    data = unpack_detailed(
+        payload
+    )
+
+    order = (
+        data.get(
+            "orderBook"
+        )
+        or
+        {}
+    )
+
+    meta = (
+        data.get(
+            "metaData"
+        )
+        or
+        data.get(
+            "metadata"
+        )
+        or
+        {}
+    )
+
+    trade = (
+        data.get(
+            "tradeInfo"
+        )
+        or
+        {}
+    )
+
+    sec = (
+        data.get(
+            "secInfo"
+        )
+        or
+        {}
+    )
+
+    price = (
+        fnum(
+            first(
+                order,
+                "lastPrice"
+            )
+        )
+        or
+        fnum(
+            first(
+                trade,
+                "lastPrice"
+            )
+        )
+        or
+        fnum(
+            first(
+                meta,
+                "closePrice"
+            )
+        )
+    )
+
+    previous_close = fnum(
+        first(
+            meta,
+            "previousClose",
+            "basePrice",
+        )
+    )
+
+    change_pct = fnum(
+        first(
+            meta,
+            "pChange"
+        )
+    )
+
+    if (
+        change_pct is None
+        and
+        price is not None
+        and
+        previous_close not in (
+            None,
+            0
+        )
+    ):
+
+        change_pct = round(
+            (
+                price
+                -
+                previous_close
+            )
+            /
+            previous_close
+            *
+            100,
+            2,
+        )
+
+    # NSE returns totalMarketCap
+    # in rupees.
+    total_market_cap = fnum(
+        first(
+            trade,
+            "totalMarketCap"
+        )
+    )
+
+    market_cap_cr = (
+
+        round(
+            total_market_cap
+            /
+            10_000_000,
+            2
+        )
+
+        if
+        total_market_cap
+        is not None
+
+        else
+        None
+    )
+
+    output.update({
+
+        "name":
+            str(
+                first(
+                    meta,
+                    "companyName",
+                    default=
+                    output.get(
+                        "name",
+                        symbol
+                    ),
+                )
+            ),
+
+        "sector":
+            str(
+                first(
+                    sec,
+                    "sector",
+                    "basicIndustry",
+                    "industryInfo",
+                    default="—",
+                )
+            ),
+
+        "industry":
+            str(
+                first(
+                    sec,
+                    "industryInfo",
+                    "basicIndustry",
+                    default="—",
+                )
+            ),
+
+        "price":
+            price,
+
+        "lastPrice":
+            price,
+
+        "previousClose":
+            previous_close,
+
+        "changePct":
+            change_pct,
+
+        "marketCapCr":
+            market_cap_cr,
+
+        "marketCapPass":
+            (
+                market_cap_cr
+                >=
+                MIN_MCAP_CR
+
+                if
+                market_cap_cr
+                is not None
+
+                else
+                None
+            ),
+
+        "volume":
+            fnum(
+                first(
+                    trade,
+                    "totalTradedVolume",
+                    "quantitytraded",
+                )
+            ),
+
+        "deliveryPct":
+            fnum(
+                first(
+                    trade,
+                    "deliveryToTradedQuantity",
+                )
+            ),
+
+        "indexList":
+            sec.get(
+                "indexList"
+            )
+            or
+            [],
+
+        "liveStatus":
+            (
+                "ok"
+                if price is not None
+                else
+                "unavailable"
+            ),
+
+        "liveError":
+            (
+                None
+                if price is not None
+                else
+                "Price missing"
+            ),
+
+        "priceTimestamp":
+            first(
+                payload,
+                "lastUpdateTime",
+                default=now_iso(),
+            ),
+    })
+
+    return output
+
+
+# ---------------------------------------------------------
+# Result comparison
+# ---------------------------------------------------------
+
+def growth(
+    current,
+    old
+):
+
+    if (
+        current is None
+        or
+        old in (
+            None,
+            0
+        )
+    ):
+        return None
+
+    return round(
+        (
+            current
+            -
+            old
+        )
+        /
+        abs(old)
+        *
+        100,
+        2,
+    )
+
+
+def enrich_results(
+    nse,
+    row
+):
+
+    output = dict(
+        row
+    )
+
+    # Results have not happened yet.
+    if (
+        str(
+            output.get(
+                "bucket",
+                ""
+            )
+        ).lower()
+        ==
+        "upcoming"
+    ):
+        return output
+
+    compare_fn = get_method(
+        nse,
+        "results_comparison",
+        "resultsComparison",
+    )
+
+    payload = (
+        safe_call(
+            output[
+                "symbol"
+            ]
+            +
+            " results",
+
+            compare_fn,
+
+            output[
+                "symbol"
+            ],
+        )
+        or
+        {}
+    )
+
+    rows = (
+        payload.get(
+            "resCmpData"
+        )
+        if
+        isinstance(
+            payload,
+            dict
+        )
+        else
+        None
+    )
+
+    if (
+        not isinstance(
+            rows,
+            list
+        )
+        or
+        not rows
+    ):
+        return output
+
+    def value(
+        result_row,
+        *keys
+    ):
+
+        return fnum(
+            first(
+                result_row,
+                *keys
+            )
+        )
+
+    latest = (
+        rows[0]
+        if
+        isinstance(
+            rows[0],
+            dict
+        )
+        else
+        {}
+    )
+
+    year_ago = (
+
+        rows[4]
+
+        if
+        len(rows) >= 5
+        and
+        isinstance(
+            rows[4],
+            dict
+        )
+
+        else
+        None
+    )
+
+    previous = (
+
+        rows[1]
+
+        if
+        len(rows) >= 2
+        and
+        isinstance(
+            rows[1],
+            dict
+        )
+
+        else
+        None
+    )
+
+    revenue = value(
+        latest,
+        "re_total_inc",
+        "totalIncome",
+        "revenue",
+        "total_revenue",
+    )
+
+    pat = value(
+        latest,
+        "re_net_profit",
+        "netProfit",
+        "pat",
+        "profitAfterTax",
+    )
+
+    revenue_yoy = (
+        growth(
+            revenue,
+            value(
+                year_ago,
+                "re_total_inc",
+                "totalIncome",
+                "revenue",
+                "total_revenue",
+            )
+        )
+        if year_ago
+        else None
+    )
+
+    pat_yoy = (
+        growth(
+            pat,
+            value(
+                year_ago,
+                "re_net_profit",
+                "netProfit",
+                "pat",
+                "profitAfterTax",
+            )
+        )
+        if year_ago
+        else None
+    )
+
+    revenue_qoq = (
+        growth(
+            revenue,
+            value(
+                previous,
+                "re_total_inc",
+                "totalIncome",
+                "revenue",
+                "total_revenue",
+            )
+        )
+        if previous
+        else None
+    )
+
+    pat_qoq = (
+        growth(
+            pat,
+            value(
+                previous,
+                "re_net_profit",
+                "netProfit",
+                "pat",
+                "profitAfterTax",
+            )
+        )
+        if previous
+        else None
+    )
+
+    output.update({
+
+        "latestRevenueLakh":
+            revenue,
+
+        "latestPatLakh":
+            pat,
+
+        "revenueYoY":
+            revenue_yoy,
+
+        "patYoY":
+            pat_yoy,
+
+        "revenueQoQ":
+            revenue_qoq,
+
+        "patQoQ":
+            pat_qoq,
+
+        "revenueP
