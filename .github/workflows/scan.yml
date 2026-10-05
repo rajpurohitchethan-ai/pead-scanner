@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
 
   schedule:
-    # Runs every hour, Monday-Friday.
-    # GitHub cron uses UTC.
+    # Every hour Monday-Friday
+    # GitHub Actions cron uses UTC
     - cron: "0 * * * 1-5"
 
 permissions:
@@ -18,7 +18,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -36,6 +36,17 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --upgrade nse
 
+      - name: Show NSE package version
+        run: |
+          python - <<'PY'
+          import importlib.metadata
+
+          try:
+              print("nse version:", importlib.metadata.version("nse"))
+          except Exception as exc:
+              print("Unable to read nse version:", exc)
+          PY
+
       - name: Check scanner syntax
         run: |
           python -m py_compile scan.py
@@ -44,7 +55,7 @@ jobs:
         run: |
           python scan.py
 
-      - name: Validate data.json
+      - name: Validate live data.json
         run: |
           python - <<'PY'
           import json
@@ -54,85 +65,193 @@ jobs:
           path = Path("data.json")
 
           if not path.exists():
-              print("ERROR: data.json was not created")
+              print("ERROR: data.json does not exist")
               sys.exit(1)
 
           try:
-              data = json.loads(path.read_text(encoding="utf-8"))
+              data = json.loads(
+                  path.read_text(
+                      encoding="utf-8"
+                  )
+              )
           except Exception as exc:
-              print("ERROR: invalid data.json:", exc)
+              print(
+                  "ERROR: invalid JSON:",
+                  exc
+              )
               sys.exit(1)
 
-          stocks = data.get("stocks")
-
-          if not isinstance(stocks, list):
-              stocks = data.get("companies")
-
-          if not isinstance(stocks, list):
-              print("ERROR: data.json contains neither a stocks[] nor companies[] list")
-              sys.exit(1)
-
-          if len(stocks) == 0:
-              print("ERROR: scanner produced 0 stocks")
-              print("Refusing to publish empty radar data")
-              sys.exit(1)
-
-          mode = data.get("scannerMode")
-          source = data.get("source")
-          errors = data.get("errorCount", 0)
-          discovered = data.get("discoveredCandidateCount", "unknown")
-
-          print("================================")
-          print("PEAD DATA VALIDATION")
-          print("================================")
-          print("Scanner mode:", mode)
-          print("Source:", source)
-          print("Discovered candidates:", discovered)
-          print("Published stocks:", len(stocks))
-          print("Scanner errors:", errors)
+          mode = data.get(
+              "scannerMode"
+          )
 
           if mode != "live-discovery":
               print(
-                  "WARNING: scannerMode is not live-discovery. "
-                  "Check whether the latest scan.py is committed."
+                  "ERROR: scannerMode is",
+                  mode
               )
+              print(
+                  "Expected live-discovery"
+              )
+              sys.exit(1)
 
-          print("data.json validation passed")
+          stocks = (
+              data.get("stocks")
+              or
+              data.get("companies")
+              or
+              []
+          )
+
+          if not isinstance(
+              stocks,
+              list
+          ):
+              print(
+                  "ERROR: stocks is not a list"
+              )
+              sys.exit(1)
+
+          if len(stocks) == 0:
+              print(
+                  "ERROR: live scanner "
+                  "published 0 stocks"
+              )
+              sys.exit(1)
+
+          print(
+              "================================="
+          )
+          print(
+              "LIVE DATA VALIDATION PASSED"
+          )
+          print(
+              "================================="
+          )
+
+          print(
+              "Scanner mode:",
+              mode
+          )
+
+          print(
+              "Source:",
+              data.get("source")
+          )
+
+          print(
+              "Board meetings:",
+              data.get(
+                  "boardMeetingRows"
+              )
+          )
+
+          print(
+              "Financial results:",
+              data.get(
+                  "financialResultRows"
+              )
+          )
+
+          print(
+              "Discovered candidates:",
+              data.get(
+                  "discoveredCandidateCount"
+              )
+          )
+
+          print(
+              "Published stocks:",
+              len(stocks)
+          )
+
+          print(
+              "Errors:",
+              data.get(
+                  "errorCount"
+              )
+          )
           PY
 
-      - name: Show scanner summary
+      - name: Show live scanner summary
         run: |
           python - <<'PY'
           import json
 
-          with open("data.json", "r", encoding="utf-8") as f:
+          with open(
+              "data.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
               d = json.load(f)
 
-          rows = d.get("stocks") or d.get("companies") or []
+          rows = (
+              d.get("stocks")
+              or
+              d.get("companies")
+              or
+              []
+          )
 
           print("")
-          print("========== PEAD LIVE SCAN ==========")
-          print("Generated:", d.get("generatedAt"))
-          print("Mode:", d.get("scannerMode"))
-          print("Source:", d.get("source"))
-          print("Discovered:", d.get("discoveredCandidateCount"))
-          print("Published:", len(rows))
-          print("Below ₹1,000 Cr:", d.get("marketCapRejectedCount"))
-          print("Market cap unavailable:", d.get("marketCapUnavailableCount"))
-          print("Errors:", d.get("errorCount"))
-          print("====================================")
-          print("")
+          print(
+              "========== LIVE PEAD SCAN =========="
+          )
 
-          for stock in rows[:20]:
+          print(
+              "Generated:",
+              d.get("generatedAt")
+          )
+
+          print(
+              "Mode:",
+              d.get("scannerMode")
+          )
+
+          print(
+              "Source:",
+              d.get("source")
+          )
+
+          print(
+              "Discovered:",
+              d.get(
+                  "discoveredCandidateCount"
+              )
+          )
+
+          print(
+              "Published:",
+              len(rows)
+          )
+
+          print(
+              "Below ₹1,000 Cr:",
+              d.get(
+                  "marketCapRejectedCount"
+              )
+          )
+
+          print(
+              "Errors:",
+              d.get("errorCount")
+          )
+
+          print(
+              "===================================="
+          )
+
+          for stock in rows[:30]:
               print(
                   stock.get("symbol"),
                   "|",
                   stock.get("bucket"),
-                  "| ₹",
+                  "| Price:",
                   stock.get("price"),
                   "| Mcap:",
                   stock.get("marketCapCr"),
-                  "Cr",
+                  "| Result:",
+                  stock.get("resultDate"),
               )
           PY
 
@@ -145,7 +264,11 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "No data.json changes to commit"
-          else
-            git commit -m "chore: refresh live PEAD scan"
-            git push
+            exit 0
           fi
+
+          git commit -m "chore: refresh live PEAD scan"
+
+          git pull --rebase origin main
+
+          git push origin main
