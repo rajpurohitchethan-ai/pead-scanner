@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PEAD J-Curve Radar</title><style>
+:root{--bg:#f6f7f9;--c:#fff;--t:#14181f;--m:#667085;--a:#0f766e;--b:#e3e6ea;--g:#15803d;--r:#b91c1c}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1116;--c:#171b22;--t:#e8ebf0;--m:#98a2b3;--a:#2dd4bf;--b:#262c36;--g:#4ade80;--r:#f87171}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:15px/1.5 system-ui,sans-serif}
+main{max-width:1000px;margin:auto;padding:20px 16px 40px}h1{margin:0;font-size:26px}.m{color:var(--m);font-size:13px}
+.eye{color:var(--a);font-size:12px;letter-spacing:.08em;font-weight:600}
+#st{background:var(--c);border:1px solid var(--b);border-left:3px solid var(--a);border-radius:10px;padding:10px 12px;margin:12px 0;font-size:13.5px}
+#st.old{border-left-color:var(--r)}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin:14px 0}
+.stat div{background:var(--c);border:1px solid var(--b);border-radius:10px;padding:10px 12px}.stat b{display:block;font-size:22px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}input,select{flex:1;min-width:140px;background:var(--c);color:var(--t);border:1px solid var(--b);border-radius:8px;padding:8px 10px;font:inherit}
+.card{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:14px;margin-bottom:10px}
+.row{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.dt{color:var(--a);font-weight:600;font-size:13px}
+.tag{font-size:11px;border:1px solid var(--b);border-radius:99px;padding:1px 8px;color:var(--m)}
+.up{color:var(--g)}.dn{color:var(--r)}.px{font-weight:600}.sm{font-size:13px;margin-top:6px}
+</style></head><body><main>
+<div class="eye">MARKET-WIDE / EARNINGS MOMENTUM</div><h1>PEAD J-Curve Radar</h1>
+<div id="st">Loading…</div><div class="stat" id="stat"></div>
+<div class="bar"><input id="q" placeholder="Find company"><select id="sec"></select><select id="ph"><option value="">All phases</option><option>Upcoming</option><option>Result day</option><option>Post-results</option></select></div>
+<div id="list"></div></main>
+<script>
+const $=i=>document.getElementById(i),e=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const f=(n,s="")=>n==null?"–":(n>0&&s=="%"?"+":"")+n+s,cl=n=>n>0?"up":n<0?"dn":"";
+let D=null;
+async function load(){try{D=await (await fetch("data.json?"+Date.now())).json();render()}catch(x){$("st").textContent="Could not load data.json yet. Run the PEAD scan workflow once."}}
+function render(){
+ if(!D)return;const q=$("q").value.toLowerCase(),sc=$("sec").value,ph=$("ph").value,all=D.companies;
+ const age=(Date.now()-new Date(D.generatedAt))/6e4;
+ $("st").className=age>180?"old":"";
+ $("st").innerHTML=`<b>Last scan:</b> ${new Date(D.generatedAt).toLocaleString("en-IN",{timeZone:"Asia/Kolkata",dateStyle:"medium",timeStyle:"short"})} IST (${Math.round(age)} min ago)<br>Prices: ${e(D.status.yahoo)} · NSE calendar: ${e(D.status.nse_calendar)}. Quotes are end-of-day or delayed, not tick data.`;
+ const secs=[...new Set(all.map(r=>r.sector))].sort(),cur=$("sec").value;
+ $("sec").innerHTML='<option value="">All sectors</option>'+secs.map(s=>`<option ${s==cur?"selected":""}>${e(s)}</option>`).join("");
+ const cnt=p=>all.filter(r=>r.phase==p).length;
+ $("stat").innerHTML=[["Upcoming",cnt("Upcoming")],["Result day",cnt("Result day")],["Post-results",cnt("Post-results")],["Near entry",all.filter(r=>r.nearEntry).length]].map(x=>`<div><b>${x[1]}</b><span class="m">${x[0]}</span></div>`).join("");
+ const rows=all.filter(r=>(!sc||r.sector==sc)&&(!ph||r.phase==ph)&&(!q||(r.name+r.sym).toLowerCase().includes(q))).sort((a,b)=>a.resultDate.localeCompare(b.resultDate));
+ $("list").innerHTML=rows.map(r=>{const x=r.reaction;return `<div class="card"><div class="row"><div><span class="dt">${r.resultDate}</span> · <b>${e(r.name)}</b> <span class="m">${r.sym} · ${e(r.quarter)} · ${r.phase}</span></div>
+ <div class="px">${r.error?'<span class="dn">no data</span>':"₹"+r.price+` <span class="${cl(r.chg)}">${f(r.chg,"%")}</span>`}</div></div>
+ ${r.error?`<div class="sm m">${e(r.error)}</div>`:`<div class="sm">Above ${r.aboveDma}/4 DMAs (10/20/50/200: ${[r.dma10,r.dma20,r.dma50,r.dma200].map(v=>f(v)).join(" / ")}) · Vol ${f(r.volRatio,"x")} avg · 52w high ₹${r.high52}${r.mcapCr?` · Mcap ₹${r.mcapCr.toLocaleString("en-IN")} cr`:""}</div>`}
+ ${x?`<div class="sm">Reaction ${x.day}: gap <span class="${cl(x.gapPct)}">${f(x.gapPct,"%")}</span>, day <span class="${cl(x.dayPct)}">${f(x.dayPct,"%")}</span>, volume ${x.volRatio}x · since result <span class="${cl(x.sincePct)}">${f(x.sincePct,"%")}</span> · ${x.holdingAboveDayHigh?"holding above":"below"} reaction-day high ₹${x.dayHigh}</div>`:""}
+ ${r.nseDate&&r.nseDate!=r.resultDate?`<div class="sm dn">NSE lists a board meeting on ${e(r.nseDate)}; check the date.</div>`:""}
+ <div class="row sm"><span class="tag">${e(r.sector)}</span><span class="m">${e(r.bucket)} · Entry ${f(r.entry)} · SL ${f(r.sl)} ${r.nearEntry?'· <b class="up">NEAR ENTRY</b>':""}</span></div></div>`}).join("")||'<div class="m">No match.</div>';
+}
+["q","sec","ph"].forEach(i=>$(i).oninput=render);load();setInterval(load,3e5);
+</script></body></html>
