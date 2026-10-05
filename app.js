@@ -708,48 +708,49 @@ function setCardCount(
 
 
 function updateCounts() {
+  const all = allStocks.length;
 
-  setCardCount(
-    'cardAll',
-    allStocks.length
-  );
+  const upcoming = allStocks.filter(
+    s => s.stageView === 'Upcoming'
+  ).length;
 
-  setCardCount(
-    'cardPostResults',
-    allStocks.filter(
-      s =>
-        s.stageView ===
-        'Post-results'
-    ).length
-  );
+  const post = allStocks.filter(
+    s => s.stageView === 'Post-results'
+  ).length;
 
-  setCardCount(
-    'cardUpcoming',
-    allStocks.filter(
-      s =>
-        s.stageView ===
-        'Upcoming'
-    ).length
-  );
+  const caution = allStocks.filter(
+    s => s.stageView === 'Caution'
+  ).length;
 
-  setCardCount(
-    'cardCaution',
-    allStocks.filter(
-      s =>
-        s.stageView ===
-        'Caution'
-    ).length
-  );
+  const qualified = allStocks.filter(
+    s => s.stageView === 'Qualified'
+  ).length;
 
-  setCardCount(
-    'cardQualified',
-    allStocks.filter(
-      s =>
-        s.stageView ===
-        'Qualified'
-    ).length
-  );
+  setCardCount('cardAll', all);
+  setCardCount('cardUpcoming', upcoming);
+  setCardCount('cardPostResults', post);
+  setCardCount('cardCaution', caution);
+  setCardCount('cardQualified', qualified);
+
+  const labels = {
+    tabBtnAll: `All Stocks (${all})`,
+    tabBtnUpcoming: `Awaiting Results (${upcoming})`,
+    tabBtnPost: `Results Declared (${post})`,
+    tabBtnCaution: `Caution / Priced In (${caution})`,
+    tabBtnQualified: `Fully Qualified (${qualified})`
+  };
+
+  Object.entries(labels).forEach(([id, label]) => {
+    const el = document.getElementById(id);
+
+    if (el) {
+      el.textContent = label;
+    }
+  });
 }
+
+
+function updateTabButtons() {
 
 
 /* --------------------------------------------------
