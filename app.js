@@ -234,4 +234,68 @@ function calculateTrade() {
     document.getElementById('resMaxShares').innerText = `${maxShares} Shares`;
     document.getElementById('resTarget1').innerText = `₹${(entry + riskPerShare * 1.5).toFixed(2)}`;
     document.getElementById('resTarget2').innerText = `₹${(entry + riskPerShare * 2.5).toFixed(2)}`;
-    document.getElementById('resRiskPct').className = riskPct > 5 ? 
+    document.getElementById('resRiskPct').className = riskPct > 5 ? "text-base font-bold text-rose-400 mt-0.5" : "text-base font-bold text-emerald-400 mt-0.5";
+  }
+}
+
+function toggleSection(sectionId) {
+  const el = document.getElementById(sectionId);
+  if (!el) return;
+  const isHidden = el.classList.toggle('hidden');
+  if (!isHidden) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const map = { sizingSection: ['tabBtnCalculator', 'btn-toggle-calc-active'], rulesSection: ['tabBtnRules', 'btn-toggle-rules-active'] };
+  const m = map[sectionId];
+  if (m) { const btn = document.getElementById(m[0]); if (btn) btn.classList.toggle(m[1], !isHidden); }
+}
+
+function loadStockInCalculator() {
+  if (!activeModalStock) return;
+  const s = activeModalStock;
+  closeModal();
+  const calcSec = document.getElementById('sizingSection');
+  if (calcSec && calcSec.classList.contains('hidden')) toggleSection('sizingSection');
+  if (s.entryNum) document.getElementById('calcEntry').value = s.entryNum;
+  if (s.slNum) document.getElementById('calcSL').value = s.slNum;
+  calculateTrade();
+  if (calcSec) calcSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function loadData() {
+  const icon = document.getElementById('refreshIcon');
+  if (icon) icon.classList.add('animate-spin');
+  try {
+    let res;
+    try {
+      res = await fetch('https://raw.githubusercontent.com/rajpurohitchethan-ai/pead-scanner/main/data.json?' + Date.now());
+      if (!res.ok) throw new Error('raw fetch failed');
+    } catch (e) {
+      res = await fetch('data.json?' + Date.now());
+    }
+    scanMeta = await res.json();
+    const ok = scanMeta.companies.filter(c => !c.error);
+    scanMeta.latestAsOf = ok.map(c => c.asOf).sort().pop();
+    fullRadarData = ok.map(mapScan);
+    const info = updateCounts();
+    updateStatusPanel(info);
+    selectStageTab(currentFilterStage);
+  } catch (e) {
+    document.getElementById('currentViewTitle').innerText = 'Could not load data.json. Run the PEAD scan workflow once.';
+  }
+  if (icon) icon.classList.remove('animate-spin');
+}
+function forceScanRefresh() { loadData(); }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('stockModal');
+  if (modal) modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+window.selectStageTab = selectStageTab; window.openModal = openModal; window.closeModal = closeModal;
+window.toggleSection = toggleSection; window.loadStockInCalculator = loadStockInCalculator;
+window.calculateTrade = calculateTrade; window.forceScanRefresh = forceScanRefresh; window.filterRadarTable = filterRadarTable;
+
+selectStageTab('ALL');
+calculateTrade();
+loadData();
+setInterval(loadData, 300000);
