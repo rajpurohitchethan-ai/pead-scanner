@@ -624,4 +624,200 @@ def qualify(row, stock_history, sector_history):
     out["sl"] = None
     out["tsl"] = None
     out["entryTriggerPass"] = None
-    o
+    out["candidateStatus"] = None
+    out["allocationPct"] = None
+
+    if bucket == "Qualified":
+        highs = [
+            value
+            for value in (
+                num(out.get("resultDayHigh")),
+                num(out.get("preResult20dHigh")),
+                num(stock_history["High"].tail(5).max())
+                if not stock_history.empty and "High" in stock_history
+                else None,
+            )
+            if value is not None
+        ]
+
+        if highs:
+            entry = max(highs) * 1.002
+            out["entry"] = round2(entry)
+            current = num(out.get("price")) or num(out.get("lastClose"))
+            out["entryTriggerPass"] = current is not None and current >= entry
+
+        lows = [
+            value
+            for value in (
+                num(out.get("resultDayLow")),
+                num(out.get("ma20")),
+            )
+            if value is not None
+        ]
+
+        if lows:
+            out["sl"] = round2(min(lows) * 0.995)
+
+        out["tsl"] = round2(out.get("ma10"))
+        out["candidateStatus"] = (
+            "Entry Triggered" if out.get("entryTriggerPass") else "Potential Candidate"
+        )
+
+        rvol = num(out.get("relativeVolume"))
+        if (
+            out.get("entryTriggerPass")
+            and out.get("sectorTailwind") is True
+            and rvol is not None
+            and rvol >= 2
+        ):
+            out["allocationPct"] = 30
+        elif out.get("entryTriggerPass"):
+            out["allocationPct"] = 20
+        else:
+            out["allocationPct"] = 10
+
+    out["qualificationVersion"] = "pead-v1.1-nse-mcp"
+    return out
+
+
+def main():
+    warnings.filterwarnings("ignore")
+    payload, rows = load_data()
+
+    print(f"Requesting official NSE MCP market layer for {len(rows)} stocks...")
+    mcp_layer = asyncio.run(fetch_nse_market_layer(rows, lookback_days=430, concurrency=4))
+
+    mcp_quotes = mcp_layer.get("quotes") or {}
+    mcp_histories = mcp_layer.get("histories") or {}
+
+    missing_stock_tickers = []
+    for row in rows:
+        s = clean_symbol(row)
+        if s and s not in mcp_histories:
+            missing_stock_tickers.append(f"{s}.NS")
+
+    proxies = sorted({sector_proxy(row) for row in rows})
+    fallback_tickers = sorted(set(missing_stock_tickers + proxies))
+
+    print(
+        f"NSE MCP quotes: {len(mcp_quotes)}/{len(rows)} | "
+        f"NSE MCP histories: {len(mcp_histories)}/{len(rows)} | "
+        f"fallback tickers: {len(fallback_tickers)}"
+    )
+
+    fallback_history = pd.DataFrame()
+    if fallback_tickers:
+        fallback_history = yf.download(
+            tickers=fallback_tickers,
+            period="14mo",
+            interval="1d",
+            group_by="ticker",
+            auto_adjust=False,
+            threads=True,
+            progress=False,
+            timeout=20,
+        )
+
+    output = []
+    counts = {
+        "Upcoming": 0,
+        "Post-results": 0,
+        "Caution": 0,
+        "Qualified": 0,
+    }
+
+    for index, row in enumerate(rows, 1):
+        out = dict(row)
+        s = clean_symbol(out)
+        print(f"[{index}/{len(rows)}] {s or 'UNKNOWN'}")
+
+        quote = mcp_quotes.get(s)
+        if quote:
+            if quote.get("price") is not None:
+                out["price"] = quote["price"]
+                out["lastPrice"] = quote["price"]
+            if quote.get("previousClose") is not None:
+                out["previousClose"] = quote["previousClose"]
+            if quote.get("changePct") is not None:
+                out["changePct"] = quote["changePct"]
+            if quote.get("priceTimestamp"):
+                out["priceTimestamp"] = quote["priceTimestamp"]
+            out["priceSource"] = "NSE MCP CM Market"
+        else:
+            out["priceSource"] = out.get("priceSource") or "NSE live-discovery fallback"
+
+        if s in mcp_histories:
+            stock_history = records_to_df(mcp_histories[s])
+            out["historySource"] = "NSE MCP Bhavcopy"
+        else:
+            stock_history = history_for_yf(fallback_history, f"{s}.NS")
+            out["historySource"] = "yfinance fallback"
+
+        sector_history = history_for_yf(fallback_history, sector_proxy(out))
+        out["sectorHistorySource"] = "yfinance index fallback"
+
+        try:
+            qualified = qualify(out, stock_history, sector_history)
+        except Exception as exc:
+            qualified = dict(out)
+            qualified["qualificationError"] = f"{type(exc).__name__}: {exc}"
+            qualified["bucket"] = (
+                "Upcoming"
+                if str(out.get("bucket", "")).lower() == "upcoming"
+                else "Post-results"
+            )
+            qualified["peadStatus"] = qualified["bucket"]
+            qualified["stage"] = qualified["bucket"]
+
+        output.append(qualified)
+        bucket = qualified.get("bucket", "Post-results")
+        counts[bucket] = counts.get(bucket, 0) + 1
+
+        if qualified.get("resultsReleased"):
+            time.sleep(0.10)
+
+    payload["stocks"] = output
+    payload["companies"] = output
+    payload["qualificationVersion"] = "pead-v1.1-nse-mcp"
+    payload["marketDataMode"] = "nse-mcp-primary"
+    payload["nseMcp"] = mcp_layer.get("meta") or {}
+    payload["nseMcpErrors"] = mcp_layer.get("errors") or []
+    payload["bucketCounts"] = counts
+    payload["qualifiedCount"] = counts.get("Qualified", 0)
+    payload["cautionCount"] = counts.get("Caution", 0)
+    payload["postResultCount"] = counts.get("Post-results", 0)
+    payload["upcomingCount"] = counts.get("Upcoming", 0)
+    payload["qualificationRules"] = {
+        "revenueYoYMin": REV_YOY_MIN,
+        "patYoYMin": PAT_YOY_MIN,
+        "patQoQFloor": PAT_QOQ_FLOOR,
+        "pricedInRunupPct": PRICED_IN_RUNUP_PCT,
+        "relativeVolumeMin": RVOL_MIN,
+        "liquidity20dTurnoverCrMin": LIQUIDITY_TURNOVER_CR_MIN,
+        "epsSurpriseMin": EPS_SURPRISE_MIN,
+        "marketSurpriseProxyMin": MARKET_SURPRISE_PROXY_MIN,
+    }
+
+    temp = DATA.with_suffix(".json.qualify.tmp")
+    temp.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    temp.replace(DATA)
+
+    print("PEAD QUALIFICATION COMPLETE")
+    print(json.dumps(counts, indent=2))
+    print("NSE MCP metadata:")
+    print(json.dumps(payload["nseMcp"], indent=2))
+    if payload["nseMcpErrors"]:
+        print("NSE MCP warnings:")
+        for error in payload["nseMcpErrors"][:20]:
+            print(" -", error)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        print(f"QUALIFIER FAILED: {type(exc).__name__}: {exc}")
+        sys.exit(1)
