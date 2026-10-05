@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+g#!/usr/bin/env python3
 
 from __future__ import annotations
 
@@ -1163,6 +1163,24 @@ def enrich_results(
     )
 
     if (
-        not isinstance(
-            rows,
+        rows = (
+        payload.get("resCmpData")
+        if isinstance(payload, dict)
+        else None
+    )
+
+    if (
+        not isinstance(rows, list)
+        or not rows
+    ):
+        return output
+
+    rows = [
+        item
+        for item in rows
+        if isinstance(item, dict)
+    ]
+
+    if not rows:
+        return output
            
