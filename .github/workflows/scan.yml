@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
 
   schedule:
-    # Every hour Monday-Friday
-    # GitHub Actions cron uses UTC
     - cron: "0 * * * 1-5"
 
 permissions:
@@ -18,9 +16,10 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -31,31 +30,25 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install live scanner dependencies
+      - name: Install scanner dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --upgrade nse
+          python -m pip install --upgrade nse yfinance pandas
 
-      - name: Show NSE package version
-        run: |
-          python - <<'PY'
-          import importlib.metadata
-
-          try:
-              print("nse version:", importlib.metadata.version("nse"))
-          except Exception as exc:
-              print("Unable to read nse version:", exc)
-          PY
-
-      - name: Check scanner syntax
+      - name: Check Python syntax
         run: |
           python -m py_compile scan.py
+          python -m py_compile qualify.py
 
-      - name: Run live PEAD scanner
+      - name: Run live discovery scanner
         run: |
           python scan.py
 
-      - name: Validate live data.json
+      - name: Run PEAD qualification engine
+        run: |
+          python qualify.py
+
+      - name: Validate qualified data.json
         run: |
           python - <<'PY'
           import json
@@ -65,37 +58,24 @@ jobs:
           path = Path("data.json")
 
           if not path.exists():
-              print("ERROR: data.json does not exist")
+              print("ERROR: data.json missing")
               sys.exit(1)
 
-          try:
-              data = json.loads(
-                  path.read_text(
-                      encoding="utf-8"
-                  )
+          data = json.loads(
+              path.read_text(
+                  encoding="utf-8"
               )
-          except Exception as exc:
-              print(
-                  "ERROR: invalid JSON:",
-                  exc
-              )
-              sys.exit(1)
-
-          mode = data.get(
-              "scannerMode"
           )
 
-          if mode != "live-discovery":
-              print(
-                  "ERROR: scannerMode is",
-                  mode
-              )
-              print(
-                  "Expected live-discovery"
-              )
+          if data.get("scannerMode") != "live-discovery":
+              print("ERROR: scanner is not live-discovery")
               sys.exit(1)
 
-          stocks = (
+          if data.get("qualificationVersion") != "pead-v1.0":
+              print("ERROR: qualifier did not run")
+              sys.exit(1)
+
+          rows = (
               data.get("stocks")
               or
               data.get("companies")
@@ -103,77 +83,19 @@ jobs:
               []
           )
 
-          if not isinstance(
-              stocks,
-              list
-          ):
-              print(
-                  "ERROR: stocks is not a list"
-              )
+          if not rows:
+              print("ERROR: 0 stocks published")
               sys.exit(1)
 
-          if len(stocks) == 0:
-              print(
-                  "ERROR: live scanner "
-                  "published 0 stocks"
-              )
-              sys.exit(1)
-
-          print(
-              "================================="
-          )
-          print(
-              "LIVE DATA VALIDATION PASSED"
-          )
-          print(
-              "================================="
-          )
-
-          print(
-              "Scanner mode:",
-              mode
-          )
-
-          print(
-              "Source:",
-              data.get("source")
-          )
-
-          print(
-              "Board meetings:",
-              data.get(
-                  "boardMeetingRows"
-              )
-          )
-
-          print(
-              "Financial results:",
-              data.get(
-                  "financialResultRows"
-              )
-          )
-
-          print(
-              "Discovered candidates:",
-              data.get(
-                  "discoveredCandidateCount"
-              )
-          )
-
-          print(
-              "Published stocks:",
-              len(stocks)
-          )
-
-          print(
-              "Errors:",
-              data.get(
-                  "errorCount"
-              )
-          )
+          print("Scanner:", data.get("scannerMode"))
+          print("Qualifier:", data.get("qualificationVersion"))
+          print("Discovered:", data.get("discoveredCandidateCount"))
+          print("Published:", len(rows))
+          print("Buckets:", data.get("bucketCounts"))
+          print("Errors:", data.get("errorCount"))
           PY
 
-      - name: Show live scanner summary
+      - name: Show PEAD candidate summary
         run: |
           python - <<'PY'
           import json
@@ -183,79 +105,54 @@ jobs:
               "r",
               encoding="utf-8"
           ) as f:
-              d = json.load(f)
+              data = json.load(f)
 
-          rows = (
-              d.get("stocks")
-              or
-              d.get("companies")
-              or
-              []
+          rows = data.get("stocks") or []
+
+          order = {
+              "Qualified": 0,
+              "Caution": 1,
+              "Post-results": 2,
+              "Upcoming": 3,
+          }
+
+          rows = sorted(
+              rows,
+              key=lambda x: (
+                  order.get(
+                      x.get("bucket"),
+                      9
+                  ),
+                  -(x.get("score") or 0),
+              ),
           )
 
-          print("")
-          print(
-              "========== LIVE PEAD SCAN =========="
-          )
+          print("========== PEAD SUMMARY ==========")
+          print("Buckets:", data.get("bucketCounts"))
+          print("==================================")
 
-          print(
-              "Generated:",
-              d.get("generatedAt")
-          )
+          for stock in rows[:40]:
 
-          print(
-              "Mode:",
-              d.get("scannerMode")
-          )
-
-          print(
-              "Source:",
-              d.get("source")
-          )
-
-          print(
-              "Discovered:",
-              d.get(
-                  "discoveredCandidateCount"
-              )
-          )
-
-          print(
-              "Published:",
-              len(rows)
-          )
-
-          print(
-              "Below ₹1,000 Cr:",
-              d.get(
-                  "marketCapRejectedCount"
-              )
-          )
-
-          print(
-              "Errors:",
-              d.get("errorCount")
-          )
-
-          print(
-              "===================================="
-          )
-
-          for stock in rows[:30]:
               print(
                   stock.get("symbol"),
                   "|",
                   stock.get("bucket"),
-                  "| Price:",
-                  stock.get("price"),
-                  "| Mcap:",
-                  stock.get("marketCapCr"),
-                  "| Result:",
-                  stock.get("resultDate"),
+                  "|",
+                  stock.get("scoreText"),
+                  "| priced-in:",
+                  stock.get("pricedIn"),
+                  "| sector:",
+                  stock.get("sectorTailwind"),
+                  "| entry:",
+                  stock.get("entry"),
+                  "| SL:",
+                  stock.get("sl"),
+                  "| allocation:",
+                  stock.get("allocationPct"),
               )
           PY
 
-      - name: Commit refreshed live data
+      - name: Commit refreshed qualified data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -267,7 +164,7 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore: refresh live PEAD scan"
+          git commit -m "chore: refresh live PEAD qualification"
 
           git pull --rebase origin main
 
