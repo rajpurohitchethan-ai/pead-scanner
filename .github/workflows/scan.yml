@@ -1,48 +1,68 @@
-name: PEAD sca[span_3](start_span)[span_3](end_span)n
+name: PEAD hourly scanner
 
 on:
-  schedule:
-    # Hourly market-hours execution (IST 09:35 to 15:35, UTC 04:05 to 10:05)
-    - cron: '5 4-10 * * 1-5'
-    # Evening sweep for corporate board disclosures (IST 19:00, UTC 13:30)
-    - cron: '30 13 * * 1-5'
   workflow_dispatch:
+  schedule:
+    # GitHub cron uses UTC. Run shortly after the hour, every hour.
+    - cron: '7 * * * *'
 
 permissions:
   contents: write
-  pages: write
 
-concurrency: scan
+concurrency:
+  group: pead-hourly-scan
+  cancel-in-progress: true
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Source Repository
-        uses: actions/checkout@v4
+    timeout-minutes: 20
 
-      - name: Initialize Python 3.12 Runtime
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: 'pip'
 
-      - name: Install Ingestion Dependencies
-        run: pip install -r requirements.txt
+      - name: Install scanner dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas
 
-      - name: Execute Autonomous Multi-Gate Engine
+      - name: Build live radar data
+        env:
+          MIN_MCAP_CR: '1000'
         run: python scan.py
 
-      - name: Commit and Push Verified State
+      - name: Validate generated feed
         run: |
-          git config user.name "pead-bot"
-          git config user.email "bot@users.noreply.github.com"
-          git add data.json
-          git diff --cached --quiet || (git commit -m "scan $(date -u +%Y%m%d%H%M%SZ) [skip ci]" && git push)
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('data.json')
+          if not p.exists():
+              raise SystemExit('data.json was not generated')
+          d = json.loads(p.read_text())
+          rows = d.get('stocks') or d.get('companies') or []
+          print('generated rows:', len(rows), 'sourceCount:', d.get('sourceCount'), 'errors:', d.get('errorCount'))
+          if d.get('sourceCount', 0) and not rows:
+              raise SystemExit('Refusing to publish an empty feed from a non-empty companies.json')
+          PY
 
-      - name: Trigger GitHub Pages Deployment
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api -X POST repos/${{ github.repository }}/pages/builds
-        
+      - name: Commit refreshed data.json
+        run: |
+          if git diff --quiet -- data.json; then
+            echo 'No data.json changes to commit.'
+            exit 0
+          fi
+          git config user.name 'pead-scanner-bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data.json
+          git commit -m 'chore: refresh PEAD live scan'
+          git push
+          
