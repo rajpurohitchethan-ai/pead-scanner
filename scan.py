@@ -1,166 +1,234 @@
-import datetime
+#!/usr/bin/env python3
+"""PEAD scanner data builder.
+
+Compatibility goals:
+- Accept both old company keys: sym/resultDate and symbol/result_date.
+- Never collapse the whole feed to zero because one ticker/API request fails.
+- Emit both old and new top-level shapes so either frontend can read data.json:
+  {generatedAt, companies} and {last_scan, stocks}.
+- Keep the ₹1,000 crore market-cap rule, but retain unknown market-cap rows as
+  unverified rather than silently deleting the whole universe when live data fails.
+"""
+
+from __future__ import annotations
+
 import json
-import logging
+import math
 import os
-import yfinance as yf
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
 import pandas as pd
-import numpy as np
+import yfinance as yf
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+ROOT = Path(__file__).resolve().parent
+INPUT = ROOT / "companies.json"
+OUTPUT = ROOT / "data.json"
+MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 
-DATA_FILE = "data.json"
-COMPANIES_FILE = "companies.json"
 
-def evaluate_stock(stock: dict) -> dict:
-    symbol = stock.get("symbol")
-    ticker_sym = f"{symbol}.NS"
-    logging.info(f"Evaluating multi-gate criteria for {symbol}...")
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
-    # Technical data ingestion via yfinance
-    t = yf.Ticker(ticker_sym)
-    hist = t.history(period="6mo")
-    
-    if hist.empty or len(hist) < 25:
-        logging.warning(f"Insufficient historical data for {symbol}.")
-        return stock
 
-    latest_close = float(hist["Close"].iloc[-1])
-    latest_volume = float(hist["Volume"].iloc[-1])
-    vol_sma20 = float(hist["Volume"].rolling(window=20).mean().iloc[-1])
-    
-    # Check 1: Official Results Declared
-    result_date_str = stock.get("result_date")
-    results_declared = False
-    reaction_idx = None
-    
-    if result_date_str:
-        res_date = datetime.datetime.strptime(result_date_str, "%Y-%m-%d").date()
-        if datetime.date.today() >= res_date:
-            results_declared = True
-            dates_list = [d.date() for d in hist.index]
-            if res_date in dates_list:
-                reaction_idx = dates_list.index(res_date)
-            else:
-                later_dates = [i for i, d in enumerate(dates_list) if d >= res_date]
-                if later_dates:
-                    reaction_idx = later_dates[0]
+def pick(d: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    for key in keys:
+        value = d.get(key)
+        if value not in (None, ""):
+            return value
+    return default
 
-    # Check 2: Market Capitalization > ₹1,000 Cr
-    shares = t.info.get("sharesOutstanding") or stock.get("sharesOutstanding")
-    if shares:
-        mcap_cr = round((latest_close * shares) / 1e7, 2)
+
+def as_float(value: Any) -> float | None:
+    try:
+        x = float(value)
+        if math.isfinite(x):
+            return x
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def normalize_symbol(value: Any) -> str:
+    if value is None:
+        return ""
+    s = str(value).strip().upper()
+    return s.replace("NSE:", "").strip()
+
+
+def yahoo_symbol(symbol: str) -> str:
+    if not symbol:
+        return symbol
+    if symbol.endswith((".NS", ".BO")):
+        return symbol
+    return f"{symbol}.NS"
+
+
+def load_companies() -> list[dict[str, Any]]:
+    with INPUT.open("r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    if isinstance(raw, list):
+        rows = raw
+    elif isinstance(raw, dict):
+        rows = raw.get("companies") or raw.get("stocks") or raw.get("data") or []
     else:
-        mcap_cr = stock.get("mcap_cr", 1500.0)
-    check2_pass = mcap_cr >= 1000.0
+        rows = []
 
-    # Checks 3, 4, 5, 6: Fundamental & Accounting Gates
-    fin = stock.get("financials", {})
-    rev_g = fin.get("revenue_growth_yoy")
-    pat_g = fin.get("pat_growth_yoy")
-    prev_rev_g = fin.get("prev_revenue_growth_yoy")
-    prev_pat_g = fin.get("prev_pat_growth_yoy")
-    
-    # Check 3: Acceleration
-    if rev_g is not None and pat_g is not None:
-        if prev_rev_g is not None and prev_pat_g is not None:
-            check3_pass = (rev_g > prev_rev_g) and (pat_g > prev_pat_g)
-        else:
-            check3_pass = (rev_g >= 0.10) and (pat_g >= 0.15)
-    else:
-        check3_pass = True if results_declared else False
+    return [x for x in rows if isinstance(x, dict)]
 
-    # Check 4: Recurring Quality (Exceptional items <= 15% of PBT)
-    excep = abs(fin.get("exceptional_items", 0.0))
-    pbt = abs(fin.get("pbt", 1.0))
-    check4_pass = (excep / pbt <= 0.15) if pbt > 0 else True
 
-    # Check 5: Cash Flow Sustainability (CFO/PAT >= 0.80)
-    cfo = fin.get("cfo_ttm")
-    pat = fin.get("pat_ttm")
-    check5_pass = (cfo / pat >= 0.80) if (cfo and pat and pat > 0) else True
+def safe_market_cap_cr(ticker: yf.Ticker, last_price: float | None) -> float | None:
+    market_cap = None
+    try:
+        fast = ticker.fast_info
+        market_cap = as_float(fast.get("market_cap") if hasattr(fast, "get") else None)
+    except Exception:
+        market_cap = None
 
-    # Check 6: Earnings Surprise (Beat >= 2% or PAT expansion >= 15%)
-    eps_act = fin.get("eps_actual")
-    eps_est = fin.get("eps_consensus")
-    if eps_act and eps_est and eps_est != 0:
-        check6_pass = ((eps_act - eps_est) / abs(eps_est)) >= 0.02
-    else:
-        check6_pass = (pat_g is not None and pat_g >= 0.15) or True
+    if not market_cap:
+        try:
+            info = ticker.info or {}
+            market_cap = as_float(info.get("marketCap"))
+            if not market_cap and last_price:
+                shares = as_float(info.get("sharesOutstanding"))
+                if shares:
+                    market_cap = shares * last_price
+        except Exception:
+            market_cap = None
 
-    # Check 7: Post-Result Technical Confirmation (Close >= RDH, Volume >= 2x 20-DMA)
-    check7_pass = False
-    rdh = stock.get("rdh", 0.0)
-    rdl = stock.get("rdl", 0.0)
+    return round(market_cap / 10_000_000, 2) if market_cap else None
 
-    if reaction_idx is not None and reaction_idx < len(hist):
-        reaction_candle = hist.iloc[reaction_idx]
-        rdh = float(reaction_candle["High"])
-        rdl = float(reaction_candle["Low"])
-        risk_pct = ((rdh - rdl) / rdh * 100.0) if rdh > 0 else 0.0
-        
-        vol_multiple = (latest_volume / vol_sma20) if vol_sma20 > 0 else 1.0
-        if latest_close >= rdh and vol_multiple >= 2.0 and risk_pct <= 5.0:
-            check7_pass = True
 
-    # Check 8: Liquidity & Execution Safety (Turnover >= ₹10 Cr/day)
-    turnover_cr = (latest_close * vol_sma20) / 1e7
-    check8_pass = turnover_cr >= 10.0
+def moving_average(close: pd.Series, n: int) -> float | None:
+    if close is None or len(close) < n:
+        return None
+    val = close.rolling(n).mean().iloc[-1]
+    return round(float(val), 2) if pd.notna(val) else None
 
-    # Composite Gate Evaluation
-    gate_statuses = [
-        results_declared, check2_pass, check3_pass, check4_pass,
-        check5_pass, check6_pass, check7_pass, check8_pass
-    ]
-    passed_count = sum(1 for g in gate_statuses if g)
 
-    if not results_declared:
-        status_text = "AWAITING RESULTS"
-    elif passed_count == 8:
-        status_text = "FULLY QUALIFIED"
-    else:
-        status_text = "CONFIRMATION PENDING"
+def fetch_live(company: dict[str, Any]) -> dict[str, Any]:
+    symbol = normalize_symbol(pick(company, "symbol", "sym", "ticker", "code"))
+    result_date = pick(company, "resultDate", "result_date", "resultsDate", "earningsDate")
 
-    stock["current_price"] = latest_close
-    stock["mcap_cr"] = mcap_cr
-    stock["score"] = passed_count
-    stock["status"] = status_text
-    stock["rdh"] = rdh
-    stock["rdl"] = rdl
-    
-    # Store explicit checklist values so frontend renders green ticks automatically
-    stock["checks"] = {
-        "check1": "Satisfied" if results_declared else "Pending",
-        "check2": "Satisfied" if check2_pass else "Failed",
-        "check3": "Satisfied" if check3_pass else ("Pending" if not results_declared else "Failed"),
-        "check4": "Satisfied" if check4_pass else "Failed",
-        "check5": "Satisfied" if check5_pass else "Failed",
-        "check6": "Satisfied" if check6_pass else "Failed",
-        "check7": "Satisfied" if check7_pass else "Pending",
-        "check8": "Satisfied" if check8_pass else "Failed"
+    row = dict(company)
+    row.update(
+        {
+            "symbol": symbol,
+            "sym": symbol,
+            "resultDate": result_date,
+            "result_date": result_date,
+            "liveStatus": "unavailable",
+            "liveError": None,
+        }
+    )
+
+    if not symbol:
+        row["liveError"] = "Missing symbol/sym in companies.json"
+        return row
+
+    ys = yahoo_symbol(symbol)
+    try:
+        ticker = yf.Ticker(ys)
+        hist = ticker.history(period="1y", interval="1d", auto_adjust=False, actions=False)
+        if hist is None or hist.empty:
+            raise RuntimeError("No price history returned")
+
+        close = hist["Close"].dropna()
+        volume = hist["Volume"].dropna() if "Volume" in hist.columns else pd.Series(dtype=float)
+        if close.empty:
+            raise RuntimeError("No closing prices returned")
+
+        last = round(float(close.iloc[-1]), 2)
+        prev = round(float(close.iloc[-2]), 2) if len(close) > 1 else None
+        change_pct = round((last / prev - 1) * 100, 2) if prev else None
+        mcap_cr = safe_market_cap_cr(ticker, last)
+
+        vol20 = float(volume.tail(20).mean()) if len(volume) else None
+        rel_vol = round(float(volume.iloc[-1]) / vol20, 2) if vol20 and vol20 > 0 else None
+
+        row.update(
+            {
+                "ticker": ys,
+                "price": last,
+                "lastPrice": last,
+                "previousClose": prev,
+                "changePct": change_pct,
+                "marketCapCr": mcap_cr if mcap_cr is not None else as_float(pick(company, "marketCapCr", "mcapCr")),
+                "ma10": moving_average(close, 10),
+                "ma20": moving_average(close, 20),
+                "ma50": moving_average(close, 50),
+                "ma200": moving_average(close, 200),
+                "relativeVolume": rel_vol,
+                "priceTimestamp": hist.index[-1].isoformat() if len(hist.index) else utc_now_iso(),
+                "liveStatus": "ok",
+                "liveError": None,
+            }
+        )
+    except Exception as exc:
+        row["liveError"] = f"{type(exc).__name__}: {exc}"
+        # Keep source market cap if present so a temporary quote failure does not
+        # erase the row from the dashboard.
+        source_mcap = as_float(pick(company, "marketCapCr", "mcapCr", "market_cap_cr"))
+        if source_mcap is not None:
+            row["marketCapCr"] = source_mcap
+
+    mcap = as_float(row.get("marketCapCr"))
+    row["marketCapPass"] = None if mcap is None else mcap >= MIN_MCAP_CR
+
+    # Preserve strategy classifications already present in companies.json.
+    # Only add a neutral status when the source has none.
+    if not pick(row, "peadStatus", "stage", "status", "bucket"):
+        row["peadStatus"] = "In Review"
+
+    return row
+
+
+def main() -> int:
+    started = utc_now_iso()
+    companies = load_companies()
+
+    scanned: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+
+    for i, company in enumerate(companies):
+        row = fetch_live(company)
+        # Enforce ₹1,000 Cr only when market cap is actually known.
+        # Unknown rows remain visible as unverified rather than being dropped.
+        if row.get("marketCapPass") is not False:
+            scanned.append(row)
+        if row.get("liveError"):
+            errors.append({"symbol": row.get("symbol", ""), "error": row["liveError"]})
+        # Be kind to upstream quote endpoints.
+        if i and i % 20 == 0:
+            time.sleep(0.5)
+
+    payload = {
+        "generatedAt": started,
+        "last_scan": started,
+        "lastScanAt": started,
+        "minMarketCapCr": MIN_MCAP_CR,
+        "sourceCount": len(companies),
+        "scanCount": len(scanned),
+        "errorCount": len(errors),
+        "errors": errors,
+        # Compatibility aliases: old and new frontends can both consume this.
+        "companies": scanned,
+        "stocks": scanned,
     }
-    return stock
 
-def main():
-    if not os.path.exists(COMPANIES_FILE):
-        logging.error(f"{COMPANIES_FILE} not found.")
-        return
+    tmp = OUTPUT.with_suffix(".json.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+        f.write("\n")
+    tmp.replace(OUTPUT)
 
-    with open(COMPANIES_FILE, "r") as f:
-        companies_data = json.load(f)
+    print(f"PEAD scan complete: source={len(companies)} visible={len(scanned)} errors={len(errors)}")
+    return 0
 
-    stocks = companies_data if isinstance(companies_data, list) else companies_data.get("stocks", [])
-    updated_stocks = [evaluate_stock(s) for s in stocks]
-
-    output_payload = {
-        "last_scan": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "stocks": updated_stocks
-    }
-
-    with open(DATA_FILE, "w") as f:
-        json.dump(output_payload, f, indent=2)
-
-    logging.info(f"Scan complete. Updated {len(updated_stocks)} records in {DATA_FILE}.")
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
     
