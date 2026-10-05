@@ -1361,38 +1361,204 @@ function toggleSection(id) {
    MODAL
 -------------------------------------------------- */
 
-function openModal(
-  symbol
-) {
+function openModal(symbol) {
+  const stock = allStocks.find(
+    s => s.symbol === symbol || s._id === symbol
+  );
 
-  const stock =
-    allStocks.find(
-      s =>
-        s.symbol ===
-          symbol ||
-        s._id ===
-          symbol
-    );
+  if (!stock) return;
 
-  if (!stock) {
-    return;
-  }
-
-  activeModalStock =
-    stock;
+  activeModalStock = stock;
 
   if ($('mSymbol')) {
-    $('mSymbol')
-      .textContent =
-      stock.symbol;
+    $('mSymbol').textContent = stock.symbol || '—';
   }
 
   if ($('mStage')) {
-    $('mStage')
-      .textContent =
-      stock.stageView;
+    $('mStage').textContent = stock.stageView || 'In Review';
   }
 
   if ($('mName')) {
-    $('mName')
-      .textCo
+    $('mName').textContent = stock.name || stock.symbol || '—';
+  }
+
+  if ($('mSector')) {
+    $('mSector').textContent = stock.sector || '—';
+  }
+
+  if ($('mScoreBadge')) {
+    $('mScoreBadge').textContent = stock.scoreText || '0/8';
+  }
+
+  if ($('mEvidence')) {
+    $('mEvidence').textContent =
+      stock.note ||
+      stock.evidence ||
+      'No additional evidence stored.';
+  }
+
+  if ($('mVerdictTitle')) {
+    $('mVerdictTitle').textContent =
+      stock.stageView === 'Qualified'
+        ? 'PEAD Qualified / Potential Candidate'
+        : stock.stageView || 'In Review';
+  }
+
+  const checks = [
+    ['Market cap > ₹1,000 Cr', stock.marketCapPass],
+    ['Revenue / PAT acceleration', stock.revenue],
+    ['Earnings quality', stock.quality],
+    ['Cash flow / surprise', stock.cash],
+    ['Price / volume confirmation', stock.technical],
+    ['Sector tailwind', stock.sectorTailwind],
+    ['Entry trigger defined', stock.entryTrigger],
+    ['Stop loss defined', stock.stopDefined]
+  ];
+
+  if ($('mChecklistGrid')) {
+    $('mChecklistGrid').innerHTML = checks
+      .map(([label, value]) => {
+        let state = 'UNVERIFIED';
+        let cls = 'text-slate-400';
+
+        if (value === true) {
+          state = 'SATISFIED';
+          cls = 'text-emerald-400';
+        } else if (value === false) {
+          state = 'NOT SATISFIED';
+          cls = 'text-rose-400';
+        }
+
+        return `
+          <div class="p-3 rounded-xl bg-dark-900 border border-dark-750">
+            <div class="text-[11px] text-slate-300">
+              ${esc(label)}
+            </div>
+            <div class="mt-1 font-semibold ${cls}">
+              ${state}
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  if ($('mThesisGrid')) {
+    $('mThesisGrid').innerHTML = `
+      <div class="p-3 rounded-xl bg-dark-900 border border-dark-750">
+        <span class="text-slate-500">Entry:</span>
+        ${esc(stock.entry ?? '—')}
+      </div>
+
+      <div class="p-3 rounded-xl bg-dark-900 border border-dark-750">
+        <span class="text-slate-500">SL:</span>
+        ${esc(stock.sl ?? '—')}
+      </div>
+
+      <div class="p-3 rounded-xl bg-dark-900 border border-dark-750">
+        <span class="text-slate-500">TSL:</span>
+        ${esc(stock.tsl ?? '—')}
+      </div>
+    `;
+  }
+
+  const modal = $('stockModal');
+
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+}
+
+
+function closeModal() {
+  const modal = $('stockModal');
+
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.add('hidden');
+  }
+
+  activeModalStock = null;
+}
+
+
+function calculateTrade() {
+  const portfolio = num($('calcPortfolio')?.value);
+  const entry = num($('calcEntry')?.value);
+  const sl = num($('calcSL')?.value);
+
+  if (!portfolio || !entry || sl == null) return;
+
+  const riskPerShare = Math.abs(entry - sl);
+
+  const riskPct =
+    entry > 0
+      ? (riskPerShare / entry) * 100
+      : 0;
+
+  const maxRiskCapital = portfolio * 0.01;
+
+  const quantity =
+    riskPerShare > 0
+      ? Math.floor(maxRiskCapital / riskPerShare)
+      : 0;
+
+  const values = {
+    resRiskPct: `${riskPct.toFixed(2)}%`,
+    resRiskPerShare: `₹${riskPerShare.toFixed(2)}`,
+    resMaxShares: quantity.toLocaleString('en-IN'),
+    resMaxQty: quantity.toLocaleString('en-IN'),
+    resTarget1: `₹${(entry + riskPerShare * 2).toFixed(2)}`,
+    resTarget2: `₹${(entry + riskPerShare * 3).toFixed(2)}`
+  };
+
+  Object.entries(values).forEach(([id, value]) => {
+    if ($(id)) {
+      $(id).textContent = value;
+    }
+  });
+}
+
+
+/* Make HTML onclick functions available globally */
+
+Object.assign(window, {
+  forceScanRefresh,
+  selectStageTab,
+  filterRadarTable,
+  toggleSection,
+  calculateTrade,
+  openModal,
+  closeModal
+});
+
+
+/* Start application */
+
+function boot() {
+  console.log('PEAD Radar booting…');
+
+  $('searchInput')?.addEventListener(
+    'input',
+    filterRadarTable
+  );
+
+  loadRadarData();
+
+  setInterval(
+    () => loadRadarData(),
+    60 * 60 * 1000
+  );
+}
+
+
+if (document.readyState === 'loading') {
+  document.addEventListener(
+    'DOMContentLoaded',
+    boot,
+    { once: true }
+  );
+} else {
+  boot();
+}
