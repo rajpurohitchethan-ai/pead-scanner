@@ -125,9 +125,11 @@ def parse_date(v):
 
 
 def result_release_detection(row):
-    """Detect whether the currently tracked result has actually crossed into post-results."""
-    now = datetime.now(IST)
-    today = now.date()
+    """Strict result-release detection.
+
+    A calendar/board-meeting date is NEVER enough to call a result released.
+    The scanner/result-enrichment layer must provide explicit release proof.
+    """
     rd = parse_date(row.get("resultDate") or row.get("result_date") or row.get("resultsDate") or row.get("earningsDate"))
     explicit = bool_value(row.get("resultsReleased"))
     if explicit is None:
@@ -138,7 +140,7 @@ def result_release_detection(row):
     source = " ".join(
         str(row.get(k) or "")
         for k in (
-            "discoverySource", "resultSource", "source",
+            "discoverySource", "resultSource", "resultDataSource", "source",
             "resultsEvidence", "resultEvidence", "evidence",
             "resultSourceUrl", "filingUrl", "announcementUrl",
             "sourceUrl", "evidenceUrl", "resultsUrl",
@@ -146,43 +148,49 @@ def result_release_detection(row):
     ).lower()
     status = str(row.get("bucket") or row.get("peadStatus") or row.get("stage") or row.get("status") or "").lower()
 
-    if any(token in f"{status} {source}" for token in (
+    # Calendar / meeting rows are upcoming evidence, not release evidence.
+    upcoming_tokens = (
+        "board meeting", "result calendar", "scheduled", "upcoming",
+        "awaiting result", "awaiting results", "pre-result", "pre result",
+    )
+    postponed_tokens = (
         "postponed", "rescheduled", "deferred", "cancelled", "canceled",
         "date changed", "board meeting postponed",
-    )):
-        return False, "Result appears postponed/rescheduled; waiting for a new confirmed date."
+    )
+    if any(token in f"{status} {source}" for token in postponed_tokens):
+        return False, "Result appears postponed/rescheduled; waiting for a confirmed filing."
 
-    if any(token in source for token in (
-        "financial results", "result announced", "results announced",
-        "exchange filing", "nse filing", "bse filing",
-        "nseindia.com", "bseindia.com",
-    )):
-        return True, "Official/source result-release evidence detected."
-
-    if any(token in status for token in (
-        "post-results", "post results", "results declared", "result declared",
-        "results released", "result released", "qualified", "entry confirmed",
-    )):
-        return True, f"Base status indicates released result: {status}."
-
+    # Explicit flag from scan/result enrichment is authoritative.
     if explicit is True:
-        return True, "Scanner explicitly marks the result as released."
-
-    if rd is not None:
-        age_days = (today - rd).days
-        if age_days < 0:
-            return False, f"Scheduled result date is still in the future: {rd}."
-        if age_days == 0:
-            if now.hour >= 18:
-                return True, "Scheduled result date is today and the evening release window has begun."
-            return False, "Scheduled result date is today; waiting for source/evening confirmation."
-        if age_days <= 45:
-            return True, f"Scheduled result date passed {age_days} day(s) ago; treating as released pending source verification."
-
+        return True, row.get("resultsEvidence") or "Scanner/result layer explicitly verified the result release."
     if explicit is False:
-        return False, "Scanner marks result as pending and no stronger evidence overrides it."
+        return False, row.get("resultsEvidence") or (
+            f"Scheduled result date {rd} is not release proof; waiting for an actual filing."
+            if rd else "Scanner marks the result as pending; waiting for an actual filing."
+        )
 
-    return False, "No current result-release evidence is available."
+    # Legacy rows without an explicit flag: accept only strong release-proof sources.
+    release_tokens = (
+        "nse financial results filing",
+        "bse result announcement",
+        "nse results comparison",
+        "bse results snapshot",
+        "quarterly statement fallback",
+        "official quarterly financial-results filing",
+        "official quarterly financial results filing",
+        "result release verified",
+    )
+    if any(token in source for token in release_tokens) and not any(token in source for token in upcoming_tokens):
+        return True, "Verified result-release source detected."
+
+    # Do not infer release just because the result date has arrived or passed.
+    if rd is not None:
+        today = datetime.now(IST).date()
+        if rd > today:
+            return False, f"Scheduled result date is still in the future: {rd}."
+        return False, f"Scheduled result date {rd} has arrived/passed, but no verified result filing was found."
+
+    return False, "No verified result-release evidence is available."
 
 
 def load_data():
