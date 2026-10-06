@@ -17,8 +17,19 @@
   }
 
   function n(v) {
-    const x = Number(v);
-    return Number.isFinite(x) ? x : null;
+  if (
+    v === null ||
+    v === undefined ||
+    v === ''
+  ) {
+    return null;
+  }
+
+  const x = Number(v);
+
+  return Number.isFinite(x)
+    ? x
+    : null;
   }
 
   function pct(v) {
@@ -83,8 +94,15 @@
     const fs = item.fundamentalSnapshot || {};
 
     return `
-      <div class="metric"><span>Revenue YoY</span><b>${pct(fs.revenueYoYCalc)}</b></div>
-      <div class="metric"><span>PAT YoY</span><b>${pct(fs.patYoYCalc)}</b></div>
+      <div class="metric">
+  <span>${item.resultsReleased ? 'Revenue YoY' : 'Previous Revenue YoY'}</span>
+  <b>${pct(fs.revenueYoYCalc)}</b>
+</div>
+
+<div class="metric">
+  <span>${item.resultsReleased ? 'PAT YoY' : 'Previous PAT YoY'}</span>
+  <b>${pct(fs.patYoYCalc)}</b>
+</div>
       <div class="metric"><span>Pre-result 20D</span><b>${pct(pc.pre20dPct)}</b></div>
       <div class="metric"><span>Result day</span><b>${pct(pc.resultDayPct)}</b></div>
       <div class="metric"><span>RVOL</span><b>${xfmt(pc.relativeVolume)}</b></div>
