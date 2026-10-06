@@ -541,9 +541,7 @@ def result_reality(row: dict, fs: dict) -> dict:
 
     label = "GENUINE" if score >= 6 and red == 0 else ("LOW QUALITY" if red >= 2 or score <= 2 else "MIXED")
     return {"label": label, "reasons": reasons, "risks": risks}
-
-
-def valuation_reality(row: dict, fs: dict) -> dict:
+    def valuation_reality(row: dict, fs: dict) -> dict:
     pe = num(fs.get("trailingPE"))
     fpe = num(fs.get("forwardPE"))
     peg = num(fs.get("pegRatio"))
@@ -608,7 +606,7 @@ def valuation_reality(row: dict, fs: dict) -> dict:
             score += 1
             reasons.append(f"ROE is {roe:.1f}%.")
         elif roe < 10:
-     risks.append(f"ROE is only {roe:.1f}%.")
+            risks.append(f"ROE is only {roe:.1f}%.")
 
     if fcf_yield is not None:
         if fcf_yield >= 3:
@@ -808,6 +806,8 @@ def build_item(row: dict, index: int) -> dict:
         "reasons": rr["reasons"][:5] + er["reasons"][:3] + vr["reasons"][:3],
         "risks": rr["risks"][:4] + er["risks"][:3] + vr["risks"][:3],
     }
+
+
 def fallback_item(row: dict, index: int, exc: Exception) -> dict:
     symbol = clean_symbol(row) or f"row-{index}"
     return {
@@ -934,7 +934,15 @@ def main():
 
     print("Source stocks:", source_count)
     print("Generated intelligence rows:", output_count)
-    )
+
+    if source_count <= 0:
+        raise RuntimeError("Base source count is 0. Refusing to publish.")
+    if output_count <= 0:
+        raise RuntimeError("Intelligence generated 0 rows. Refusing to publish.")
+    if output_count != source_count:
+        raise RuntimeError(
+            f"Intelligence count mismatch: source={source_count}, output={output_count}"
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = Path(str(output_path) + ".tmp")
@@ -957,4 +965,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+            
+
+
+        
