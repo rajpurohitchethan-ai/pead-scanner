@@ -1788,10 +1788,18 @@ def main():
         if s in mcp_histories:
             stock_history = records_to_df(mcp_histories[s])
             out["historySource"] = "NSE MCP Bhavcopy"
-        else:
-            yt = yahoo_ticker(out)
-            stock_history = history_for_yf(fallback_history, yt)
-            out["historySource"] = "yfinance fallback"
+       else:
+    yt = yahoo_ticker(out)
+    stock_history = history_for_yf(fallback_history, yt)
+
+    if stock_history is not None and not stock_history.empty:
+        out["historySource"] = "yfinance fallback"
+    else:
+        # Preserve BSE/NSE history source already obtained
+        out["historySource"] = (
+            out.get("historySource")
+            or "PRICE HISTORY UNAVAILABLE"
+        )
 
         sector_history = history_for_yf(fallback_history, sector_proxy(out))
         out["sectorHistorySource"] = "yfinance index fallback"
