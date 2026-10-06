@@ -3,993 +3,487 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>PEAD Intelligence Lab</title>
-
   <style>
     :root {
       color-scheme: dark;
-
-      --bg: #06090e;
-      --panel: #0f1420;
-      --panel2: #151c2a;
-      --border: #253148;
-
-      --text: #eef4ff;
-      --muted: #98a7bc;
-
-      --green: #3dd9a3;
-      --amber: #ffc33d;
-      --red: #ff7188;
-      --blue: #6aaeff;
+      --bg:#06090e;
+      --panel:#0f1420;
+      --panel2:#151c2a;
+      --border:#253148;
+      --text:#eef4ff;
+      --muted:#98a7bc;
+      --green:#3dd9a3;
+      --amber:#ffc33d;
+      --red:#ff7188;
+      --blue:#6aaeff;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing:border-box; }
 
     body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-
-      font-family:
-        Inter,
-        system-ui,
-        Arial,
-        sans-serif;
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:Inter,system-ui,Arial,sans-serif;
     }
 
     .wrap {
-      max-width: 1180px;
-      margin: auto;
-
-      padding:
-        22px
-        16px
-        60px;
+      max-width:1180px;
+      margin:auto;
+      padding:22px 16px 60px;
     }
 
     .top {
-      display: flex;
-
-      justify-content:
-        space-between;
-
-      align-items:
-        flex-start;
-
-      gap: 16px;
-
-      flex-wrap:
-        wrap;
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:16px;
+      flex-wrap:wrap;
     }
 
     h1 {
-      margin: 0;
-
-      font-size:
-        28px;
+      margin:0;
+      font-size:28px;
     }
 
     .subtitle {
-      color:
-        var(--muted);
-
-      margin-top:
-        7px;
-
-      max-width:
-        760px;
-
-      line-height:
-        1.5;
+      color:var(--muted);
+      margin-top:7px;
+      max-width:760px;
+      line-height:1.5;
     }
 
     .safe {
-      border:
-        1px solid
-        rgba(
-          61,
-          217,
-          163,
-          0.35
-        );
-
-      color:
-        var(--green);
-
-      background:
-        rgba(
-          61,
-          217,
-          163,
-          0.08
-        );
-
-      padding:
-        9px
-        12px;
-
-      border-radius:
-        12px;
-
-      font-size:
-        12px;
+      border:1px solid rgba(61,217,163,.35);
+      color:var(--green);
+      background:rgba(61,217,163,.08);
+      padding:9px 12px;
+      border-radius:12px;
+      font-size:12px;
     }
 
     .summary {
-      display:
-        grid;
-
-      grid-template-columns:
-        repeat(
-          5,
-          1fr
-        );
-
-      gap:
-        10px;
-
-      margin:
-        22px
-        0;
+      display:grid;
+      grid-template-columns:repeat(5,1fr);
+      gap:10px;
+      margin:22px 0;
     }
 
     .summary .box {
-      background:
-        var(--panel);
-
-      border:
-        1px solid
-        var(--border);
-
-      padding:
-        15px;
-
-      border-radius:
-        16px;
+      background:var(--panel);
+      border:1px solid var(--border);
+      padding:15px;
+      border-radius:16px;
     }
 
     .summary span {
-      display:
-        block;
-
-      color:
-        var(--muted);
-
-      font-size:
-        11px;
-
-      text-transform:
-        uppercase;
+      display:block;
+      color:var(--muted);
+      font-size:11px;
+      text-transform:uppercase;
     }
 
     .summary b {
-      display:
-        block;
-
-      font-size:
-        28px;
-
-      margin-top:
-        7px;
+      display:block;
+      font-size:28px;
+      margin-top:7px;
     }
 
     .controls {
-      display:
-        flex;
-
-      gap:
-        9px;
-
-      flex-wrap:
-        wrap;
-
-      margin-bottom:
-        14px;
+      display:flex;
+      gap:9px;
+      flex-wrap:wrap;
+      margin-bottom:14px;
     }
 
     button,
     input {
-      border:
-        1px solid
-        var(--border);
-
-      background:
-        var(--panel);
-
-      color:
-        var(--text);
-
-      border-radius:
-        12px;
-
-      padding:
-        11px
-        13px;
+      border:1px solid var(--border);
+      background:var(--panel);
+      color:var(--text);
+      border-radius:12px;
+      padding:11px 13px;
     }
 
     button {
-      cursor:
-        pointer;
+      cursor:pointer;
     }
 
     button.active {
-      border-color:
-        var(--green);
-
-      color:
-        var(--green);
-
-      background:
-        rgba(
-          61,
-          217,
-          163,
-          0.08
-        );
+      border-color:var(--green);
+      color:var(--green);
+      background:rgba(61,217,163,.08);
     }
 
     input {
-      flex:
-        1;
-
-      min-width:
-        220px;
+      flex:1;
+      min-width:220px;
     }
 
     .meta {
-      display:
-        flex;
-
-      justify-content:
-        space-between;
-
-      color:
-        var(--muted);
-
-      font-size:
-        12px;
-
-      margin:
-        10px
-        2px
-        18px;
-
-      gap:
-        8px;
-
-      flex-wrap:
-        wrap;
+      display:flex;
+      justify-content:space-between;
+      color:var(--muted);
+      font-size:12px;
+      margin:10px 2px 18px;
+      gap:8px;
+      flex-wrap:wrap;
     }
 
     .stock-card {
-      background:
-        var(--panel);
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius:
-        20px;
-
-      padding:
-        18px;
-
-      margin:
-        14px
-        0;
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:20px;
+      padding:18px;
+      margin:14px 0;
     }
 
     .stock-head {
-      display:
-        flex;
-
-      justify-content:
-        space-between;
-
-      gap:
-        18px;
-
-      align-items:
-        flex-start;
+      display:flex;
+      justify-content:space-between;
+      gap:18px;
+      align-items:flex-start;
     }
 
     .symbol {
-      font-size:
-        22px;
-
-      font-weight:
-        800;
+      font-size:22px;
+      font-weight:800;
     }
 
     .name,
     .sub {
-      color:
-        var(--muted);
-
-      margin-top:
-        4px;
+      color:var(--muted);
+      margin-top:4px;
     }
 
     .sub {
-      font-size:
-        12px;
+      font-size:12px;
     }
 
     .conviction {
-      text-align:
-        right;
+      text-align:right;
     }
 
     .conviction div {
-      font-size:
-        28px;
-
-      font-weight:
-        800;
+      font-size:28px;
+      font-weight:800;
     }
 
     .conviction div span {
-      font-size:
-        13px;
-
-      color:
-        var(--muted);
+      font-size:13px;
+      color:var(--muted);
     }
 
     .conviction small {
-      color:
-        var(--muted);
+      color:var(--muted);
     }
 
     .reality-grid {
-      display:
-        grid;
-
-      grid-template-columns:
-        repeat(
-          4,
-          1fr
-        );
-
-      gap:
-        9px;
-
-      margin:
-        16px
-        0;
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+      gap:9px;
+      margin:16px 0;
     }
 
     .reality-grid > div {
-      background:
-        var(--panel2);
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius:
-        13px;
-
-      padding:
-        11px;
+      background:var(--panel2);
+      border:1px solid var(--border);
+      border-radius:13px;
+      padding:11px;
     }
 
     .reality-grid small {
-      display:
-        block;
-
-      color:
-        var(--muted);
-
-      font-size:
-        9px;
-
-      margin-bottom:
-        7px;
+      display:block;
+      color:var(--muted);
+      font-size:9px;
+      margin-bottom:7px;
     }
 
     .badge {
-      display:
-        inline-block;
-
-      font-size:
-        11px;
-
-      font-weight:
-        800;
-
-      padding:
-        5px
-        8px;
-
-      border-radius:
-        999px;
+      display:inline-block;
+      font-size:11px;
+      font-weight:800;
+      padding:5px 8px;
+      border-radius:999px;
     }
 
-    .good {
-      color:
-        var(--green);
-    }
-
-    .warn {
-      color:
-        var(--amber);
-    }
-
-    .bad {
-      color:
-        var(--red);
-    }
+    .good { color:var(--green); }
+    .warn { color:var(--amber); }
+    .bad { color:var(--red); }
 
     .badge.good {
-      background:
-        rgba(
-          61,
-          217,
-          163,
-          0.10
-        );
-
-      border:
-        1px solid
-        rgba(
-          61,
-          217,
-          163,
-          0.25
-        );
+      background:rgba(61,217,163,.10);
+      border:1px solid rgba(61,217,163,.25);
     }
 
     .badge.warn {
-      background:
-        rgba(
-          255,
-          195,
-          61,
-          0.10
-        );
-
-      border:
-        1px solid
-        rgba(
-          255,
-          195,
-          61,
-          0.25
-        );
+      background:rgba(255,195,61,.10);
+      border:1px solid rgba(255,195,61,.25);
     }
 
     .badge.bad {
-      background:
-        rgba(
-          255,
-          113,
-          136,
-          0.10
-        );
-
-      border:
-        1px solid
-        rgba(
-          255,
-          113,
-          136,
-          0.25
-        );
+      background:rgba(255,113,136,.10);
+      border:1px solid rgba(255,113,136,.25);
     }
 
     .verdict {
-      font-size:
-        14px;
-
-      font-weight:
-        800;
-
-      border-top:
-        1px solid
-        var(--border);
-
-      border-bottom:
-        1px solid
-        var(--border);
-
-      padding:
-        12px
-        0;
+      font-size:14px;
+      font-weight:800;
+      border-top:1px solid var(--border);
+      border-bottom:1px solid var(--border);
+      padding:12px 0;
     }
 
     .metrics {
-      display:
-        grid;
-
-      grid-template-columns:
-        repeat(
-          6,
-          1fr
-        );
-
-      gap:
-        8px;
-
-      margin:
-        15px
-        0;
+      display:grid;
+      grid-template-columns:repeat(6,1fr);
+      gap:8px;
+      margin:15px 0;
     }
 
     .metric {
-      background:
-        var(--panel2);
-
-      padding:
-        9px;
-
-      border-radius:
-        10px;
-
-      min-width:
-        0;
+      background:var(--panel2);
+      padding:9px;
+      border-radius:10px;
+      min-width:0;
     }
 
     .metric span {
-      display:
-        block;
-
-      color:
-        var(--muted);
-
-      font-size:
-        9px;
+      display:block;
+      color:var(--muted);
+      font-size:9px;
     }
 
     .metric b {
-      display:
-        block;
+      display:block;
+      font-size:12px;
+      margin-top:4px;
+      overflow-wrap:anywhere;
+    }
 
-      font-size:
-        12px;
+    .freshness {
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:8px;
+      margin:12px 0 15px;
+    }
 
-      margin-top:
-        4px;
+    .freshness > div {
+      background:rgba(106,174,255,.045);
+      border:1px solid rgba(106,174,255,.16);
+      border-radius:10px;
+      padding:9px;
+    }
 
-      overflow-wrap:
-        anywhere;
+    .freshness span {
+      display:block;
+      color:var(--muted);
+      font-size:8px;
+      letter-spacing:.04em;
+      margin-bottom:4px;
+    }
+
+    .freshness b {
+      display:block;
+      font-size:10px;
+      line-height:1.35;
+      overflow-wrap:anywhere;
+    }
+
+    .micro-note {
+      color:var(--muted);
+      font-size:10px;
+      line-height:1.5;
+      margin:-5px 0 14px;
+      padding:8px 10px;
+      border-left:2px solid var(--amber);
+      background:rgba(255,195,61,.04);
     }
 
     .evidence-grid {
-      display:
-        grid;
-
-      grid-template-columns:
-        1fr
-        1fr;
-
-      gap:
-        10px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
     }
 
     .evidence {
-      background:
-        var(--panel2);
-
-      border-radius:
-        12px;
-
-      padding:
-        12px;
+      background:var(--panel2);
+      border-radius:12px;
+      padding:12px;
     }
 
     .evidence h4 {
-      font-size:
-        10px;
-
-      margin:
-        0
-        0
-        7px;
+      font-size:10px;
+      margin:0 0 7px;
     }
 
-    .positive h4 {
-      color:
-        var(--green);
-    }
-
-    .risk h4 {
-      color:
-        var(--red);
-    }
+    .positive h4 { color:var(--green); }
+    .risk h4 { color:var(--red); }
 
     .evidence ul {
-      margin:
-        0;
-
-      padding-left:
-        17px;
-
-      color:
-        #cbd6e6;
-
-      font-size:
-        12px;
-
-      line-height:
-        1.6;
+      margin:0;
+      padding-left:17px;
+      color:#cbd6e6;
+      font-size:12px;
+      line-height:1.6;
     }
 
     .commentary {
-      margin-top:
-        11px;
-
-      padding:
-        11px;
-
-      border-radius:
-        12px;
-
-      background:
-        rgba(
-          106,
-          174,
-          255,
-          0.06
-        );
-
-      border:
-        1px solid
-        rgba(
-          106,
-          174,
-          255,
-          0.18
-        );
-
-      font-size:
-        12px;
-
-      line-height:
-        1.55;
+      margin-top:11px;
+      padding:11px;
+      border-radius:12px;
+      background:rgba(106,174,255,.06);
+      border:1px solid rgba(106,174,255,.18);
+      font-size:12px;
+      line-height:1.55;
     }
 
     .muted {
-      color:
-        var(--muted);
+      color:var(--muted);
     }
 
     .empty {
-      text-align:
-        center;
-
-      padding:
-        50px
-        18px;
-
-      background:
-        var(--panel);
-
-      border:
-        1px solid
-        var(--border);
-
-      border-radius:
-        18px;
-
-      color:
-        var(--muted);
-
-      line-height:
-        1.6;
+      text-align:center;
+      padding:50px 18px;
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:18px;
+      color:var(--muted);
+      line-height:1.6;
     }
 
     .note {
-      color:
-        var(--muted);
-
-      font-size:
-        11px;
-
-      line-height:
-        1.6;
-
-      margin-top:
-        22px;
-
-      padding:
-        12px;
-
-      border-left:
-        3px solid
-        var(--blue);
-
-      background:
-        rgba(
-          106,
-          174,
-          255,
-          0.04
-        );
+      color:var(--muted);
+      font-size:11px;
+      line-height:1.6;
+      margin-top:22px;
+      padding:12px;
+      border-left:3px solid var(--blue);
+      background:rgba(106,174,255,.04);
     }
 
-    @media (
-      max-width:
-      850px
-    ) {
-
+    @media (max-width:850px) {
       .summary {
-        grid-template-columns:
-          repeat(
-            2,
-            1fr
-          );
+        grid-template-columns:repeat(2,1fr);
       }
 
       .reality-grid {
-        grid-template-columns:
-          repeat(
-            2,
-            1fr
-          );
+        grid-template-columns:repeat(2,1fr);
       }
 
       .metrics {
-        grid-template-columns:
-          repeat(
-            3,
-            1fr
-          );
+        grid-template-columns:repeat(3,1fr);
       }
 
       .evidence-grid {
-        grid-template-columns:
-          1fr;
+        grid-template-columns:1fr;
+      }
+
+      .freshness {
+        grid-template-columns:repeat(2,1fr);
       }
     }
 
-    @media (
-      max-width:
-      520px
-    ) {
-
+    @media (max-width:520px) {
       .metrics {
-        grid-template-columns:
-          repeat(
-            2,
-            1fr
-          );
+        grid-template-columns:repeat(2,1fr);
       }
 
       h1 {
-        font-size:
-          24px;
+        font-size:24px;
       }
 
       .stock-head {
-        align-items:
-          center;
+        align-items:center;
       }
     }
   </style>
 </head>
 
 <body>
-
   <main class="wrap">
-
     <div class="top">
-
       <div>
-
-        <h1>
-          PEAD Intelligence Lab
-        </h1>
-
+        <h1>PEAD Intelligence Lab</h1>
         <div class="subtitle">
-
-          Separate read-only intelligence layer
-          for result quality, expectations,
-          valuation and post-result confirmation.
-
-          The working PEAD radar is not
+          Separate read-only intelligence layer for result quality, expectations,
+          valuation and post-result confirmation. The working PEAD radar is not
           modified by this page.
-
         </div>
-
       </div>
 
       <div class="safe">
-
         BASE PROTECTED · data.json READ ONLY
-
       </div>
-
     </div>
 
-
     <section class="summary">
-
       <div class="box">
-
-        <span>
-          Analyzed
-        </span>
-
-        <b id="total">
-          —
-        </b>
-
+        <span>Analyzed</span>
+        <b id="total">—</b>
       </div>
 
-
       <div class="box">
-
-        <span>
-          Results Declared
-        </span>
-
-        <b id="declared">
-          —
-        </b>
-
+        <span>Results Declared</span>
+        <b id="declared">—</b>
       </div>
 
-
       <div class="box">
-
-        <span>
-          Genuine Results
-        </span>
-
-        <b id="genuine">
-          —
-        </b>
-
+        <span>Genuine Results</span>
+        <b id="genuine">—</b>
       </div>
 
-
       <div class="box">
-
-        <span>
-          Priced In
-        </span>
-
-        <b id="priced">
-          —
-        </b>
-
+        <span>Priced In</span>
+        <b id="priced">—</b>
       </div>
 
-
       <div class="box">
-
-        <span>
-          High Conviction
-        </span>
-
-        <b id="high">
-          —
-        </b>
-
+        <span>High Conviction</span>
+        <b id="high">—</b>
       </div>
-
     </section>
 
-
     <div class="controls">
-
-      <button
-        data-filter="DECLARED"
-        class="active"
-      >
-        Results Declared
-      </button>
-
-
-      <button
-        data-filter="HIGH"
-      >
-        High Conviction
-      </button>
-
-
-      <button
-        data-filter="PRICED"
-      >
-        Priced In
-      </button>
-
-
-      <button
-        data-filter="UPCOMING"
-      >
-        Upcoming Watch
-      </button>
-
-
-      <button
-        data-filter="ALL"
-      >
-        All
-      </button>
-
+      <button data-filter="DECLARED" class="active">Results Declared</button>
+      <button data-filter="HIGH">High Conviction</button>
+      <button data-filter="PRICED">Priced In</button>
+      <button data-filter="UPCOMING">Upcoming Watch</button>
+      <button data-filter="ALL">All</button>
 
       <input
         id="search"
         placeholder="Search symbol, company, sector…"
       >
 
-
-      <button
-        id="reload"
-      >
+      <button id="reload">
         Reload
       </button>
-
     </div>
-
 
     <div class="meta">
-
-      <span
-        id="count"
-      >
-        —
-      </span>
-
-
+      <span id="count">—</span>
       <span>
-
         Generated:
-
-        <span
-          id="generated"
-        >
-          —
-        </span>
-
+        <span id="generated">—</span>
       </span>
-
     </div>
 
-
-    <section
-      id="cards"
-    >
-
+    <section id="cards">
       <div class="empty">
-
         Loading intelligence.json…
-
       </div>
-
     </section>
 
-
     <div class="note">
-
-      PEAD Intelligence v1 follows the attached
-      framework:
-
-      genuine earnings quality,
-      margin and cash-flow support,
-      low-vs-high pre-result expectations,
-      sector context,
-      52-week-high proximity,
-      post-result price/volume response,
-      and growth-adjusted valuation.
-
-      Missing evidence stays UNVERIFIED
-      rather than being guessed.
-
+      PEAD Intelligence v1 follows the attached framework: genuine earnings quality,
+      margin/cash-flow support, low-vs-high pre-result expectations, sector context,
+      52-week-high proximity, post-result price/volume response, and growth-adjusted
+      valuation. Missing evidence stays UNVERIFIED rather than being guessed.
     </div>
-
   </main>
 
-
-  <script
-    src="./intelligence.js?v=1"
-  ></script>
-
+  <script src="./intelligence.js?v=1"></script>
 </body>
 </html>
