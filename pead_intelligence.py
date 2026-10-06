@@ -535,7 +535,7 @@ def result_reality(row: dict, fs: dict) -> dict:
             red += 1
             risks.append(f"Other income is {other_ratio:.1f}% of pretax income; one-off support needs review.")
 
-        if surprise_pass is True:
+    if surprise_pass is True:
         score += 1
         reasons.append("Surprise gate passed.")
 
@@ -710,6 +710,392 @@ def result_verification(row: dict, released: bool) -> dict:
     }
 
 
+
+def event_key(item: dict) -> str:
+    quarter = str(item.get("quarter") or "").strip()
+    result_date_value = str(item.get("resultDate") or "").strip()
+
+    if quarter and quarter != "—":
+        return f"quarter:{quarter}"
+
+    if result_date_value:
+        return f"date:{result_date_value}"
+
+    return "current-unidentified-quarter"
+
+
+def expectation_gap(item: dict) -> dict:
+    """
+    Estimate how much positive expectation appears embedded BEFORE the result.
+
+    This is deliberately separate from result quality. A genuine result can still
+    be a weak PEAD setup if expectations were already extreme.
+    """
+    pc = item.get("priceContext") or {}
+
+    pre5 = num(pc.get("pre5dPct"))
+    pre10 = num(pc.get("pre10dPct"))
+    pre20 = num(pc.get("pre20dPct"))
+    high_dist = num(pc.get("distanceFrom52wHighPct"))
+
+    burden = 0
+    reasons: list[str] = []
+    offsets: list[str] = []
+
+    if pre20 is None:
+        reasons.append("20-day pre-result return is unverified.")
+    elif pre20 <= 0:
+        offsets.append(f"20-day move is subdued at {pre20:+.1f}%.")
+    elif pre20 <= 5:
+        burden += 10
+        offsets.append(f"20-day run-up is modest at {pre20:+.1f}%.")
+    elif pre20 <= 10:
+        burden += 25
+        reasons.append(f"20-day run-up is {pre20:+.1f}%.")
+    elif pre20 <= 15:
+        burden += 45
+        reasons.append(f"20-day run-up is already {pre20:+.1f}%.")
+    elif pre20 <= 25:
+        burden += 70
+        reasons.append(f"20-day run-up is elevated at {pre20:+.1f}%.")
+    else:
+        burden += 90
+        reasons.append(f"20-day run-up is extreme at {pre20:+.1f}%.")
+
+    if pre10 is not None:
+        if pre10 >= 10:
+            burden += 8
+            reasons.append(f"10-day run-up is strong at {pre10:+.1f}%.")
+        elif pre10 <= -3:
+            burden = max(0, burden - 5)
+            offsets.append(f"10-day move is weak at {pre10:+.1f}%.")
+
+    if pre5 is not None:
+        if pre5 >= 6:
+            burden += 7
+            reasons.append(f"5-day acceleration is {pre5:+.1f}%.")
+        elif pre5 <= -3:
+            burden = max(0, burden - 4)
+            offsets.append(f"5-day move is weak at {pre5:+.1f}%.")
+
+    if high_dist is not None:
+        if high_dist >= -3:
+            burden += 8
+            reasons.append("Stock is within 3% of its 52-week high.")
+        elif high_dist >= -7:
+            burden += 5
+            reasons.append("Stock is close to its 52-week high.")
+        elif high_dist <= -25:
+            burden = max(0, burden - 4)
+            offsets.append("Stock is well below its 52-week high.")
+
+    burden = max(0, min(100, int(round(burden))))
+
+    if pre20 is None:
+        label = "UNVERIFIED"
+        surprise_room = "UNVERIFIED"
+    elif burden <= 20:
+        label = "LOW"
+        surprise_room = "HIGH"
+    elif burden <= 45:
+        label = "NORMAL"
+        surprise_room = "FAIR"
+    elif burden <= 70:
+        label = "ELEVATED"
+        surprise_room = "LOW"
+    else:
+        label = "EXTREME"
+        surprise_room = "VERY LOW"
+
+    return {
+        "label": label,
+        "burdenScore": burden,
+        "surpriseRoom": surprise_room,
+        "pre5dPct": pre5,
+        "pre10dPct": pre10,
+        "pre20dPct": pre20,
+        "distanceFrom52wHighPct": high_dist,
+        "reasons": reasons[:5],
+        "offsets": offsets[:4],
+    }
+
+
+def compact_history_snapshot(
+    item: dict,
+    gap: dict,
+    *,
+    first_seen_at: str | None = None,
+    seen_at: str | None = None,
+) -> dict:
+    seen_at = seen_at or datetime.now(IST).isoformat()
+
+    return {
+        "eventKey": event_key(item),
+        "quarter": item.get("quarter"),
+        "resultDate": item.get("resultDate"),
+        "firstSeenAt": first_seen_at or seen_at,
+        "lastSeenAt": seen_at,
+        "resultsReleased": item.get("resultsReleased") is True,
+        "resultReality": (item.get("resultReality") or {}).get("label"),
+        "expectationReality": (item.get("expectationReality") or {}).get("label"),
+        "expectationGap": gap.get("label"),
+        "expectationBurdenScore": gap.get("burdenScore"),
+        "priceResponse": (item.get("priceResponse") or {}).get("label"),
+        "valuationReality": (item.get("valuationReality") or {}).get("label"),
+        "baseBucket": item.get("baseBucket"),
+        "baseScore": item.get("baseScore"),
+        "convictionScore": num(item.get("convictionScore")),
+        "verdict": item.get("verdict"),
+        "sectorTailwind": item.get("sectorTailwind"),
+    }
+
+
+def previous_quarter_history(previous_payload: dict | None) -> dict[str, list[dict]]:
+    """
+    Read prior quarter memory from the previous intelligence.json.
+
+    Migration behavior:
+    - If quarterHistory already exists, preserve it.
+    - If it does not exist yet, seed one snapshot from the previous items so the
+      first upgraded run does not lose the previously tracked quarter.
+    """
+    if not isinstance(previous_payload, dict):
+        return {}
+
+    existing = previous_payload.get("quarterHistory")
+    if isinstance(existing, dict):
+        clean: dict[str, list[dict]] = {}
+        for symbol, events in existing.items():
+            if isinstance(events, list):
+                clean[str(symbol).upper()] = [
+                    dict(event) for event in events if isinstance(event, dict)
+                ][-12:]
+        return clean
+
+    seeded: dict[str, list[dict]] = {}
+    previous_generated = previous_payload.get("generatedAt") or datetime.now(IST).isoformat()
+
+    for item in previous_payload.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+
+        symbol = str(item.get("symbol") or "").upper().strip()
+        if not symbol:
+            continue
+
+        gap = item.get("expectationGap")
+        if not isinstance(gap, dict):
+            gap = expectation_gap(item)
+
+        seeded[symbol] = [
+            compact_history_snapshot(
+                item,
+                gap,
+                first_seen_at=str(previous_generated),
+                seen_at=str(previous_generated),
+            )
+        ]
+
+    return seeded
+
+
+def update_quarter_history(
+    previous_payload: dict | None,
+    items: list[dict],
+) -> dict[str, list[dict]]:
+    history = previous_quarter_history(previous_payload)
+    seen_at = datetime.now(IST).isoformat()
+
+    for item in items:
+        symbol = str(item.get("symbol") or "").upper().strip()
+        if not symbol:
+            continue
+
+        gap = item.get("expectationGap") or expectation_gap(item)
+        events = history.setdefault(symbol, [])
+        key = event_key(item)
+
+        existing = next(
+            (event for event in events if event.get("eventKey") == key),
+            None,
+        )
+
+        snapshot = compact_history_snapshot(
+            item,
+            gap,
+            first_seen_at=existing.get("firstSeenAt") if existing else None,
+            seen_at=seen_at,
+        )
+
+        if existing is None:
+            events.append(snapshot)
+        else:
+            existing.clear()
+            existing.update(snapshot)
+
+        # Bound persistent memory to the most recent 12 tracked quarters/events.
+        if len(events) > 12:
+            history[symbol] = events[-12:]
+
+    return history
+
+
+def quarter_memory(item: dict, history: dict[str, list[dict]]) -> dict:
+    symbol = str(item.get("symbol") or "").upper().strip()
+    events = list(history.get(symbol) or [])
+
+    events.sort(
+        key=lambda e: (
+            str(e.get("firstSeenAt") or ""),
+            str(e.get("resultDate") or ""),
+            str(e.get("eventKey") or ""),
+        )
+    )
+
+    key = event_key(item)
+    current_index = next(
+        (i for i, event in enumerate(events) if event.get("eventKey") == key),
+        None,
+    )
+
+    current = (
+        events[current_index]
+        if current_index is not None
+        else (events[-1] if events else None)
+    )
+
+    prior = (
+        events[:current_index]
+        if current_index is not None
+        else events[:-1]
+    )
+
+    previous = prior[-1] if prior else None
+    status = "FIRST OBSERVATION"
+    reasons: list[str] = []
+
+    if previous and current:
+        prev_rr = str(previous.get("resultReality") or "")
+        curr_rr = str(current.get("resultReality") or "")
+        prev_verdict = str(previous.get("verdict") or "")
+        curr_verdict = str(current.get("verdict") or "")
+
+        if current.get("resultsReleased") is not True:
+            status = "TRACKING NEXT QUARTER"
+            reasons.append("A prior tracked quarter exists; current result is still pending.")
+        elif prev_rr in {"LOW QUALITY", "MIXED"} and curr_rr == "GENUINE":
+            status = "SECOND-CHANCE CONFIRMATION"
+            reasons.append(
+                "A previously weak/mixed tracked quarter is now followed by a genuine result."
+            )
+        elif prev_rr == "GENUINE" and curr_rr == "GENUINE":
+            status = "CONFIRMED AGAIN"
+            reasons.append("Two consecutive tracked quarters are classified as genuine.")
+        elif prev_rr == "GENUINE" and curr_rr == "LOW QUALITY":
+            status = "EXECUTION BROKE"
+            reasons.append(
+                "Current result quality deteriorated after a previously genuine quarter."
+            )
+        elif (
+            "HIGH-CONVICTION" in prev_verdict
+            and "HIGH-CONVICTION" in curr_verdict
+        ):
+            status = "REPEATED HIGH CONVICTION"
+            reasons.append("High-conviction PEAD status persisted across tracked quarters.")
+        else:
+            status = "TRACKING"
+            reasons.append(
+                "Quarter-to-quarter evidence exists but has not formed a stronger pattern yet."
+            )
+    elif previous:
+        status = "TRACKING"
+        reasons.append("A prior tracked quarter exists.")
+
+    return {
+        "status": status,
+        "trackedQuarterCount": len(events),
+        "previous": previous,
+        "current": current,
+        "recentEvents": events[-4:],
+        "reasons": reasons,
+    }
+
+
+def jcurve_phase(item: dict, memory: dict) -> dict:
+    released = item.get("resultsReleased") is True
+    rr = str((item.get("resultReality") or {}).get("label") or "")
+    pr = str((item.get("priceResponse") or {}).get("label") or "")
+    memory_status = str(memory.get("status") or "")
+
+    if not released:
+        label = "PRE-RESULT EXPECTATION SETUP"
+        note = "Wait for the result; judge how much expectation is already embedded."
+    elif rr == "LOW QUALITY":
+        label = "THESIS REVIEW / BROKEN"
+        note = "Result quality is weak; do not force a PEAD thesis."
+    elif rr == "GENUINE" and pr == "CONFIRMED":
+        label = "EARNINGS INFLECTION + MARKET CONFIRMATION"
+        note = "Fundamentals and post-result price/volume are aligned."
+    elif rr == "GENUINE":
+        label = "RESULT CONFIRMED / MARKET TEST PENDING"
+        note = "Result quality is genuine; market confirmation is still incomplete."
+    elif memory_status in {
+        "CONFIRMED AGAIN",
+        "SECOND-CHANCE CONFIRMATION",
+        "REPEATED HIGH CONVICTION",
+    }:
+        label = "EXECUTION TREND IMPROVING"
+        note = "Quarter memory is strengthening."
+    else:
+        label = "IN REVIEW"
+        note = "Evidence is mixed or incomplete."
+
+    return {"label": label, "note": note}
+
+
+def action_bias(item: dict, gap: dict, memory: dict) -> dict:
+    released = item.get("resultsReleased") is True
+    rr = str((item.get("resultReality") or {}).get("label") or "")
+    pr = str((item.get("priceResponse") or {}).get("label") or "")
+    gap_label = str(gap.get("label") or "")
+    memory_status = str(memory.get("status") or "")
+
+    if not released:
+        if gap_label in {"ELEVATED", "EXTREME"}:
+            label = "WAIT — EXPECTATIONS HIGH"
+            reason = "Result is pending and the pre-result expectation burden is elevated."
+        elif gap_label == "LOW":
+            label = "WATCH — SURPRISE ROOM"
+            reason = "Result is pending and pre-result expectations appear relatively low."
+        else:
+            label = "WATCH"
+            reason = "Result is pending; expectation evidence is normal or incomplete."
+    elif rr == "GENUINE" and pr == "CONFIRMED" and gap_label in {"LOW", "NORMAL"}:
+        label = "PEAD SETUP STRONG"
+        reason = (
+            "Genuine result, acceptable prior expectations and market confirmation are aligned."
+        )
+    elif rr == "GENUINE" and gap_label in {"ELEVATED", "EXTREME"}:
+        label = "GOOD RESULT — PRICED-IN RISK"
+        reason = (
+            "The result is genuine, but expectations were already elevated before the print."
+        )
+    elif rr == "GENUINE":
+        label = "REVIEW ENTRY"
+        reason = "Result quality is genuine; confirmation or entry structure still needs review."
+    elif rr == "LOW QUALITY":
+        label = "AVOID / REVIEW"
+        reason = "Result quality is weak."
+    elif memory_status == "SECOND-CHANCE CONFIRMATION":
+        label = "SECOND-CHANCE WATCH"
+        reason = "Quarter memory improved after an earlier weak/mixed setup."
+    else:
+        label = "IN REVIEW"
+        reason = "Not enough aligned evidence for a stronger PEAD classification."
+
+    return {"label": label, "reason": reason}
+
+
 def base_points(row: dict) -> int:
     score = num(pick(row, "score"))
     if score is None and isinstance(row.get("checks"), list):
@@ -854,11 +1240,16 @@ def fallback_item(row: dict, index: int, exc: Exception) -> dict:
     }
 
 
-def build_payload(data_path: Path) -> dict:
+def build_payload(
+    data_path: Path,
+    previous_payload: dict | None = None,
+) -> dict:
     payload = json.loads(data_path.read_text(encoding="utf-8"))
     rows = extract_rows(payload)
     if not rows:
-        raise RuntimeError("Base data.json contains 0 stocks. Intelligence output will NOT be published.")
+        raise RuntimeError(
+            "Base data.json contains 0 stocks. Intelligence output will NOT be published."
+        )
 
     items = []
     for i, row in enumerate(rows, 1):
@@ -869,7 +1260,10 @@ def build_payload(data_path: Path) -> dict:
         except Exception as exc:
             print(f"WARNING: {symbol}: {type(exc).__name__}: {exc}")
             item = fallback_item(row, i, exc)
+
+        item["expectationGap"] = expectation_gap(item)
         items.append(item)
+
         if item.get("resultsReleased"):
             time.sleep(0.15)
 
@@ -878,31 +1272,90 @@ def build_payload(data_path: Path) -> dict:
             f"Row-preservation failure: base={len(rows)}, intelligence={len(items)}"
         )
 
+    quarter_history = update_quarter_history(previous_payload, items)
+
+    for item in items:
+        memory = quarter_memory(item, quarter_history)
+        item["quarterMemory"] = memory
+        item["jCurvePhase"] = jcurve_phase(item, memory)
+        item["actionBias"] = action_bias(
+            item,
+            item.get("expectationGap") or {},
+            memory,
+        )
+
     counts = {
         "total": len(items),
         "resultsDeclared": sum(x.get("resultsReleased") is True for x in items),
-        "genuineResults": sum(x.get("resultReality", {}).get("label") == "GENUINE" for x in items),
-        "lowExpectations": sum(x.get("expectationReality", {}).get("label") == "LOW EXPECTATIONS" for x in items),
-        "pricedIn": sum(x.get("expectationReality", {}).get("label") == "PRICED IN" for x in items),
-        "attractiveValuation": sum(x.get("valuationReality", {}).get("label") == "ATTRACTIVE" for x in items),
-        "highConviction": sum(x.get("verdict") == "HIGH-CONVICTION PEAD CANDIDATE" for x in items),
+        "genuineResults": sum(
+            x.get("resultReality", {}).get("label") == "GENUINE"
+            for x in items
+        ),
+        "lowExpectations": sum(
+            x.get("expectationReality", {}).get("label") == "LOW EXPECTATIONS"
+            for x in items
+        ),
+        "pricedIn": sum(
+            x.get("expectationReality", {}).get("label") == "PRICED IN"
+            for x in items
+        ),
+        "attractiveValuation": sum(
+            x.get("valuationReality", {}).get("label") == "ATTRACTIVE"
+            for x in items
+        ),
+        "highConviction": sum(
+            x.get("verdict") == "HIGH-CONVICTION PEAD CANDIDATE"
+            for x in items
+        ),
+        "expectationGapLow": sum(
+            x.get("expectationGap", {}).get("label") == "LOW"
+            for x in items
+        ),
+        "expectationGapElevated": sum(
+            x.get("expectationGap", {}).get("label") in {"ELEVATED", "EXTREME"}
+            for x in items
+        ),
+        "secondChance": sum(
+            x.get("quarterMemory", {}).get("status") == "SECOND-CHANCE CONFIRMATION"
+            for x in items
+        ),
+        "confirmedAgain": sum(
+            x.get("quarterMemory", {}).get("status")
+            in {"CONFIRMED AGAIN", "REPEATED HIGH CONVICTION"}
+            for x in items
+        ),
+        "peadStrong": sum(
+            x.get("actionBias", {}).get("label") == "PEAD SETUP STRONG"
+            for x in items
+        ),
     }
 
     return {
         "generatedAt": datetime.now(IST).isoformat(),
-        "sourceDataGeneratedAt": pick(payload, "generatedAt", "last_scan", "lastScanAt"),
+        "sourceDataGeneratedAt": pick(
+            payload,
+            "generatedAt",
+            "last_scan",
+            "lastScanAt",
+        ),
         "sourceScannerMode": payload.get("scannerMode"),
         "sourceQualificationVersion": payload.get("qualificationVersion"),
         "sourceStockCount": len(rows),
-        "intelligenceVersion": "pead-intelligence-v2",
+        "intelligenceVersion": "pead-intelligence-v3-context-merged",
         "safety": {
             "dataJsonReadOnly": True,
             "zeroPublishProtection": True,
             "exactRowPreservation": True,
+            "contextMergedIntoIntelligence": True,
+            "noThirdPageRequired": True,
         },
         "methodNotes": [
             "Result Reality uses reported growth, earnings quality, cash flow and best-effort quarterly fundamentals.",
             "Expectation Reality uses pre-result movement; RVOL is a post-result confirmation input.",
+            "Expectation Gap separately estimates how much optimism is already embedded before results using 5D/10D/20D movement and 52-week-high proximity.",
+            "Quarter Memory persists inside intelligence.json and tracks one evolving snapshot per symbol/quarter.",
+            "Second-chance confirmation highlights a genuine current result after a previously weak/mixed tracked quarter.",
+            "J-Curve Phase is a lightweight context label based only on verified result/price/quarter-memory evidence; it does not invent capacity or management facts.",
             "Intraday RVOL is time-adjusted and explicitly marked as an estimate.",
             "Valuation requires at least 3 inputs before a label is assigned; otherwise it remains UNVERIFIED.",
             "Official result evidence is marked official only when the source explicitly points to NSE/BSE or an official exchange filing.",
@@ -910,6 +1363,7 @@ def build_payload(data_path: Path) -> dict:
             "This add-on never modifies data.json or the main PEAD radar.",
         ],
         "counts": counts,
+        "quarterHistory": quarter_history,
         "items": items,
     }
 
@@ -918,19 +1372,47 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", default="data.json")
     parser.add_argument("--output", default="intelligence.json")
+    parser.add_argument(
+        "--previous",
+        default="intelligence.json",
+        help="Previous intelligence.json used only for quarter-memory carry-forward.",
+    )
     args = parser.parse_args()
 
     data_path = Path(args.data)
     output_path = Path(args.output)
+    previous_path = Path(args.previous)
 
     print("PEAD Intelligence starting...")
     print("Input:", data_path)
     print("Output:", output_path)
+    print("Previous memory source:", previous_path)
 
     if not data_path.exists():
         raise RuntimeError(f"Input file not found: {data_path}")
 
-    payload = build_payload(data_path)
+    previous_payload = None
+    if previous_path.exists():
+        try:
+            previous_payload = json.loads(
+                previous_path.read_text(encoding="utf-8")
+            )
+            print(
+                "Previous quarter-memory source loaded:",
+                previous_payload.get("generatedAt"),
+            )
+        except Exception as exc:
+            # Memory enrichment must never block a fresh intelligence build.
+            print(
+                "WARNING: previous intelligence memory could not be read:",
+                f"{type(exc).__name__}: {exc}",
+            )
+
+    payload = build_payload(
+        data_path,
+        previous_payload=previous_payload,
+    )
+
     source_count = int(payload.get("sourceStockCount", 0))
     output_count = len(payload.get("items") or [])
 
@@ -939,8 +1421,10 @@ def main():
 
     if source_count <= 0:
         raise RuntimeError("Base source count is 0. Refusing to publish.")
+
     if output_count <= 0:
         raise RuntimeError("Intelligence generated 0 rows. Refusing to publish.")
+
     if output_count != source_count:
         raise RuntimeError(
             f"Intelligence count mismatch: source={source_count}, output={output_count}"
@@ -948,6 +1432,7 @@ def main():
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = Path(str(output_path) + ".tmp")
+
     temp_path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -956,6 +1441,7 @@ def main():
 
     if not output_path.exists():
         raise RuntimeError("Output file was not created.")
+
     if output_path.stat().st_size == 0:
         raise RuntimeError("Output file was created but is empty.")
 
@@ -967,4 +1453,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
