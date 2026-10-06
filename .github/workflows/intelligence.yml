@@ -19,24 +19,48 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      # -------------------------------------------------
+      # 1. CHECKOUT
+      # -------------------------------------------------
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+
+      # -------------------------------------------------
+      # 2. PYTHON
+      # -------------------------------------------------
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+
+      # -------------------------------------------------
+      # 3. DEPENDENCIES
+      # -------------------------------------------------
+
       - name: Install intelligence dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade yfinance pandas
 
+
+      # -------------------------------------------------
+      # 4. CHECK PYTHON FILE
+      # -------------------------------------------------
+
       - name: Check intelligence syntax
         run: |
           python -m py_compile pead_intelligence.py
+
+
+      # -------------------------------------------------
+      # 5. VERIFY LIVE BASE
+      # -------------------------------------------------
 
       - name: Verify base is present
         run: |
@@ -48,14 +72,21 @@ jobs:
           path = Path("data.json")
 
           if not path.exists():
-              print("ERROR: data.json missing")
+              print("ERROR: data.json does not exist")
               sys.exit(1)
 
-          data = json.loads(
-              path.read_text(
-                  encoding="utf-8"
+          try:
+              data = json.loads(
+                  path.read_text(
+                      encoding="utf-8"
+                  )
               )
-          )
+          except Exception as exc:
+              print(
+                  "ERROR: Could not read data.json:",
+                  exc
+              )
+              sys.exit(1)
 
           rows = (
               data.get("stocks")
@@ -64,13 +95,35 @@ jobs:
           )
 
           if not rows:
-              print("ERROR: base has 0 stocks")
+              print(
+                  "ERROR: Base radar contains 0 stocks."
+              )
               sys.exit(1)
 
-          print("Base stock count:", len(rows))
+          print(
+              "LIVE BASE STOCK COUNT:",
+              len(rows)
+          )
+
+          print(
+              "BASE GENERATED AT:",
+              data.get("generatedAt")
+              or data.get("last_scan")
+              or data.get("lastScanAt")
+          )
+
+          print(
+              "BASE SCANNER MODE:",
+              data.get("scannerMode")
+          )
           PY
 
-      - name: Build intelligence candidate file
+
+      # -------------------------------------------------
+      # 6. BUILD BRAND-NEW INTELLIGENCE
+      # -------------------------------------------------
+
+      - name: Build fresh intelligence candidate
         run: |
           rm -f /tmp/intelligence.new.json
 
@@ -78,34 +131,58 @@ jobs:
             --data data.json \
             --output /tmp/intelligence.new.json
 
-          if [ -s /tmp/intelligence.new.json ]; then
-            echo "Candidate created successfully"
-          elif [ -s intelligence.json ]; then
-            echo "Using generated intelligence.json as candidate"
-            cp intelligence.json /tmp/intelligence.new.json
-          else
-            echo "ERROR: intelligence engine produced no JSON"
+          if [ ! -f /tmp/intelligence.new.json ]; then
+            echo "ERROR: Fresh intelligence candidate was not created."
             exit 1
           fi
 
+          if [ ! -s /tmp/intelligence.new.json ]; then
+            echo "ERROR: Fresh intelligence candidate is empty."
+            exit 1
+          fi
+
+          echo "Fresh intelligence candidate created successfully."
+
           ls -lh /tmp/intelligence.new.json
 
-      - name: Zero and drop protection
+
+      # -------------------------------------------------
+      # 7. STRICT ZERO + STALE PROTECTION
+      # -------------------------------------------------
+
+      - name: Verify intelligence matches live universe
         run: |
           python - <<'PY'
           import json
-          import math
           import sys
           from pathlib import Path
 
+          base_path = Path("data.json")
+
+          candidate_path = Path(
+              "/tmp/intelligence.new.json"
+          )
+
+          if not base_path.exists():
+              print(
+                  "ERROR: data.json disappeared."
+              )
+              sys.exit(1)
+
+          if not candidate_path.exists():
+              print(
+                  "ERROR: Intelligence candidate missing."
+              )
+              sys.exit(1)
+
           base = json.loads(
-              Path("data.json").read_text(
+              base_path.read_text(
                   encoding="utf-8"
               )
           )
 
           candidate = json.loads(
-              Path("/tmp/intelligence.new.json").read_text(
+              candidate_path.read_text(
                   encoding="utf-8"
               )
           )
@@ -116,39 +193,150 @@ jobs:
               or []
           )
 
-          items = candidate.get("items") or []
+          intelligence_rows = (
+              candidate.get("items")
+              or []
+          )
 
-          base_count = len(base_rows)
-          intelligence_count = len(items)
+          base_count = len(
+              base_rows
+          )
 
-          minimum = max(
-              1,
-              math.floor(
-                  base_count * 0.80
+          intelligence_count = len(
+              intelligence_rows
+          )
+
+          reported_source_count = (
+              candidate.get(
+                  "sourceStockCount"
               )
           )
 
-          print("Base rows:", base_count)
-          print("Intelligence rows:", intelligence_count)
-          print("Minimum allowed:", minimum)
+          base_generated = (
+              base.get("generatedAt")
+              or base.get("last_scan")
+              or base.get("lastScanAt")
+          )
 
-          if intelligence_count == 0:
-              print("ERROR: Intelligence produced 0 rows")
-              sys.exit(1)
+          candidate_source_generated = (
+              candidate.get(
+                  "sourceDataGeneratedAt"
+              )
+          )
 
-          if intelligence_count < minimum:
+          print(
+              "LIVE BASE COUNT:",
+              base_count
+          )
+
+          print(
+              "INTELLIGENCE COUNT:",
+              intelligence_count
+          )
+
+          print(
+              "REPORTED SOURCE COUNT:",
+              reported_source_count
+          )
+
+          print(
+              "BASE GENERATED:",
+              base_generated
+          )
+
+          print(
+              "INTELLIGENCE SOURCE GENERATED:",
+              candidate_source_generated
+          )
+
+          if base_count == 0:
               print(
-                  "ERROR: Intelligence universe dropped too far. "
-                  "Existing intelligence.json will remain untouched."
+                  "ERROR: Base unexpectedly contains 0 stocks."
               )
               sys.exit(1)
 
-          print("Safety check passed")
+          if intelligence_count == 0:
+              print(
+                  "ERROR: Intelligence produced 0 stocks."
+              )
+              sys.exit(1)
+
+          if intelligence_count != base_count:
+              print(
+                  "ERROR: Intelligence universe does not "
+                  "match base universe."
+              )
+
+              print(
+                  "Base:",
+                  base_count,
+                  "Intelligence:",
+                  intelligence_count
+              )
+
+              sys.exit(1)
+
+          if reported_source_count != base_count:
+              print(
+                  "ERROR: sourceStockCount does not "
+                  "match live base."
+              )
+
+              sys.exit(1)
+
+          if (
+              base_generated
+              and
+              candidate_source_generated
+              and
+              str(base_generated)
+              !=
+              str(candidate_source_generated)
+          ):
+              print(
+                  "ERROR: Intelligence was generated "
+                  "from an older data.json."
+              )
+
+              print(
+                  "Base timestamp:",
+                  base_generated
+              )
+
+              print(
+                  "Candidate timestamp:",
+                  candidate_source_generated
+              )
+
+              sys.exit(1)
+
+          print(
+              "SYNC CHECK PASSED."
+          )
+
+          print(
+              "Intelligence exactly matches "
+              "the current live base universe."
+          )
           PY
 
-      - name: Publish intelligence file locally
+
+      # -------------------------------------------------
+      # 8. COPY CANDIDATE LOCALLY
+      # -------------------------------------------------
+
+      - name: Publish new intelligence file locally
         run: |
           cp /tmp/intelligence.new.json intelligence.json
+
+          echo "Local intelligence.json created."
+
+          ls -lh intelligence.json
+
+
+      # -------------------------------------------------
+      # 9. SHOW SUMMARY
+      # -------------------------------------------------
 
       - name: Show intelligence summary
         run: |
@@ -163,22 +351,102 @@ jobs:
               data = json.load(f)
 
           print(
-              "Source stocks:",
-              data.get("sourceStockCount")
+              "INTELLIGENCE VERSION:",
+              data.get(
+                  "intelligenceVersion"
+              )
           )
 
           print(
-              "Generated:",
-              data.get("generatedAt")
+              "SOURCE STOCK COUNT:",
+              data.get(
+                  "sourceStockCount"
+              )
           )
 
           print(
-              "Counts:",
-              data.get("counts")
+              "GENERATED AT:",
+              data.get(
+                  "generatedAt"
+              )
           )
+
+          print(
+              "SOURCE DATA GENERATED AT:",
+              data.get(
+                  "sourceDataGeneratedAt"
+              )
+          )
+
+          print(
+              "COUNTS:"
+          )
+
+          print(
+              json.dumps(
+                  data.get(
+                      "counts",
+                      {}
+                  ),
+                  indent=2
+              )
+          )
+
+          high = [
+              item
+              for item in data.get(
+                  "items",
+                  []
+              )
+              if item.get(
+                  "verdict"
+              )
+              ==
+              "HIGH-CONVICTION PEAD CANDIDATE"
+          ]
+
+          print(
+              "HIGH CONVICTION:",
+              len(high)
+          )
+
+          for item in high[:20]:
+              print(
+                  item.get("symbol"),
+                  "| conviction",
+                  item.get(
+                      "convictionScore"
+                  ),
+                  "| result",
+                  item.get(
+                      "resultReality",
+                      {}
+                  ).get(
+                      "label"
+                  ),
+                  "| expectations",
+                  item.get(
+                      "expectationReality",
+                      {}
+                  ).get(
+                      "label"
+                  ),
+                  "| valuation",
+                  item.get(
+                      "valuationReality",
+                      {}
+                  ).get(
+                      "label"
+                  )
+              )
           PY
 
-      - name: Commit intelligence only
+
+      # -------------------------------------------------
+      # 10. PUBLISH ONLY IF BASE IS STILL SAME
+      # -------------------------------------------------
+
+      - name: Commit fresh intelligence only
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -190,7 +458,117 @@ jobs:
             echo "Push attempt $attempt"
 
             git fetch origin main
+
             git reset --hard origin/main
+
+            echo "Checking that base did not change while intelligence was running..."
+
+            python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          latest_base = json.loads(
+              Path("data.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          candidate = json.loads(
+              Path(
+                  "/tmp/intelligence.publish.json"
+              ).read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          latest_rows = (
+              latest_base.get("stocks")
+              or latest_base.get("companies")
+              or []
+          )
+
+          latest_count = len(
+              latest_rows
+          )
+
+          candidate_count = len(
+              candidate.get(
+                  "items",
+                  []
+              )
+          )
+
+          latest_generated = (
+              latest_base.get("generatedAt")
+              or latest_base.get("last_scan")
+              or latest_base.get("lastScanAt")
+          )
+
+          candidate_source_generated = (
+              candidate.get(
+                  "sourceDataGeneratedAt"
+              )
+          )
+
+          print(
+              "LATEST BASE COUNT:",
+              latest_count
+          )
+
+          print(
+              "CANDIDATE COUNT:",
+              candidate_count
+          )
+
+          print(
+              "LATEST BASE TIMESTAMP:",
+              latest_generated
+          )
+
+          print(
+              "CANDIDATE SOURCE TIMESTAMP:",
+              candidate_source_generated
+          )
+
+          if latest_count != candidate_count:
+              print(
+                  "ERROR: Base changed during "
+                  "intelligence run."
+              )
+
+              print(
+                  "Fresh intelligence must be "
+                  "generated again."
+              )
+
+              sys.exit(1)
+
+          if (
+              latest_generated
+              and
+              candidate_source_generated
+              and
+              str(latest_generated)
+              !=
+              str(candidate_source_generated)
+          ):
+              print(
+                  "ERROR: Base timestamp changed "
+                  "during intelligence run."
+              )
+
+              print(
+                  "Refusing to publish stale "
+                  "intelligence."
+              )
+
+              sys.exit(1)
+
+          print(
+              "FINAL SYNC CHECK PASSED."
+          )
+          PY
 
             cp /tmp/intelligence.publish.json intelligence.json
 
@@ -198,7 +576,7 @@ jobs:
 
             if git diff --cached --quiet
             then
-              echo "No intelligence changes to commit"
+              echo "No intelligence changes to commit."
               exit 0
             fi
 
@@ -206,13 +584,15 @@ jobs:
 
             if git push origin HEAD:main
             then
-              echo "PEAD intelligence pushed successfully"
+              echo "PEAD intelligence pushed successfully."
               exit 0
             fi
 
-            echo "Push conflict. Retrying..."
+            echo "Push conflict detected."
+            echo "Retrying..."
+
             sleep 3
           done
 
-          echo "ERROR: could not publish intelligence after 3 attempts"
+          echo "ERROR: Could not publish intelligence after 3 attempts."
           exit 1
