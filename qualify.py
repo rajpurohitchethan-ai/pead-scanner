@@ -687,39 +687,77 @@ def _filing_broadcast_date(item):
 
 
 def fetch_nse_result_enrichment(rows):
+    """Fetch result-release proof and quarterly numbers from NSE.
+
+    Important resilience rule: failure of the market-wide financial_results()
+    endpoint must NOT prevent per-symbol results_comparison() checks. GitHub
+    runners are sometimes blocked/throttled on one NSE endpoint while another
+    still works.
+    """
     enrichment = {}
     errors = []
-    stats = {"filings": 0, "matched": 0, "comparisons": 0}
+    stats = {
+        "filings": 0,
+        "matched": 0,
+        "comparisonAttempts": 0,
+        "comparisons": 0,
+    }
     if NSE is None:
         return enrichment, ["nse package unavailable for results"], stats
 
     now = datetime.now(IST).replace(tzinfo=None)
+    today = datetime.now(IST).date()
     client = None
+    by_symbol = {}
+
     try:
         client = _nse_client()
-        filings = client.financial_results(
-            segment="equities",
-            period="quarterly",
-            from_date=now - timedelta(days=60),
-            to_date=now,
-        ) or []
-        stats["filings"] = len(filings)
-        by_symbol = {}
-        for item in filings:
-            if not isinstance(item, dict):
-                continue
-            symbol = str(item.get("symbol") or item.get("Symbol") or "").upper().replace(".NS", "").strip()
-            if not symbol:
-                continue
-            by_symbol.setdefault(symbol, []).append(item)
+        if client is None:
+            return enrichment, ["NSE result client could not be created"], stats
+
+        # Best-effort market-wide filing index. Do not abort the whole result
+        # layer when this single NSE endpoint is blocked or changes shape.
+        try:
+            filings = client.financial_results(
+                segment="equities",
+                period="quarterly",
+                from_date=now - timedelta(days=60),
+                to_date=now,
+            ) or []
+            if not isinstance(filings, list):
+                filings = []
+            stats["filings"] = len(filings)
+
+            for item in filings:
+                if not isinstance(item, dict):
+                    continue
+                symbol = str(
+                    item.get("symbol")
+                    or item.get("Symbol")
+                    or item.get("sm_symbol")
+                    or ""
+                ).upper().replace(".NS", "").strip()
+                if symbol:
+                    by_symbol.setdefault(symbol, []).append(item)
+        except Exception as exc:
+            errors.append(
+                f"NSE financial_results index unavailable: {type(exc).__name__}: {exc}; "
+                "continuing with per-symbol results_comparison checks"
+            )
 
         for row in rows:
             symbol = clean_symbol(row)
             if not symbol:
                 continue
+
             expected = expected_period_end(row)
             rd = parse_date(row.get("resultDate") or row.get("result_date"))
-            due = rd is not None and rd <= datetime.now(IST).date() and (datetime.now(IST).date() - rd).days <= 60
+            due = (
+                rd is not None
+                and rd <= today
+                and (today - rd).days <= 60
+            )
+
             filing_list = by_symbol.get(symbol) or []
             best = None
             if filing_list:
@@ -734,10 +772,10 @@ def fetch_nse_result_enrichment(rows):
                         if distance <= 45:
                             best = candidate
                 if best is None:
-                    best = max(filing_list, key=lambda x: _filing_broadcast_date(x) or date.min)
-
-            if best is None and not due:
-                continue
+                    best = max(
+                        filing_list,
+                        key=lambda x: _filing_broadcast_date(x) or date.min,
+                    )
 
             base = {}
             if best is not None:
@@ -749,15 +787,27 @@ def fetch_nse_result_enrichment(rows):
                     "resultReleased": True,
                     "resultVerifiedAt": datetime.now(IST).isoformat(),
                     "resultSource": "NSE financial results filing",
-                    "resultSourceUrl": best.get("xbrl") or best.get("xbrlLink") or "https://www.nseindia.com/companies-listing/corporate-filings-financial-results",
+                    "resultSourceUrl": (
+                        best.get("xbrl")
+                        or best.get("xbrlLink")
+                        or best.get("filePath")
+                        or "https://www.nseindia.com/companies-listing/corporate-filings-financial-results"
+                    ),
                     "resultPeriodEnd": period_end.isoformat() if period_end else None,
-                    "resultsEvidence": "Official NSE quarterly financial-results filing detected"
-                    + (f" on {broadcast.isoformat()}" if broadcast else "") + ".",
+                    "resultsEvidence": (
+                        "Official NSE quarterly financial-results filing detected"
+                        + (f" on {broadcast.isoformat()}" if broadcast else "")
+                        + "."
+                    ),
                 })
 
-            # Fetch numeric P&L only for rows that have actually reached their result date
-            # or have an official filing. This keeps the request count bounded.
+            # This is the critical fallback: for every result that is due, ask
+            # NSE for the symbol's latest quarterly P&L even when the filing-index
+            # request above failed. parse_nse_comparison() only accepts it when
+            # the reported period matches the expected quarter, so stale quarters
+            # are not falsely marked released.
             if best is not None or due:
+                stats["comparisonAttempts"] += 1
                 try:
                     comp = client.results_comparison(symbol)
                     parsed = parse_nse_comparison(comp, row)
@@ -765,20 +815,23 @@ def fetch_nse_result_enrichment(rows):
                         base.update(parsed)
                         stats["comparisons"] += 1
                 except Exception as exc:
-                    errors.append(f"NSE comparison {symbol}: {type(exc).__name__}: {exc}")
+                    errors.append(
+                        f"NSE comparison {symbol}: {type(exc).__name__}: {exc}"
+                    )
 
             if base:
                 enrichment[symbol] = base
+
     except Exception as exc:
-        errors.append(f"NSE result layer: {type(exc).__name__}: {exc}")
+        errors.append(f"NSE result client failure: {type(exc).__name__}: {exc}")
     finally:
         if client is not None:
             try:
                 client.exit()
             except Exception:
                 pass
-    return enrichment, errors, stats
 
+    return enrichment, errors, stats
 
 def _snapshot_table(snapshot):
     block = snapshot.get("results_in_crores") if isinstance(snapshot, dict) else None
