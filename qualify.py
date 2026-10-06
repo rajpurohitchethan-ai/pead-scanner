@@ -6,7 +6,7 @@ import math
 import sys
 import time
 import warnings
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -14,6 +14,16 @@ import pandas as pd
 import yfinance as yf
 
 from nse_mcp import fetch_nse_market_layer
+
+try:
+    from nse import NSE
+except Exception:
+    NSE = None
+
+try:
+    from bse import BSE
+except Exception:
+    BSE = None
 
 
 BASE = Path(__file__).resolve().parent
@@ -192,10 +202,22 @@ def load_data():
 
 
 def clean_symbol(row):
-    return str(row.get("symbol") or row.get("sym") or "").upper().replace(".NS", "").strip()
+    return (
+        str(row.get("symbol") or row.get("sym") or "")
+        .upper()
+        .replace(".NS", "")
+        .replace(".BO", "")
+        .strip()
+    )
 
 
 def yahoo_ticker(row):
+    explicit = str(row.get("ticker") or row.get("yahooTicker") or "").strip().upper()
+    if explicit.endswith((".NS", ".BO")):
+        return explicit
+    code = str(row.get("bseCode") or row.get("bse_code") or row.get("scripCode") or "").strip()
+    if code.isdigit() and len(code) == 6:
+        return f"{code}.BO"
     s = clean_symbol(row)
     return f"{s}.NS" if s else None
 
@@ -482,6 +504,535 @@ def eps_surprise(ticker, result_date):
         return None
 
 
+
+def expected_period_end(row):
+    explicit = parse_date(
+        row.get("resultPeriodEnd")
+        or row.get("periodEnd")
+        or row.get("periodEnded")
+        or row.get("toDate")
+    )
+    if explicit is not None:
+        return explicit
+
+    rd = parse_date(
+        row.get("resultDate")
+        or row.get("result_date")
+        or row.get("resultsDate")
+        or row.get("earningsDate")
+    )
+    if rd is None:
+        return None
+
+    candidates = [
+        date(rd.year - 1, 12, 31),
+        date(rd.year, 3, 31),
+        date(rd.year, 6, 30),
+        date(rd.year, 9, 30),
+        date(rd.year, 12, 31),
+    ]
+    prior = [d for d in candidates if d < rd]
+    return max(prior) if prior else None
+
+
+def _nse_client():
+    if NSE is None:
+        return None
+    return NSE(download_folder=str(BASE))
+
+
+def _metric_from_record(record, *aliases):
+    if not isinstance(record, dict):
+        return None
+    lowered = {str(k).lower().replace("-", "_"): v for k, v in record.items()}
+    for key in aliases:
+        v = record.get(key)
+        if v not in (None, ""):
+            return num(v)
+        v = lowered.get(key.lower().replace("-", "_"))
+        if v not in (None, ""):
+            return num(v)
+    return None
+
+
+def _record_date(record):
+    if not isinstance(record, dict):
+        return None
+    for key in (
+        "re_to_dt", "toDate", "periodEnd", "periodEnded", "endDate",
+        "re_end_dt", "quarterEnd", "date",
+    ):
+        d = parse_date(record.get(key))
+        if d is not None:
+            return d
+    return None
+
+
+def _pct(new, old):
+    if new is None or old in (None, 0):
+        return None
+    return (new / old - 1.0) * 100.0
+
+
+def parse_nse_comparison(payload, row):
+    records = []
+    if isinstance(payload, dict):
+        records = payload.get("resCmpData") or payload.get("data") or []
+    if not isinstance(records, list) or not records:
+        return {}
+
+    dated = [(d, r) for r in records if isinstance(r, dict) for d in [_record_date(r)] if d is not None]
+    dated.sort(key=lambda x: x[0], reverse=True)
+    if not dated:
+        return {}
+
+    expected = expected_period_end(row)
+    if expected is not None:
+        candidates = sorted(dated, key=lambda x: abs((x[0] - expected).days))
+        current_date, current = candidates[0]
+        if abs((current_date - expected).days) > 45:
+            return {}
+    else:
+        current_date, current = dated[0]
+
+    older = [(d, r) for d, r in dated if d < current_date]
+    previous = older[0][1] if older else None
+    previous_date = older[0][0] if older else None
+
+    yoy_target = date(current_date.year - 1, current_date.month, min(current_date.day, 28))
+    yoy_candidates = [(abs((d - yoy_target).days), d, r) for d, r in dated if d < current_date]
+    yoy_row = None
+    yoy_date = None
+    if yoy_candidates:
+        distance, yoy_date, yoy_row = min(yoy_candidates, key=lambda x: x[0])
+        if distance > 50:
+            yoy_row = None
+            yoy_date = None
+
+    revenue_aliases = (
+        "re_net_sale", "re_net_sales", "re_revenue", "re_revenue_from_operations",
+        "re_total_inc", "re_total_income", "re_income",
+    )
+    pat_aliases = (
+        "re_net_profit", "re_profit_after_tax", "re_pat",
+        "re_profit_loss", "net_profit",
+    )
+    eps_aliases = (
+        "re_basic_eps", "re_basic_eps_for_cont_dic_opr",
+        "re_bsc_eps_bfr_exi", "re_eps", "basic_eps", "eps",
+    )
+
+    revenue = _metric_from_record(current, *revenue_aliases)
+    pat = _metric_from_record(current, *pat_aliases)
+    eps = _metric_from_record(current, *eps_aliases)
+    prev_revenue = _metric_from_record(previous, *revenue_aliases)
+    prev_pat = _metric_from_record(previous, *pat_aliases)
+    yoy_revenue = _metric_from_record(yoy_row, *revenue_aliases)
+    yoy_pat = _metric_from_record(yoy_row, *pat_aliases)
+
+    out = {
+        "resultsReleased": True,
+        "resultReleased": True,
+        "resultVerifiedAt": datetime.now(IST).isoformat(),
+        "resultSource": "NSE results comparison",
+        "resultSourceUrl": "https://www.nseindia.com/companies-listing/corporate-filings-financial-results",
+        "resultPeriodEnd": current_date.isoformat(),
+        "latestRevenueLakh": revenue,
+        "latestPatLakh": pat,
+        "reportedEps": eps,
+        "revenueQoQ": round2(_pct(revenue, prev_revenue)),
+        "patQoQ": round2(_pct(pat, prev_pat)),
+        "revenueYoY": round2(_pct(revenue, yoy_revenue)),
+        "patYoY": round2(_pct(pat, yoy_pat)),
+        "resultDataSource": "NSE official results comparison",
+        "resultDataPeriod": current_date.isoformat(),
+    }
+    bits = [f"NSE quarter ended {current_date.isoformat()} verified"]
+    if revenue is not None:
+        bits.append(f"income/revenue ₹{revenue/100:.2f} Cr")
+    if pat is not None:
+        bits.append(f"PAT ₹{pat/100:.2f} Cr")
+    out["resultsEvidence"] = "; ".join(bits) + "."
+    return out
+
+
+def _filing_period_end(item):
+    if not isinstance(item, dict):
+        return None
+    return parse_date(
+        item.get("toDate")
+        or item.get("periodEnd")
+        or item.get("periodEnded")
+        or item.get("endDate")
+    )
+
+
+def _filing_broadcast_date(item):
+    if not isinstance(item, dict):
+        return None
+    return parse_date(
+        item.get("broadCastDate")
+        or item.get("broadcastDate")
+        or item.get("filingDate")
+        or item.get("date")
+    )
+
+
+def fetch_nse_result_enrichment(rows):
+    enrichment = {}
+    errors = []
+    stats = {"filings": 0, "matched": 0, "comparisons": 0}
+    if NSE is None:
+        return enrichment, ["nse package unavailable for results"], stats
+
+    now = datetime.now(IST).replace(tzinfo=None)
+    client = None
+    try:
+        client = _nse_client()
+        filings = client.financial_results(
+            segment="equities",
+            period="quarterly",
+            from_date=now - timedelta(days=60),
+            to_date=now,
+        ) or []
+        stats["filings"] = len(filings)
+        by_symbol = {}
+        for item in filings:
+            if not isinstance(item, dict):
+                continue
+            symbol = str(item.get("symbol") or item.get("Symbol") or "").upper().replace(".NS", "").strip()
+            if not symbol:
+                continue
+            by_symbol.setdefault(symbol, []).append(item)
+
+        for row in rows:
+            symbol = clean_symbol(row)
+            if not symbol:
+                continue
+            expected = expected_period_end(row)
+            rd = parse_date(row.get("resultDate") or row.get("result_date"))
+            due = rd is not None and rd <= datetime.now(IST).date() and (datetime.now(IST).date() - rd).days <= 60
+            filing_list = by_symbol.get(symbol) or []
+            best = None
+            if filing_list:
+                if expected is not None:
+                    ranked = []
+                    for item in filing_list:
+                        pe = _filing_period_end(item)
+                        if pe is not None:
+                            ranked.append((abs((pe - expected).days), item))
+                    if ranked:
+                        distance, candidate = min(ranked, key=lambda x: x[0])
+                        if distance <= 45:
+                            best = candidate
+                if best is None:
+                    best = max(filing_list, key=lambda x: _filing_broadcast_date(x) or date.min)
+
+            if best is None and not due:
+                continue
+
+            base = {}
+            if best is not None:
+                stats["matched"] += 1
+                period_end = _filing_period_end(best) or expected
+                broadcast = _filing_broadcast_date(best)
+                base.update({
+                    "resultsReleased": True,
+                    "resultReleased": True,
+                    "resultVerifiedAt": datetime.now(IST).isoformat(),
+                    "resultSource": "NSE financial results filing",
+                    "resultSourceUrl": best.get("xbrl") or best.get("xbrlLink") or "https://www.nseindia.com/companies-listing/corporate-filings-financial-results",
+                    "resultPeriodEnd": period_end.isoformat() if period_end else None,
+                    "resultsEvidence": "Official NSE quarterly financial-results filing detected"
+                    + (f" on {broadcast.isoformat()}" if broadcast else "") + ".",
+                })
+
+            # Fetch numeric P&L only for rows that have actually reached their result date
+            # or have an official filing. This keeps the request count bounded.
+            if best is not None or due:
+                try:
+                    comp = client.results_comparison(symbol)
+                    parsed = parse_nse_comparison(comp, row)
+                    if parsed:
+                        base.update(parsed)
+                        stats["comparisons"] += 1
+                except Exception as exc:
+                    errors.append(f"NSE comparison {symbol}: {type(exc).__name__}: {exc}")
+
+            if base:
+                enrichment[symbol] = base
+    except Exception as exc:
+        errors.append(f"NSE result layer: {type(exc).__name__}: {exc}")
+    finally:
+        if client is not None:
+            try:
+                client.exit()
+            except Exception:
+                pass
+    return enrichment, errors, stats
+
+
+def _snapshot_table(snapshot):
+    block = snapshot.get("results_in_crores") if isinstance(snapshot, dict) else None
+    if not isinstance(block, dict):
+        return {}, []
+    fields = block.get("fields") or []
+    data = block.get("data") or []
+    if not fields or len(fields) < 2:
+        return {}, []
+    periods = [str(x) for x in fields[1:]]
+    table = {}
+    for row in data:
+        if not isinstance(row, list) or not row:
+            continue
+        title = str(row[0]).strip().lower()
+        table[title] = row[1:]
+    return table, periods
+
+
+def _snapshot_value(table, period_index, *titles):
+    for title in titles:
+        values = table.get(title.lower())
+        if values and period_index < len(values):
+            return num(values[period_index])
+    return None
+
+
+def _period_label(d):
+    return d.strftime("%b-%y") if d is not None else None
+
+
+def fetch_bse_result_enrichment(rows, already=None):
+    enrichment = {}
+    errors = []
+    stats = {"lookups": 0, "snapshots": 0, "matched": 0}
+    if BSE is None:
+        return enrichment, ["bse package unavailable for results"], stats
+
+    already = already or {}
+    today = datetime.now(IST).date()
+    try:
+        with BSE(str(BASE)) as bse:
+            for row in rows:
+                symbol = clean_symbol(row)
+                if not symbol or symbol in already:
+                    continue
+                rd = parse_date(row.get("resultDate") or row.get("result_date"))
+                if rd is None or rd > today or (today - rd).days > 60:
+                    continue
+                expected = expected_period_end(row)
+                try:
+                    code = str(
+                        row.get("bseCode")
+                        or row.get("bse_code")
+                        or row.get("scripCode")
+                        or row.get("scrip_code")
+                        or ""
+                    ).strip()
+                    if not code:
+                        stats["lookups"] += 1
+                        try:
+                            code = str(bse.getScripCode(symbol)).strip()
+                        except Exception:
+                            lookup = bse.lookup(str(row.get("name") or symbol))
+                            code = str((lookup or {}).get("bse_code") or "").strip()
+                    if not code:
+                        continue
+                    snapshot = bse.resultsSnapshot(code)
+                    stats["snapshots"] += 1
+                    table, periods = _snapshot_table(snapshot or {})
+                    if not periods:
+                        continue
+                    expected_label = _period_label(expected)
+                    latest_label = periods[0]
+                    if expected_label and latest_label.lower() != expected_label.lower():
+                        continue
+
+                    revenue_cr = _snapshot_value(table, 0, "Revenue", "Total Income", "Net Sales")
+                    pat_cr = _snapshot_value(table, 0, "Net Profit", "PAT", "Profit After Tax")
+                    eps = _snapshot_value(table, 0, "EPS")
+                    prev_revenue_cr = _snapshot_value(table, 1, "Revenue", "Total Income", "Net Sales")
+                    prev_pat_cr = _snapshot_value(table, 1, "Net Profit", "PAT", "Profit After Tax")
+
+                    base = {
+                        "resultsReleased": True,
+                        "resultReleased": True,
+                        "resultVerifiedAt": datetime.now(IST).isoformat(),
+                        "resultSource": "BSE results snapshot",
+                        "resultSourceUrl": f"https://www.bseindia.com/stock-share-price/x/{code}/",
+                        "bseCode": code,
+                        "resultPeriodEnd": expected.isoformat() if expected else latest_label,
+                        "latestRevenueLakh": revenue_cr * 100 if revenue_cr is not None else None,
+                        "latestPatLakh": pat_cr * 100 if pat_cr is not None else None,
+                        "reportedEps": eps,
+                        "revenueQoQ": round2(_pct(revenue_cr, prev_revenue_cr)),
+                        "patQoQ": round2(_pct(pat_cr, prev_pat_cr)),
+                        "resultDataSource": "BSE official results snapshot",
+                        "resultDataPeriod": latest_label,
+                        "resultsEvidence": f"BSE results snapshot updated for {latest_label}"
+                        + (f"; Revenue ₹{revenue_cr:.2f} Cr" if revenue_cr is not None else "")
+                        + (f"; PAT ₹{pat_cr:.2f} Cr" if pat_cr is not None else "") + ".",
+                    }
+                    enrichment[symbol] = base
+                    stats["matched"] += 1
+                except Exception as exc:
+                    errors.append(f"BSE result {symbol}: {type(exc).__name__}: {exc}")
+    except Exception as exc:
+        errors.append(f"BSE result layer: {type(exc).__name__}: {exc}")
+    return enrichment, errors, stats
+
+
+def _statement_row_local(df, names):
+    if df is None or getattr(df, "empty", True):
+        return None
+    normalized = {str(index).strip().lower(): index for index in df.index}
+    for name in names:
+        if name.lower() in normalized:
+            return normalized[name.lower()]
+    for low, original in normalized.items():
+        if any(name.lower() in low for name in names):
+            return original
+    return None
+
+
+def fetch_yfinance_quarterly_enrichment(row):
+    """Last-resort verification when exchange endpoints are unavailable."""
+    expected = expected_period_end(row)
+    if expected is None:
+        return {}
+    symbol = clean_symbol(row)
+    candidates = []
+    explicit = str(row.get("ticker") or "").strip().upper()
+    if explicit:
+        candidates.append(explicit)
+    bse_code = str(row.get("bseCode") or row.get("bse_code") or "").strip()
+    if bse_code.isdigit() and len(bse_code) == 6:
+        candidates.append(f"{bse_code}.BO")
+    if symbol:
+        candidates.append(f"{symbol}.NS")
+    candidates = list(dict.fromkeys(candidates))
+
+    for ticker_symbol in candidates:
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            stmt = ticker.quarterly_income_stmt
+            if stmt is None or stmt.empty:
+                stmt = ticker.quarterly_financials
+            if stmt is None or stmt.empty:
+                continue
+            cols = []
+            for col in stmt.columns:
+                try:
+                    d = pd.Timestamp(col).date()
+                    cols.append((d, col))
+                except Exception:
+                    pass
+            if not cols:
+                continue
+            cols.sort(reverse=True)
+            current_date, current_col = min(cols, key=lambda x: abs((x[0] - expected).days))
+            if abs((current_date - expected).days) > 45:
+                continue
+
+            rev_row = _statement_row_local(stmt, ["Total Revenue", "Operating Revenue", "Revenue", "Total Operating Income"])
+            pat_row = _statement_row_local(stmt, ["Net Income", "Net Income Common Stockholders", "Profit After Tax"])
+            if rev_row is None and pat_row is None:
+                continue
+
+            revenue = num(stmt.loc[rev_row, current_col]) if rev_row is not None else None
+            pat = num(stmt.loc[pat_row, current_col]) if pat_row is not None else None
+
+            older = [(d, c) for d, c in cols if d < current_date]
+            prev_col = older[0][1] if older else None
+            prev_revenue = num(stmt.loc[rev_row, prev_col]) if rev_row is not None and prev_col is not None else None
+            prev_pat = num(stmt.loc[pat_row, prev_col]) if pat_row is not None and prev_col is not None else None
+
+            yoy_target = date(current_date.year - 1, current_date.month, min(current_date.day, 28))
+            yoy_candidates = [(abs((d - yoy_target).days), c) for d, c in cols if d < current_date]
+            yoy_col = None
+            if yoy_candidates:
+                dist, yoy_col = min(yoy_candidates, key=lambda x: x[0])
+                if dist > 50:
+                    yoy_col = None
+            yoy_revenue = num(stmt.loc[rev_row, yoy_col]) if rev_row is not None and yoy_col is not None else None
+            yoy_pat = num(stmt.loc[pat_row, yoy_col]) if pat_row is not None and yoy_col is not None else None
+
+            return {
+                "resultsReleased": True,
+                "resultReleased": True,
+                "resultVerifiedAt": datetime.now(IST).isoformat(),
+                "resultSource": "Yahoo Finance quarterly statement fallback",
+                "resultPeriodEnd": current_date.isoformat(),
+                "latestRevenueLakh": revenue / 100000 if revenue is not None else None,
+                "latestPatLakh": pat / 100000 if pat is not None else None,
+                "revenueQoQ": round2(_pct(revenue, prev_revenue)),
+                "patQoQ": round2(_pct(pat, prev_pat)),
+                "revenueYoY": round2(_pct(revenue, yoy_revenue)),
+                "patYoY": round2(_pct(pat, yoy_pat)),
+                "resultDataSource": "yfinance quarterly statement fallback",
+                "resultDataPeriod": current_date.isoformat(),
+                "resultsEvidence": f"Quarterly statement for {current_date.isoformat()} verified via Yahoo Finance fallback.",
+                "ticker": ticker_symbol,
+            }
+        except Exception:
+            continue
+    return {}
+
+
+def build_result_enrichment(rows):
+    nse_map, nse_errors, nse_stats = fetch_nse_result_enrichment(rows)
+    bse_map, bse_errors, bse_stats = fetch_bse_result_enrichment(rows, already=nse_map)
+    merged = dict(nse_map)
+    merged.update(bse_map)
+
+    today = datetime.now(IST).date()
+    yf_count = 0
+    yf_supplemented = 0
+    for row in rows:
+        symbol = clean_symbol(row)
+        if not symbol:
+            continue
+        rd = parse_date(row.get("resultDate") or row.get("result_date"))
+        if rd is None or rd > today or (today - rd).days > 60:
+            continue
+
+        existing = merged.get(symbol)
+        needs_numbers = (
+            existing is None
+            or existing.get("revenueYoY") is None
+            or existing.get("patYoY") is None
+        )
+        if not needs_numbers:
+            continue
+
+        data = fetch_yfinance_quarterly_enrichment({**row, **(existing or {})})
+        if not data:
+            continue
+
+        if existing is None:
+            merged[symbol] = data
+            yf_count += 1
+        else:
+            # Preserve official NSE/BSE release proof and use Yahoo only to fill
+            # numeric fields that the exchange snapshot does not provide.
+            for key in (
+                "latestRevenueLakh", "latestPatLakh", "reportedEps",
+                "revenueQoQ", "patQoQ", "revenueYoY", "patYoY",
+            ):
+                if existing.get(key) is None and data.get(key) is not None:
+                    existing[key] = data[key]
+            existing["numericFallbackSource"] = data.get("resultDataSource")
+            yf_supplemented += 1
+
+    stats = {
+        "nse": nse_stats,
+        "bse": bse_stats,
+        "yfinanceFallbackMatched": yf_count,
+        "yfinanceSupplemented": yf_supplemented,
+        "totalMatched": len(merged),
+    }
+    return merged, nse_errors + bse_errors, stats
+
 def build_checks(row):
     market_cap = num(row.get("marketCapCr"))
 
@@ -733,6 +1284,10 @@ def main():
     warnings.filterwarnings("ignore")
     payload, rows = load_data()
 
+    print(f"Fetching official NSE/BSE result layer for {len(rows)} stocks...")
+    result_layer, result_errors, result_stats = build_result_enrichment(rows)
+    print("Result layer matched:", len(result_layer), "| stats:", result_stats)
+
     print(f"Requesting official NSE MCP market layer for {len(rows)} stocks...")
     mcp_layer = asyncio.run(fetch_nse_market_layer(rows, lookback_days=430, concurrency=4))
 
@@ -743,7 +1298,9 @@ def main():
     for row in rows:
         s = clean_symbol(row)
         if s and s not in mcp_histories:
-            missing_stock_tickers.append(f"{s}.NS")
+            yt = yahoo_ticker(row)
+            if yt:
+                missing_stock_tickers.append(yt)
 
     proxies = sorted({sector_proxy(row) for row in rows})
     fallback_tickers = sorted(set(missing_stock_tickers + proxies))
@@ -780,6 +1337,9 @@ def main():
         s = clean_symbol(out)
         print(f"[{index}/{len(rows)}] {s or 'UNKNOWN'}")
 
+        if s in result_layer:
+            out.update(result_layer[s])
+
         quote = mcp_quotes.get(s)
         if quote:
             if quote.get("price") is not None:
@@ -799,7 +1359,8 @@ def main():
             stock_history = records_to_df(mcp_histories[s])
             out["historySource"] = "NSE MCP Bhavcopy"
         else:
-            stock_history = history_for_yf(fallback_history, f"{s}.NS")
+            yt = yahoo_ticker(out)
+            stock_history = history_for_yf(fallback_history, yt)
             out["historySource"] = "yfinance fallback"
 
         sector_history = history_for_yf(fallback_history, sector_proxy(out))
@@ -836,6 +1397,9 @@ def main():
     payload["cautionCount"] = counts.get("Caution", 0)
     payload["postResultCount"] = counts.get("Post-results", 0)
     payload["upcomingCount"] = counts.get("Upcoming", 0)
+    payload["resultDataVersion"] = "exchange-results-v2-nse-bse-yf"
+    payload["resultSourceStats"] = result_stats
+    payload["resultSourceErrors"] = result_errors
     payload["qualificationRules"] = {
         "revenueYoYMin": REV_YOY_MIN,
         "patYoYMin": PAT_YOY_MIN,
@@ -861,6 +1425,10 @@ def main():
     if payload["nseMcpErrors"]:
         print("NSE MCP warnings:")
         for error in payload["nseMcpErrors"][:20]:
+            print(" -", error)
+    if payload["resultSourceErrors"]:
+        print("Result-source warnings:")
+        for error in payload["resultSourceErrors"][:20]:
             print(" -", error)
 
 
