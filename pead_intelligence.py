@@ -259,6 +259,12 @@ def release_detection(row: dict) -> dict:
     }
 
 
+
+def results_released(row: dict) -> bool:
+    """Compatibility helper used throughout the intelligence engine."""
+    return release_detection(row).get("released") is True
+
+
 def history_for_symbol(symbol: str) -> pd.DataFrame:
     if not symbol:
         return pd.DataFrame()
