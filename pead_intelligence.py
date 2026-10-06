@@ -325,18 +325,29 @@ def history_for_row(row: dict) -> pd.DataFrame:
 
 def price_context(row: dict, h: pd.DataFrame) -> dict:
     out = {
-        "pre5dPct": None,
-        "pre10dPct": None,
-        "pre20dPct": num(row.get("preResultRunupPct")),
-        "resultDayPct": num(row.get("resultDayReturnPct")),
+        "pre5dPct": num(pick(row, "preResult5dPct", "pre5dPct")),
+        "pre10dPct": num(pick(row, "preResult10dPct", "pre10dPct")),
+        "pre20dPct": num(pick(row, "preResultRunupPct", "pre20dPct")),
+        "resultDayPct": num(pick(row, "resultDayReturnPct", "resultDayPct")),
         "relativeVolume": num(pick(row, "relativeVolume", "rvol")),
         "rawFullDayRvol": None,
-        "rvolMode": "UNVERIFIED",
+        "rvolMode": "BASE / BSE" if pick(row, "relativeVolume", "rvol") not in (None, "") else "UNVERIFIED",
         "rvolIsPartial": False,
-        "rvolAsOf": None,
-        "distanceFrom52wHighPct": None,
+        "rvolAsOf": pick(row, "priceTimestamp"),
+        "distanceFrom52wHighPct": num(
+            pick(row, "distanceFrom52wHighPct", "fifty2WeekHighDistancePct")
+        ),
         "lastClose": num(pick(row, "price", "lastPrice", "ltp")),
-        "historyAvailable": False,
+        "historyAvailable": any(
+            pick(row, k) not in (None, "")
+            for k in (
+                "preResult5dPct",
+                "preResult10dPct",
+                "preResultRunupPct",
+                "resultDayReturnPct",
+                "distanceFrom52wHighPct",
+            )
+        ),
     }
 
     if h.empty or "Close" not in h:
