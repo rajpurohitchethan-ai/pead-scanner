@@ -1,0 +1,252 @@
+name: PEAD intelligence lab
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "30 * * * 1-5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pead-intelligence-lab
+  cancel-in-progress: false
+
+jobs:
+  intelligence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install intelligence dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade yfinance pandas
+
+      - name: Check intelligence syntax
+        run: |
+          python -m py_compile pead_intelligence.py
+
+      - name: Verify base is present
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          p = Path("data.json")
+
+          if not p.exists():
+              print("ERROR: data.json missing")
+              sys.exit(1)
+
+          d = json.loads(
+              p.read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          rows = (
+              d.get("stocks")
+              or d.get("companies")
+              or []
+          )
+
+          if not rows:
+              print("ERROR: base has 0 stocks. Intelligence run stopped.")
+              sys.exit(1)
+
+          print("Base stock count:", len(rows))
+          print("Base scanner:", d.get("scannerMode"))
+          print("Base qualifier:", d.get("qualificationVersion"))
+          PY
+
+      - name: Build intelligence candidate file
+        run: |
+          python pead_intelligence.py \
+            --data data.json \
+            --output /tmp/intelligence.new.json
+
+      - name: Zero and drop protection
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          import sys
+          from pathlib import Path
+
+          base = json.loads(
+              Path("data.json")
+              .read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          new = json.loads(
+              Path(
+                  "/tmp/intelligence.new.json"
+              )
+              .read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          base_rows = (
+              base.get("stocks")
+              or base.get("companies")
+              or []
+          )
+
+          items = (
+              new.get("items")
+              or []
+          )
+
+          minimum = max(
+              1,
+              math.floor(
+                  len(base_rows)
+                  * 0.80
+              )
+          )
+
+          print(
+              "Base rows:",
+              len(base_rows)
+          )
+
+          print(
+              "Intelligence rows:",
+              len(items)
+          )
+
+          print(
+              "Minimum allowed:",
+              minimum
+          )
+
+          if len(items) == 0:
+              print(
+                  "ERROR: 0 intelligence rows. "
+                  "Keeping last known good file."
+              )
+              sys.exit(1)
+
+          if len(items) < minimum:
+              print(
+                  "ERROR: sudden intelligence row drop. "
+                  "Keeping last known good file."
+              )
+              sys.exit(1)
+          PY
+
+      - name: Publish new intelligence file locally
+        run: |
+          cp /tmp/intelligence.new.json intelligence.json
+
+      - name: Show intelligence summary
+        run: |
+          python - <<'PY'
+          import json
+
+          with open(
+              "intelligence.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
+              d = json.load(f)
+
+          print(
+              "Version:",
+              d.get("intelligenceVersion")
+          )
+
+          print(
+              "Source stocks:",
+              d.get("sourceStockCount")
+          )
+
+          print(
+              "Counts:",
+              d.get("counts")
+          )
+
+          high = [
+              x
+              for x in d.get("items", [])
+              if x.get("verdict")
+              == "HIGH-CONVICTION PEAD CANDIDATE"
+          ]
+
+          for x in high[:20]:
+              print(
+                  x.get("symbol"),
+                  "| conviction",
+                  x.get("convictionScore"),
+                  "| result",
+                  x.get(
+                      "resultReality",
+                      {}
+                  ).get("label"),
+                  "| expectations",
+                  x.get(
+                      "expectationReality",
+                      {}
+                  ).get("label"),
+                  "| valuation",
+                  x.get(
+                      "valuationReality",
+                      {}
+                  ).get("label"),
+              )
+          PY
+
+      - name: Commit intelligence only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          cp intelligence.json /tmp/intelligence.publish.json
+
+          for attempt in 1 2 3
+          do
+            echo "Push attempt $attempt"
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            cp /tmp/intelligence.publish.json intelligence.json
+
+            git add intelligence.json
+
+            if git diff --cached --quiet
+            then
+              echo "No intelligence changes to commit"
+              exit 0
+            fi
+
+            git commit -m "chore: refresh PEAD intelligence"
+
+            if git push origin HEAD:main
+            then
+              echo "PEAD intelligence pushed successfully"
+              exit 0
+            fi
+
+            echo "Main changed during push. Retrying..."
+            sleep 3
+          done
+
+          echo "ERROR: could not publish intelligence after 3 attempts"
+          exit 1
