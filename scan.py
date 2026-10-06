@@ -380,6 +380,7 @@ def main() -> int:
         "generatedAt": started,
         "last_scan": started,
         "lastScanAt": started,
+        "scannerMode": "live-discovery",
         "minMarketCapCr": MIN_MCAP_CR,
         "sourceCount": len(companies),
         "scanCount": len(scanned),
