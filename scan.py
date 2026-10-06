@@ -398,6 +398,123 @@ def discover_bse() -> tuple[list[dict[str, Any]], list[str]]:
     return rows, errors
 
 
+
+RESULT_STICKY_DAYS = int(os.getenv("RESULT_STICKY_DAYS", "75"))
+
+_RESULT_PERSIST_FIELDS = (
+    "symbol", "sym", "name", "sector", "industry",
+    "bseCode", "bse_code", "scripCode", "ticker", "yahooTicker",
+    "resultDate", "result_date", "resultsDate", "earningsDate",
+    "resultPeriodEnd", "quarter",
+    "resultsReleased", "resultReleased",
+    "resultVerifiedAt", "resultSource", "resultDataSource",
+    "resultSourceUrl", "resultsEvidence", "resultEvidence",
+    "latestRevenueLakh", "latestPatLakh", "reportedEps",
+    "revenueQoQ", "patQoQ", "revenueYoY", "patYoY",
+    "patYoYTurnaround", "patYoYStatus",
+    "historicalComparatorSource", "historicalComparatorPeriod",
+    "preResult5dPct", "preResult10dPct", "preResultRunupPct",
+    "resultDayReturnPct", "relativeVolume",
+    "distanceFrom52wHighPct",
+)
+
+
+def _official_release_evidence(row: dict[str, Any]) -> bool:
+    if boolish(pick(row, "resultsReleased", "resultReleased", "results_declared")) is not True:
+        return False
+    text = " ".join(
+        str(pick(row, key, default="") or "")
+        for key in (
+            "discoverySource", "resultSource", "resultDataSource",
+            "resultsEvidence", "resultEvidence", "resultSourceUrl",
+        )
+    ).lower()
+    return any(token in text for token in (
+        "nse financial results",
+        "bse result announcement",
+        "bse results snapshot",
+        "nse results comparison",
+        "official exchange",
+        "exchange filing",
+        "quarterly statement",
+        "nseindia.com",
+        "bseindia.com",
+    ))
+
+
+def load_previous_verified_results() -> dict[str, dict[str, Any]]:
+    """Carry forward only recent, previously verified result events.
+
+    This prevents a temporary NSE/BSE outage from turning Results Declared
+    from a valid non-zero count back to zero on the next hourly scan.
+    """
+    if not OUTPUT.exists():
+        return {}
+    try:
+        payload = json.loads(OUTPUT.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    rows = payload.get("stocks") or payload.get("companies") or []
+    today = datetime.now(IST).date()
+    out: dict[str, dict[str, Any]] = {}
+
+    for row in rows:
+        if not isinstance(row, dict) or not _official_release_evidence(row):
+            continue
+        symbol = normalize_symbol(pick(row, "symbol", "sym", "ticker", "code"))
+        if not symbol:
+            continue
+        rd = parse_date(pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"))
+        if rd is not None:
+            age = (today - rd).days
+            if age < -2 or age > RESULT_STICKY_DAYS:
+                continue
+        kept = {k: row.get(k) for k in _RESULT_PERSIST_FIELDS if row.get(k) not in (None, "")}
+        kept["symbol"] = symbol
+        kept["sym"] = symbol
+        kept["resultsReleased"] = True
+        kept["resultReleased"] = True
+        kept["peadStatus"] = "Post-results"
+        kept["bucket"] = "Post-results"
+        kept["_carriedVerifiedResult"] = True
+        out[symbol] = kept
+    return out
+
+
+def add_previous_verified_results(
+    discovered: list[dict[str, Any]],
+    previous: dict[str, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    """Add prior verified events unless a newer result event is now scheduled."""
+    if not previous:
+        return discovered, 0
+
+    newest_current: dict[str, date] = {}
+    for row in discovered:
+        symbol = normalize_symbol(pick(row, "symbol", "sym"))
+        rd = parse_date(pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"))
+        if symbol and rd is not None:
+            if symbol not in newest_current or rd > newest_current[symbol]:
+                newest_current[symbol] = rd
+
+    out = list(discovered)
+    carried = 0
+    for symbol, row in previous.items():
+        old_date = parse_date(pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"))
+        new_date = newest_current.get(symbol)
+
+        # If a clearly newer event exists, do not let the old released quarter
+        # overwrite the new upcoming quarter.
+        if old_date is not None and new_date is not None and new_date > old_date + timedelta(days=7):
+            continue
+
+        out.append(dict(row))
+        carried += 1
+
+    return out, carried
+
+
 def merge_universe(seeds: list[dict[str, Any]], discovered: list[dict[str, Any]]) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
     order: list[str] = []
@@ -545,10 +662,15 @@ def fetch_live(company: dict[str, Any]) -> dict[str, Any]:
 
 def main() -> int:
     started = utc_now_iso()
+    previous_verified = load_previous_verified_results()
     seeds = load_seed_companies()
     nse_rows, nse_errors = discover_nse()
     bse_rows, bse_errors = discover_bse()
-    universe = merge_universe(seeds, nse_rows + bse_rows)
+    discovered_rows, carried_verified = add_previous_verified_results(
+        nse_rows + bse_rows,
+        previous_verified,
+    )
+    universe = merge_universe(seeds, discovered_rows)
 
     print(
         f"Discovery: seeds={len(seeds)} NSE={len(nse_rows)} BSE={len(bse_rows)} "
@@ -603,6 +725,7 @@ def main() -> int:
         "discoveredCandidateCount": len(universe),
         "nseDiscoveredCount": len(nse_rows),
         "bseDiscoveredCount": len(bse_rows),
+        "carriedForwardVerifiedResultCount": carried_verified,
         "scanCount": len(scanned),
         "errorCount": len(errors),
         "errors": errors,
@@ -622,7 +745,8 @@ def main() -> int:
 
     print(
         f"PEAD scan complete: seeds={len(seeds)} discovered={len(universe)} "
-        f"published={len(scanned)} warnings={len(payload['discoveryWarnings'])} errors={len(errors)}"
+        f"published={len(scanned)} carried_verified={carried_verified} "
+        f"warnings={len(payload['discoveryWarnings'])} errors={len(errors)}"
     )
     for warning in payload["discoveryWarnings"][:20]:
         print("DISCOVERY WARNING:", warning)
