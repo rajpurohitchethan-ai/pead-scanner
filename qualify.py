@@ -1475,8 +1475,23 @@ def qualify(row, stock_history, sector_history):
     out["resultReleased"] = results_released
     out["resultsEvidence"] = release_evidence
 
-    out.update(technicals(stock_history))
-    out.update(result_metrics(stock_history, result_date))
+    # Never overwrite exchange/BSE fallback data with NULL values
+# from an empty Yahoo/NSE history dataframe.
+if stock_history is not None and not stock_history.empty:
+
+    tech_data = technicals(stock_history)
+    out.update({
+        k: v
+        for k, v in tech_data.items()
+        if v is not None
+    })
+
+    result_data = result_metrics(stock_history, result_date)
+    out.update({
+        k: v
+        for k, v in result_data.items()
+        if v is not None
+    })
 
     revenue_yoy = num(out.get("revenueYoY"))
     pat_yoy = num(out.get("patYoY"))
