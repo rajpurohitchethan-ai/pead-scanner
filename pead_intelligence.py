@@ -695,6 +695,7 @@ def result_reality(row: dict, fs: dict) -> dict:
     pat = num(pick(row, "patYoY"))
     if pat is None:
         pat = num(fs.get("patYoYCalc"))
+    pat_turnaround = bval(pick(row, "patYoYTurnaround")) is True
 
     pat_qoq = num(pick(row, "patQoQ"))
     margin_delta = num(fs.get("operatingMarginYoY"))
@@ -717,7 +718,10 @@ def result_reality(row: dict, fs: dict) -> dict:
             red += 1
             risks.append(f"Revenue YoY declined {abs(rev):.1f}%.")
 
-    if pat is not None:
+    if pat_turnaround:
+        score += 2
+        reasons.append("PAT turned positive YoY from a loss/zero base.")
+    elif pat is not None:
         if pat >= 15:
             score += 2
             reasons.append(f"PAT YoY growth is {pat:.1f}%.")
@@ -780,7 +784,7 @@ def result_reality(row: dict, fs: dict) -> dict:
     # Do not call a released result "LOW QUALITY" merely because most
     # current-quarter inputs are still missing. Missing evidence is UNVERIFIED,
     # not negative evidence.
-    core_evidence_count = sum(x is not None for x in (rev, pat))
+    core_evidence_count = int(rev is not None) + int(pat is not None or pat_turnaround)
     evidence_count = sum(
         x is not None
         for x in (
@@ -1428,6 +1432,18 @@ def build_item(row: dict, index: int) -> dict:
         else empty_fundamentals()
     )
 
+    # Base-feed exchange metrics are often fresher than Yahoo for newly
+    # released quarters. Expose them in the snapshot used by the UI.
+    row_revenue_yoy = num(pick(row, "revenueYoY"))
+    row_pat_yoy = num(pick(row, "patYoY"))
+    if row_revenue_yoy is not None:
+        fs["revenueYoYCalc"] = row_revenue_yoy
+    if row_pat_yoy is not None:
+        fs["patYoYCalc"] = row_pat_yoy
+    fs["patYoYTurnaround"] = bval(pick(row, "patYoYTurnaround")) is True
+    fs["patYoYStatus"] = pick(row, "patYoYStatus")
+    fs["patQoQBase"] = num(pick(row, "patQoQ"))
+
     rr = result_reality(row, fs)
     vr = valuation_reality(row, fs)
     pr = price_response(row, pc)
@@ -1464,6 +1480,11 @@ def build_item(row: dict, index: int) -> dict:
         "marketCapCr": num(pick(row, "marketCapCr", "mcapCr", "market_cap_cr")),
         "price": num(pick(row, "price", "lastPrice", "ltp")),
         "priceTimestamp": pick(row, "priceTimestamp", "marketTime", "quoteTimestamp"),
+        "revenueYoY": num(pick(row, "revenueYoY")),
+        "patYoY": num(pick(row, "patYoY")),
+        "patYoYTurnaround": bval(pick(row, "patYoYTurnaround")) is True,
+        "patYoYStatus": pick(row, "patYoYStatus"),
+        "patQoQ": num(pick(row, "patQoQ")),
         "resultReality": rr,
         "expectationReality": er,
         "valuationReality": vr,
