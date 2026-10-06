@@ -1,61 +1,81 @@
 #!/usr/bin/env python3
-"""
-PEAD Intelligence Lab — read-only add-on.
 
-Reads:  data.json
-Writes: the path passed with --output (normally /tmp/intelligence.new.json)
-
-Safety:
-- Never modifies data.json.
-- Preserves every base row even if enrichment fails for one symbol.
-- Refuses to write 0 rows or a row count different from the base universe.
-- Missing evidence stays UNVERIFIED; nothing is invented.
-"""
-
-from __future__ import annotations
-
-import argparse
+import asyncio
 import json
 import math
+import sys
 import time
-from datetime import datetime
+import warnings
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
 
+from nse_mcp import fetch_nse_market_layer
+
+try:
+    from nse import NSE
+except Exception:
+    NSE = None
+
+try:
+    from bse import BSE
+except Exception:
+    BSE = None
+
+
+BASE = Path(__file__).resolve().parent
+DATA = BASE / "data.json"
 IST = ZoneInfo("Asia/Kolkata")
+
+REV_YOY_MIN = 10.0
+PAT_YOY_MIN = 15.0
+PAT_QOQ_FLOOR = -10.0
 PRICED_IN_RUNUP_PCT = 15.0
-RVOL_CONFIRM = 1.20
-RESULT_DATE_RELEASE_LOOKBACK_DAYS = 45
-RESULT_DAY_AUTO_RELEASE_HOUR_IST = 18
-
-RESULT_POINTS = {
-    "GENUINE": 25,
-    "MIXED": 14,
-    "LOW QUALITY": 4,
-    "AWAITING RESULT": 0,
-    "UNVERIFIED": 0,
-}
-EXPECTATION_POINTS = {
-    "LOW EXPECTATIONS": 15,
-    "PARTLY PRICED": 8,
-    "PRICED IN": 0,
-    "AWAITING PRICE HISTORY": 4,
-    "UNVERIFIED": 0,
-}
-VALUATION_POINTS = {
-    "ATTRACTIVE": 10,
-    "FAIR": 7,
-    "EXPENSIVE BUT JUSTIFIED": 4,
-    "EXCESSIVE": 0,
-    "UNVERIFIED": 3,
-}
+RVOL_MIN = 1.20
+EPS_SURPRISE_MIN = 5.0
+MARKET_SURPRISE_PROXY_MIN = 3.0
+LIQUIDITY_TURNOVER_CR_MIN = 5.0
+CASHFLOW_TO_PAT_MIN = 0.50
 
 
-def num(v: Any) -> float | None:
+SECTOR_PROXIES = {
+    "bank": "^NSEBANK",
+    "private bank": "^NSEBANK",
+    "public bank": "^NSEBANK",
+    "financial": "^CNXFIN",
+    "nbfc": "^CNXFIN",
+    "finance": "^CNXFIN",
+    "wealth": "^CNXFIN",
+    "asset management": "^CNXFIN",
+    "insurance": "^CNXFIN",
+    "it services": "^CNXIT",
+    "software": "^CNXIT",
+    "technology": "^CNXIT",
+    "auto": "^CNXAUTO",
+    "tyre": "^CNXAUTO",
+    "pharma": "^CNXPHARMA",
+    "healthcare": "^CNXPHARMA",
+    "fmcg": "^CNXFMCG",
+    "food": "^CNXFMCG",
+    "steel": "^CNXMETAL",
+    "metal": "^CNXMETAL",
+    "mining": "^CNXMETAL",
+    "real estate": "^CNXREALTY",
+    "realty": "^CNXREALTY",
+    "cement": "^CNXINFRA",
+    "construction": "^CNXINFRA",
+    "infrastructure": "^CNXINFRA",
+    "energy": "^CNXENERGY",
+    "oil": "^CNXENERGY",
+    "gas": "^CNXENERGY",
+    "media": "^CNXMEDIA",
+}
+
+
+def num(v):
     if v in (None, ""):
         return None
     try:
@@ -65,1605 +85,1364 @@ def num(v: Any) -> float | None:
         return None
 
 
-def bval(v: Any) -> bool | None:
+def round2(v):
+    x = num(v)
+    return round(x, 2) if x is not None else None
+
+
+def bool_value(v):
     if v is True or v is False:
         return v
     if v is None:
         return None
-    if isinstance(v, (int, float)):
-        return v != 0
     s = str(v).strip().lower()
-    if s in {"true", "yes", "pass", "passed", "qualified", "satisfied", "ok", "green"}:
+    if s in {"true", "yes", "pass", "passed", "qualified", "satisfied", "ok"}:
         return True
-    if s in {"false", "no", "fail", "failed", "not satisfied", "red"}:
+    if s in {"false", "no", "fail", "failed", "not satisfied"}:
         return False
     return None
 
 
-def pick(obj: dict, *keys: str):
-    for key in keys:
-        if key in obj and obj[key] not in (None, ""):
-            return obj[key]
-    return None
-
-
-def pct_change(new: float | None, old: float | None) -> float | None:
-    if new is None or old in (None, 0):
-        return None
-    return (new / old - 1.0) * 100.0
-
-
-def parse_date(v: Any):
+def parse_date(v):
     if not v:
         return None
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+
+    s = str(v).strip()
+    for fmt in ("%Y-%m-%d", "%d-%b-%Y", "%d-%b-%Y %H:%M:%S", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            pass
+
     try:
-        return pd.Timestamp(v).date()
-    except Exception:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
+    except ValueError:
         return None
 
 
-def clean_symbol(row: dict) -> str:
+def result_release_detection(row):
+    """Strict result-release detection.
+
+    A calendar/board-meeting date is NEVER enough to call a result released.
+    The scanner/result-enrichment layer must provide explicit release proof.
+    """
+    rd = parse_date(row.get("resultDate") or row.get("result_date") or row.get("resultsDate") or row.get("earningsDate"))
+    explicit = bool_value(row.get("resultsReleased"))
+    if explicit is None:
+        explicit = bool_value(row.get("resultReleased"))
+    if explicit is None:
+        explicit = bool_value(row.get("results_declared"))
+
+    source = " ".join(
+        str(row.get(k) or "")
+        for k in (
+            "discoverySource", "resultSource", "resultDataSource", "source",
+            "resultsEvidence", "resultEvidence", "evidence",
+            "resultSourceUrl", "filingUrl", "announcementUrl",
+            "sourceUrl", "evidenceUrl", "resultsUrl",
+        )
+    ).lower()
+    status = str(row.get("bucket") or row.get("peadStatus") or row.get("stage") or row.get("status") or "").lower()
+
+    # Calendar / meeting rows are upcoming evidence, not release evidence.
+    upcoming_tokens = (
+        "board meeting", "result calendar", "scheduled", "upcoming",
+        "awaiting result", "awaiting results", "pre-result", "pre result",
+    )
+    postponed_tokens = (
+        "postponed", "rescheduled", "deferred", "cancelled", "canceled",
+        "date changed", "board meeting postponed",
+    )
+    if any(token in f"{status} {source}" for token in postponed_tokens):
+        return False, "Result appears postponed/rescheduled; waiting for a confirmed filing."
+
+    # Explicit flag from scan/result enrichment is authoritative.
+    if explicit is True:
+        return True, row.get("resultsEvidence") or "Scanner/result layer explicitly verified the result release."
+    if explicit is False:
+        return False, row.get("resultsEvidence") or (
+            f"Scheduled result date {rd} is not release proof; waiting for an actual filing."
+            if rd else "Scanner marks the result as pending; waiting for an actual filing."
+        )
+
+    # Legacy rows without an explicit flag: accept only strong release-proof sources.
+    release_tokens = (
+        "nse financial results filing",
+        "bse result announcement",
+        "nse results comparison",
+        "bse results snapshot",
+        "quarterly statement fallback",
+        "official quarterly financial-results filing",
+        "official quarterly financial results filing",
+        "result release verified",
+    )
+    if any(token in source for token in release_tokens) and not any(token in source for token in upcoming_tokens):
+        return True, "Verified result-release source detected."
+
+    # Do not infer release just because the result date has arrived or passed.
+    if rd is not None:
+        today = datetime.now(IST).date()
+        if rd > today:
+            return False, f"Scheduled result date is still in the future: {rd}."
+        return False, f"Scheduled result date {rd} has arrived/passed, but no verified result filing was found."
+
+    return False, "No verified result-release evidence is available."
+
+
+def load_data():
+    if not DATA.exists():
+        raise RuntimeError("data.json missing; run scan.py first")
+
+    payload = json.loads(DATA.read_text(encoding="utf-8"))
+
+    if payload.get("scannerMode") != "live-discovery":
+        raise RuntimeError("Expected scannerMode=live-discovery")
+
+    rows = payload.get("stocks") or payload.get("companies") or []
+    if not rows:
+        raise RuntimeError("No live-discovery stocks found")
+
+    return payload, rows
+
+
+def clean_symbol(row):
     return (
-        str(pick(row, "symbol", "sym", "ticker", "code") or "")
+        str(row.get("symbol") or row.get("sym") or "")
         .upper()
         .replace(".NS", "")
+        .replace(".BO", "")
         .strip()
     )
 
 
-def extract_rows(payload: Any) -> list[dict]:
-    if isinstance(payload, list):
-        return payload
-    if not isinstance(payload, dict):
-        return []
-    for key in ("stocks", "companies", "data"):
-        val = payload.get(key)
-        if isinstance(val, list):
-            return val
-    nested = payload.get("data")
-    if isinstance(nested, dict):
-        for key in ("stocks", "companies"):
-            val = nested.get(key)
-            if isinstance(val, list):
-                return val
-    return []
+def yahoo_ticker(row):
+    explicit = str(row.get("ticker") or row.get("yahooTicker") or "").strip().upper()
+    if explicit.endswith((".NS", ".BO")):
+        return explicit
+    code = str(row.get("bseCode") or row.get("bse_code") or row.get("scripCode") or "").strip()
+    if code.isdigit() and len(code) == 6:
+        return f"{code}.BO"
+    s = clean_symbol(row)
+    return f"{s}.NS" if s else None
 
 
-def result_date(row: dict):
-    return parse_date(pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"))
-
-
-def expected_result_period_end(row: dict):
-    """Return the calendar quarter-end most likely reported on resultDate."""
-    rd = result_date(row)
-    if rd is None:
-        return None
-
-    candidates = [
-        datetime(rd.year - 1, 12, 31).date(),
-        datetime(rd.year, 3, 31).date(),
-        datetime(rd.year, 6, 30).date(),
-        datetime(rd.year, 9, 30).date(),
-        datetime(rd.year, 12, 31).date(),
-    ]
-    prior = [d for d in candidates if d < rd]
-    return max(prior) if prior else None
-
-
-def result_source_blob(row: dict) -> str:
-    values = [
-        pick(row, "discoverySource", "resultSource", "source"),
-        pick(row, "resultsEvidence", "resultEvidence", "evidence"),
-        pick(
-            row,
-            "resultSourceUrl", "filingUrl", "announcementUrl",
-            "sourceUrl", "evidenceUrl", "resultsUrl",
-        ),
-    ]
-    return " ".join(str(v) for v in values if v not in (None, "")).lower()
-
-
-def release_detection(row: dict) -> dict:
-    """Detect whether the current tracked result is released."""
-    now = datetime.now(IST)
-    today = now.date()
-    rd = result_date(row)
-    explicit = bval(pick(row, "resultsReleased", "resultReleased", "results_declared"))
-    source = result_source_blob(row)
-    status = str(pick(row, "bucket", "peadStatus", "stage", "status") or "").lower()
-
-    postponement_tokens = (
-        "postponed", "rescheduled", "deferred", "cancelled", "canceled",
-        "date changed", "board meeting postponed",
-    )
-    if any(token in f"{status} {source}" for token in postponement_tokens):
-        return {
-            "released": False,
-            "method": "POSTPONED_OR_RESCHEDULED",
-            "confidence": "HIGH",
-            "reason": "Result appears postponed/rescheduled; calendar auto-release was suppressed.",
-            "resultDate": str(rd) if rd else None,
-        }
-
-    official_tokens = (
-        "financial results", "result announced", "results announced",
-        "exchange filing", "nse filing", "bse filing",
-        "nseindia.com", "bseindia.com",
-    )
-    if any(token in source for token in official_tokens):
-        return {
-            "released": True,
-            "method": "SOURCE_EVIDENCE",
-            "confidence": "HIGH",
-            "reason": "Result release evidence is present in the source data.",
-            "resultDate": str(rd) if rd else None,
-        }
-
-    released_status_tokens = (
-        "post-results", "post results", "results declared", "result declared",
-        "results released", "result released", "qualified", "entry confirmed",
-    )
-    if any(token in status for token in released_status_tokens):
-        return {
-            "released": True,
-            "method": "STATUS",
-            "confidence": "HIGH",
-            "reason": f"Base status indicates a released result: {status}.",
-            "resultDate": str(rd) if rd else None,
-        }
-
-    if explicit is True:
-        return {
-            "released": True,
-            "method": "EXPLICIT_FLAG",
-            "confidence": "HIGH",
-            "reason": "Base feed explicitly marks the result as released.",
-            "resultDate": str(rd) if rd else None,
-        }
-
-    if rd is not None:
-        age_days = (today - rd).days
-
-        if age_days < 0:
-            return {
-                "released": False,
-                "method": "FUTURE_RESULT_DATE",
-                "confidence": "HIGH",
-                "reason": f"Scheduled result date is still in the future: {rd}.",
-                "resultDate": str(rd),
-            }
-
-        if age_days == 0:
-            if now.hour >= RESULT_DAY_AUTO_RELEASE_HOUR_IST:
-                return {
-                    "released": True,
-                    "method": "RESULT_DATE_TODAY_EVENING",
-                    "confidence": "MEDIUM",
-                    "reason": "Scheduled result date is today and the evening release window has begun.",
-                    "resultDate": str(rd),
-                }
-            return {
-                "released": False,
-                "method": "RESULT_DATE_TODAY_WAIT",
-                "confidence": "MEDIUM",
-                "reason": "Scheduled result date is today; waiting for evening/source confirmation.",
-                "resultDate": str(rd),
-            }
-
-        if age_days <= RESULT_DATE_RELEASE_LOOKBACK_DAYS:
-            return {
-                "released": True,
-                "method": "RECENT_RESULT_DATE_PASSED",
-                "confidence": "MEDIUM",
-                "reason": f"Scheduled result date passed {age_days} day(s) ago; treating it as released pending source verification.",
-                "resultDate": str(rd),
-            }
-
-        return {
-            "released": False,
-            "method": "STALE_RESULT_DATE",
-            "confidence": "LOW",
-            "reason": f"Result date is {age_days} days old, so it is not reused as current-quarter release evidence.",
-            "resultDate": str(rd),
-        }
-
-    if explicit is False:
-        return {
-            "released": False,
-            "method": "EXPLICIT_NOT_RELEASED",
-            "confidence": "MEDIUM",
-            "reason": "Base feed marks the result as not released and no stronger evidence overrides it.",
-            "resultDate": None,
-        }
-
-    return {
-        "released": False,
-        "method": "NO_RELEASE_EVIDENCE",
-        "confidence": "LOW",
-        "reason": "No current result-release evidence is available.",
-        "resultDate": None,
-    }
-
-
-def results_released(row: dict) -> bool:
-    return release_detection(row)["released"] is True
-
-
-def history_for_symbol(symbol: str) -> pd.DataFrame:
-    if not symbol:
+def records_to_df(records):
+    if not records:
         return pd.DataFrame()
+
+    df = pd.DataFrame(records)
+    if df.empty or "Date" not in df.columns or "Close" not in df.columns:
+        return pd.DataFrame()
+
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date", "Close"]).copy()
+    if df.empty:
+        return pd.DataFrame()
+
+    for column in ("Open", "High", "Low", "Close", "Volume"):
+        if column in df.columns:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+
+    df = df.sort_values("Date").set_index("Date")
+    return df
+
+
+def history_for_yf(batch, ticker):
+    if batch is None or batch.empty or not ticker:
+        return pd.DataFrame()
+
     try:
-        h = yf.download(
-            f"{symbol}.NS",
-            period="14mo",
-            interval="1d",
-            auto_adjust=False,
-            progress=False,
-            threads=False,
-            timeout=15,
-        )
-        if h is None or h.empty:
-            return pd.DataFrame()
-        if isinstance(h.columns, pd.MultiIndex):
-            try:
-                h = h.xs(f"{symbol}.NS", axis=1, level=1)
-            except Exception:
-                h.columns = h.columns.get_level_values(0)
+        if isinstance(batch.columns, pd.MultiIndex):
+            level0 = batch.columns.get_level_values(0)
+            level1 = batch.columns.get_level_values(1)
+
+            if ticker in level0:
+                h = batch[ticker].copy()
+            elif ticker in level1:
+                h = batch.xs(ticker, axis=1, level=1).copy()
+            else:
+                return pd.DataFrame()
+        else:
+            h = batch.copy()
+
         if "Close" in h:
             h = h[h["Close"].notna()]
+
         return h.dropna(how="all")
     except Exception:
         return pd.DataFrame()
 
 
-def price_context(row: dict, h: pd.DataFrame) -> dict:
+def technicals(h):
+    if h.empty or "Close" not in h:
+        return {}
+
+    close = h["Close"].astype(float)
+
     out = {
-        "pre5dPct": None,
-        "pre10dPct": None,
-        "pre20dPct": num(row.get("preResultRunupPct")),
-        "resultDayPct": num(row.get("resultDayReturnPct")),
-        "relativeVolume": num(pick(row, "relativeVolume", "rvol")),
-        "rawFullDayRvol": None,
-        "rvolMode": "UNVERIFIED",
-        "rvolIsPartial": False,
-        "rvolAsOf": None,
-        "distanceFrom52wHighPct": None,
-        "lastClose": num(pick(row, "price", "lastPrice", "ltp")),
-        "historyAvailable": False,
+        "lastClose": round2(close.iloc[-1]),
+        "ma10": round2(close.ewm(span=10, adjust=False).mean().iloc[-1]) if len(close) >= 10 else None,
+        "ma20": round2(close.ewm(span=20, adjust=False).mean().iloc[-1]) if len(close) >= 20 else None,
+        "ma50": round2(close.rolling(50).mean().iloc[-1]) if len(close) >= 50 else None,
+        "ma200": round2(close.rolling(200).mean().iloc[-1]) if len(close) >= 200 else None,
     }
 
-    if h.empty or "Close" not in h:
-        return out
+    if "Volume" in h and len(h) >= 21:
+        volume = h["Volume"].astype(float)
+        average_volume = float(volume.iloc[-21:-1].mean())
 
-    close = pd.to_numeric(h["Close"], errors="coerce").dropna()
-    if close.empty:
-        return out
-
-    out["historyAvailable"] = True
-    out["lastClose"] = float(close.iloc[-1])
-
-    high = pd.to_numeric(h["High"], errors="coerce").dropna() if "High" in h else close
-    if not high.empty:
-        high52 = float(high.tail(252).max())
-        if high52 > 0:
-            out["distanceFrom52wHighPct"] = (out["lastClose"] / high52 - 1.0) * 100.0
-
-    rd = result_date(row)
-    end = len(h)
-    if rd is not None:
-        for i, ts in enumerate(h.index):
-            try:
-                if pd.Timestamp(ts).date() >= rd:
-                    end = i
-                    break
-            except Exception:
-                pass
-
-    pre = h.iloc[:end]
-    pre_close = (
-        pd.to_numeric(pre["Close"], errors="coerce").dropna()
-        if "Close" in pre
-        else pd.Series(dtype=float)
-    )
-
-    def pre_return(days: int):
-        if len(pre_close) <= days:
-            return None
-        return pct_change(float(pre_close.iloc[-1]), float(pre_close.iloc[-1 - days]))
-
-    out["pre5dPct"] = pre_return(5)
-    out["pre10dPct"] = pre_return(10)
-    if out["pre20dPct"] is None:
-        out["pre20dPct"] = pre_return(20)
-
-    if rd is not None and out["resultDayPct"] is None and 0 < end < len(h):
-        out["resultDayPct"] = pct_change(
-            num(h["Close"].iloc[end]),
-            num(h["Close"].iloc[end - 1]),
+        out["relativeVolume"] = (
+            round2(float(volume.iloc[-1]) / average_volume)
+            if average_volume > 0
+            else None
         )
 
-    if "Volume" in h and len(h) >= 21:
-        vol = pd.to_numeric(h["Volume"], errors="coerce")
-        avg_full_day = num(vol.iloc[-21:-1].mean())
-        current_volume = num(vol.iloc[-1])
-
-        if avg_full_day not in (None, 0) and current_volume is not None:
-            raw_rvol = current_volume / avg_full_day
-            out["rawFullDayRvol"] = raw_rvol
-
-            if out["relativeVolume"] is not None:
-                out["rvolMode"] = "SOURCE_PROVIDED"
-            else:
-                now = datetime.now(IST)
-                try:
-                    last_bar_date = pd.Timestamp(h.index[-1]).date()
-                except Exception:
-                    last_bar_date = None
-
-                open_min = 9 * 60 + 15
-                close_min = 15 * 60 + 30
-                now_min = now.hour * 60 + now.minute
-                intraday = (
-                    last_bar_date == now.date()
-                    and now.weekday() < 5
-                    and open_min <= now_min < close_min
-                )
-
-                if intraday:
-                    elapsed_fraction = max(
-                        0.05,
-                        min(1.0, (now_min - open_min) / (close_min - open_min)),
-                    )
-                    expected_so_far = avg_full_day * elapsed_fraction
-                    if expected_so_far > 0:
-                        out["relativeVolume"] = current_volume / expected_so_far
-                        out["rvolMode"] = "INTRADAY_TIME_ADJUSTED_ESTIMATE"
-                        out["rvolIsPartial"] = True
-                        out["rvolAsOf"] = now.isoformat()
-                else:
-                    out["relativeVolume"] = raw_rvol
-                    out["rvolMode"] = "FULL_DAY"
+        turnover = ((close.tail(20) * volume.tail(20)).mean() / 10_000_000)
+        out["avgTurnover20dCr"] = round2(turnover)
+    else:
+        out["relativeVolume"] = None
+        out["avgTurnover20dCr"] = None
 
     return out
 
 
-def expectation_reality(row: dict, pc: dict) -> dict:
-    run20 = num(pc.get("pre20dPct"))
-    move = num(pc.get("resultDayPct"))
-    rvol = num(pc.get("relativeVolume"))
-    released = results_released(row)
-    reasons, risks = [], []
+def result_metrics(h, result_date):
+    out = {
+        "preResultRunupPct": None,
+        "resultDayReturnPct": None,
+        "resultDayHigh": None,
+        "resultDayLow": None,
+        "preResult20dHigh": None,
+        "pricedIn": False,
+    }
 
-    if run20 is None:
-        label = "AWAITING PRICE HISTORY"
-        reasons.append("20-day pre-result move could not be verified.")
-    elif run20 > PRICED_IN_RUNUP_PCT:
-        label = "PRICED IN"
-        risks.append(
-            f"20-day pre-result run-up was {run20:.1f}%, above the {PRICED_IN_RUNUP_PCT:.0f}% threshold."
+    if h.empty or result_date is None or "Close" not in h:
+        return out
+
+    result_index = None
+    for i, idx in enumerate(h.index):
+        if pd.Timestamp(idx).date() >= result_date:
+            result_index = i
+            break
+
+    end_index = len(h) if result_index is None else result_index
+    pre = h.iloc[:end_index]
+
+    if len(pre) >= 20:
+        start_close = num(pre["Close"].iloc[-20])
+        end_close = num(pre["Close"].iloc[-1])
+
+        if start_close not in (None, 0) and end_close is not None:
+            runup = (end_close / start_close - 1) * 100
+            out["preResultRunupPct"] = round2(runup)
+            out["pricedIn"] = runup > PRICED_IN_RUNUP_PCT
+
+        if "High" in pre:
+            out["preResult20dHigh"] = round2(pre["High"].tail(20).max())
+
+    if result_index is not None and result_index < len(h):
+        rr = h.iloc[result_index]
+        previous_close = num(h.iloc[result_index - 1]["Close"]) if result_index > 0 else None
+        result_close = num(rr.get("Close"))
+
+        if previous_close not in (None, 0) and result_close is not None:
+            out["resultDayReturnPct"] = round2((result_close / previous_close - 1) * 100)
+
+        if "High" in h:
+            out["resultDayHigh"] = round2(rr.get("High"))
+        if "Low" in h:
+            out["resultDayLow"] = round2(rr.get("Low"))
+
+    return out
+
+
+def sector_proxy(row):
+    text = f"{row.get('sector', '')} {row.get('industry', '')}".lower()
+    for key, value in SECTOR_PROXIES.items():
+        if key in text:
+            return value
+    return "^NSEI"
+
+
+def sector_tailwind(h):
+    if h.empty or "Close" not in h or len(h) < 200:
+        return None, {}
+
+    close = h["Close"].astype(float)
+    last = float(close.iloc[-1])
+    ma10 = float(close.ewm(span=10, adjust=False).mean().iloc[-1])
+    ma20 = float(close.ewm(span=20, adjust=False).mean().iloc[-1])
+    ma50 = float(close.rolling(50).mean().iloc[-1])
+    ma200 = float(close.rolling(200).mean().iloc[-1])
+
+    return all(last > x for x in (ma10, ma20, ma50, ma200)), {
+        "sectorClose": round2(last),
+        "sectorMa10": round2(ma10),
+        "sectorMa20": round2(ma20),
+        "sectorMa50": round2(ma50),
+        "sectorMa200": round2(ma200),
+    }
+
+
+def is_financial(row):
+    text = f"{row.get('sector', '')} {row.get('industry', '')}".lower()
+    return any(
+        x in text
+        for x in (
+            "bank", "financial", "finance", "nbfc",
+            "insurance", "asset management", "wealth",
         )
-    elif run20 > 5:
-        label = "PARTLY PRICED"
-        reasons.append(f"Pre-result move was moderate at {run20:.1f}%.")
-    else:
-        label = "LOW EXPECTATIONS"
-        reasons.append(f"Pre-result move was only {run20:.1f}%.")
-
-    if released and move is not None:
-        if move >= 3:
-            reasons.append(f"Result-day move was +{move:.1f}%.")
-        elif move <= -3:
-            risks.append(f"Result-day move was {move:.1f}%.")
-
-    if released and rvol is not None:
-        suffix = " (intraday time-adjusted estimate)" if pc.get("rvolIsPartial") else ""
-        if rvol >= RVOL_CONFIRM:
-            reasons.append(f"Post-result relative volume was {rvol:.2f}x{suffix}.")
-        else:
-            risks.append(f"Post-result relative volume was only {rvol:.2f}x{suffix}.")
-
-    return {"label": label, "reasons": reasons, "risks": risks}
+    )
 
 
-def row_from_statement(df: pd.DataFrame, aliases: list[str]):
+def statement_row(df, names):
     if df is None or getattr(df, "empty", True):
         return None
-    norm = {str(i).strip().lower(): i for i in df.index}
-    for alias in aliases:
-        if alias.lower() in norm:
-            return norm[alias.lower()]
-    for low, original in norm.items():
-        if any(alias.lower() in low for alias in aliases):
+
+    normalized = {str(index).strip().lower(): index for index in df.index}
+
+    for name in names:
+        if name.lower() in normalized:
+            return normalized[name.lower()]
+
+    for low, original in normalized.items():
+        if any(name.lower() in low for name in names):
+            return original
+
+    return None
+
+
+def cashflow_gate(ticker, row):
+    if is_financial(row):
+        pat_yoy = num(row.get("patYoY"))
+        quality = bool_value(row.get("earningsQualityPass"))
+        passed = quality is True and pat_yoy is not None and pat_yoy > 0
+        return passed, {
+            "cashFlowMethod": "financial-sector proxy",
+            "cashFlowEvidence": "CFO not comparable for lenders/financials; positive earnings quality + PAT YoY growth used",
+        }
+
+    try:
+        cashflow = ticker.quarterly_cash_flow
+
+        operating_row = statement_row(
+            cashflow,
+            [
+                "Operating Cash Flow",
+                "Total Cash From Operating Activities",
+                "Cash Flow From Continuing Operating Activities",
+            ],
+        )
+
+        income_row = statement_row(
+            cashflow,
+            [
+                "Net Income From Continuing Operations",
+                "Net Income",
+            ],
+        )
+
+        if operating_row is None:
+            return None, {
+                "cashFlowMethod": "yfinance quarterly cash flow",
+                "cashFlowEvidence": "Operating cash flow unavailable",
+            }
+
+        operating_series = cashflow.loc[operating_row].dropna()
+        income_series = cashflow.loc[income_row].dropna() if income_row is not None else pd.Series(dtype=float)
+
+        operating_cashflow = num(operating_series.iloc[0]) if not operating_series.empty else None
+        net_income = num(income_series.iloc[0]) if not income_series.empty else None
+
+        if operating_cashflow is None:
+            return None, {
+                "cashFlowMethod": "yfinance quarterly cash flow",
+                "cashFlowEvidence": "Latest operating cash flow unavailable",
+            }
+
+        ratio = operating_cashflow / abs(net_income) if net_income not in (None, 0) else None
+        passed = operating_cashflow > 0 and (ratio is None or ratio >= CASHFLOW_TO_PAT_MIN)
+
+        return passed, {
+            "operatingCashFlow": round2(operating_cashflow),
+            "cashFlowToNetIncome": round2(ratio),
+            "cashFlowMethod": "yfinance quarterly cash flow",
+            "cashFlowEvidence": "OCF positive" + (f"; OCF/net income {ratio:.2f}x" if ratio is not None else ""),
+        }
+
+    except Exception as exc:
+        return None, {
+            "cashFlowMethod": "yfinance quarterly cash flow",
+            "cashFlowEvidence": f"Unavailable: {type(exc).__name__}",
+        }
+
+
+def eps_surprise(ticker, result_date):
+    try:
+        earnings = ticker.get_earnings_dates(limit=12)
+        if earnings is None or earnings.empty or result_date is None:
+            return None
+
+        matches = []
+        for index, row in earnings.iterrows():
+            distance = abs((pd.Timestamp(index).date() - result_date).days)
+            if distance <= 4:
+                matches.append((distance, row))
+
+        if not matches:
+            return None
+
+        row = sorted(matches, key=lambda x: x[0])[0][1]
+
+        for column in ("Surprise(%)", "Surprise %", "Surprise"):
+            if column in row.index and num(row.get(column)) is not None:
+                return num(row.get(column))
+
+        estimate = num(row.get("EPS Estimate"))
+        reported = num(row.get("Reported EPS"))
+        if estimate not in (None, 0) and reported is not None:
+            return (reported / estimate - 1) * 100
+
+        return None
+    except Exception:
+        return None
+
+
+
+def expected_period_end(row):
+    explicit = parse_date(
+        row.get("resultPeriodEnd")
+        or row.get("periodEnd")
+        or row.get("periodEnded")
+        or row.get("toDate")
+    )
+    if explicit is not None:
+        return explicit
+
+    rd = parse_date(
+        row.get("resultDate")
+        or row.get("result_date")
+        or row.get("resultsDate")
+        or row.get("earningsDate")
+    )
+    if rd is None:
+        return None
+
+    candidates = [
+        date(rd.year - 1, 12, 31),
+        date(rd.year, 3, 31),
+        date(rd.year, 6, 30),
+        date(rd.year, 9, 30),
+        date(rd.year, 12, 31),
+    ]
+    prior = [d for d in candidates if d < rd]
+    return max(prior) if prior else None
+
+
+def _nse_client():
+    if NSE is None:
+        return None
+    return NSE(download_folder=str(BASE))
+
+
+def _metric_from_record(record, *aliases):
+    if not isinstance(record, dict):
+        return None
+    lowered = {str(k).lower().replace("-", "_"): v for k, v in record.items()}
+    for key in aliases:
+        v = record.get(key)
+        if v not in (None, ""):
+            return num(v)
+        v = lowered.get(key.lower().replace("-", "_"))
+        if v not in (None, ""):
+            return num(v)
+    return None
+
+
+def _record_date(record):
+    if not isinstance(record, dict):
+        return None
+    for key in (
+        "re_to_dt", "toDate", "periodEnd", "periodEnded", "endDate",
+        "re_end_dt", "quarterEnd", "date",
+    ):
+        d = parse_date(record.get(key))
+        if d is not None:
+            return d
+    return None
+
+
+def _pct(new, old):
+    if new is None or old in (None, 0):
+        return None
+    return (new / old - 1.0) * 100.0
+
+
+def parse_nse_comparison(payload, row):
+    records = []
+    if isinstance(payload, dict):
+        records = payload.get("resCmpData") or payload.get("data") or []
+    if not isinstance(records, list) or not records:
+        return {}
+
+    dated = [(d, r) for r in records if isinstance(r, dict) for d in [_record_date(r)] if d is not None]
+    dated.sort(key=lambda x: x[0], reverse=True)
+    if not dated:
+        return {}
+
+    expected = expected_period_end(row)
+    if expected is not None:
+        candidates = sorted(dated, key=lambda x: abs((x[0] - expected).days))
+        current_date, current = candidates[0]
+        if abs((current_date - expected).days) > 45:
+            return {}
+    else:
+        current_date, current = dated[0]
+
+    older = [(d, r) for d, r in dated if d < current_date]
+    previous = older[0][1] if older else None
+    previous_date = older[0][0] if older else None
+
+    yoy_target = date(current_date.year - 1, current_date.month, min(current_date.day, 28))
+    yoy_candidates = [(abs((d - yoy_target).days), d, r) for d, r in dated if d < current_date]
+    yoy_row = None
+    yoy_date = None
+    if yoy_candidates:
+        distance, yoy_date, yoy_row = min(yoy_candidates, key=lambda x: x[0])
+        if distance > 50:
+            yoy_row = None
+            yoy_date = None
+
+    revenue_aliases = (
+        "re_net_sale", "re_net_sales", "re_revenue", "re_revenue_from_operations",
+        "re_total_inc", "re_total_income", "re_income",
+    )
+    pat_aliases = (
+        "re_net_profit", "re_profit_after_tax", "re_pat",
+        "re_profit_loss", "net_profit",
+    )
+    eps_aliases = (
+        "re_basic_eps", "re_basic_eps_for_cont_dic_opr",
+        "re_bsc_eps_bfr_exi", "re_eps", "basic_eps", "eps",
+    )
+
+    revenue = _metric_from_record(current, *revenue_aliases)
+    pat = _metric_from_record(current, *pat_aliases)
+    eps = _metric_from_record(current, *eps_aliases)
+    prev_revenue = _metric_from_record(previous, *revenue_aliases)
+    prev_pat = _metric_from_record(previous, *pat_aliases)
+    yoy_revenue = _metric_from_record(yoy_row, *revenue_aliases)
+    yoy_pat = _metric_from_record(yoy_row, *pat_aliases)
+
+    out = {
+        "resultsReleased": True,
+        "resultReleased": True,
+        "resultVerifiedAt": datetime.now(IST).isoformat(),
+        "resultSource": "NSE results comparison",
+        "resultSourceUrl": "https://www.nseindia.com/companies-listing/corporate-filings-financial-results",
+        "resultPeriodEnd": current_date.isoformat(),
+        "latestRevenueLakh": revenue,
+        "latestPatLakh": pat,
+        "reportedEps": eps,
+        "revenueQoQ": round2(_pct(revenue, prev_revenue)),
+        "patQoQ": round2(_pct(pat, prev_pat)),
+        "revenueYoY": round2(_pct(revenue, yoy_revenue)),
+        "patYoY": round2(_pct(pat, yoy_pat)),
+        "resultDataSource": "NSE official results comparison",
+        "resultDataPeriod": current_date.isoformat(),
+    }
+    bits = [f"NSE quarter ended {current_date.isoformat()} verified"]
+    if revenue is not None:
+        bits.append(f"income/revenue ₹{revenue/100:.2f} Cr")
+    if pat is not None:
+        bits.append(f"PAT ₹{pat/100:.2f} Cr")
+    out["resultsEvidence"] = "; ".join(bits) + "."
+    return out
+
+
+def _filing_period_end(item):
+    if not isinstance(item, dict):
+        return None
+    return parse_date(
+        item.get("toDate")
+        or item.get("periodEnd")
+        or item.get("periodEnded")
+        or item.get("endDate")
+    )
+
+
+def _filing_broadcast_date(item):
+    if not isinstance(item, dict):
+        return None
+    return parse_date(
+        item.get("broadCastDate")
+        or item.get("broadcastDate")
+        or item.get("filingDate")
+        or item.get("date")
+    )
+
+
+def fetch_nse_result_enrichment(rows):
+    enrichment = {}
+    errors = []
+    stats = {"filings": 0, "matched": 0, "comparisons": 0}
+    if NSE is None:
+        return enrichment, ["nse package unavailable for results"], stats
+
+    now = datetime.now(IST).replace(tzinfo=None)
+    client = None
+    try:
+        client = _nse_client()
+        filings = client.financial_results(
+            segment="equities",
+            period="quarterly",
+            from_date=now - timedelta(days=60),
+            to_date=now,
+        ) or []
+        stats["filings"] = len(filings)
+        by_symbol = {}
+        for item in filings:
+            if not isinstance(item, dict):
+                continue
+            symbol = str(item.get("symbol") or item.get("Symbol") or "").upper().replace(".NS", "").strip()
+            if not symbol:
+                continue
+            by_symbol.setdefault(symbol, []).append(item)
+
+        for row in rows:
+            symbol = clean_symbol(row)
+            if not symbol:
+                continue
+            expected = expected_period_end(row)
+            rd = parse_date(row.get("resultDate") or row.get("result_date"))
+            due = rd is not None and rd <= datetime.now(IST).date() and (datetime.now(IST).date() - rd).days <= 60
+            filing_list = by_symbol.get(symbol) or []
+            best = None
+            if filing_list:
+                if expected is not None:
+                    ranked = []
+                    for item in filing_list:
+                        pe = _filing_period_end(item)
+                        if pe is not None:
+                            ranked.append((abs((pe - expected).days), item))
+                    if ranked:
+                        distance, candidate = min(ranked, key=lambda x: x[0])
+                        if distance <= 45:
+                            best = candidate
+                if best is None:
+                    best = max(filing_list, key=lambda x: _filing_broadcast_date(x) or date.min)
+
+            if best is None and not due:
+                continue
+
+            base = {}
+            if best is not None:
+                stats["matched"] += 1
+                period_end = _filing_period_end(best) or expected
+                broadcast = _filing_broadcast_date(best)
+                base.update({
+                    "resultsReleased": True,
+                    "resultReleased": True,
+                    "resultVerifiedAt": datetime.now(IST).isoformat(),
+                    "resultSource": "NSE financial results filing",
+                    "resultSourceUrl": best.get("xbrl") or best.get("xbrlLink") or "https://www.nseindia.com/companies-listing/corporate-filings-financial-results",
+                    "resultPeriodEnd": period_end.isoformat() if period_end else None,
+                    "resultsEvidence": "Official NSE quarterly financial-results filing detected"
+                    + (f" on {broadcast.isoformat()}" if broadcast else "") + ".",
+                })
+
+            # Fetch numeric P&L only for rows that have actually reached their result date
+            # or have an official filing. This keeps the request count bounded.
+            if best is not None or due:
+                try:
+                    comp = client.results_comparison(symbol)
+                    parsed = parse_nse_comparison(comp, row)
+                    if parsed:
+                        base.update(parsed)
+                        stats["comparisons"] += 1
+                except Exception as exc:
+                    errors.append(f"NSE comparison {symbol}: {type(exc).__name__}: {exc}")
+
+            if base:
+                enrichment[symbol] = base
+    except Exception as exc:
+        errors.append(f"NSE result layer: {type(exc).__name__}: {exc}")
+    finally:
+        if client is not None:
+            try:
+                client.exit()
+            except Exception:
+                pass
+    return enrichment, errors, stats
+
+
+def _snapshot_table(snapshot):
+    block = snapshot.get("results_in_crores") if isinstance(snapshot, dict) else None
+    if not isinstance(block, dict):
+        return {}, []
+    fields = block.get("fields") or []
+    data = block.get("data") or []
+    if not fields or len(fields) < 2:
+        return {}, []
+    periods = [str(x) for x in fields[1:]]
+    table = {}
+    for row in data:
+        if not isinstance(row, list) or not row:
+            continue
+        title = str(row[0]).strip().lower()
+        table[title] = row[1:]
+    return table, periods
+
+
+def _snapshot_value(table, period_index, *titles):
+    for title in titles:
+        values = table.get(title.lower())
+        if values and period_index < len(values):
+            return num(values[period_index])
+    return None
+
+
+def _period_label(d):
+    return d.strftime("%b-%y") if d is not None else None
+
+
+def fetch_bse_result_enrichment(rows, already=None):
+    enrichment = {}
+    errors = []
+    stats = {"lookups": 0, "snapshots": 0, "matched": 0}
+    if BSE is None:
+        return enrichment, ["bse package unavailable for results"], stats
+
+    already = already or {}
+    today = datetime.now(IST).date()
+    try:
+        with BSE(str(BASE)) as bse:
+            for row in rows:
+                symbol = clean_symbol(row)
+                if not symbol or symbol in already:
+                    continue
+                rd = parse_date(row.get("resultDate") or row.get("result_date"))
+                if rd is None or rd > today or (today - rd).days > 60:
+                    continue
+                expected = expected_period_end(row)
+                try:
+                    code = str(
+                        row.get("bseCode")
+                        or row.get("bse_code")
+                        or row.get("scripCode")
+                        or row.get("scrip_code")
+                        or ""
+                    ).strip()
+                    if not code:
+                        stats["lookups"] += 1
+                        try:
+                            code = str(bse.getScripCode(symbol)).strip()
+                        except Exception:
+                            lookup = bse.lookup(str(row.get("name") or symbol))
+                            code = str((lookup or {}).get("bse_code") or "").strip()
+                    if not code:
+                        continue
+                    snapshot = bse.resultsSnapshot(code)
+                    stats["snapshots"] += 1
+                    table, periods = _snapshot_table(snapshot or {})
+                    if not periods:
+                        continue
+                    expected_label = _period_label(expected)
+                    latest_label = periods[0]
+                    if expected_label and latest_label.lower() != expected_label.lower():
+                        continue
+
+                    revenue_cr = _snapshot_value(table, 0, "Revenue", "Total Income", "Net Sales")
+                    pat_cr = _snapshot_value(table, 0, "Net Profit", "PAT", "Profit After Tax")
+                    eps = _snapshot_value(table, 0, "EPS")
+                    prev_revenue_cr = _snapshot_value(table, 1, "Revenue", "Total Income", "Net Sales")
+                    prev_pat_cr = _snapshot_value(table, 1, "Net Profit", "PAT", "Profit After Tax")
+
+                    base = {
+                        "resultsReleased": True,
+                        "resultReleased": True,
+                        "resultVerifiedAt": datetime.now(IST).isoformat(),
+                        "resultSource": "BSE results snapshot",
+                        "resultSourceUrl": f"https://www.bseindia.com/stock-share-price/x/{code}/",
+                        "bseCode": code,
+                        "resultPeriodEnd": expected.isoformat() if expected else latest_label,
+                        "latestRevenueLakh": revenue_cr * 100 if revenue_cr is not None else None,
+                        "latestPatLakh": pat_cr * 100 if pat_cr is not None else None,
+                        "reportedEps": eps,
+                        "revenueQoQ": round2(_pct(revenue_cr, prev_revenue_cr)),
+                        "patQoQ": round2(_pct(pat_cr, prev_pat_cr)),
+                        "resultDataSource": "BSE official results snapshot",
+                        "resultDataPeriod": latest_label,
+                        "resultsEvidence": f"BSE results snapshot updated for {latest_label}"
+                        + (f"; Revenue ₹{revenue_cr:.2f} Cr" if revenue_cr is not None else "")
+                        + (f"; PAT ₹{pat_cr:.2f} Cr" if pat_cr is not None else "") + ".",
+                    }
+                    enrichment[symbol] = base
+                    stats["matched"] += 1
+                except Exception as exc:
+                    errors.append(f"BSE result {symbol}: {type(exc).__name__}: {exc}")
+    except Exception as exc:
+        errors.append(f"BSE result layer: {type(exc).__name__}: {exc}")
+    return enrichment, errors, stats
+
+
+def _statement_row_local(df, names):
+    if df is None or getattr(df, "empty", True):
+        return None
+    normalized = {str(index).strip().lower(): index for index in df.index}
+    for name in names:
+        if name.lower() in normalized:
+            return normalized[name.lower()]
+    for low, original in normalized.items():
+        if any(name.lower() in low for name in names):
             return original
     return None
 
 
-def statement_series(df: pd.DataFrame, aliases: list[str]) -> list[float]:
-    idx = row_from_statement(df, aliases)
-    if idx is None:
-        return []
-    s = pd.to_numeric(df.loc[idx], errors="coerce").dropna()
-    return [float(x) for x in s.tolist()]
+def fetch_yfinance_quarterly_enrichment(row):
+    """Last-resort verification when exchange endpoints are unavailable."""
+    expected = expected_period_end(row)
+    if expected is None:
+        return {}
+    symbol = clean_symbol(row)
+    candidates = []
+    explicit = str(row.get("ticker") or "").strip().upper()
+    if explicit:
+        candidates.append(explicit)
+    bse_code = str(row.get("bseCode") or row.get("bse_code") or "").strip()
+    if bse_code.isdigit() and len(bse_code) == 6:
+        candidates.append(f"{bse_code}.BO")
+    if symbol:
+        candidates.append(f"{symbol}.NS")
+    candidates = list(dict.fromkeys(candidates))
 
-
-def latest_statement_date(df: pd.DataFrame):
-    if df is None or getattr(df, "empty", True):
-        return None
-    dates = []
-    for col in df.columns:
+    for ticker_symbol in candidates:
         try:
-            dates.append(pd.Timestamp(col).date())
+            ticker = yf.Ticker(ticker_symbol)
+            stmt = ticker.quarterly_income_stmt
+            if stmt is None or stmt.empty:
+                stmt = ticker.quarterly_financials
+            if stmt is None or stmt.empty:
+                continue
+            cols = []
+            for col in stmt.columns:
+                try:
+                    d = pd.Timestamp(col).date()
+                    cols.append((d, col))
+                except Exception:
+                    pass
+            if not cols:
+                continue
+            cols.sort(reverse=True)
+            current_date, current_col = min(cols, key=lambda x: abs((x[0] - expected).days))
+            if abs((current_date - expected).days) > 45:
+                continue
+
+            rev_row = _statement_row_local(stmt, ["Total Revenue", "Operating Revenue", "Revenue", "Total Operating Income"])
+            pat_row = _statement_row_local(stmt, ["Net Income", "Net Income Common Stockholders", "Profit After Tax"])
+            if rev_row is None and pat_row is None:
+                continue
+
+            revenue = num(stmt.loc[rev_row, current_col]) if rev_row is not None else None
+            pat = num(stmt.loc[pat_row, current_col]) if pat_row is not None else None
+
+            older = [(d, c) for d, c in cols if d < current_date]
+            prev_col = older[0][1] if older else None
+            prev_revenue = num(stmt.loc[rev_row, prev_col]) if rev_row is not None and prev_col is not None else None
+            prev_pat = num(stmt.loc[pat_row, prev_col]) if pat_row is not None and prev_col is not None else None
+
+            yoy_target = date(current_date.year - 1, current_date.month, min(current_date.day, 28))
+            yoy_candidates = [(abs((d - yoy_target).days), c) for d, c in cols if d < current_date]
+            yoy_col = None
+            if yoy_candidates:
+                dist, yoy_col = min(yoy_candidates, key=lambda x: x[0])
+                if dist > 50:
+                    yoy_col = None
+            yoy_revenue = num(stmt.loc[rev_row, yoy_col]) if rev_row is not None and yoy_col is not None else None
+            yoy_pat = num(stmt.loc[pat_row, yoy_col]) if pat_row is not None and yoy_col is not None else None
+
+            return {
+                "resultsReleased": True,
+                "resultReleased": True,
+                "resultVerifiedAt": datetime.now(IST).isoformat(),
+                "resultSource": "Yahoo Finance quarterly statement fallback",
+                "resultPeriodEnd": current_date.isoformat(),
+                "latestRevenueLakh": revenue / 100000 if revenue is not None else None,
+                "latestPatLakh": pat / 100000 if pat is not None else None,
+                "revenueQoQ": round2(_pct(revenue, prev_revenue)),
+                "patQoQ": round2(_pct(pat, prev_pat)),
+                "revenueYoY": round2(_pct(revenue, yoy_revenue)),
+                "patYoY": round2(_pct(pat, yoy_pat)),
+                "resultDataSource": "yfinance quarterly statement fallback",
+                "resultDataPeriod": current_date.isoformat(),
+                "resultsEvidence": f"Quarterly statement for {current_date.isoformat()} verified via Yahoo Finance fallback.",
+                "ticker": ticker_symbol,
+            }
         except Exception:
             continue
-    return max(dates) if dates else None
+    return {}
 
 
-def fundamentals_current_for_result(row: dict, fs: dict) -> tuple[bool, str]:
-    """Guard against scoring an old Yahoo quarter as the newly released result."""
-    expected = expected_result_period_end(row)
-    latest = parse_date(fs.get("latestIncomeQuarterEnd"))
-    detection = release_detection(row)
+def build_result_enrichment(rows):
+    nse_map, nse_errors, nse_stats = fetch_nse_result_enrichment(rows)
+    bse_map, bse_errors, bse_stats = fetch_bse_result_enrichment(rows, already=nse_map)
+    merged = dict(nse_map)
+    merged.update(bse_map)
 
-    row_metrics = any(
-        pick(row, key) not in (None, "")
-        for key in (
-            "revenueYoY", "patYoY", "patQoQ",
-            "earningsQualityPass", "cashFlowPass", "surprisePass",
+    today = datetime.now(IST).date()
+    yf_count = 0
+    yf_supplemented = 0
+    for row in rows:
+        symbol = clean_symbol(row)
+        if not symbol:
+            continue
+        rd = parse_date(row.get("resultDate") or row.get("result_date"))
+        if rd is None or rd > today or (today - rd).days > 60:
+            continue
+
+        existing = merged.get(symbol)
+        needs_numbers = (
+            existing is None
+            or existing.get("revenueYoY") is None
+            or existing.get("patYoY") is None
         )
-    )
-    if row_metrics and detection.get("confidence") == "HIGH":
-        return True, "Base feed contains result metrics with high-confidence release evidence."
+        if not needs_numbers:
+            continue
 
-    if expected is None:
-        if latest is not None and detection.get("confidence") == "HIGH":
-            return True, f"Latest available reported quarter is {latest}."
-        return False, "Result is detected, but its reporting period cannot yet be matched to fresh fundamentals."
+        data = fetch_yfinance_quarterly_enrichment({**row, **(existing or {})})
+        if not data:
+            continue
 
-    if latest is None:
-        return False, f"Expected reported period is about {expected}, but current-quarter Yahoo fundamentals are not available yet."
+        if existing is None:
+            merged[symbol] = data
+            yf_count += 1
+        else:
+            # Preserve official NSE/BSE release proof and use Yahoo only to fill
+            # numeric fields that the exchange snapshot does not provide.
+            for key in (
+                "latestRevenueLakh", "latestPatLakh", "reportedEps",
+                "revenueQoQ", "patQoQ", "revenueYoY", "patYoY",
+            ):
+                if existing.get(key) is None and data.get(key) is not None:
+                    existing[key] = data[key]
+            existing["numericFallbackSource"] = data.get("resultDataSource")
+            yf_supplemented += 1
 
-    distance = abs((latest - expected).days)
-    if distance <= 10:
-        return True, f"Latest reported quarter ({latest}) matches the expected period ({expected})."
-
-    return False, (
-        f"Result is detected, but Yahoo still shows {latest} while the expected reported period is {expected}."
-    )
-
-
-def empty_fundamentals() -> dict:
-    return {
-        "source": "not requested before result",
-        "latestIncomeQuarterEnd": None,
-        "latestCashFlowQuarterEnd": None,
-        "revenueYoYCalc": None,
-        "patYoYCalc": None,
-        "operatingMarginNow": None,
-        "operatingMarginYoY": None,
-        "operatingCashFlow": None,
-        "cashFlowToNetIncome": None,
-        "otherIncomeToPretaxPct": None,
-        "trailingPE": None,
-        "forwardPE": None,
-        "pegRatio": None,
-        "priceToBook": None,
-        "enterpriseToEbitda": None,
-        "returnOnEquityPct": None,
-        "debtToEquity": None,
-        "freeCashFlowYieldPct": None,
-        "errors": [],
+    stats = {
+        "nse": nse_stats,
+        "bse": bse_stats,
+        "yfinanceFallbackMatched": yf_count,
+        "yfinanceSupplemented": yf_supplemented,
+        "totalMatched": len(merged),
     }
+    return merged, nse_errors + bse_errors, stats
+
+def build_checks(row):
+    market_cap = num(row.get("marketCapCr"))
+
+    return [
+        {"label": "Results released", "value": row.get("resultsReleased"), "note": row.get("resultsEvidence", "")},
+        {
+            "label": "Market cap > ₹1,000 Cr",
+            "value": row.get("marketCapPass"),
+            "note": f"₹{market_cap:,.0f} Cr" if market_cap is not None else "Unverified",
+        },
+        {"label": "Earnings acceleration", "value": row.get("earningsAccelerationPass"), "note": row.get("earningsEvidence", "")},
+        {"label": "Earnings quality", "value": row.get("earningsQualityPass"), "note": row.get("qualityEvidence", "")},
+        {"label": "Cash flow", "value": row.get("cashFlowPass"), "note": row.get("cashFlowEvidence", "")},
+        {"label": "Surprise", "value": row.get("surprisePass"), "note": row.get("surpriseEvidence", "")},
+        {
+            "label": "Post-result price/volume confirmation",
+            "value": row.get("priceVolumePass"),
+            "note": row.get("priceVolumeEvidence", ""),
+        },
+        {"label": "Liquidity", "value": row.get("liquidityPass"), "note": row.get("liquidityEvidence", "")},
+    ]
 
 
-def fundamental_snapshot(symbol: str) -> dict:
-    out = empty_fundamentals()
-    out["source"] = "yfinance best-effort"
-    if not symbol:
-        return out
+def qualify(row, stock_history, sector_history):
+    out = dict(row)
+    today = datetime.now(IST).date()
+    result_date = parse_date(out.get("resultDate") or out.get("result_date"))
 
-    try:
-        t = yf.Ticker(f"{symbol}.NS")
+    results_released, release_evidence = result_release_detection(out)
 
-        try:
-            income = t.quarterly_income_stmt
-            income_date = latest_statement_date(income)
-            out["latestIncomeQuarterEnd"] = str(income_date) if income_date else None
-            rev = statement_series(income, ["Total Revenue", "Operating Revenue"])
-            pat = statement_series(income, ["Net Income", "Net Income Common Stockholders"])
-            opi = statement_series(income, ["Operating Income", "EBIT"])
+    out["resultsReleased"] = results_released
+    out["resultReleased"] = results_released
+    out["resultsEvidence"] = release_evidence
 
-            if len(rev) >= 5:
-                out["revenueYoYCalc"] = pct_change(rev[0], rev[4])
-            if len(pat) >= 5:
-                out["patYoYCalc"] = pct_change(pat[0], pat[4])
-            if rev and opi and rev[0] != 0:
-                out["operatingMarginNow"] = opi[0] / rev[0] * 100.0
-            if len(rev) >= 5 and len(opi) >= 5 and rev[4] != 0 and out["operatingMarginNow"] is not None:
-                out["operatingMarginYoY"] = out["operatingMarginNow"] - opi[4] / rev[4] * 100.0
+    out.update(technicals(stock_history))
+    out.update(result_metrics(stock_history, result_date))
 
-            pretax = statement_series(income, ["Pretax Income", "Income Before Tax"])
-            other = statement_series(
-                income,
-                ["Other Non Operating Income Expenses", "Other Income Expense", "Other Non Operating Income"],
+    revenue_yoy = num(out.get("revenueYoY"))
+    pat_yoy = num(out.get("patYoY"))
+    pat_qoq = num(out.get("patQoQ"))
+
+    if not results_released or revenue_yoy is None or pat_yoy is None:
+        earnings_pass = None
+    else:
+        earnings_pass = (
+            revenue_yoy >= REV_YOY_MIN
+            and pat_yoy >= PAT_YOY_MIN
+            and (pat_qoq is None or pat_qoq >= PAT_QOQ_FLOOR)
+        )
+
+    out["earningsAccelerationPass"] = earnings_pass
+    out["revenuePatPass"] = earnings_pass
+    out["earningsEvidence"] = (
+        f"Revenue YoY {revenue_yoy:.1f}%, PAT YoY {pat_yoy:.1f}%"
+        + (f", PAT QoQ {pat_qoq:.1f}%" if pat_qoq is not None else "")
+        if revenue_yoy is not None and pat_yoy is not None
+        else "Growth data unavailable"
+    )
+
+    latest_revenue = num(out.get("latestRevenueLakh"))
+    latest_pat = num(out.get("latestPatLakh"))
+    margin = (
+        latest_pat / latest_revenue * 100
+        if latest_revenue not in (None, 0) and latest_pat is not None
+        else None
+    )
+
+    if not results_released:
+        quality_pass = None
+    elif latest_revenue is not None and latest_pat is not None:
+        quality_pass = latest_revenue > 0 and latest_pat > 0 and (margin is None or margin >= 3)
+    else:
+        quality_pass = bool_value(out.get("earningsQualityPass"))
+
+    out["earningsQualityPass"] = quality_pass
+    out["netMarginPct"] = round2(margin)
+    out["qualityEvidence"] = (
+        f"PAT positive; net margin {margin:.1f}%"
+        if margin is not None
+        else ("Positive revenue/PAT required" if results_released else "Awaiting results")
+    )
+
+    sector_pass, sector_data = sector_tailwind(sector_history)
+    out["sectorTailwind"] = sector_pass
+    out.update(sector_data)
+
+    turnover = num(out.get("avgTurnover20dCr"))
+    out["liquidityPass"] = turnover >= LIQUIDITY_TURNOVER_CR_MIN if turnover is not None else None
+    out["liquidityEvidence"] = (
+        f"20d avg traded value ₹{turnover:.1f} Cr"
+        if turnover is not None
+        else "20d turnover unavailable"
+    )
+
+    if not results_released:
+        out["cashFlowPass"] = None
+        out["cashFlowEvidence"] = "Awaiting results"
+        out["surprisePass"] = None
+        out["surprisePct"] = None
+        out["surpriseEvidence"] = "Awaiting results"
+        out["priceVolumePass"] = None
+        out["priceVolumeEvidence"] = "Awaiting post-result confirmation"
+    else:
+        ticker_symbol = yahoo_ticker(out)
+        ticker = yf.Ticker(ticker_symbol) if ticker_symbol else None
+
+        if ticker is not None:
+            cash_pass, cash_data = cashflow_gate(ticker, out)
+        else:
+            cash_pass, cash_data = None, {
+                "cashFlowEvidence": "Ticker unavailable",
+                "cashFlowMethod": "unavailable",
+            }
+
+        out["cashFlowPass"] = cash_pass
+        out.update(cash_data)
+
+        surprise = eps_surprise(ticker, result_date) if ticker is not None else None
+        result_return = num(out.get("resultDayReturnPct"))
+        rvol = num(out.get("relativeVolume"))
+
+        if surprise is not None:
+            surprise_pass = surprise >= EPS_SURPRISE_MIN
+            surprise_text = f"Reported EPS surprise {surprise:.1f}%"
+            surprise_method = "reported EPS surprise"
+        elif result_return is not None:
+            surprise_pass = (
+                result_return >= MARKET_SURPRISE_PROXY_MIN
+                and (rvol is None or rvol >= RVOL_MIN)
             )
-            if pretax and other and pretax[0] != 0:
-                out["otherIncomeToPretaxPct"] = abs(other[0]) / abs(pretax[0]) * 100.0
-        except Exception as exc:
-            out["errors"].append(f"income:{type(exc).__name__}")
-
-        try:
-            cf = t.quarterly_cash_flow
-            cashflow_date = latest_statement_date(cf)
-            out["latestCashFlowQuarterEnd"] = str(cashflow_date) if cashflow_date else None
-            ocf = statement_series(
-                cf,
-                ["Operating Cash Flow", "Total Cash From Operating Activities", "Cash Flow From Continuing Operating Activities"],
+            surprise_text = (
+                f"Market-reaction proxy: result-day {result_return:.1f}%"
+                + (f", RVOL {rvol:.2f}x" if rvol is not None else "")
             )
-            ni = statement_series(cf, ["Net Income", "Net Income From Continuing Operations"])
-            if ocf:
-                out["operatingCashFlow"] = ocf[0]
-            if ocf and ni and ni[0] != 0:
-                out["cashFlowToNetIncome"] = ocf[0] / abs(ni[0])
-        except Exception as exc:
-            out["errors"].append(f"cashflow:{type(exc).__name__}")
+            surprise_method = "market-reaction proxy"
+        else:
+            surprise_pass = None
+            surprise_text = "EPS surprise and result-day reaction unavailable"
+            surprise_method = "unavailable"
 
-        try:
-            info = t.get_info() or {}
-            out["trailingPE"] = num(info.get("trailingPE"))
-            out["forwardPE"] = num(info.get("forwardPE"))
-            out["pegRatio"] = num(info.get("pegRatio"))
-            out["priceToBook"] = num(info.get("priceToBook"))
-            out["enterpriseToEbitda"] = num(info.get("enterpriseToEbitda"))
-            roe = num(info.get("returnOnEquity"))
-            out["returnOnEquityPct"] = roe * 100.0 if roe is not None and abs(roe) <= 5 else roe
-            out["debtToEquity"] = num(info.get("debtToEquity"))
-            fcf = num(info.get("freeCashflow"))
-            mcap = num(info.get("marketCap"))
-            if fcf is not None and mcap not in (None, 0):
-                out["freeCashFlowYieldPct"] = fcf / mcap * 100.0
-        except Exception as exc:
-            out["errors"].append(f"valuation:{type(exc).__name__}")
+        out["surprisePass"] = surprise_pass
+        out["surprisePct"] = round2(surprise)
+        out["surpriseMethod"] = surprise_method
+        out["surpriseEvidence"] = surprise_text
 
-    except Exception as exc:
-        out["errors"].append(f"ticker:{type(exc).__name__}")
+        last_close = num(out.get("lastClose")) or num(out.get("price"))
+        ma10 = num(out.get("ma10"))
 
+        if None in (last_close, ma10, result_return, rvol):
+            price_volume_pass = None
+        else:
+            price_volume_pass = (
+                last_close > ma10
+                and rvol >= RVOL_MIN
+                and result_return >= 2
+            )
+
+        out["priceVolumePass"] = price_volume_pass
+        out["priceVolumeEvidence"] = (
+            f"Close ₹{last_close:.2f} vs EMA10 ₹{ma10:.2f}; RVOL {rvol:.2f}x; result-day {result_return:.1f}%"
+            if None not in (last_close, ma10, rvol, result_return)
+            else "Post-result evidence incomplete"
+        )
+
+    checklist = build_checks(out)
+    values = [item["value"] for item in checklist]
+
+    out["checks"] = checklist
+    out["score"] = sum(value is True for value in values)
+    out["knownChecks"] = sum(value is not None for value in values)
+    out["scoreText"] = f'{out["score"]}/8'
+
+    all_eight = all(value is True for value in values)
+    priced_in = out.get("pricedIn") is True
+
+    if priced_in:
+        bucket = "Caution"
+    elif not results_released:
+        bucket = "Upcoming"
+    elif all_eight:
+        bucket = "Qualified"
+    else:
+        bucket = "Post-results"
+
+    out["bucket"] = bucket
+    out["peadStatus"] = bucket
+    out["stage"] = bucket
+    out["entry"] = None
+    out["sl"] = None
+    out["tsl"] = None
+    out["entryTriggerPass"] = None
+    out["candidateStatus"] = None
+    out["allocationPct"] = None
+
+    if bucket == "Qualified":
+        highs = [
+            value
+            for value in (
+                num(out.get("resultDayHigh")),
+                num(out.get("preResult20dHigh")),
+                num(stock_history["High"].tail(5).max())
+                if not stock_history.empty and "High" in stock_history
+                else None,
+            )
+            if value is not None
+        ]
+
+        if highs:
+            entry = max(highs) * 1.002
+            out["entry"] = round2(entry)
+            current = num(out.get("price")) or num(out.get("lastClose"))
+            out["entryTriggerPass"] = current is not None and current >= entry
+
+        lows = [
+            value
+            for value in (
+                num(out.get("resultDayLow")),
+                num(out.get("ma20")),
+            )
+            if value is not None
+        ]
+
+        if lows:
+            out["sl"] = round2(min(lows) * 0.995)
+
+        out["tsl"] = round2(out.get("ma10"))
+        out["candidateStatus"] = (
+            "Entry Triggered" if out.get("entryTriggerPass") else "Potential Candidate"
+        )
+
+        rvol = num(out.get("relativeVolume"))
+        if (
+            out.get("entryTriggerPass")
+            and out.get("sectorTailwind") is True
+            and rvol is not None
+            and rvol >= 2
+        ):
+            out["allocationPct"] = 30
+        elif out.get("entryTriggerPass"):
+            out["allocationPct"] = 20
+        else:
+            out["allocationPct"] = 10
+
+    out["qualificationVersion"] = "pead-v1.1-nse-mcp"
     return out
 
 
-def result_reality(row: dict, fs: dict) -> dict:
-    detection = release_detection(row)
-    if not detection["released"]:
-        return {
-            "label": "AWAITING RESULT",
-            "reasons": [detection.get("reason") or "Result has not been confirmed as released."],
-            "risks": [],
-        }
-
-    current_ok, current_note = fundamentals_current_for_result(row, fs)
-    if not current_ok:
-        return {
-            "label": "UNVERIFIED",
-            "reasons": [
-                detection.get("reason") or "Result release detected.",
-                current_note,
-            ],
-            "risks": [
-                "Current-quarter fundamentals are not verified yet, so result quality is not scored from stale numbers."
-            ],
-        }
-
-    rev = num(pick(row, "revenueYoY"))
-    if rev is None:
-        rev = num(fs.get("revenueYoYCalc"))
-    pat = num(pick(row, "patYoY"))
-    if pat is None:
-        pat = num(fs.get("patYoYCalc"))
-
-    pat_qoq = num(pick(row, "patQoQ"))
-    margin_delta = num(fs.get("operatingMarginYoY"))
-    other_ratio = num(fs.get("otherIncomeToPretaxPct"))
-    ocf = num(fs.get("operatingCashFlow"))
-    cf_ratio = num(fs.get("cashFlowToNetIncome"))
-    quality_pass = bval(pick(row, "earningsQualityPass"))
-    cash_pass = bval(pick(row, "cashFlowPass"))
-    surprise_pass = bval(pick(row, "surprisePass"))
-
-    score = 0
-    red = 0
-    reasons, risks = [], []
-
-    if rev is not None:
-        if rev >= 10:
-            score += 2
-            reasons.append(f"Revenue YoY growth is {rev:.1f}%.")
-        elif rev < 0:
-            red += 1
-            risks.append(f"Revenue YoY declined {abs(rev):.1f}%.")
-
-    if pat is not None:
-        if pat >= 15:
-            score += 2
-            reasons.append(f"PAT YoY growth is {pat:.1f}%.")
-        elif pat < 0:
-            red += 1
-            risks.append(f"PAT YoY declined {abs(pat):.1f}%.")
-
-    if pat_qoq is not None and pat_qoq >= 0:
-        score += 1
-        reasons.append(f"PAT QoQ is {pat_qoq:+.1f}%.")
-
-    if margin_delta is not None:
-        if margin_delta > 0.5:
-            score += 1
-            reasons.append(f"Operating margin improved {margin_delta:.1f} percentage points YoY.")
-        elif margin_delta < -1.5:
-            red += 1
-            risks.append(f"Operating margin contracted {abs(margin_delta):.1f} percentage points YoY.")
-
-    if quality_pass is True:
-        score += 1
-        reasons.append("Base earnings-quality gate passed.")
-    elif quality_pass is False:
-        red += 1
-        risks.append("Base earnings-quality gate failed.")
-
-    if cash_pass is True:
-        score += 1
-        reasons.append("Cash-flow gate passed.")
-    elif cash_pass is False:
-        red += 1
-        risks.append("Cash-flow gate failed.")
-    elif ocf is not None:
-        if ocf > 0:
-            score += 1
-            reasons.append("Operating cash flow is positive.")
-        else:
-            red += 1
-            risks.append("Operating cash flow is negative.")
-
-    if cf_ratio is not None:
-        if cf_ratio >= 0.5:
-            score += 1
-            reasons.append(f"Operating cash flow / net income is {cf_ratio:.2f}x.")
-        elif cf_ratio < 0.25:
-            risks.append(f"Operating cash flow / net income is weak at {cf_ratio:.2f}x.")
-
-    if other_ratio is not None:
-        if other_ratio <= 15:
-            score += 1
-            reasons.append(f"Other income is only {other_ratio:.1f}% of pretax income.")
-        elif other_ratio >= 30:
-            red += 1
-            risks.append(f"Other income is {other_ratio:.1f}% of pretax income; one-off support needs review.")
-
-    if surprise_pass is True:
-        score += 1
-        reasons.append("Surprise gate passed.")
-
-    label = "GENUINE" if score >= 6 and red == 0 else ("LOW QUALITY" if red >= 2 or score <= 2 else "MIXED")
-    return {"label": label, "reasons": reasons, "risks": risks}
-
-
-def valuation_reality(row: dict, fs: dict) -> dict:
-    pe = num(fs.get("trailingPE"))
-    fpe = num(fs.get("forwardPE"))
-    peg = num(fs.get("pegRatio"))
-    pb = num(fs.get("priceToBook"))
-    eve = num(fs.get("enterpriseToEbitda"))
-    roe = num(fs.get("returnOnEquityPct"))
-    de = num(fs.get("debtToEquity"))
-    fcf_yield = num(fs.get("freeCashFlowYieldPct"))
-    growth = num(pick(row, "patYoY"))
-
-    if peg is None and pe is not None and growth not in (None, 0) and growth > 0:
-        peg = pe / growth
-
-    metrics = {
-        "trailingPE": pe,
-        "forwardPE": fpe,
-        "peg": peg,
-        "priceToBook": pb,
-        "enterpriseToEbitda": eve,
-        "roePct": roe,
-        "debtToEquity": de,
-        "fcfYieldPct": fcf_yield,
-    }
-
-    evidence_count = sum(x is not None for x in (pe, fpe, peg, pb, eve, roe, fcf_yield))
-    confidence = "HIGH" if evidence_count >= 5 else ("MEDIUM" if evidence_count >= 3 else "LIMITED")
-    reasons, risks = [], []
-
-    if evidence_count < 3:
-        return {
-            "label": "UNVERIFIED",
-            "confidence": confidence,
-            "evidenceCount": evidence_count,
-            "reasons": [
-                f"Only {evidence_count} valuation input(s) available; at least 3 are required before assigning a valuation label."
-            ],
-            "risks": [],
-            "metrics": metrics,
-        }
-
-    score = 0
-    if peg is not None:
-        if peg <= 1.0:
-            score += 3
-            reasons.append(f"PEG ≈ {peg:.2f}.")
-        elif peg <= 1.8:
-            score += 2
-            reasons.append(f"PEG ≈ {peg:.2f}, broadly reasonable for growth.")
-        elif peg >= 2.5:
-            score -= 2
-            risks.append(f"PEG ≈ {peg:.2f}; valuation is high relative to PAT growth.")
-
-    if pe is not None and fpe is not None:
-        if fpe < pe:
-            score += 1
-            reasons.append(f"Forward P/E {fpe:.1f}x is below trailing P/E {pe:.1f}x.")
-        elif fpe > pe * 1.15:
-            risks.append(f"Forward P/E {fpe:.1f}x is above trailing P/E {pe:.1f}x.")
-
-    if roe is not None:
-        if roe >= 18:
-            score += 1
-            reasons.append(f"ROE is {roe:.1f}%.")
-        elif roe < 10:
-            risks.append(f"ROE is only {roe:.1f}%.")
-
-    if fcf_yield is not None:
-        if fcf_yield >= 3:
-            score += 1
-            reasons.append(f"FCF yield is {fcf_yield:.1f}%.")
-        elif fcf_yield < 0:
-            risks.append("Free cash flow is negative.")
-
-    if de is not None and de > 200:
-        score -= 1
-        risks.append(f"Debt/equity is elevated at {de:.0f}.")
-
-    if pe is not None and growth is not None and pe > 70 and growth < 20:
-        score -= 2
-        risks.append(f"P/E is {pe:.1f}x while PAT growth is only {growth:.1f}%.")
-
-    label = (
-        "ATTRACTIVE" if score >= 4
-        else "FAIR" if score >= 2
-        else "EXPENSIVE BUT JUSTIFIED" if score >= 0
-        else "EXCESSIVE"
-    )
-    return {
-        "label": label,
-        "confidence": confidence,
-        "evidenceCount": evidence_count,
-        "reasons": reasons,
-        "risks": risks,
-        "metrics": metrics,
-    }
-
-
-def price_response(row: dict, pc: dict) -> dict:
-    if not results_released(row):
-        return {"label": "AWAITING RESULT", "points": 0}
-    move = num(pc.get("resultDayPct"))
-    rvol = num(pc.get("relativeVolume"))
-    if move is not None and rvol is not None:
-        if move >= 2 and rvol >= RVOL_CONFIRM:
-            return {"label": "CONFIRMED", "points": 5}
-        if move <= -2:
-            return {"label": "NEGATIVE", "points": 0}
-        return {"label": "MIXED", "points": 2}
-    return {"label": "UNVERIFIED", "points": 1}
-
-
-def result_verification(row: dict, released: bool) -> dict:
-    detection = release_detection(row)
-    if not released:
-        return {
-            "label": "AWAITING RESULT",
-            "official": False,
-            "source": None,
-            "sourceUrl": None,
-            "verifiedAt": None,
-            "detectionMethod": detection.get("method"),
-            "detectionConfidence": detection.get("confidence"),
-            "detectionReason": detection.get("reason"),
-        }
-
-    source_url = pick(
-        row,
-        "resultSourceUrl", "filingUrl", "announcementUrl",
-        "sourceUrl", "evidenceUrl", "resultsUrl",
-    )
-    source_text = pick(
-        row,
-        "resultSource", "discoverySource", "source",
-        "resultsEvidence", "resultEvidence", "evidence",
-    )
-    verified_at = pick(
-        row,
-        "resultVerifiedAt", "resultDetectedAt", "filingTimestamp",
-        "announcementTimestamp", "sourceTimestamp",
-    )
-
-    combined = " ".join(
-        x for x in (str(source_text or ""), str(source_url or "")) if x
-    ).lower()
-    official = any(
-        token in combined
-        for token in (
-            "nseindia.com", "bseindia.com", "nse filing", "bse filing",
-            "official exchange", "exchange filing",
-        )
-    )
-
-    if official:
-        label = "OFFICIAL EXCHANGE EVIDENCE"
-    elif source_url:
-        label = "SOURCE LINK PRESENT — VERIFY DOMAIN"
-    elif source_text:
-        label = "SOURCE TEXT PRESENT — NOT OFFICIAL VERIFIED"
-    elif detection.get("method") in {"RECENT_RESULT_DATE_PASSED", "RESULT_DATE_TODAY_EVENING"}:
-        label = "AUTO-DETECTED FROM RESULT DATE — SOURCE PENDING"
-    else:
-        label = "BASE CONFIRMED — SOURCE NOT ATTACHED"
-
-    return {
-        "label": label,
-        "official": official,
-        "source": str(source_text) if source_text else None,
-        "sourceUrl": str(source_url) if source_url else None,
-        "verifiedAt": verified_at,
-        "detectionMethod": detection.get("method"),
-        "detectionConfidence": detection.get("confidence"),
-        "detectionReason": detection.get("reason"),
-    }
-
-
-
-def event_key(item: dict) -> str:
-    quarter = str(item.get("quarter") or "").strip()
-    result_date_value = str(item.get("resultDate") or "").strip()
-
-    if quarter and quarter != "—":
-        return f"quarter:{quarter}"
-
-    if result_date_value:
-        return f"date:{result_date_value}"
-
-    return "current-unidentified-quarter"
-
-
-def expectation_gap(item: dict) -> dict:
-    """
-    Estimate how much positive expectation appears embedded BEFORE the result.
-
-    This is deliberately separate from result quality. A genuine result can still
-    be a weak PEAD setup if expectations were already extreme.
-    """
-    pc = item.get("priceContext") or {}
-
-    pre5 = num(pc.get("pre5dPct"))
-    pre10 = num(pc.get("pre10dPct"))
-    pre20 = num(pc.get("pre20dPct"))
-    high_dist = num(pc.get("distanceFrom52wHighPct"))
-
-    burden = 0
-    reasons: list[str] = []
-    offsets: list[str] = []
-
-    if pre20 is None:
-        reasons.append("20-day pre-result return is unverified.")
-    elif pre20 <= 0:
-        offsets.append(f"20-day move is subdued at {pre20:+.1f}%.")
-    elif pre20 <= 5:
-        burden += 10
-        offsets.append(f"20-day run-up is modest at {pre20:+.1f}%.")
-    elif pre20 <= 10:
-        burden += 25
-        reasons.append(f"20-day run-up is {pre20:+.1f}%.")
-    elif pre20 <= 15:
-        burden += 45
-        reasons.append(f"20-day run-up is already {pre20:+.1f}%.")
-    elif pre20 <= 25:
-        burden += 70
-        reasons.append(f"20-day run-up is elevated at {pre20:+.1f}%.")
-    else:
-        burden += 90
-        reasons.append(f"20-day run-up is extreme at {pre20:+.1f}%.")
-
-    if pre10 is not None:
-        if pre10 >= 10:
-            burden += 8
-            reasons.append(f"10-day run-up is strong at {pre10:+.1f}%.")
-        elif pre10 <= -3:
-            burden = max(0, burden - 5)
-            offsets.append(f"10-day move is weak at {pre10:+.1f}%.")
-
-    if pre5 is not None:
-        if pre5 >= 6:
-            burden += 7
-            reasons.append(f"5-day acceleration is {pre5:+.1f}%.")
-        elif pre5 <= -3:
-            burden = max(0, burden - 4)
-            offsets.append(f"5-day move is weak at {pre5:+.1f}%.")
-
-    if high_dist is not None:
-        if high_dist >= -3:
-            burden += 8
-            reasons.append("Stock is within 3% of its 52-week high.")
-        elif high_dist >= -7:
-            burden += 5
-            reasons.append("Stock is close to its 52-week high.")
-        elif high_dist <= -25:
-            burden = max(0, burden - 4)
-            offsets.append("Stock is well below its 52-week high.")
-
-    burden = max(0, min(100, int(round(burden))))
-
-    if pre20 is None:
-        label = "UNVERIFIED"
-        surprise_room = "UNVERIFIED"
-    elif burden <= 20:
-        label = "LOW"
-        surprise_room = "HIGH"
-    elif burden <= 45:
-        label = "NORMAL"
-        surprise_room = "FAIR"
-    elif burden <= 70:
-        label = "ELEVATED"
-        surprise_room = "LOW"
-    else:
-        label = "EXTREME"
-        surprise_room = "VERY LOW"
-
-    return {
-        "label": label,
-        "burdenScore": burden,
-        "surpriseRoom": surprise_room,
-        "pre5dPct": pre5,
-        "pre10dPct": pre10,
-        "pre20dPct": pre20,
-        "distanceFrom52wHighPct": high_dist,
-        "reasons": reasons[:5],
-        "offsets": offsets[:4],
-    }
-
-
-def compact_history_snapshot(
-    item: dict,
-    gap: dict,
-    *,
-    first_seen_at: str | None = None,
-    seen_at: str | None = None,
-) -> dict:
-    seen_at = seen_at or datetime.now(IST).isoformat()
-
-    return {
-        "eventKey": event_key(item),
-        "quarter": item.get("quarter"),
-        "resultDate": item.get("resultDate"),
-        "firstSeenAt": first_seen_at or seen_at,
-        "lastSeenAt": seen_at,
-        "resultsReleased": item.get("resultsReleased") is True,
-        "resultReality": (item.get("resultReality") or {}).get("label"),
-        "expectationReality": (item.get("expectationReality") or {}).get("label"),
-        "expectationGap": gap.get("label"),
-        "expectationBurdenScore": gap.get("burdenScore"),
-        "priceResponse": (item.get("priceResponse") or {}).get("label"),
-        "valuationReality": (item.get("valuationReality") or {}).get("label"),
-        "baseBucket": item.get("baseBucket"),
-        "baseScore": item.get("baseScore"),
-        "convictionScore": num(item.get("convictionScore")),
-        "verdict": item.get("verdict"),
-        "sectorTailwind": item.get("sectorTailwind"),
-    }
-
-
-def previous_quarter_history(previous_payload: dict | None) -> dict[str, list[dict]]:
-    """
-    Read prior quarter memory from the previous intelligence.json.
-
-    Migration behavior:
-    - If quarterHistory already exists, preserve it.
-    - If it does not exist yet, seed one snapshot from the previous items so the
-      first upgraded run does not lose the previously tracked quarter.
-    """
-    if not isinstance(previous_payload, dict):
-        return {}
-
-    existing = previous_payload.get("quarterHistory")
-    if isinstance(existing, dict):
-        clean: dict[str, list[dict]] = {}
-        for symbol, events in existing.items():
-            if isinstance(events, list):
-                clean[str(symbol).upper()] = [
-                    dict(event) for event in events if isinstance(event, dict)
-                ][-12:]
-        return clean
-
-    seeded: dict[str, list[dict]] = {}
-    previous_generated = previous_payload.get("generatedAt") or datetime.now(IST).isoformat()
-
-    for item in previous_payload.get("items") or []:
-        if not isinstance(item, dict):
-            continue
-
-        symbol = str(item.get("symbol") or "").upper().strip()
-        if not symbol:
-            continue
-
-        gap = item.get("expectationGap")
-        if not isinstance(gap, dict):
-            gap = expectation_gap(item)
-
-        seeded[symbol] = [
-            compact_history_snapshot(
-                item,
-                gap,
-                first_seen_at=str(previous_generated),
-                seen_at=str(previous_generated),
-            )
-        ]
-
-    return seeded
-
-
-def update_quarter_history(
-    previous_payload: dict | None,
-    items: list[dict],
-) -> dict[str, list[dict]]:
-    history = previous_quarter_history(previous_payload)
-    seen_at = datetime.now(IST).isoformat()
-
-    for item in items:
-        symbol = str(item.get("symbol") or "").upper().strip()
-        if not symbol:
-            continue
-
-        gap = item.get("expectationGap") or expectation_gap(item)
-        events = history.setdefault(symbol, [])
-        key = event_key(item)
-
-        existing = next(
-            (event for event in events if event.get("eventKey") == key),
-            None,
-        )
-
-        snapshot = compact_history_snapshot(
-            item,
-            gap,
-            first_seen_at=existing.get("firstSeenAt") if existing else None,
-            seen_at=seen_at,
-        )
-
-        if existing is None:
-            events.append(snapshot)
-        else:
-            existing.clear()
-            existing.update(snapshot)
-
-        # Bound persistent memory to the most recent 12 tracked quarters/events.
-        if len(events) > 12:
-            history[symbol] = events[-12:]
-
-    return history
-
-
-def quarter_memory(item: dict, history: dict[str, list[dict]]) -> dict:
-    symbol = str(item.get("symbol") or "").upper().strip()
-    events = list(history.get(symbol) or [])
-
-    events.sort(
-        key=lambda e: (
-            str(e.get("firstSeenAt") or ""),
-            str(e.get("resultDate") or ""),
-            str(e.get("eventKey") or ""),
-        )
-    )
-
-    key = event_key(item)
-    current_index = next(
-        (i for i, event in enumerate(events) if event.get("eventKey") == key),
-        None,
-    )
-
-    current = (
-        events[current_index]
-        if current_index is not None
-        else (events[-1] if events else None)
-    )
-
-    prior = (
-        events[:current_index]
-        if current_index is not None
-        else events[:-1]
-    )
-
-    previous = prior[-1] if prior else None
-    status = "FIRST OBSERVATION"
-    reasons: list[str] = []
-
-    if previous and current:
-        prev_rr = str(previous.get("resultReality") or "")
-        curr_rr = str(current.get("resultReality") or "")
-        prev_verdict = str(previous.get("verdict") or "")
-        curr_verdict = str(current.get("verdict") or "")
-
-        if current.get("resultsReleased") is not True:
-            status = "TRACKING NEXT QUARTER"
-            reasons.append("A prior tracked quarter exists; current result is still pending.")
-        elif prev_rr in {"LOW QUALITY", "MIXED"} and curr_rr == "GENUINE":
-            status = "SECOND-CHANCE CONFIRMATION"
-            reasons.append(
-                "A previously weak/mixed tracked quarter is now followed by a genuine result."
-            )
-        elif prev_rr == "GENUINE" and curr_rr == "GENUINE":
-            status = "CONFIRMED AGAIN"
-            reasons.append("Two consecutive tracked quarters are classified as genuine.")
-        elif prev_rr == "GENUINE" and curr_rr == "LOW QUALITY":
-            status = "EXECUTION BROKE"
-            reasons.append(
-                "Current result quality deteriorated after a previously genuine quarter."
-            )
-        elif (
-            "HIGH-CONVICTION" in prev_verdict
-            and "HIGH-CONVICTION" in curr_verdict
-        ):
-            status = "REPEATED HIGH CONVICTION"
-            reasons.append("High-conviction PEAD status persisted across tracked quarters.")
-        else:
-            status = "TRACKING"
-            reasons.append(
-                "Quarter-to-quarter evidence exists but has not formed a stronger pattern yet."
-            )
-    elif previous:
-        status = "TRACKING"
-        reasons.append("A prior tracked quarter exists.")
-
-    return {
-        "status": status,
-        "trackedQuarterCount": len(events),
-        "previous": previous,
-        "current": current,
-        "recentEvents": events[-4:],
-        "reasons": reasons,
-    }
-
-
-def jcurve_phase(item: dict, memory: dict) -> dict:
-    released = item.get("resultsReleased") is True
-    rr = str((item.get("resultReality") or {}).get("label") or "")
-    pr = str((item.get("priceResponse") or {}).get("label") or "")
-    memory_status = str(memory.get("status") or "")
-
-    if not released:
-        label = "PRE-RESULT EXPECTATION SETUP"
-        note = "Wait for the result; judge how much expectation is already embedded."
-    elif rr == "LOW QUALITY":
-        label = "THESIS REVIEW / BROKEN"
-        note = "Result quality is weak; do not force a PEAD thesis."
-    elif rr == "GENUINE" and pr == "CONFIRMED":
-        label = "EARNINGS INFLECTION + MARKET CONFIRMATION"
-        note = "Fundamentals and post-result price/volume are aligned."
-    elif rr == "GENUINE":
-        label = "RESULT CONFIRMED / MARKET TEST PENDING"
-        note = "Result quality is genuine; market confirmation is still incomplete."
-    elif memory_status in {
-        "CONFIRMED AGAIN",
-        "SECOND-CHANCE CONFIRMATION",
-        "REPEATED HIGH CONVICTION",
-    }:
-        label = "EXECUTION TREND IMPROVING"
-        note = "Quarter memory is strengthening."
-    else:
-        label = "IN REVIEW"
-        note = "Evidence is mixed or incomplete."
-
-    return {"label": label, "note": note}
-
-
-def action_bias(item: dict, gap: dict, memory: dict) -> dict:
-    released = item.get("resultsReleased") is True
-    rr = str((item.get("resultReality") or {}).get("label") or "")
-    pr = str((item.get("priceResponse") or {}).get("label") or "")
-    gap_label = str(gap.get("label") or "")
-    memory_status = str(memory.get("status") or "")
-
-    if not released:
-        if gap_label in {"ELEVATED", "EXTREME"}:
-            label = "WAIT — EXPECTATIONS HIGH"
-            reason = "Result is pending and the pre-result expectation burden is elevated."
-        elif gap_label == "LOW":
-            label = "WATCH — SURPRISE ROOM"
-            reason = "Result is pending and pre-result expectations appear relatively low."
-        else:
-            label = "WATCH"
-            reason = "Result is pending; expectation evidence is normal or incomplete."
-    elif rr == "GENUINE" and pr == "CONFIRMED" and gap_label in {"LOW", "NORMAL"}:
-        label = "PEAD SETUP STRONG"
-        reason = (
-            "Genuine result, acceptable prior expectations and market confirmation are aligned."
-        )
-    elif rr == "GENUINE" and gap_label in {"ELEVATED", "EXTREME"}:
-        label = "GOOD RESULT — PRICED-IN RISK"
-        reason = (
-            "The result is genuine, but expectations were already elevated before the print."
-        )
-    elif rr == "GENUINE":
-        label = "REVIEW ENTRY"
-        reason = "Result quality is genuine; confirmation or entry structure still needs review."
-    elif rr == "LOW QUALITY":
-        label = "AVOID / REVIEW"
-        reason = "Result quality is weak."
-    elif memory_status == "SECOND-CHANCE CONFIRMATION":
-        label = "SECOND-CHANCE WATCH"
-        reason = "Quarter memory improved after an earlier weak/mixed setup."
-    else:
-        label = "IN REVIEW"
-        reason = "Not enough aligned evidence for a stronger PEAD classification."
-
-    return {"label": label, "reason": reason}
-
-
-def base_points(row: dict) -> int:
-    score = num(pick(row, "score"))
-    if score is None and isinstance(row.get("checks"), list):
-        score = sum(
-            bval(c.get("value")) is True
-            for c in row["checks"]
-            if isinstance(c, dict)
-        )
-    return 0 if score is None else max(0, min(40, round(score / 8.0 * 40)))
-
-
-def verdict(row: dict, rr: dict, er: dict, conviction: int) -> str:
-    if not results_released(row):
-        return (
-            "AWAIT RESULT — EXPECTATIONS ALREADY ELEVATED"
-            if er["label"] == "PRICED IN"
-            else "AWAIT RESULT — WATCHLIST"
-        )
-    if er["label"] == "PRICED IN":
-        return "GOOD RESULT MAY BE PRICED IN — WAIT"
-    if rr["label"] == "LOW QUALITY":
-        return "RESULT QUALITY WEAK — AVOID / REVIEW"
-    if conviction >= 75 and rr["label"] == "GENUINE" and er["label"] == "LOW EXPECTATIONS":
-        return "HIGH-CONVICTION PEAD CANDIDATE"
-    if conviction >= 60:
-        return "PEAD CANDIDATE — REVIEW ENTRY"
-    return "IN REVIEW — NOT ENOUGH EDGE YET"
-
-
-def build_item(row: dict, index: int) -> dict:
-    symbol = clean_symbol(row)
-    released = results_released(row)
-    history = history_for_symbol(symbol)
-    pc = price_context(row, history)
-    er = expectation_reality(row, pc)
-
-    status = str(pick(row, "bucket", "peadStatus", "stage", "status") or "").lower()
-    fs = (
-        fundamental_snapshot(symbol)
-        if released or status in {"caution", "qualified", "post-results", "post results"}
-        else empty_fundamentals()
-    )
-
-    rr = result_reality(row, fs)
-    vr = valuation_reality(row, fs)
-    pr = price_response(row, pc)
-    rv = result_verification(row, released)
-
-    conviction = min(
-        100,
-        base_points(row)
-        + RESULT_POINTS.get(rr["label"], 0)
-        + EXPECTATION_POINTS.get(er["label"], 0)
-        + VALUATION_POINTS.get(vr["label"], 0)
-        + (5 if bval(pick(row, "sectorTailwind", "sectorPass")) is True else 0)
-        + pr["points"],
-    )
-
-    commentary = pick(
-        row,
-        "managementCommentary", "guidance", "commentary",
-        "resultCommentary", "note", "evidence",
-    )
-
-    return {
-        "id": symbol or f"row-{index}",
-        "symbol": symbol,
-        "name": str(pick(row, "name", "company", "companyName") or symbol),
-        "sector": str(pick(row, "sector", "industry") or "—"),
-        "quarter": str(pick(row, "quarter", "earningsPeriod", "period") or "—"),
-        "resultDate": pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"),
-        "resultsReleased": released,
-        "releaseDetection": release_detection(row),
-        "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
-        "baseScore": num(pick(row, "score")),
-        "baseScoreText": str(pick(row, "scoreText") or "—"),
-        "marketCapCr": num(pick(row, "marketCapCr", "mcapCr", "market_cap_cr")),
-        "price": num(pick(row, "price", "lastPrice", "ltp")),
-        "priceTimestamp": pick(row, "priceTimestamp", "marketTime", "quoteTimestamp"),
-        "resultReality": rr,
-        "expectationReality": er,
-        "valuationReality": vr,
-        "priceResponse": pr,
-        "resultVerification": rv,
-        "priceContext": pc,
-        "fundamentalSnapshot": fs,
-        "sectorTailwind": bval(pick(row, "sectorTailwind", "sectorPass")),
-        "entry": pick(row, "entry", "entryPrice"),
-        "sl": pick(row, "sl", "stopLoss"),
-        "tsl": pick(row, "tsl", "trailingStopLoss"),
-        "candidateStatus": pick(row, "candidateStatus"),
-        "allocationPct": num(pick(row, "allocationPct")),
-        "managementCommentary": commentary,
-        "commentaryVerified": bool(commentary),
-        "convictionScore": conviction,
-        "verdict": verdict(row, rr, er, conviction),
-        "reasons": rr["reasons"][:5] + er["reasons"][:3] + vr["reasons"][:3],
-        "risks": rr["risks"][:4] + er["risks"][:3] + vr["risks"][:3],
-    }
-
-
-def fallback_item(row: dict, index: int, exc: Exception) -> dict:
-    symbol = clean_symbol(row) or f"row-{index}"
-    return {
-        "id": symbol,
-        "symbol": clean_symbol(row),
-        "name": str(pick(row, "name", "company", "companyName") or symbol),
-        "sector": str(pick(row, "sector", "industry") or "—"),
-        "quarter": str(pick(row, "quarter", "earningsPeriod", "period") or "—"),
-        "resultDate": pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"),
-        "resultsReleased": results_released(row),
-        "releaseDetection": release_detection(row),
-        "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
-        "baseScore": num(pick(row, "score")),
-        "baseScoreText": str(pick(row, "scoreText") or "—"),
-        "marketCapCr": num(pick(row, "marketCapCr", "mcapCr", "market_cap_cr")),
-        "price": num(pick(row, "price", "lastPrice", "ltp")),
-        "priceTimestamp": pick(row, "priceTimestamp", "marketTime", "quoteTimestamp"),
-        "resultReality": {"label": "UNVERIFIED", "reasons": [], "risks": []},
-        "expectationReality": {"label": "UNVERIFIED", "reasons": [], "risks": []},
-        "valuationReality": {
-            "label": "UNVERIFIED", "confidence": "LIMITED", "evidenceCount": 0,
-            "reasons": [], "risks": [], "metrics": {},
-        },
-        "priceResponse": {"label": "UNVERIFIED", "points": 0},
-        "resultVerification": {
-            "label": "UNVERIFIED", "official": False, "source": None,
-            "sourceUrl": None, "verifiedAt": None,
-        },
-        "priceContext": {},
-        "fundamentalSnapshot": {"errors": [f"{type(exc).__name__}: {exc}"]},
-        "sectorTailwind": bval(pick(row, "sectorTailwind", "sectorPass")),
-        "entry": pick(row, "entry", "entryPrice"),
-        "sl": pick(row, "sl", "stopLoss"),
-        "tsl": pick(row, "tsl", "trailingStopLoss"),
-        "candidateStatus": pick(row, "candidateStatus"),
-        "allocationPct": num(pick(row, "allocationPct")),
-        "managementCommentary": None,
-        "commentaryVerified": False,
-        "convictionScore": base_points(row),
-        "verdict": "INTELLIGENCE ERROR — BASE ROW PRESERVED",
-        "reasons": [],
-        "risks": [f"Intelligence calculation failed: {type(exc).__name__}"],
-    }
-
-
-def build_payload(
-    data_path: Path,
-    previous_payload: dict | None = None,
-) -> dict:
-    payload = json.loads(data_path.read_text(encoding="utf-8"))
-    rows = extract_rows(payload)
-    if not rows:
-        raise RuntimeError(
-            "Base data.json contains 0 stocks. Intelligence output will NOT be published."
-        )
-
-    items = []
-    for i, row in enumerate(rows, 1):
-        symbol = clean_symbol(row) or f"row-{i}"
-        print(f"[{i}/{len(rows)}] {symbol}")
-        try:
-            item = build_item(row, i)
-        except Exception as exc:
-            print(f"WARNING: {symbol}: {type(exc).__name__}: {exc}")
-            item = fallback_item(row, i, exc)
-
-        item["expectationGap"] = expectation_gap(item)
-        items.append(item)
-
-        if item.get("resultsReleased"):
-            time.sleep(0.15)
-
-    if len(items) != len(rows):
-        raise RuntimeError(
-            f"Row-preservation failure: base={len(rows)}, intelligence={len(items)}"
-        )
-
-    quarter_history = update_quarter_history(previous_payload, items)
-
-    for item in items:
-        memory = quarter_memory(item, quarter_history)
-        item["quarterMemory"] = memory
-        item["jCurvePhase"] = jcurve_phase(item, memory)
-        item["actionBias"] = action_bias(
-            item,
-            item.get("expectationGap") or {},
-            memory,
-        )
-
-    counts = {
-        "total": len(items),
-        "resultsDeclared": sum(x.get("resultsReleased") is True for x in items),
-        "genuineResults": sum(
-            x.get("resultReality", {}).get("label") == "GENUINE"
-            for x in items
-        ),
-        "lowExpectations": sum(
-            x.get("expectationReality", {}).get("label") == "LOW EXPECTATIONS"
-            for x in items
-        ),
-        "pricedIn": sum(
-            x.get("expectationReality", {}).get("label") == "PRICED IN"
-            for x in items
-        ),
-        "attractiveValuation": sum(
-            x.get("valuationReality", {}).get("label") == "ATTRACTIVE"
-            for x in items
-        ),
-        "highConviction": sum(
-            x.get("verdict") == "HIGH-CONVICTION PEAD CANDIDATE"
-            for x in items
-        ),
-        "expectationGapLow": sum(
-            x.get("expectationGap", {}).get("label") == "LOW"
-            for x in items
-        ),
-        "expectationGapElevated": sum(
-            x.get("expectationGap", {}).get("label") in {"ELEVATED", "EXTREME"}
-            for x in items
-        ),
-        "secondChance": sum(
-            x.get("quarterMemory", {}).get("status") == "SECOND-CHANCE CONFIRMATION"
-            for x in items
-        ),
-        "confirmedAgain": sum(
-            x.get("quarterMemory", {}).get("status")
-            in {"CONFIRMED AGAIN", "REPEATED HIGH CONVICTION"}
-            for x in items
-        ),
-        "peadStrong": sum(
-            x.get("actionBias", {}).get("label") == "PEAD SETUP STRONG"
-            for x in items
-        ),
-    }
-
-    return {
-        "generatedAt": datetime.now(IST).isoformat(),
-        "sourceDataGeneratedAt": pick(
-            payload,
-            "generatedAt",
-            "last_scan",
-            "lastScanAt",
-        ),
-        "sourceScannerMode": payload.get("scannerMode"),
-        "sourceQualificationVersion": payload.get("qualificationVersion"),
-        "sourceStockCount": len(rows),
-        "intelligenceVersion": "pead-intelligence-v4-auto-result-detection",
-        "safety": {
-            "dataJsonReadOnly": True,
-            "zeroPublishProtection": True,
-            "exactRowPreservation": True,
-            "contextMergedIntoIntelligence": True,
-            "noThirdPageRequired": True,
-        },
-        "methodNotes": [
-            "Result release detection combines explicit flags, source/status evidence and recent scheduled result dates; generic In Review is not release proof.",
-            "Calendar-detected releases are blocked from scoring stale Yahoo quarters until the latest reported period matches the expected quarter.",
-            "Result Reality uses reported growth, earnings quality, cash flow and best-effort quarterly fundamentals.",
-            "Expectation Reality uses pre-result movement; RVOL is a post-result confirmation input.",
-            "Expectation Gap separately estimates how much optimism is already embedded before results using 5D/10D/20D movement and 52-week-high proximity.",
-            "Quarter Memory persists inside intelligence.json and tracks one evolving snapshot per symbol/quarter.",
-            "Second-chance confirmation highlights a genuine current result after a previously weak/mixed tracked quarter.",
-            "J-Curve Phase is a lightweight context label based only on verified result/price/quarter-memory evidence; it does not invent capacity or management facts.",
-            "Intraday RVOL is time-adjusted and explicitly marked as an estimate.",
-            "Valuation requires at least 3 inputs before a label is assigned; otherwise it remains UNVERIFIED.",
-            "Official result evidence is marked official only when the source explicitly points to NSE/BSE or an official exchange filing.",
-            "Management commentary is never invented.",
-            "This add-on never modifies data.json or the main PEAD radar.",
-        ],
-        "counts": counts,
-        "quarterHistory": quarter_history,
-        "items": items,
-    }
-
-
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data", default="data.json")
-    parser.add_argument("--output", default="intelligence.json")
-    parser.add_argument(
-        "--previous",
-        default="intelligence.json",
-        help="Previous intelligence.json used only for quarter-memory carry-forward.",
-    )
-    args = parser.parse_args()
+    warnings.filterwarnings("ignore")
+    payload, rows = load_data()
 
-    data_path = Path(args.data)
-    output_path = Path(args.output)
-    previous_path = Path(args.previous)
+    print(f"Fetching official NSE/BSE result layer for {len(rows)} stocks...")
+    result_layer, result_errors, result_stats = build_result_enrichment(rows)
+    print("Result layer matched:", len(result_layer), "| stats:", result_stats)
 
-    print("PEAD Intelligence starting...")
-    print("Input:", data_path)
-    print("Output:", output_path)
-    print("Previous memory source:", previous_path)
+    print(f"Requesting official NSE MCP market layer for {len(rows)} stocks...")
+    mcp_layer = asyncio.run(fetch_nse_market_layer(rows, lookback_days=430, concurrency=4))
 
-    if not data_path.exists():
-        raise RuntimeError(f"Input file not found: {data_path}")
+    mcp_quotes = mcp_layer.get("quotes") or {}
+    mcp_histories = mcp_layer.get("histories") or {}
 
-    previous_payload = None
-    if previous_path.exists():
-        try:
-            previous_payload = json.loads(
-                previous_path.read_text(encoding="utf-8")
-            )
-            print(
-                "Previous quarter-memory source loaded:",
-                previous_payload.get("generatedAt"),
-            )
-        except Exception as exc:
-            # Memory enrichment must never block a fresh intelligence build.
-            print(
-                "WARNING: previous intelligence memory could not be read:",
-                f"{type(exc).__name__}: {exc}",
-            )
+    missing_stock_tickers = []
+    for row in rows:
+        s = clean_symbol(row)
+        if s and s not in mcp_histories:
+            yt = yahoo_ticker(row)
+            if yt:
+                missing_stock_tickers.append(yt)
 
-    payload = build_payload(
-        data_path,
-        previous_payload=previous_payload,
+    proxies = sorted({sector_proxy(row) for row in rows})
+    fallback_tickers = sorted(set(missing_stock_tickers + proxies))
+
+    print(
+        f"NSE MCP quotes: {len(mcp_quotes)}/{len(rows)} | "
+        f"NSE MCP histories: {len(mcp_histories)}/{len(rows)} | "
+        f"fallback tickers: {len(fallback_tickers)}"
     )
 
-    source_count = int(payload.get("sourceStockCount", 0))
-    output_count = len(payload.get("items") or [])
-
-    print("Source stocks:", source_count)
-    print("Generated intelligence rows:", output_count)
-
-    if source_count <= 0:
-        raise RuntimeError("Base source count is 0. Refusing to publish.")
-
-    if output_count <= 0:
-        raise RuntimeError("Intelligence generated 0 rows. Refusing to publish.")
-
-    if output_count != source_count:
-        raise RuntimeError(
-            f"Intelligence count mismatch: source={source_count}, output={output_count}"
+    fallback_history = pd.DataFrame()
+    if fallback_tickers:
+        fallback_history = yf.download(
+            tickers=fallback_tickers,
+            period="14mo",
+            interval="1d",
+            group_by="ticker",
+            auto_adjust=False,
+            threads=True,
+            progress=False,
+            timeout=20,
         )
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = Path(str(output_path) + ".tmp")
+    output = []
+    counts = {
+        "Upcoming": 0,
+        "Post-results": 0,
+        "Caution": 0,
+        "Qualified": 0,
+    }
 
-    temp_path.write_text(
+    for index, row in enumerate(rows, 1):
+        out = dict(row)
+        s = clean_symbol(out)
+        print(f"[{index}/{len(rows)}] {s or 'UNKNOWN'}")
+
+        if s in result_layer:
+            out.update(result_layer[s])
+
+        quote = mcp_quotes.get(s)
+        if quote:
+            if quote.get("price") is not None:
+                out["price"] = quote["price"]
+                out["lastPrice"] = quote["price"]
+            if quote.get("previousClose") is not None:
+                out["previousClose"] = quote["previousClose"]
+            if quote.get("changePct") is not None:
+                out["changePct"] = quote["changePct"]
+            if quote.get("priceTimestamp"):
+                out["priceTimestamp"] = quote["priceTimestamp"]
+            out["priceSource"] = "NSE MCP CM Market"
+        else:
+            out["priceSource"] = out.get("priceSource") or "NSE live-discovery fallback"
+
+        if s in mcp_histories:
+            stock_history = records_to_df(mcp_histories[s])
+            out["historySource"] = "NSE MCP Bhavcopy"
+        else:
+            yt = yahoo_ticker(out)
+            stock_history = history_for_yf(fallback_history, yt)
+            out["historySource"] = "yfinance fallback"
+
+        sector_history = history_for_yf(fallback_history, sector_proxy(out))
+        out["sectorHistorySource"] = "yfinance index fallback"
+
+        try:
+            qualified = qualify(out, stock_history, sector_history)
+        except Exception as exc:
+            qualified = dict(out)
+            qualified["qualificationError"] = f"{type(exc).__name__}: {exc}"
+            qualified["bucket"] = (
+                "Upcoming"
+                if str(out.get("bucket", "")).lower() == "upcoming"
+                else "Post-results"
+            )
+            qualified["peadStatus"] = qualified["bucket"]
+            qualified["stage"] = qualified["bucket"]
+
+        output.append(qualified)
+        bucket = qualified.get("bucket", "Post-results")
+        counts[bucket] = counts.get(bucket, 0) + 1
+
+        if qualified.get("resultsReleased"):
+            time.sleep(0.10)
+
+    payload["stocks"] = output
+    payload["companies"] = output
+    payload["qualificationVersion"] = "pead-v1.1-nse-mcp"
+    payload["marketDataMode"] = "nse-mcp-primary"
+    payload["nseMcp"] = mcp_layer.get("meta") or {}
+    payload["nseMcpErrors"] = mcp_layer.get("errors") or []
+    payload["bucketCounts"] = counts
+    payload["qualifiedCount"] = counts.get("Qualified", 0)
+    payload["cautionCount"] = counts.get("Caution", 0)
+    payload["postResultCount"] = counts.get("Post-results", 0)
+    payload["upcomingCount"] = counts.get("Upcoming", 0)
+    payload["resultDataVersion"] = "exchange-results-v2-nse-bse-yf"
+    payload["resultSourceStats"] = result_stats
+    payload["resultSourceErrors"] = result_errors
+    payload["qualificationRules"] = {
+        "revenueYoYMin": REV_YOY_MIN,
+        "patYoYMin": PAT_YOY_MIN,
+        "patQoQFloor": PAT_QOQ_FLOOR,
+        "pricedInRunupPct": PRICED_IN_RUNUP_PCT,
+        "relativeVolumeMin": RVOL_MIN,
+        "liquidity20dTurnoverCrMin": LIQUIDITY_TURNOVER_CR_MIN,
+        "epsSurpriseMin": EPS_SURPRISE_MIN,
+        "marketSurpriseProxyMin": MARKET_SURPRISE_PROXY_MIN,
+    }
+
+    temp = DATA.with_suffix(".json.qualify.tmp")
+    temp.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
-    temp_path.replace(output_path)
+    temp.replace(DATA)
 
-    if not output_path.exists():
-        raise RuntimeError("Output file was not created.")
-
-    if output_path.stat().st_size == 0:
-        raise RuntimeError("Output file was created but is empty.")
-
-    print("OUTPUT CREATED:", output_path)
-    print("OUTPUT SIZE:", output_path.stat().st_size, "bytes")
-    print("PEAD INTELLIGENCE COMPLETE")
-    print(json.dumps(payload.get("counts", {}), indent=2))
+    print("PEAD QUALIFICATION COMPLETE")
+    print(json.dumps(counts, indent=2))
+    print("NSE MCP metadata:")
+    print(json.dumps(payload["nseMcp"], indent=2))
+    if payload["nseMcpErrors"]:
+        print("NSE MCP warnings:")
+        for error in payload["nseMcpErrors"][:20]:
+            print(" -", error)
+    if payload["resultSourceErrors"]:
+        print("Result-source warnings:")
+        for error in payload["resultSourceErrors"][:20]:
+            print(" -", error)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        print(f"QUALIFIER FAILED: {type(exc).__name__}: {exc}")
+        sys.exit(1)
