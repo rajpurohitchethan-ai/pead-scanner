@@ -564,7 +564,27 @@ def main() -> int:
         # the result feed does not get flooded with tiny/unknown names.
         seed = bool(row.get("_seedRow"))
         mcap_pass = row.get("marketCapPass")
-        if mcap_pass is True or (seed and mcap_pass is not False):
+        released = boolish(row.get("resultsReleased")) is True
+
+        # Never throw away an officially released result just because Yahoo
+        # temporarily failed to return price/market-cap data. Keep the row in
+        # the feed with marketCapPass=None; the PEAD qualifier will NOT qualify
+        # it until market cap is verified >= the configured threshold.
+        keep_for_result_verification = released and mcap_pass is None
+
+        if (
+            mcap_pass is True
+            or (seed and mcap_pass is not False)
+            or keep_for_result_verification
+        ):
+            if keep_for_result_verification:
+                row["marketCapVerificationRequired"] = True
+                row["marketCapEvidence"] = (
+                    "Official result release retained while market cap is temporarily unavailable; "
+                    "PEAD qualification remains blocked until market cap is verified."
+                )
+            else:
+                row["marketCapVerificationRequired"] = False
             row.pop("_seedRow", None)
             scanned.append(row)
         if row.get("liveError"):
@@ -587,6 +607,11 @@ def main() -> int:
         "errorCount": len(errors),
         "errors": errors,
         "discoveryWarnings": nse_errors + bse_errors,
+        "releasedUnknownMarketCapCount": sum(
+            boolish(r.get("resultsReleased")) is True
+            and r.get("marketCapPass") is None
+            for r in scanned
+        ),
         "companies": scanned,
         "stocks": scanned,
     }
