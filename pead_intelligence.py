@@ -537,11 +537,13 @@ def result_reality(row: dict, fs: dict) -> dict:
 
     if surprise_pass is True:
         score += 1
-        reasons.append("Surprise gate passed.")
+                reasons.append("Surprise gate passed.")
 
     label = "GENUINE" if score >= 6 and red == 0 else ("LOW QUALITY" if red >= 2 or score <= 2 else "MIXED")
     return {"label": label, "reasons": reasons, "risks": risks}
-    def valuation_reality(row: dict, fs: dict) -> dict:
+
+
+def valuation_reality(row: dict, fs: dict) -> dict:
     pe = num(fs.get("trailingPE"))
     fpe = num(fs.get("forwardPE"))
     peg = num(fs.get("pegRatio"))
@@ -966,6 +968,3 @@ def main():
 if __name__ == "__main__":
     main()
             
-
-
-        
