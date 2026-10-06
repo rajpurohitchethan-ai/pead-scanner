@@ -29,6 +29,8 @@ import yfinance as yf
 IST = ZoneInfo("Asia/Kolkata")
 PRICED_IN_RUNUP_PCT = 15.0
 RVOL_CONFIRM = 1.20
+RESULT_DATE_RELEASE_LOOKBACK_DAYS = 45
+RESULT_DAY_AUTO_RELEASE_HOUR_IST = 18
 
 RESULT_POINTS = {
     "GENUINE": 25,
@@ -131,26 +133,160 @@ def result_date(row: dict):
     return parse_date(pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"))
 
 
-def results_released(row: dict) -> bool:
-    explicit = bval(pick(row, "resultsReleased", "resultReleased", "results_declared"))
-    if explicit is not None:
-        return explicit
+def expected_result_period_end(row: dict):
+    """Return the calendar quarter-end most likely reported on resultDate."""
+    rd = result_date(row)
+    if rd is None:
+        return None
 
-    source = str(pick(row, "discoverySource", "resultSource", "source") or "").lower()
+    candidates = [
+        datetime(rd.year - 1, 12, 31).date(),
+        datetime(rd.year, 3, 31).date(),
+        datetime(rd.year, 6, 30).date(),
+        datetime(rd.year, 9, 30).date(),
+        datetime(rd.year, 12, 31).date(),
+    ]
+    prior = [d for d in candidates if d < rd]
+    return max(prior) if prior else None
+
+
+def result_source_blob(row: dict) -> str:
+    values = [
+        pick(row, "discoverySource", "resultSource", "source"),
+        pick(row, "resultsEvidence", "resultEvidence", "evidence"),
+        pick(
+            row,
+            "resultSourceUrl", "filingUrl", "announcementUrl",
+            "sourceUrl", "evidenceUrl", "resultsUrl",
+        ),
+    ]
+    return " ".join(str(v) for v in values if v not in (None, "")).lower()
+
+
+def release_detection(row: dict) -> dict:
+    """Detect whether the current tracked result is released."""
+    now = datetime.now(IST)
+    today = now.date()
+    rd = result_date(row)
+    explicit = bval(pick(row, "resultsReleased", "resultReleased", "results_declared"))
+    source = result_source_blob(row)
     status = str(pick(row, "bucket", "peadStatus", "stage", "status") or "").lower()
 
-    if "financial results" in source or "exchange filing" in source:
-        return True
+    postponement_tokens = (
+        "postponed", "rescheduled", "deferred", "cancelled", "canceled",
+        "date changed", "board meeting postponed",
+    )
+    if any(token in f"{status} {source}" for token in postponement_tokens):
+        return {
+            "released": False,
+            "method": "POSTPONED_OR_RESCHEDULED",
+            "confidence": "HIGH",
+            "reason": "Result appears postponed/rescheduled; calendar auto-release was suppressed.",
+            "resultDate": str(rd) if rd else None,
+        }
 
-    if any(x in status for x in ("post-results", "post results", "results declared", "in review", "qualified")):
-        return True
+    official_tokens = (
+        "financial results", "result announced", "results announced",
+        "exchange filing", "nse filing", "bse filing",
+        "nseindia.com", "bseindia.com",
+    )
+    if any(token in source for token in official_tokens):
+        return {
+            "released": True,
+            "method": "SOURCE_EVIDENCE",
+            "confidence": "HIGH",
+            "reason": "Result release evidence is present in the source data.",
+            "resultDate": str(rd) if rd else None,
+        }
 
-    rd = result_date(row)
-    if rd is not None and rd < datetime.now(IST).date():
-        # A passed calendar date alone is not enough to claim a result is released.
-        return False
+    released_status_tokens = (
+        "post-results", "post results", "results declared", "result declared",
+        "results released", "result released", "qualified", "entry confirmed",
+    )
+    if any(token in status for token in released_status_tokens):
+        return {
+            "released": True,
+            "method": "STATUS",
+            "confidence": "HIGH",
+            "reason": f"Base status indicates a released result: {status}.",
+            "resultDate": str(rd) if rd else None,
+        }
 
-    return False
+    if explicit is True:
+        return {
+            "released": True,
+            "method": "EXPLICIT_FLAG",
+            "confidence": "HIGH",
+            "reason": "Base feed explicitly marks the result as released.",
+            "resultDate": str(rd) if rd else None,
+        }
+
+    if rd is not None:
+        age_days = (today - rd).days
+
+        if age_days < 0:
+            return {
+                "released": False,
+                "method": "FUTURE_RESULT_DATE",
+                "confidence": "HIGH",
+                "reason": f"Scheduled result date is still in the future: {rd}.",
+                "resultDate": str(rd),
+            }
+
+        if age_days == 0:
+            if now.hour >= RESULT_DAY_AUTO_RELEASE_HOUR_IST:
+                return {
+                    "released": True,
+                    "method": "RESULT_DATE_TODAY_EVENING",
+                    "confidence": "MEDIUM",
+                    "reason": "Scheduled result date is today and the evening release window has begun.",
+                    "resultDate": str(rd),
+                }
+            return {
+                "released": False,
+                "method": "RESULT_DATE_TODAY_WAIT",
+                "confidence": "MEDIUM",
+                "reason": "Scheduled result date is today; waiting for evening/source confirmation.",
+                "resultDate": str(rd),
+            }
+
+        if age_days <= RESULT_DATE_RELEASE_LOOKBACK_DAYS:
+            return {
+                "released": True,
+                "method": "RECENT_RESULT_DATE_PASSED",
+                "confidence": "MEDIUM",
+                "reason": f"Scheduled result date passed {age_days} day(s) ago; treating it as released pending source verification.",
+                "resultDate": str(rd),
+            }
+
+        return {
+            "released": False,
+            "method": "STALE_RESULT_DATE",
+            "confidence": "LOW",
+            "reason": f"Result date is {age_days} days old, so it is not reused as current-quarter release evidence.",
+            "resultDate": str(rd),
+        }
+
+    if explicit is False:
+        return {
+            "released": False,
+            "method": "EXPLICIT_NOT_RELEASED",
+            "confidence": "MEDIUM",
+            "reason": "Base feed marks the result as not released and no stronger evidence overrides it.",
+            "resultDate": None,
+        }
+
+    return {
+        "released": False,
+        "method": "NO_RELEASE_EVIDENCE",
+        "confidence": "LOW",
+        "reason": "No current result-release evidence is available.",
+        "resultDate": None,
+    }
+
+
+def results_released(row: dict) -> bool:
+    return release_detection(row)["released"] is True
 
 
 def history_for_symbol(symbol: str) -> pd.DataFrame:
@@ -350,9 +486,56 @@ def statement_series(df: pd.DataFrame, aliases: list[str]) -> list[float]:
     return [float(x) for x in s.tolist()]
 
 
+def latest_statement_date(df: pd.DataFrame):
+    if df is None or getattr(df, "empty", True):
+        return None
+    dates = []
+    for col in df.columns:
+        try:
+            dates.append(pd.Timestamp(col).date())
+        except Exception:
+            continue
+    return max(dates) if dates else None
+
+
+def fundamentals_current_for_result(row: dict, fs: dict) -> tuple[bool, str]:
+    """Guard against scoring an old Yahoo quarter as the newly released result."""
+    expected = expected_result_period_end(row)
+    latest = parse_date(fs.get("latestIncomeQuarterEnd"))
+    detection = release_detection(row)
+
+    row_metrics = any(
+        pick(row, key) not in (None, "")
+        for key in (
+            "revenueYoY", "patYoY", "patQoQ",
+            "earningsQualityPass", "cashFlowPass", "surprisePass",
+        )
+    )
+    if row_metrics and detection.get("confidence") == "HIGH":
+        return True, "Base feed contains result metrics with high-confidence release evidence."
+
+    if expected is None:
+        if latest is not None and detection.get("confidence") == "HIGH":
+            return True, f"Latest available reported quarter is {latest}."
+        return False, "Result is detected, but its reporting period cannot yet be matched to fresh fundamentals."
+
+    if latest is None:
+        return False, f"Expected reported period is about {expected}, but current-quarter Yahoo fundamentals are not available yet."
+
+    distance = abs((latest - expected).days)
+    if distance <= 10:
+        return True, f"Latest reported quarter ({latest}) matches the expected period ({expected})."
+
+    return False, (
+        f"Result is detected, but Yahoo still shows {latest} while the expected reported period is {expected}."
+    )
+
+
 def empty_fundamentals() -> dict:
     return {
         "source": "not requested before result",
+        "latestIncomeQuarterEnd": None,
+        "latestCashFlowQuarterEnd": None,
         "revenueYoYCalc": None,
         "patYoYCalc": None,
         "operatingMarginNow": None,
@@ -383,6 +566,8 @@ def fundamental_snapshot(symbol: str) -> dict:
 
         try:
             income = t.quarterly_income_stmt
+            income_date = latest_statement_date(income)
+            out["latestIncomeQuarterEnd"] = str(income_date) if income_date else None
             rev = statement_series(income, ["Total Revenue", "Operating Revenue"])
             pat = statement_series(income, ["Net Income", "Net Income Common Stockholders"])
             opi = statement_series(income, ["Operating Income", "EBIT"])
@@ -408,6 +593,8 @@ def fundamental_snapshot(symbol: str) -> dict:
 
         try:
             cf = t.quarterly_cash_flow
+            cashflow_date = latest_statement_date(cf)
+            out["latestCashFlowQuarterEnd"] = str(cashflow_date) if cashflow_date else None
             ocf = statement_series(
                 cf,
                 ["Operating Cash Flow", "Total Cash From Operating Activities", "Cash Flow From Continuing Operating Activities"],
@@ -444,11 +631,25 @@ def fundamental_snapshot(symbol: str) -> dict:
 
 
 def result_reality(row: dict, fs: dict) -> dict:
-    if not results_released(row):
+    detection = release_detection(row)
+    if not detection["released"]:
         return {
             "label": "AWAITING RESULT",
-            "reasons": ["Result has not been confirmed as released."],
+            "reasons": [detection.get("reason") or "Result has not been confirmed as released."],
             "risks": [],
+        }
+
+    current_ok, current_note = fundamentals_current_for_result(row, fs)
+    if not current_ok:
+        return {
+            "label": "UNVERIFIED",
+            "reasons": [
+                detection.get("reason") or "Result release detected.",
+                current_note,
+            ],
+            "risks": [
+                "Current-quarter fundamentals are not verified yet, so result quality is not scored from stale numbers."
+            ],
         }
 
     rev = num(pick(row, "revenueYoY"))
@@ -656,6 +857,7 @@ def price_response(row: dict, pc: dict) -> dict:
 
 
 def result_verification(row: dict, released: bool) -> dict:
+    detection = release_detection(row)
     if not released:
         return {
             "label": "AWAITING RESULT",
@@ -663,6 +865,9 @@ def result_verification(row: dict, released: bool) -> dict:
             "source": None,
             "sourceUrl": None,
             "verifiedAt": None,
+            "detectionMethod": detection.get("method"),
+            "detectionConfidence": detection.get("confidence"),
+            "detectionReason": detection.get("reason"),
         }
 
     source_url = pick(
@@ -698,6 +903,8 @@ def result_verification(row: dict, released: bool) -> dict:
         label = "SOURCE LINK PRESENT — VERIFY DOMAIN"
     elif source_text:
         label = "SOURCE TEXT PRESENT — NOT OFFICIAL VERIFIED"
+    elif detection.get("method") in {"RECENT_RESULT_DATE_PASSED", "RESULT_DATE_TODAY_EVENING"}:
+        label = "AUTO-DETECTED FROM RESULT DATE — SOURCE PENDING"
     else:
         label = "BASE CONFIRMED — SOURCE NOT ATTACHED"
 
@@ -707,6 +914,9 @@ def result_verification(row: dict, released: bool) -> dict:
         "source": str(source_text) if source_text else None,
         "sourceUrl": str(source_url) if source_url else None,
         "verifiedAt": verified_at,
+        "detectionMethod": detection.get("method"),
+        "detectionConfidence": detection.get("confidence"),
+        "detectionReason": detection.get("reason"),
     }
 
 
@@ -1168,6 +1378,7 @@ def build_item(row: dict, index: int) -> dict:
         "quarter": str(pick(row, "quarter", "earningsPeriod", "period") or "—"),
         "resultDate": pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"),
         "resultsReleased": released,
+        "releaseDetection": release_detection(row),
         "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
         "baseScore": num(pick(row, "score")),
         "baseScoreText": str(pick(row, "scoreText") or "—"),
@@ -1206,6 +1417,7 @@ def fallback_item(row: dict, index: int, exc: Exception) -> dict:
         "quarter": str(pick(row, "quarter", "earningsPeriod", "period") or "—"),
         "resultDate": pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"),
         "resultsReleased": results_released(row),
+        "releaseDetection": release_detection(row),
         "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
         "baseScore": num(pick(row, "score")),
         "baseScoreText": str(pick(row, "scoreText") or "—"),
@@ -1341,7 +1553,7 @@ def build_payload(
         "sourceScannerMode": payload.get("scannerMode"),
         "sourceQualificationVersion": payload.get("qualificationVersion"),
         "sourceStockCount": len(rows),
-        "intelligenceVersion": "pead-intelligence-v3-context-merged",
+        "intelligenceVersion": "pead-intelligence-v4-auto-result-detection",
         "safety": {
             "dataJsonReadOnly": True,
             "zeroPublishProtection": True,
@@ -1350,6 +1562,8 @@ def build_payload(
             "noThirdPageRequired": True,
         },
         "methodNotes": [
+            "Result release detection combines explicit flags, source/status evidence and recent scheduled result dates; generic In Review is not release proof.",
+            "Calendar-detected releases are blocked from scoring stale Yahoo quarters until the latest reported period matches the expected quarter.",
             "Result Reality uses reported growth, earnings quality, cash flow and best-effort quarterly fundamentals.",
             "Expectation Reality uses pre-result movement; RVOL is a post-result confirmation input.",
             "Expectation Gap separately estimates how much optimism is already embedded before results using 5D/10D/20D movement and 52-week-high proximity.",
