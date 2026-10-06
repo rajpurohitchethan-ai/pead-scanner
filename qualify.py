@@ -585,6 +585,21 @@ def _pct(new, old):
     return (new / old - 1.0) * 100.0
 
 
+def _growth_or_turnaround(new, old):
+    """Return (growth_pct, turnaround_flag).
+
+    A move from a loss/zero base to positive profit is a turnaround, not a
+    negative YoY growth percentage.
+    """
+    if new is None or old is None:
+        return None, False
+    if old <= 0 < new:
+        return None, True
+    if old == 0:
+        return None, False
+    return _pct(new, old), False
+
+
 def parse_nse_comparison(payload, row):
     records = []
     if isinstance(payload, dict):
@@ -640,6 +655,7 @@ def parse_nse_comparison(payload, row):
     prev_pat = _metric_from_record(previous, *pat_aliases)
     yoy_revenue = _metric_from_record(yoy_row, *revenue_aliases)
     yoy_pat = _metric_from_record(yoy_row, *pat_aliases)
+    pat_yoy_pct, pat_turnaround = _growth_or_turnaround(pat, yoy_pat)
 
     out = {
         "resultsReleased": True,
@@ -654,7 +670,9 @@ def parse_nse_comparison(payload, row):
         "revenueQoQ": round2(_pct(revenue, prev_revenue)),
         "patQoQ": round2(_pct(pat, prev_pat)),
         "revenueYoY": round2(_pct(revenue, yoy_revenue)),
-        "patYoY": round2(_pct(pat, yoy_pat)),
+        "patYoY": round2(pat_yoy_pct),
+        "patYoYTurnaround": pat_turnaround,
+        "patYoYStatus": "TURNAROUND" if pat_turnaround else None,
         "resultDataSource": "NSE official results comparison",
         "resultDataPeriod": current_date.isoformat(),
     }
@@ -1213,6 +1231,13 @@ def fetch_bse_result_enrichment(rows, already=None):
                     historical = fetch_screener_prior_year(code, expected)
                     prior_yoy_revenue_cr = historical.get("priorYearRevenueCr")
                     prior_yoy_pat_cr = historical.get("priorYearPatCr")
+                    effective_yoy_pat_cr = (
+                        yoy_pat_cr if yoy_pat_cr is not None else prior_yoy_pat_cr
+                    )
+                    pat_yoy_pct, pat_turnaround = _growth_or_turnaround(
+                        pat_cr,
+                        effective_yoy_pat_cr,
+                    )
 
                     base = {
                         "resultsReleased": True,
@@ -1235,12 +1260,9 @@ def fetch_bse_result_enrichment(rows, already=None):
                                 yoy_revenue_cr if yoy_revenue_cr is not None else prior_yoy_revenue_cr,
                             )
                         ),
-                        "patYoY": round2(
-                            _pct(
-                                pat_cr,
-                                yoy_pat_cr if yoy_pat_cr is not None else prior_yoy_pat_cr,
-                            )
-                        ),
+                        "patYoY": round2(pat_yoy_pct),
+                        "patYoYTurnaround": pat_turnaround,
+                        "patYoYStatus": "TURNAROUND" if pat_turnaround else None,
                         "resultDataSource": "BSE official results snapshot",
                         "resultDataPeriod": latest_label,
                         "resultsEvidence": f"BSE results snapshot updated for {latest_label}"
@@ -1338,6 +1360,7 @@ def fetch_yfinance_quarterly_enrichment(row):
                     yoy_col = None
             yoy_revenue = num(stmt.loc[rev_row, yoy_col]) if rev_row is not None and yoy_col is not None else None
             yoy_pat = num(stmt.loc[pat_row, yoy_col]) if pat_row is not None and yoy_col is not None else None
+            pat_yoy_pct, pat_turnaround = _growth_or_turnaround(pat, yoy_pat)
 
             return {
                 "resultsReleased": True,
@@ -1350,7 +1373,9 @@ def fetch_yfinance_quarterly_enrichment(row):
                 "revenueQoQ": round2(_pct(revenue, prev_revenue)),
                 "patQoQ": round2(_pct(pat, prev_pat)),
                 "revenueYoY": round2(_pct(revenue, yoy_revenue)),
-                "patYoY": round2(_pct(pat, yoy_pat)),
+                "patYoY": round2(pat_yoy_pct),
+                "patYoYTurnaround": pat_turnaround,
+                "patYoYStatus": "TURNAROUND" if pat_turnaround else None,
                 "resultDataSource": "yfinance quarterly statement fallback",
                 "resultDataPeriod": current_date.isoformat(),
                 "resultsEvidence": f"Quarterly statement for {current_date.isoformat()} verified via Yahoo Finance fallback.",
@@ -1400,6 +1425,7 @@ def build_result_enrichment(rows):
             for key in (
                 "latestRevenueLakh", "latestPatLakh", "reportedEps",
                 "revenueQoQ", "patQoQ", "revenueYoY", "patYoY",
+                "patYoYTurnaround", "patYoYStatus",
             ):
                 if existing.get(key) is None and data.get(key) is not None:
                     existing[key] = data[key]
@@ -1455,24 +1481,31 @@ def qualify(row, stock_history, sector_history):
     revenue_yoy = num(out.get("revenueYoY"))
     pat_yoy = num(out.get("patYoY"))
     pat_qoq = num(out.get("patQoQ"))
+    pat_turnaround = bool_value(out.get("patYoYTurnaround")) is True
 
-    if not results_released or revenue_yoy is None or pat_yoy is None:
+    if not results_released or revenue_yoy is None or (pat_yoy is None and not pat_turnaround):
         earnings_pass = None
     else:
         earnings_pass = (
             revenue_yoy >= REV_YOY_MIN
-            and pat_yoy >= PAT_YOY_MIN
+            and (pat_turnaround or (pat_yoy is not None and pat_yoy >= PAT_YOY_MIN))
             and (pat_qoq is None or pat_qoq >= PAT_QOQ_FLOOR)
         )
 
     out["earningsAccelerationPass"] = earnings_pass
     out["revenuePatPass"] = earnings_pass
-    out["earningsEvidence"] = (
-        f"Revenue YoY {revenue_yoy:.1f}%, PAT YoY {pat_yoy:.1f}%"
-        + (f", PAT QoQ {pat_qoq:.1f}%" if pat_qoq is not None else "")
-        if revenue_yoy is not None and pat_yoy is not None
-        else "Growth data unavailable"
-    )
+    if revenue_yoy is not None and pat_turnaround:
+        out["earningsEvidence"] = (
+            f"Revenue YoY {revenue_yoy:.1f}%, PAT turned profitable YoY"
+            + (f", PAT QoQ {pat_qoq:.1f}%" if pat_qoq is not None else "")
+        )
+    elif revenue_yoy is not None and pat_yoy is not None:
+        out["earningsEvidence"] = (
+            f"Revenue YoY {revenue_yoy:.1f}%, PAT YoY {pat_yoy:.1f}%"
+            + (f", PAT QoQ {pat_qoq:.1f}%" if pat_qoq is not None else "")
+        )
+    else:
+        out["earningsEvidence"] = "Growth data unavailable"
 
     latest_revenue = num(out.get("latestRevenueLakh"))
     latest_pat = num(out.get("latestPatLakh"))
