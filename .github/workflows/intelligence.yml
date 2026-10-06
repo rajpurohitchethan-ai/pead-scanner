@@ -123,28 +123,40 @@ jobs:
       # 6. BUILD BRAND-NEW INTELLIGENCE
       # -------------------------------------------------
 
-      - name: Build fresh intelligence candidate
+            - name: Build fresh intelligence candidate
         run: |
+          echo "Removing any old intelligence output from runner..."
+
+          rm -f intelligence.json
           rm -f /tmp/intelligence.new.json
 
-          python pead_intelligence.py \
-            --data data.json \
-            --output /tmp/intelligence.new.json
+          echo "Running fresh intelligence engine..."
 
-          if [ ! -f /tmp/intelligence.new.json ]; then
-            echo "ERROR: Fresh intelligence candidate was not created."
+          python pead_intelligence.py
+
+          if [ ! -f intelligence.json ]; then
+            echo "ERROR: pead_intelligence.py did not create intelligence.json"
             exit 1
           fi
+
+          if [ ! -s intelligence.json ]; then
+            echo "ERROR: Fresh intelligence.json is empty"
+            exit 1
+          fi
+
+          echo "Fresh intelligence.json created."
+
+          cp intelligence.json /tmp/intelligence.new.json
 
           if [ ! -s /tmp/intelligence.new.json ]; then
-            echo "ERROR: Fresh intelligence candidate is empty."
+            echo "ERROR: Could not create protected candidate file"
             exit 1
           fi
 
-          echo "Fresh intelligence candidate created successfully."
+          echo "Protected candidate created successfully."
 
+          ls -lh intelligence.json
           ls -lh /tmp/intelligence.new.json
-
 
       # -------------------------------------------------
       # 7. STRICT ZERO + STALE PROTECTION
