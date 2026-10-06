@@ -151,12 +151,24 @@ def history_for_symbol(symbol: str) -> pd.DataFrame:
 
 
 def price_context(row: dict, h: pd.DataFrame) -> dict:
+    """
+    Price context with intraday-aware RVOL.
+
+    During NSE cash-market hours (09:15-15:30 IST), today's cumulative volume
+    is compared with the fraction of normal daily volume expected by that time.
+    This is explicitly labelled as an estimate. After market close, normal
+    full-day RVOL is used.
+    """
     out = {
         "pre5dPct": None,
         "pre10dPct": None,
         "pre20dPct": num(row.get("preResultRunupPct")),
         "resultDayPct": num(row.get("resultDayReturnPct")),
         "relativeVolume": num(pick(row, "relativeVolume", "rvol")),
+        "rawFullDayRvol": None,
+        "rvolMode": "UNVERIFIED",
+        "rvolIsPartial": False,
+        "rvolAsOf": None,
         "distanceFrom52wHighPct": None,
         "lastClose": num(pick(row, "price", "lastPrice")),
         "historyAvailable": False,
@@ -191,7 +203,11 @@ def price_context(row: dict, h: pd.DataFrame) -> dict:
                 pass
 
     pre = h.iloc[:end]
-    pre_close = pd.to_numeric(pre["Close"], errors="coerce").dropna() if "Close" in pre else pd.Series(dtype=float)
+    pre_close = (
+        pd.to_numeric(pre["Close"], errors="coerce").dropna()
+        if "Close" in pre
+        else pd.Series(dtype=float)
+    )
 
     def pre_return(days: int):
         if len(pre_close) <= days:
@@ -200,26 +216,73 @@ def price_context(row: dict, h: pd.DataFrame) -> dict:
 
     out["pre5dPct"] = pre_return(5)
     out["pre10dPct"] = pre_return(10)
+
     if out["pre20dPct"] is None:
         out["pre20dPct"] = pre_return(20)
 
     if rd is not None and out["resultDayPct"] is None and end < len(h) and end > 0:
-        out["resultDayPct"] = pct_change(num(h["Close"].iloc[end]), num(h["Close"].iloc[end - 1]))
+        out["resultDayPct"] = pct_change(
+            num(h["Close"].iloc[end]),
+            num(h["Close"].iloc[end - 1]),
+        )
 
-    if out["relativeVolume"] is None and "Volume" in h and len(h) >= 21:
+    if "Volume" in h and len(h) >= 21:
         vol = pd.to_numeric(h["Volume"], errors="coerce")
-        avg = num(vol.iloc[-21:-1].mean())
-        cur = num(vol.iloc[-1])
-        if avg not in (None, 0) and cur is not None:
-            out["relativeVolume"] = cur / avg
+        avg_full_day = num(vol.iloc[-21:-1].mean())
+        current_volume = num(vol.iloc[-1])
+
+        if avg_full_day not in (None, 0) and current_volume is not None:
+            raw_rvol = current_volume / avg_full_day
+            out["rawFullDayRvol"] = raw_rvol
+
+            # Prefer a valid base-provided RVOL only if it is already present.
+            # Otherwise calculate an intraday-aware value from yfinance volume.
+            if out["relativeVolume"] is None:
+                now = datetime.now(IST)
+
+                try:
+                    last_bar_date = pd.Timestamp(h.index[-1]).date()
+                except Exception:
+                    last_bar_date = None
+
+                market_open_minutes = 9 * 60 + 15
+                market_close_minutes = 15 * 60 + 30
+                now_minutes = now.hour * 60 + now.minute
+
+                is_today_bar = last_bar_date == now.date()
+                is_weekday = now.weekday() < 5
+                in_market_hours = (
+                    is_today_bar
+                    and is_weekday
+                    and market_open_minutes <= now_minutes < market_close_minutes
+                )
+
+                if in_market_hours:
+                    session_minutes = market_close_minutes - market_open_minutes
+                    elapsed_minutes = max(1, now_minutes - market_open_minutes)
+                    elapsed_fraction = max(0.05, min(1.0, elapsed_minutes / session_minutes))
+                    expected_so_far = avg_full_day * elapsed_fraction
+
+                    if expected_so_far > 0:
+                        out["relativeVolume"] = current_volume / expected_so_far
+                        out["rvolMode"] = "INTRADAY_TIME_ADJUSTED_ESTIMATE"
+                        out["rvolIsPartial"] = True
+                        out["rvolAsOf"] = now.isoformat()
+                else:
+                    out["relativeVolume"] = raw_rvol
+                    out["rvolMode"] = "FULL_DAY"
+                    out["rvolIsPartial"] = False
+
+            else:
+                out["rvolMode"] = "SOURCE_PROVIDED"
 
     return out
-
 
 def expectation_reality(row: dict, pc: dict) -> dict:
     run20 = num(pc.get("pre20dPct"))
     result_move = num(pc.get("resultDayPct"))
     rvol = num(pc.get("relativeVolume"))
+    released = results_released(row)
     reasons, risks = [], []
 
     if run20 is None:
@@ -227,7 +290,10 @@ def expectation_reality(row: dict, pc: dict) -> dict:
         reasons.append("20-day pre-result move could not be verified.")
     elif run20 > PRICED_IN_RUNUP_PCT:
         label = "PRICED IN"
-        risks.append(f"20-day pre-result run-up was {run20:.1f}%, above the {PRICED_IN_RUNUP_PCT:.0f}% threshold.")
+        risks.append(
+            f"20-day pre-result run-up was {run20:.1f}%, "
+            f"above the {PRICED_IN_RUNUP_PCT:.0f}% threshold."
+        )
     elif run20 > 5:
         label = "PARTLY PRICED"
         reasons.append(f"Pre-result move was moderate at {run20:.1f}%.")
@@ -235,20 +301,27 @@ def expectation_reality(row: dict, pc: dict) -> dict:
         label = "LOW EXPECTATIONS"
         reasons.append(f"Pre-result move was only {run20:.1f}%.")
 
-    if result_move is not None:
+    if released and result_move is not None:
         if result_move >= 3:
             reasons.append(f"Result-day move was +{result_move:.1f}%.")
         elif result_move <= -3:
             risks.append(f"Result-day move was {result_move:.1f}%.")
 
-    if rvol is not None:
+    # Do not use today's ordinary trading RVOL to strengthen/weaken an upcoming-result setup.
+    # RVOL becomes a PEAD confirmation input only after the result is released.
+    if released and rvol is not None:
+        mode_note = (
+            " (intraday time-adjusted estimate)"
+            if pc.get("rvolIsPartial")
+            else ""
+        )
+
         if rvol >= RVOL_CONFIRM:
-            reasons.append(f"Relative volume was {rvol:.2f}x.")
-        elif results_released(row):
-            risks.append(f"Relative volume was only {rvol:.2f}x.")
+            reasons.append(f"Post-result relative volume was {rvol:.2f}x{mode_note}.")
+        else:
+            risks.append(f"Post-result relative volume was only {rvol:.2f}x{mode_note}.")
 
     return {"label": label, "reasons": reasons, "risks": risks}
-
 
 def row_from_statement(df: pd.DataFrame, aliases: list[str]):
     if df is None or getattr(df, "empty", True):
@@ -492,10 +565,17 @@ def valuation_reality(row: dict, fs: dict) -> dict:
     evidence_count = sum(x is not None for x in (pe, fpe, peg, pb, eve, roe, fcf_yield))
     reasons, risks = [], []
 
-    if evidence_count < 2:
+    confidence = "HIGH" if evidence_count >= 5 else ("MEDIUM" if evidence_count >= 3 else "LIMITED")
+
+    if evidence_count < 3:
         return {
             "label": "UNVERIFIED",
-            "reasons": ["Insufficient valuation data; no valuation conclusion forced."],
+            "confidence": confidence,
+            "evidenceCount": evidence_count,
+            "reasons": [
+                f"Only {evidence_count} valuation input(s) available; "
+                "at least 3 are required before assigning a valuation label."
+            ],
             "risks": [],
             "metrics": metrics,
         }
@@ -516,296 +596,3 @@ def valuation_reality(row: dict, fs: dict) -> dict:
     if pe is not None and fpe is not None:
         if fpe < pe:
             score += 1
-            reasons.append(f"Forward P/E {fpe:.1f}x is below trailing P/E {pe:.1f}x.")
-        elif fpe > pe * 1.15:
-            risks.append(f"Forward P/E {fpe:.1f}x is above trailing P/E {pe:.1f}x.")
-
-    if roe is not None:
-        if roe >= 18:
-            score += 1
-            reasons.append(f"ROE is {roe:.1f}%.")
-        elif roe < 10:
-            risks.append(f"ROE is only {roe:.1f}%.")
-
-    if fcf_yield is not None:
-        if fcf_yield >= 3:
-            score += 1
-            reasons.append(f"FCF yield is {fcf_yield:.1f}%.")
-        elif fcf_yield < 0:
-            risks.append("Free cash flow is negative.")
-
-    if de is not None and de > 200:
-        score -= 1
-        risks.append(f"Debt/equity is elevated at {de:.0f}.")
-
-    if pe is not None and growth is not None and pe > 70 and growth < 20:
-        score -= 2
-        risks.append(f"P/E is {pe:.1f}x while PAT growth is only {growth:.1f}%.")
-
-    label = "ATTRACTIVE" if score >= 4 else ("FAIR" if score >= 2 else ("EXPENSIVE BUT JUSTIFIED" if score >= 0 else "EXCESSIVE"))
-    return {"label": label, "reasons": reasons, "risks": risks, "metrics": metrics}
-
-
-def price_response(row: dict, pc: dict) -> dict:
-    if not results_released(row):
-        return {"label": "AWAITING RESULT", "points": 0}
-
-    move = num(pc.get("resultDayPct"))
-    rvol = num(pc.get("relativeVolume"))
-
-    if move is not None and rvol is not None:
-        if move >= 2 and rvol >= RVOL_CONFIRM:
-            return {"label": "CONFIRMED", "points": 5}
-        if move <= -2:
-            return {"label": "NEGATIVE", "points": 0}
-        return {"label": "MIXED", "points": 2}
-
-    return {"label": "UNVERIFIED", "points": 1}
-
-
-def base_points(row: dict) -> int:
-    score = num(pick(row, "score"))
-    if score is None and isinstance(row.get("checks"), list):
-        score = sum(
-            bval(c.get("value")) is True
-            for c in row["checks"]
-            if isinstance(c, dict)
-        )
-    return 0 if score is None else max(0, min(40, round(score / 8 * 40)))
-
-
-def verdict(row: dict, rr: dict, er: dict, vr: dict, conviction: int) -> str:
-    if not results_released(row):
-        return "AWAIT RESULT — EXPECTATIONS ALREADY ELEVATED" if er["label"] == "PRICED IN" else "AWAIT RESULT — WATCHLIST"
-
-    if er["label"] == "PRICED IN":
-        return "GOOD RESULT MAY BE PRICED IN — WAIT"
-
-    if rr["label"] == "LOW QUALITY":
-        return "RESULT QUALITY WEAK — AVOID / REVIEW"
-
-    if conviction >= 75 and rr["label"] == "GENUINE" and er["label"] == "LOW EXPECTATIONS":
-        return "HIGH-CONVICTION PEAD CANDIDATE"
-
-    if conviction >= 60:
-        return "PEAD CANDIDATE — REVIEW ENTRY"
-
-    return "IN REVIEW — NOT ENOUGH EDGE YET"
-
-
-def empty_fundamentals():
-    return {
-        "source": "not requested before result",
-        "revenueYoYCalc": None,
-        "patYoYCalc": None,
-        "operatingMarginNow": None,
-        "operatingMarginYoY": None,
-        "operatingCashFlow": None,
-        "cashFlowToNetIncome": None,
-        "otherIncomeToPretaxPct": None,
-        "trailingPE": None,
-        "forwardPE": None,
-        "pegRatio": None,
-        "priceToBook": None,
-        "enterpriseToEbitda": None,
-        "returnOnEquityPct": None,
-        "debtToEquity": None,
-        "freeCashFlowYieldPct": None,
-        "errors": [],
-    }
-
-
-def build_item(row: dict, index: int) -> dict:
-    symbol = clean_symbol(row)
-    released = results_released(row)
-
-    h = history_for_symbol(symbol)
-    pc = price_context(row, h)
-    er = expectation_reality(row, pc)
-
-    status = str(pick(row, "bucket", "peadStatus", "stage", "status") or "")
-    fs = fundamental_snapshot(symbol) if (released or status.lower() in {"caution", "qualified", "post-results"}) else empty_fundamentals()
-
-    rr = result_reality(row, fs)
-    vr = valuation_reality(row, fs)
-    pr = price_response(row, pc)
-
-    conviction = min(
-        100,
-        base_points(row)
-        + RESULT_POINTS.get(rr["label"], 0)
-        + EXPECTATION_POINTS.get(er["label"], 0)
-        + VALUATION_POINTS.get(vr["label"], 0)
-        + (5 if bval(pick(row, "sectorTailwind", "sectorPass")) is True else 0)
-        + pr["points"],
-    )
-
-    commentary = pick(
-        row,
-        "managementCommentary",
-        "guidance",
-        "commentary",
-        "resultCommentary",
-        "note",
-        "evidence",
-    )
-
-    return {
-        "id": symbol or f"row-{index}",
-        "symbol": symbol,
-        "name": str(pick(row, "name", "company", "companyName") or symbol),
-        "sector": str(pick(row, "sector", "industry") or "—"),
-        "quarter": str(pick(row, "quarter", "earningsPeriod", "period") or "—"),
-        "resultDate": pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"),
-        "resultsReleased": released,
-        "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
-        "baseScore": num(pick(row, "score")),
-        "baseScoreText": str(pick(row, "scoreText") or "—"),
-        "marketCapCr": num(pick(row, "marketCapCr", "mcapCr")),
-        "price": num(pick(row, "price", "lastPrice")),
-        "resultReality": rr,
-        "expectationReality": er,
-        "valuationReality": vr,
-        "priceResponse": pr,
-        "priceContext": pc,
-        "fundamentalSnapshot": fs,
-        "sectorTailwind": bval(pick(row, "sectorTailwind", "sectorPass")),
-        "entry": pick(row, "entry", "entryPrice"),
-        "sl": pick(row, "sl", "stopLoss"),
-        "tsl": pick(row, "tsl", "trailingStopLoss"),
-        "candidateStatus": pick(row, "candidateStatus"),
-        "allocationPct": num(pick(row, "allocationPct")),
-        "managementCommentary": commentary,
-        "commentaryVerified": bool(commentary),
-        "convictionScore": conviction,
-        "verdict": verdict(row, rr, er, vr, conviction),
-        "reasons": (rr["reasons"][:5] + er["reasons"][:3] + vr["reasons"][:3]),
-        "risks": (rr["risks"][:4] + er["risks"][:3] + vr["risks"][:3]),
-    }
-
-
-def build_payload(data_path: Path) -> dict:
-    payload = json.loads(data_path.read_text(encoding="utf-8"))
-    rows = extract_rows(payload)
-
-    if not rows:
-        raise RuntimeError("Base data.json contains 0 stocks. Intelligence output will NOT be published.")
-
-    items = []
-    for i, row in enumerate(rows, 1):
-        symbol = clean_symbol(row) or f"row-{i}"
-        print(f"[{i}/{len(rows)}] {symbol}")
-
-        try:
-            item = build_item(row, i)
-        except Exception as exc:
-            # Preserve the base row instead of dropping it.
-            item = {
-                "id": symbol,
-                "symbol": clean_symbol(row),
-                "name": str(pick(row, "name", "company", "companyName") or symbol),
-                "sector": str(pick(row, "sector", "industry") or "—"),
-                "quarter": str(pick(row, "quarter", "earningsPeriod", "period") or "—"),
-                "resultDate": pick(row, "resultDate", "result_date", "resultsDate"),
-                "resultsReleased": results_released(row),
-                "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
-                "baseScore": num(pick(row, "score")),
-                "baseScoreText": str(pick(row, "scoreText") or "—"),
-                "marketCapCr": num(pick(row, "marketCapCr", "mcapCr")),
-                "price": num(pick(row, "price", "lastPrice")),
-                "resultReality": {"label": "UNVERIFIED", "reasons": [], "risks": []},
-                "expectationReality": {"label": "UNVERIFIED", "reasons": [], "risks": []},
-                "valuationReality": {"label": "UNVERIFIED", "reasons": [], "risks": [], "metrics": {}},
-                "priceResponse": {"label": "UNVERIFIED", "points": 0},
-                "priceContext": {},
-                "fundamentalSnapshot": {"errors": [f"{type(exc).__name__}: {exc}"]},
-                "sectorTailwind": bval(pick(row, "sectorTailwind", "sectorPass")),
-                "entry": pick(row, "entry", "entryPrice"),
-                "sl": pick(row, "sl", "stopLoss"),
-                "tsl": pick(row, "tsl", "trailingStopLoss"),
-                "candidateStatus": pick(row, "candidateStatus"),
-                "allocationPct": num(pick(row, "allocationPct")),
-                "managementCommentary": None,
-                "commentaryVerified": False,
-                "convictionScore": base_points(row),
-                "verdict": "INTELLIGENCE ERROR — BASE ROW PRESERVED",
-                "reasons": [],
-                "risks": [f"Intelligence calculation failed: {type(exc).__name__}"],
-            }
-
-        items.append(item)
-        if item.get("resultsReleased"):
-            time.sleep(0.15)
-
-    if not items:
-        raise RuntimeError("Intelligence produced 0 rows. Refusing to publish.")
-
-    counts = {
-        "total": len(items),
-        "resultsDeclared": sum(x.get("resultsReleased") is True for x in items),
-        "genuineResults": sum(x.get("resultReality", {}).get("label") == "GENUINE" for x in items),
-        "lowExpectations": sum(x.get("expectationReality", {}).get("label") == "LOW EXPECTATIONS" for x in items),
-        "pricedIn": sum(x.get("expectationReality", {}).get("label") == "PRICED IN" for x in items),
-        "attractiveValuation": sum(x.get("valuationReality", {}).get("label") == "ATTRACTIVE" for x in items),
-        "highConviction": sum(x.get("verdict") == "HIGH-CONVICTION PEAD CANDIDATE" for x in items),
-    }
-
-    return {
-        "generatedAt": datetime.now(IST).isoformat(),
-        "sourceDataGeneratedAt": pick(payload, "generatedAt", "last_scan", "lastScanAt"),
-        "sourceScannerMode": payload.get("scannerMode"),
-        "sourceQualificationVersion": payload.get("qualificationVersion"),
-        "sourceStockCount": len(rows),
-        "intelligenceVersion": "pead-intelligence-v1",
-        "safety": {
-            "dataJsonReadOnly": True,
-            "zeroPublishProtection": True,
-            "minimumPublishRatio": 0.80,
-        },
-        "methodNotes": [
-            "Result Reality uses reported growth, quality/cash-flow gates and best-effort quarterly fundamentals.",
-            "Expectation Reality is driven primarily by pre-result price movement, plus result-day move and RVOL.",
-            "Valuation Reality is growth-adjusted and best-effort; missing valuation inputs remain UNVERIFIED.",
-            "Management commentary is not invented. It is shown only when already present in the source row.",
-            "This add-on does not modify the base PEAD radar or data.json.",
-        ],
-        "counts": counts,
-        "items": items,
-    }
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data", default="data.json")
-    parser.add_argument("--output", default="intelligence.json")
-    args = parser.parse_args()
-
-    data_path = Path(args.data)
-    output_path = Path(args.output)
-
-    if not data_path.exists():
-        raise RuntimeError(f"{data_path} not found")
-
-    payload = build_payload(data_path)
-
-    source_count = int(payload["sourceStockCount"])
-    output_count = len(payload["items"])
-    minimum = max(1, math.floor(source_count * 0.80))
-
-    if output_count < minimum:
-        raise RuntimeError(
-            f"Safety stop: intelligence has {output_count} rows from {source_count} base rows; "
-            f"minimum allowed is {minimum}. Existing intelligence.json must be kept."
-        )
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = output_path.with_suffix(output_path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    tmp.replace(output_path)
-
-    print("PEAD INTELLIGENCE COMPLETE")
-    print(json.dumps(payload["counts"], indent=2))
-
-
-if __name__ == "__main__":
-    main()
