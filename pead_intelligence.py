@@ -2,11 +2,14 @@
 """
 PEAD Intelligence Lab — read-only add-on.
 
+Reads:  data.json
+Writes: the path passed with --output (normally /tmp/intelligence.new.json)
+
 Safety:
-- Reads data.json.
-- NEVER writes data.json.
-- Writes only the requested intelligence output.
-- Missing evidence stays UNVERIFIED; it is never invented.
+- Never modifies data.json.
+- Preserves every base row even if enrichment fails for one symbol.
+- Refuses to write 0 rows or a row count different from the base universe.
+- Missing evidence stays UNVERIFIED; nothing is invented.
 """
 
 from __future__ import annotations
@@ -27,9 +30,27 @@ IST = ZoneInfo("Asia/Kolkata")
 PRICED_IN_RUNUP_PCT = 15.0
 RVOL_CONFIRM = 1.20
 
-RESULT_POINTS = {"GENUINE": 25, "MIXED": 14, "LOW QUALITY": 4, "AWAITING RESULT": 0, "UNVERIFIED": 0}
-EXPECTATION_POINTS = {"LOW EXPECTATIONS": 15, "PARTLY PRICED": 8, "PRICED IN": 0, "AWAITING PRICE HISTORY": 4, "UNVERIFIED": 0}
-VALUATION_POINTS = {"ATTRACTIVE": 10, "FAIR": 7, "EXPENSIVE BUT JUSTIFIED": 4, "EXCESSIVE": 0, "UNVERIFIED": 3}
+RESULT_POINTS = {
+    "GENUINE": 25,
+    "MIXED": 14,
+    "LOW QUALITY": 4,
+    "AWAITING RESULT": 0,
+    "UNVERIFIED": 0,
+}
+EXPECTATION_POINTS = {
+    "LOW EXPECTATIONS": 15,
+    "PARTLY PRICED": 8,
+    "PRICED IN": 0,
+    "AWAITING PRICE HISTORY": 4,
+    "UNVERIFIED": 0,
+}
+VALUATION_POINTS = {
+    "ATTRACTIVE": 10,
+    "FAIR": 7,
+    "EXPENSIVE BUT JUSTIFIED": 4,
+    "EXCESSIVE": 0,
+    "UNVERIFIED": 3,
+}
 
 
 def num(v: Any) -> float | None:
@@ -80,10 +101,15 @@ def parse_date(v: Any):
 
 
 def clean_symbol(row: dict) -> str:
-    return str(pick(row, "symbol", "sym", "ticker", "code") or "").upper().replace(".NS", "").strip()
+    return (
+        str(pick(row, "symbol", "sym", "ticker", "code") or "")
+        .upper()
+        .replace(".NS", "")
+        .strip()
+    )
 
 
-def extract_rows(payload: dict) -> list[dict]:
+def extract_rows(payload: Any) -> list[dict]:
     if isinstance(payload, list):
         return payload
     if not isinstance(payload, dict):
@@ -92,12 +118,17 @@ def extract_rows(payload: dict) -> list[dict]:
         val = payload.get(key)
         if isinstance(val, list):
             return val
-    if isinstance(payload.get("data"), dict):
+    nested = payload.get("data")
+    if isinstance(nested, dict):
         for key in ("stocks", "companies"):
-            val = payload["data"].get(key)
+            val = nested.get(key)
             if isinstance(val, list):
                 return val
     return []
+
+
+def result_date(row: dict):
+    return parse_date(pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"))
 
 
 def results_released(row: dict) -> bool:
@@ -105,20 +136,21 @@ def results_released(row: dict) -> bool:
     if explicit is not None:
         return explicit
 
-    source = str(pick(row, "discoverySource", "source") or "").lower()
+    source = str(pick(row, "discoverySource", "resultSource", "source") or "").lower()
     status = str(pick(row, "bucket", "peadStatus", "stage", "status") or "").lower()
 
-    if "financial results" in source:
+    if "financial results" in source or "exchange filing" in source:
         return True
 
-    return any(
-        token in status
-        for token in ("post-results", "post results", "results declared", "in review", "qualified")
-    )
+    if any(x in status for x in ("post-results", "post results", "results declared", "in review", "qualified")):
+        return True
 
+    rd = result_date(row)
+    if rd is not None and rd < datetime.now(IST).date():
+        # A passed calendar date alone is not enough to claim a result is released.
+        return False
 
-def result_date(row: dict):
-    return parse_date(pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"))
+    return False
 
 
 def history_for_symbol(symbol: str) -> pd.DataFrame:
@@ -136,13 +168,11 @@ def history_for_symbol(symbol: str) -> pd.DataFrame:
         )
         if h is None or h.empty:
             return pd.DataFrame()
-
         if isinstance(h.columns, pd.MultiIndex):
             try:
                 h = h.xs(f"{symbol}.NS", axis=1, level=1)
             except Exception:
                 h.columns = h.columns.get_level_values(0)
-
         if "Close" in h:
             h = h[h["Close"].notna()]
         return h.dropna(how="all")
@@ -151,14 +181,6 @@ def history_for_symbol(symbol: str) -> pd.DataFrame:
 
 
 def price_context(row: dict, h: pd.DataFrame) -> dict:
-    """
-    Price context with intraday-aware RVOL.
-
-    During NSE cash-market hours (09:15-15:30 IST), today's cumulative volume
-    is compared with the fraction of normal daily volume expected by that time.
-    This is explicitly labelled as an estimate. After market close, normal
-    full-day RVOL is used.
-    """
     out = {
         "pre5dPct": None,
         "pre10dPct": None,
@@ -170,7 +192,7 @@ def price_context(row: dict, h: pd.DataFrame) -> dict:
         "rvolIsPartial": False,
         "rvolAsOf": None,
         "distanceFrom52wHighPct": None,
-        "lastClose": num(pick(row, "price", "lastPrice")),
+        "lastClose": num(pick(row, "price", "lastPrice", "ltp")),
         "historyAvailable": False,
     }
 
@@ -188,11 +210,10 @@ def price_context(row: dict, h: pd.DataFrame) -> dict:
     if not high.empty:
         high52 = float(high.tail(252).max())
         if high52 > 0:
-            out["distanceFrom52wHighPct"] = (out["lastClose"] / high52 - 1) * 100
+            out["distanceFrom52wHighPct"] = (out["lastClose"] / high52 - 1.0) * 100.0
 
     rd = result_date(row)
     end = len(h)
-
     if rd is not None:
         for i, ts in enumerate(h.index):
             try:
@@ -216,11 +237,10 @@ def price_context(row: dict, h: pd.DataFrame) -> dict:
 
     out["pre5dPct"] = pre_return(5)
     out["pre10dPct"] = pre_return(10)
-
     if out["pre20dPct"] is None:
         out["pre20dPct"] = pre_return(20)
 
-    if rd is not None and out["resultDayPct"] is None and end < len(h) and end > 0:
+    if rd is not None and out["resultDayPct"] is None and 0 < end < len(h):
         out["resultDayPct"] = pct_change(
             num(h["Close"].iloc[end]),
             num(h["Close"].iloc[end - 1]),
@@ -235,34 +255,30 @@ def price_context(row: dict, h: pd.DataFrame) -> dict:
             raw_rvol = current_volume / avg_full_day
             out["rawFullDayRvol"] = raw_rvol
 
-            # Prefer a valid base-provided RVOL only if it is already present.
-            # Otherwise calculate an intraday-aware value from yfinance volume.
-            if out["relativeVolume"] is None:
+            if out["relativeVolume"] is not None:
+                out["rvolMode"] = "SOURCE_PROVIDED"
+            else:
                 now = datetime.now(IST)
-
                 try:
                     last_bar_date = pd.Timestamp(h.index[-1]).date()
                 except Exception:
                     last_bar_date = None
 
-                market_open_minutes = 9 * 60 + 15
-                market_close_minutes = 15 * 60 + 30
-                now_minutes = now.hour * 60 + now.minute
-
-                is_today_bar = last_bar_date == now.date()
-                is_weekday = now.weekday() < 5
-                in_market_hours = (
-                    is_today_bar
-                    and is_weekday
-                    and market_open_minutes <= now_minutes < market_close_minutes
+                open_min = 9 * 60 + 15
+                close_min = 15 * 60 + 30
+                now_min = now.hour * 60 + now.minute
+                intraday = (
+                    last_bar_date == now.date()
+                    and now.weekday() < 5
+                    and open_min <= now_min < close_min
                 )
 
-                if in_market_hours:
-                    session_minutes = market_close_minutes - market_open_minutes
-                    elapsed_minutes = max(1, now_minutes - market_open_minutes)
-                    elapsed_fraction = max(0.05, min(1.0, elapsed_minutes / session_minutes))
+                if intraday:
+                    elapsed_fraction = max(
+                        0.05,
+                        min(1.0, (now_min - open_min) / (close_min - open_min)),
+                    )
                     expected_so_far = avg_full_day * elapsed_fraction
-
                     if expected_so_far > 0:
                         out["relativeVolume"] = current_volume / expected_so_far
                         out["rvolMode"] = "INTRADAY_TIME_ADJUSTED_ESTIMATE"
@@ -271,16 +287,13 @@ def price_context(row: dict, h: pd.DataFrame) -> dict:
                 else:
                     out["relativeVolume"] = raw_rvol
                     out["rvolMode"] = "FULL_DAY"
-                    out["rvolIsPartial"] = False
-
-            else:
-                out["rvolMode"] = "SOURCE_PROVIDED"
 
     return out
 
+
 def expectation_reality(row: dict, pc: dict) -> dict:
     run20 = num(pc.get("pre20dPct"))
-    result_move = num(pc.get("resultDayPct"))
+    move = num(pc.get("resultDayPct"))
     rvol = num(pc.get("relativeVolume"))
     released = results_released(row)
     reasons, risks = [], []
@@ -291,8 +304,7 @@ def expectation_reality(row: dict, pc: dict) -> dict:
     elif run20 > PRICED_IN_RUNUP_PCT:
         label = "PRICED IN"
         risks.append(
-            f"20-day pre-result run-up was {run20:.1f}%, "
-            f"above the {PRICED_IN_RUNUP_PCT:.0f}% threshold."
+            f"20-day pre-result run-up was {run20:.1f}%, above the {PRICED_IN_RUNUP_PCT:.0f}% threshold."
         )
     elif run20 > 5:
         label = "PARTLY PRICED"
@@ -301,44 +313,36 @@ def expectation_reality(row: dict, pc: dict) -> dict:
         label = "LOW EXPECTATIONS"
         reasons.append(f"Pre-result move was only {run20:.1f}%.")
 
-    if released and result_move is not None:
-        if result_move >= 3:
-            reasons.append(f"Result-day move was +{result_move:.1f}%.")
-        elif result_move <= -3:
-            risks.append(f"Result-day move was {result_move:.1f}%.")
+    if released and move is not None:
+        if move >= 3:
+            reasons.append(f"Result-day move was +{move:.1f}%.")
+        elif move <= -3:
+            risks.append(f"Result-day move was {move:.1f}%.")
 
-    # Do not use today's ordinary trading RVOL to strengthen/weaken an upcoming-result setup.
-    # RVOL becomes a PEAD confirmation input only after the result is released.
     if released and rvol is not None:
-        mode_note = (
-            " (intraday time-adjusted estimate)"
-            if pc.get("rvolIsPartial")
-            else ""
-        )
-
+        suffix = " (intraday time-adjusted estimate)" if pc.get("rvolIsPartial") else ""
         if rvol >= RVOL_CONFIRM:
-            reasons.append(f"Post-result relative volume was {rvol:.2f}x{mode_note}.")
+            reasons.append(f"Post-result relative volume was {rvol:.2f}x{suffix}.")
         else:
-            risks.append(f"Post-result relative volume was only {rvol:.2f}x{mode_note}.")
+            risks.append(f"Post-result relative volume was only {rvol:.2f}x{suffix}.")
 
     return {"label": label, "reasons": reasons, "risks": risks}
+
 
 def row_from_statement(df: pd.DataFrame, aliases: list[str]):
     if df is None or getattr(df, "empty", True):
         return None
     norm = {str(i).strip().lower(): i for i in df.index}
-
     for alias in aliases:
         if alias.lower() in norm:
             return norm[alias.lower()]
-
     for low, original in norm.items():
         if any(alias.lower() in low for alias in aliases):
             return original
     return None
 
 
-def statement_series(df: pd.DataFrame, aliases: list[str]):
+def statement_series(df: pd.DataFrame, aliases: list[str]) -> list[float]:
     idx = row_from_statement(df, aliases)
     if idx is None:
         return []
@@ -346,9 +350,9 @@ def statement_series(df: pd.DataFrame, aliases: list[str]):
     return [float(x) for x in s.tolist()]
 
 
-def fundamental_snapshot(symbol: str) -> dict:
-    out = {
-        "source": "yfinance best-effort",
+def empty_fundamentals() -> dict:
+    return {
+        "source": "not requested before result",
         "revenueYoYCalc": None,
         "patYoYCalc": None,
         "operatingMarginNow": None,
@@ -367,6 +371,10 @@ def fundamental_snapshot(symbol: str) -> dict:
         "errors": [],
     }
 
+
+def fundamental_snapshot(symbol: str) -> dict:
+    out = empty_fundamentals()
+    out["source"] = "yfinance best-effort"
     if not symbol:
         return out
 
@@ -383,11 +391,10 @@ def fundamental_snapshot(symbol: str) -> dict:
                 out["revenueYoYCalc"] = pct_change(rev[0], rev[4])
             if len(pat) >= 5:
                 out["patYoYCalc"] = pct_change(pat[0], pat[4])
-
             if rev and opi and rev[0] != 0:
-                out["operatingMarginNow"] = opi[0] / rev[0] * 100
+                out["operatingMarginNow"] = opi[0] / rev[0] * 100.0
             if len(rev) >= 5 and len(opi) >= 5 and rev[4] != 0 and out["operatingMarginNow"] is not None:
-                out["operatingMarginYoY"] = out["operatingMarginNow"] - (opi[4] / rev[4] * 100)
+                out["operatingMarginYoY"] = out["operatingMarginNow"] - opi[4] / rev[4] * 100.0
 
             pretax = statement_series(income, ["Pretax Income", "Income Before Tax"])
             other = statement_series(
@@ -395,7 +402,7 @@ def fundamental_snapshot(symbol: str) -> dict:
                 ["Other Non Operating Income Expenses", "Other Income Expense", "Other Non Operating Income"],
             )
             if pretax and other and pretax[0] != 0:
-                out["otherIncomeToPretaxPct"] = abs(other[0]) / abs(pretax[0]) * 100
+                out["otherIncomeToPretaxPct"] = abs(other[0]) / abs(pretax[0]) * 100.0
         except Exception as exc:
             out["errors"].append(f"income:{type(exc).__name__}")
 
@@ -406,7 +413,6 @@ def fundamental_snapshot(symbol: str) -> dict:
                 ["Operating Cash Flow", "Total Cash From Operating Activities", "Cash Flow From Continuing Operating Activities"],
             )
             ni = statement_series(cf, ["Net Income", "Net Income From Continuing Operations"])
-
             if ocf:
                 out["operatingCashFlow"] = ocf[0]
             if ocf and ni and ni[0] != 0:
@@ -421,16 +427,13 @@ def fundamental_snapshot(symbol: str) -> dict:
             out["pegRatio"] = num(info.get("pegRatio"))
             out["priceToBook"] = num(info.get("priceToBook"))
             out["enterpriseToEbitda"] = num(info.get("enterpriseToEbitda"))
-
             roe = num(info.get("returnOnEquity"))
-            out["returnOnEquityPct"] = roe * 100 if roe is not None and abs(roe) <= 5 else roe
-
+            out["returnOnEquityPct"] = roe * 100.0 if roe is not None and abs(roe) <= 5 else roe
             out["debtToEquity"] = num(info.get("debtToEquity"))
-
             fcf = num(info.get("freeCashflow"))
             mcap = num(info.get("marketCap"))
             if fcf is not None and mcap not in (None, 0):
-                out["freeCashFlowYieldPct"] = fcf / mcap * 100
+                out["freeCashFlowYieldPct"] = fcf / mcap * 100.0
         except Exception as exc:
             out["errors"].append(f"valuation:{type(exc).__name__}")
 
@@ -442,12 +445,15 @@ def fundamental_snapshot(symbol: str) -> dict:
 
 def result_reality(row: dict, fs: dict) -> dict:
     if not results_released(row):
-        return {"label": "AWAITING RESULT", "reasons": ["Result has not been confirmed as released."], "risks": []}
+        return {
+            "label": "AWAITING RESULT",
+            "reasons": ["Result has not been confirmed as released."],
+            "risks": [],
+        }
 
     rev = num(pick(row, "revenueYoY"))
     if rev is None:
         rev = num(fs.get("revenueYoYCalc"))
-
     pat = num(pick(row, "patYoY"))
     if pat is None:
         pat = num(fs.get("patYoYCalc"))
@@ -457,12 +463,12 @@ def result_reality(row: dict, fs: dict) -> dict:
     other_ratio = num(fs.get("otherIncomeToPretaxPct"))
     ocf = num(fs.get("operatingCashFlow"))
     cf_ratio = num(fs.get("cashFlowToNetIncome"))
-
     quality_pass = bval(pick(row, "earningsQualityPass"))
     cash_pass = bval(pick(row, "cashFlowPass"))
     surprise_pass = bval(pick(row, "surprisePass"))
 
-    score, red = 0, 0
+    score = 0
+    red = 0
     reasons, risks = [], []
 
     if rev is not None:
@@ -563,9 +569,8 @@ def valuation_reality(row: dict, fs: dict) -> dict:
     }
 
     evidence_count = sum(x is not None for x in (pe, fpe, peg, pb, eve, roe, fcf_yield))
-    reasons, risks = [], []
-
     confidence = "HIGH" if evidence_count >= 5 else ("MEDIUM" if evidence_count >= 3 else "LIMITED")
+    reasons, risks = [], []
 
     if evidence_count < 3:
         return {
@@ -573,15 +578,13 @@ def valuation_reality(row: dict, fs: dict) -> dict:
             "confidence": confidence,
             "evidenceCount": evidence_count,
             "reasons": [
-                f"Only {evidence_count} valuation input(s) available; "
-                "at least 3 are required before assigning a valuation label."
+                f"Only {evidence_count} valuation input(s) available; at least 3 are required before assigning a valuation label."
             ],
             "risks": [],
             "metrics": metrics,
         }
 
     score = 0
-
     if peg is not None:
         if peg <= 1.0:
             score += 3
@@ -596,3 +599,371 @@ def valuation_reality(row: dict, fs: dict) -> dict:
     if pe is not None and fpe is not None:
         if fpe < pe:
             score += 1
+            reasons.append(f"Forward P/E {fpe:.1f}x is below trailing P/E {pe:.1f}x.")
+        elif fpe > pe * 1.15:
+            risks.append(f"Forward P/E {fpe:.1f}x is above trailing P/E {pe:.1f}x.")
+
+    if roe is not None:
+        if roe >= 18:
+            score += 1
+            reasons.append(f"ROE is {roe:.1f}%.")
+        elif roe < 10:
+            risks.append(f"ROE is only {roe:.1f}%.")
+
+    if fcf_yield is not None:
+        if fcf_yield >= 3:
+            score += 1
+            reasons.append(f"FCF yield is {fcf_yield:.1f}%.")
+        elif fcf_yield < 0:
+            risks.append("Free cash flow is negative.")
+
+    if de is not None and de > 200:
+        score -= 1
+        risks.append(f"Debt/equity is elevated at {de:.0f}.")
+
+    if pe is not None and growth is not None and pe > 70 and growth < 20:
+        score -= 2
+        risks.append(f"P/E is {pe:.1f}x while PAT growth is only {growth:.1f}%.")
+
+    label = (
+        "ATTRACTIVE" if score >= 4
+        else "FAIR" if score >= 2
+        else "EXPENSIVE BUT JUSTIFIED" if score >= 0
+        else "EXCESSIVE"
+    )
+    return {
+        "label": label,
+        "confidence": confidence,
+        "evidenceCount": evidence_count,
+        "reasons": reasons,
+        "risks": risks,
+        "metrics": metrics,
+    }
+
+
+def price_response(row: dict, pc: dict) -> dict:
+    if not results_released(row):
+        return {"label": "AWAITING RESULT", "points": 0}
+    move = num(pc.get("resultDayPct"))
+    rvol = num(pc.get("relativeVolume"))
+    if move is not None and rvol is not None:
+        if move >= 2 and rvol >= RVOL_CONFIRM:
+            return {"label": "CONFIRMED", "points": 5}
+        if move <= -2:
+            return {"label": "NEGATIVE", "points": 0}
+        return {"label": "MIXED", "points": 2}
+    return {"label": "UNVERIFIED", "points": 1}
+
+
+def result_verification(row: dict, released: bool) -> dict:
+    if not released:
+        return {
+            "label": "AWAITING RESULT",
+            "official": False,
+            "source": None,
+            "sourceUrl": None,
+            "verifiedAt": None,
+        }
+
+    source_url = pick(
+        row,
+        "resultSourceUrl", "filingUrl", "announcementUrl",
+        "sourceUrl", "evidenceUrl", "resultsUrl",
+    )
+    source_text = pick(
+        row,
+        "resultSource", "discoverySource", "source",
+        "resultsEvidence", "resultEvidence", "evidence",
+    )
+    verified_at = pick(
+        row,
+        "resultVerifiedAt", "resultDetectedAt", "filingTimestamp",
+        "announcementTimestamp", "sourceTimestamp",
+    )
+
+    combined = " ".join(
+        x for x in (str(source_text or ""), str(source_url or "")) if x
+    ).lower()
+    official = any(
+        token in combined
+        for token in (
+            "nseindia.com", "bseindia.com", "nse filing", "bse filing",
+            "official exchange", "exchange filing",
+        )
+    )
+
+    if official:
+        label = "OFFICIAL EXCHANGE EVIDENCE"
+    elif source_url:
+        label = "SOURCE LINK PRESENT — VERIFY DOMAIN"
+    elif source_text:
+        label = "SOURCE TEXT PRESENT — NOT OFFICIAL VERIFIED"
+    else:
+        label = "BASE CONFIRMED — SOURCE NOT ATTACHED"
+
+    return {
+        "label": label,
+        "official": official,
+        "source": str(source_text) if source_text else None,
+        "sourceUrl": str(source_url) if source_url else None,
+        "verifiedAt": verified_at,
+    }
+
+
+def base_points(row: dict) -> int:
+    score = num(pick(row, "score"))
+    if score is None and isinstance(row.get("checks"), list):
+        score = sum(
+            bval(c.get("value")) is True
+            for c in row["checks"]
+            if isinstance(c, dict)
+        )
+    return 0 if score is None else max(0, min(40, round(score / 8.0 * 40)))
+
+
+def verdict(row: dict, rr: dict, er: dict, conviction: int) -> str:
+    if not results_released(row):
+        return (
+            "AWAIT RESULT — EXPECTATIONS ALREADY ELEVATED"
+            if er["label"] == "PRICED IN"
+            else "AWAIT RESULT — WATCHLIST"
+        )
+    if er["label"] == "PRICED IN":
+        return "GOOD RESULT MAY BE PRICED IN — WAIT"
+    if rr["label"] == "LOW QUALITY":
+        return "RESULT QUALITY WEAK — AVOID / REVIEW"
+    if conviction >= 75 and rr["label"] == "GENUINE" and er["label"] == "LOW EXPECTATIONS":
+        return "HIGH-CONVICTION PEAD CANDIDATE"
+    if conviction >= 60:
+        return "PEAD CANDIDATE — REVIEW ENTRY"
+    return "IN REVIEW — NOT ENOUGH EDGE YET"
+
+
+def build_item(row: dict, index: int) -> dict:
+    symbol = clean_symbol(row)
+    released = results_released(row)
+    history = history_for_symbol(symbol)
+    pc = price_context(row, history)
+    er = expectation_reality(row, pc)
+
+    status = str(pick(row, "bucket", "peadStatus", "stage", "status") or "").lower()
+    fs = (
+        fundamental_snapshot(symbol)
+        if released or status in {"caution", "qualified", "post-results", "post results"}
+        else empty_fundamentals()
+    )
+
+    rr = result_reality(row, fs)
+    vr = valuation_reality(row, fs)
+    pr = price_response(row, pc)
+    rv = result_verification(row, released)
+
+    conviction = min(
+        100,
+        base_points(row)
+        + RESULT_POINTS.get(rr["label"], 0)
+        + EXPECTATION_POINTS.get(er["label"], 0)
+        + VALUATION_POINTS.get(vr["label"], 0)
+        + (5 if bval(pick(row, "sectorTailwind", "sectorPass")) is True else 0)
+        + pr["points"],
+    )
+
+    commentary = pick(
+        row,
+        "managementCommentary", "guidance", "commentary",
+        "resultCommentary", "note", "evidence",
+    )
+
+    return {
+        "id": symbol or f"row-{index}",
+        "symbol": symbol,
+        "name": str(pick(row, "name", "company", "companyName") or symbol),
+        "sector": str(pick(row, "sector", "industry") or "—"),
+        "quarter": str(pick(row, "quarter", "earningsPeriod", "period") or "—"),
+        "resultDate": pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"),
+        "resultsReleased": released,
+        "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
+        "baseScore": num(pick(row, "score")),
+        "baseScoreText": str(pick(row, "scoreText") or "—"),
+        "marketCapCr": num(pick(row, "marketCapCr", "mcapCr", "market_cap_cr")),
+        "price": num(pick(row, "price", "lastPrice", "ltp")),
+        "priceTimestamp": pick(row, "priceTimestamp", "marketTime", "quoteTimestamp"),
+        "resultReality": rr,
+        "expectationReality": er,
+        "valuationReality": vr,
+        "priceResponse": pr,
+        "resultVerification": rv,
+        "priceContext": pc,
+        "fundamentalSnapshot": fs,
+        "sectorTailwind": bval(pick(row, "sectorTailwind", "sectorPass")),
+        "entry": pick(row, "entry", "entryPrice"),
+        "sl": pick(row, "sl", "stopLoss"),
+        "tsl": pick(row, "tsl", "trailingStopLoss"),
+        "candidateStatus": pick(row, "candidateStatus"),
+        "allocationPct": num(pick(row, "allocationPct")),
+        "managementCommentary": commentary,
+        "commentaryVerified": bool(commentary),
+        "convictionScore": conviction,
+        "verdict": verdict(row, rr, er, conviction),
+        "reasons": rr["reasons"][:5] + er["reasons"][:3] + vr["reasons"][:3],
+        "risks": rr["risks"][:4] + er["risks"][:3] + vr["risks"][:3],
+    }
+
+
+def fallback_item(row: dict, index: int, exc: Exception) -> dict:
+    symbol = clean_symbol(row) or f"row-{index}"
+    return {
+        "id": symbol,
+        "symbol": clean_symbol(row),
+        "name": str(pick(row, "name", "company", "companyName") or symbol),
+        "sector": str(pick(row, "sector", "industry") or "—"),
+        "quarter": str(pick(row, "quarter", "earningsPeriod", "period") or "—"),
+        "resultDate": pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"),
+        "resultsReleased": results_released(row),
+        "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
+        "baseScore": num(pick(row, "score")),
+        "baseScoreText": str(pick(row, "scoreText") or "—"),
+        "marketCapCr": num(pick(row, "marketCapCr", "mcapCr", "market_cap_cr")),
+        "price": num(pick(row, "price", "lastPrice", "ltp")),
+        "priceTimestamp": pick(row, "priceTimestamp", "marketTime", "quoteTimestamp"),
+        "resultReality": {"label": "UNVERIFIED", "reasons": [], "risks": []},
+        "expectationReality": {"label": "UNVERIFIED", "reasons": [], "risks": []},
+        "valuationReality": {
+            "label": "UNVERIFIED", "confidence": "LIMITED", "evidenceCount": 0,
+            "reasons": [], "risks": [], "metrics": {},
+        },
+        "priceResponse": {"label": "UNVERIFIED", "points": 0},
+        "resultVerification": {
+            "label": "UNVERIFIED", "official": False, "source": None,
+            "sourceUrl": None, "verifiedAt": None,
+        },
+        "priceContext": {},
+        "fundamentalSnapshot": {"errors": [f"{type(exc).__name__}: {exc}"]},
+        "sectorTailwind": bval(pick(row, "sectorTailwind", "sectorPass")),
+        "entry": pick(row, "entry", "entryPrice"),
+        "sl": pick(row, "sl", "stopLoss"),
+        "tsl": pick(row, "tsl", "trailingStopLoss"),
+        "candidateStatus": pick(row, "candidateStatus"),
+        "allocationPct": num(pick(row, "allocationPct")),
+        "managementCommentary": None,
+        "commentaryVerified": False,
+        "convictionScore": base_points(row),
+        "verdict": "INTELLIGENCE ERROR — BASE ROW PRESERVED",
+        "reasons": [],
+        "risks": [f"Intelligence calculation failed: {type(exc).__name__}"],
+    }
+
+
+def build_payload(data_path: Path) -> dict:
+    payload = json.loads(data_path.read_text(encoding="utf-8"))
+    rows = extract_rows(payload)
+    if not rows:
+        raise RuntimeError("Base data.json contains 0 stocks. Intelligence output will NOT be published.")
+
+    items = []
+    for i, row in enumerate(rows, 1):
+        symbol = clean_symbol(row) or f"row-{i}"
+        print(f"[{i}/{len(rows)}] {symbol}")
+        try:
+            item = build_item(row, i)
+        except Exception as exc:
+            print(f"WARNING: {symbol}: {type(exc).__name__}: {exc}")
+            item = fallback_item(row, i, exc)
+        items.append(item)
+        if item.get("resultsReleased"):
+            time.sleep(0.15)
+
+    if len(items) != len(rows):
+        raise RuntimeError(
+            f"Row-preservation failure: base={len(rows)}, intelligence={len(items)}"
+        )
+
+    counts = {
+        "total": len(items),
+        "resultsDeclared": sum(x.get("resultsReleased") is True for x in items),
+        "genuineResults": sum(x.get("resultReality", {}).get("label") == "GENUINE" for x in items),
+        "lowExpectations": sum(x.get("expectationReality", {}).get("label") == "LOW EXPECTATIONS" for x in items),
+        "pricedIn": sum(x.get("expectationReality", {}).get("label") == "PRICED IN" for x in items),
+        "attractiveValuation": sum(x.get("valuationReality", {}).get("label") == "ATTRACTIVE" for x in items),
+        "highConviction": sum(x.get("verdict") == "HIGH-CONVICTION PEAD CANDIDATE" for x in items),
+    }
+
+    return {
+        "generatedAt": datetime.now(IST).isoformat(),
+        "sourceDataGeneratedAt": pick(payload, "generatedAt", "last_scan", "lastScanAt"),
+        "sourceScannerMode": payload.get("scannerMode"),
+        "sourceQualificationVersion": payload.get("qualificationVersion"),
+        "sourceStockCount": len(rows),
+        "intelligenceVersion": "pead-intelligence-v2",
+        "safety": {
+            "dataJsonReadOnly": True,
+            "zeroPublishProtection": True,
+            "exactRowPreservation": True,
+        },
+        "methodNotes": [
+            "Result Reality uses reported growth, earnings quality, cash flow and best-effort quarterly fundamentals.",
+            "Expectation Reality uses pre-result movement; RVOL is a post-result confirmation input.",
+            "Intraday RVOL is time-adjusted and explicitly marked as an estimate.",
+            "Valuation requires at least 3 inputs before a label is assigned; otherwise it remains UNVERIFIED.",
+            "Official result evidence is marked official only when the source explicitly points to NSE/BSE or an official exchange filing.",
+            "Management commentary is never invented.",
+            "This add-on never modifies data.json or the main PEAD radar.",
+        ],
+        "counts": counts,
+        "items": items,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data", default="data.json")
+    parser.add_argument("--output", default="intelligence.json")
+    args = parser.parse_args()
+
+    data_path = Path(args.data)
+    output_path = Path(args.output)
+
+    print("PEAD Intelligence starting...")
+    print("Input:", data_path)
+    print("Output:", output_path)
+
+    if not data_path.exists():
+        raise RuntimeError(f"Input file not found: {data_path}")
+
+    payload = build_payload(data_path)
+    source_count = int(payload.get("sourceStockCount", 0))
+    output_count = len(payload.get("items") or [])
+
+    print("Source stocks:", source_count)
+    print("Generated intelligence rows:", output_count)
+
+    if source_count <= 0:
+        raise RuntimeError("Base source count is 0. Refusing to publish.")
+    if output_count <= 0:
+        raise RuntimeError("Intelligence generated 0 rows. Refusing to publish.")
+    if output_count != source_count:
+        raise RuntimeError(
+            f"Intelligence count mismatch: source={source_count}, output={output_count}"
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = Path(str(output_path) + ".tmp")
+    temp_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    temp_path.replace(output_path)
+
+    if not output_path.exists():
+        raise RuntimeError("Output file was not created.")
+    if output_path.stat().st_size == 0:
+        raise RuntimeError("Output file was created but is empty.")
+
+    print("OUTPUT CREATED:", output_path)
+    print("OUTPUT SIZE:", output_path.stat().st_size, "bytes")
+    print("PEAD INTELLIGENCE COMPLETE")
+    print(json.dumps(payload.get("counts", {}), indent=2))
+
+
+if __name__ == "__main__":
+    main()
