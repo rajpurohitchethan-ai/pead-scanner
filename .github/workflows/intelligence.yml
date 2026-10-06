@@ -73,10 +73,24 @@ jobs:
           PY
 
       - name: Build intelligence candidate file
-        run: |
-          python pead_intelligence.py \
-            --data data.json \
-            --output /tmp/intelligence.new.json
+  run: |
+    rm -f /tmp/intelligence.new.json
+
+    python pead_intelligence.py \
+      --data data.json \
+      --output /tmp/intelligence.new.json
+
+    if [ -s /tmp/intelligence.new.json ]; then
+      echo "Candidate created at /tmp/intelligence.new.json"
+    elif [ -s intelligence.json ]; then
+      echo "Engine created intelligence.json directly; copying candidate"
+      cp intelligence.json /tmp/intelligence.new.json
+    else
+      echo "ERROR: Intelligence engine completed but produced no JSON file"
+      exit 1
+    fi
+
+    ls -lh /tmp/intelligence.new.json
 
       - name: Zero and drop protection
         run: |
