@@ -114,6 +114,67 @@ def parse_date(v):
         return None
 
 
+def result_release_detection(row):
+    """Detect whether the currently tracked result has actually crossed into post-results."""
+    now = datetime.now(IST)
+    today = now.date()
+    rd = parse_date(row.get("resultDate") or row.get("result_date") or row.get("resultsDate") or row.get("earningsDate"))
+    explicit = bool_value(row.get("resultsReleased"))
+    if explicit is None:
+        explicit = bool_value(row.get("resultReleased"))
+    if explicit is None:
+        explicit = bool_value(row.get("results_declared"))
+
+    source = " ".join(
+        str(row.get(k) or "")
+        for k in (
+            "discoverySource", "resultSource", "source",
+            "resultsEvidence", "resultEvidence", "evidence",
+            "resultSourceUrl", "filingUrl", "announcementUrl",
+            "sourceUrl", "evidenceUrl", "resultsUrl",
+        )
+    ).lower()
+    status = str(row.get("bucket") or row.get("peadStatus") or row.get("stage") or row.get("status") or "").lower()
+
+    if any(token in f"{status} {source}" for token in (
+        "postponed", "rescheduled", "deferred", "cancelled", "canceled",
+        "date changed", "board meeting postponed",
+    )):
+        return False, "Result appears postponed/rescheduled; waiting for a new confirmed date."
+
+    if any(token in source for token in (
+        "financial results", "result announced", "results announced",
+        "exchange filing", "nse filing", "bse filing",
+        "nseindia.com", "bseindia.com",
+    )):
+        return True, "Official/source result-release evidence detected."
+
+    if any(token in status for token in (
+        "post-results", "post results", "results declared", "result declared",
+        "results released", "result released", "qualified", "entry confirmed",
+    )):
+        return True, f"Base status indicates released result: {status}."
+
+    if explicit is True:
+        return True, "Scanner explicitly marks the result as released."
+
+    if rd is not None:
+        age_days = (today - rd).days
+        if age_days < 0:
+            return False, f"Scheduled result date is still in the future: {rd}."
+        if age_days == 0:
+            if now.hour >= 18:
+                return True, "Scheduled result date is today and the evening release window has begun."
+            return False, "Scheduled result date is today; waiting for source/evening confirmation."
+        if age_days <= 45:
+            return True, f"Scheduled result date passed {age_days} day(s) ago; treating as released pending source verification."
+
+    if explicit is False:
+        return False, "Scanner marks result as pending and no stronger evidence overrides it."
+
+    return False, "No current result-release evidence is available."
+
+
 def load_data():
     if not DATA.exists():
         raise RuntimeError("data.json missing; run scan.py first")
@@ -449,23 +510,11 @@ def qualify(row, stock_history, sector_history):
     today = datetime.now(IST).date()
     result_date = parse_date(out.get("resultDate") or out.get("result_date"))
 
-    source = str(out.get("discoverySource") or "").lower()
-    old_bucket = str(out.get("bucket") or out.get("peadStatus") or "").lower()
-
-    results_released = (
-        "financial results" in source
-        or old_bucket in {"post-results", "in review", "qualified", "caution"}
-    )
-
-    if result_date is not None and result_date > today:
-        results_released = False
+    results_released, release_evidence = result_release_detection(out)
 
     out["resultsReleased"] = results_released
-    out["resultsEvidence"] = (
-        "NSE financial-results filing detected"
-        if "financial results" in source
-        else ("Post-result live record" if results_released else "Awaiting result filing")
-    )
+    out["resultReleased"] = results_released
+    out["resultsEvidence"] = release_evidence
 
     out.update(technicals(stock_history))
     out.update(result_metrics(stock_history, result_date))
