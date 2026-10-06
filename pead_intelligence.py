@@ -535,9 +535,9 @@ def result_reality(row: dict, fs: dict) -> dict:
             red += 1
             risks.append(f"Other income is {other_ratio:.1f}% of pretax income; one-off support needs review.")
 
-    if surprise_pass is True:
+        if surprise_pass is True:
         score += 1
-                reasons.append("Surprise gate passed.")
+        reasons.append("Surprise gate passed.")
 
     label = "GENUINE" if score >= 6 and red == 0 else ("LOW QUALITY" if red >= 2 or score <= 2 else "MIXED")
     return {"label": label, "reasons": reasons, "risks": risks}
