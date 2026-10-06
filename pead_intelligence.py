@@ -604,4 +604,208 @@ def empty_fundamentals():
         "cashFlowToNetIncome": None,
         "otherIncomeToPretaxPct": None,
         "trailingPE": None,
-        "forwardPE": Non
+        "forwardPE": None,
+        "pegRatio": None,
+        "priceToBook": None,
+        "enterpriseToEbitda": None,
+        "returnOnEquityPct": None,
+        "debtToEquity": None,
+        "freeCashFlowYieldPct": None,
+        "errors": [],
+    }
+
+
+def build_item(row: dict, index: int) -> dict:
+    symbol = clean_symbol(row)
+    released = results_released(row)
+
+    h = history_for_symbol(symbol)
+    pc = price_context(row, h)
+    er = expectation_reality(row, pc)
+
+    status = str(pick(row, "bucket", "peadStatus", "stage", "status") or "")
+    fs = fundamental_snapshot(symbol) if (released or status.lower() in {"caution", "qualified", "post-results"}) else empty_fundamentals()
+
+    rr = result_reality(row, fs)
+    vr = valuation_reality(row, fs)
+    pr = price_response(row, pc)
+
+    conviction = min(
+        100,
+        base_points(row)
+        + RESULT_POINTS.get(rr["label"], 0)
+        + EXPECTATION_POINTS.get(er["label"], 0)
+        + VALUATION_POINTS.get(vr["label"], 0)
+        + (5 if bval(pick(row, "sectorTailwind", "sectorPass")) is True else 0)
+        + pr["points"],
+    )
+
+    commentary = pick(
+        row,
+        "managementCommentary",
+        "guidance",
+        "commentary",
+        "resultCommentary",
+        "note",
+        "evidence",
+    )
+
+    return {
+        "id": symbol or f"row-{index}",
+        "symbol": symbol,
+        "name": str(pick(row, "name", "company", "companyName") or symbol),
+        "sector": str(pick(row, "sector", "industry") or "—"),
+        "quarter": str(pick(row, "quarter", "earningsPeriod", "period") or "—"),
+        "resultDate": pick(row, "resultDate", "result_date", "resultsDate", "earningsDate"),
+        "resultsReleased": released,
+        "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
+        "baseScore": num(pick(row, "score")),
+        "baseScoreText": str(pick(row, "scoreText") or "—"),
+        "marketCapCr": num(pick(row, "marketCapCr", "mcapCr")),
+        "price": num(pick(row, "price", "lastPrice")),
+        "resultReality": rr,
+        "expectationReality": er,
+        "valuationReality": vr,
+        "priceResponse": pr,
+        "priceContext": pc,
+        "fundamentalSnapshot": fs,
+        "sectorTailwind": bval(pick(row, "sectorTailwind", "sectorPass")),
+        "entry": pick(row, "entry", "entryPrice"),
+        "sl": pick(row, "sl", "stopLoss"),
+        "tsl": pick(row, "tsl", "trailingStopLoss"),
+        "candidateStatus": pick(row, "candidateStatus"),
+        "allocationPct": num(pick(row, "allocationPct")),
+        "managementCommentary": commentary,
+        "commentaryVerified": bool(commentary),
+        "convictionScore": conviction,
+        "verdict": verdict(row, rr, er, vr, conviction),
+        "reasons": (rr["reasons"][:5] + er["reasons"][:3] + vr["reasons"][:3]),
+        "risks": (rr["risks"][:4] + er["risks"][:3] + vr["risks"][:3]),
+    }
+
+
+def build_payload(data_path: Path) -> dict:
+    payload = json.loads(data_path.read_text(encoding="utf-8"))
+    rows = extract_rows(payload)
+
+    if not rows:
+        raise RuntimeError("Base data.json contains 0 stocks. Intelligence output will NOT be published.")
+
+    items = []
+    for i, row in enumerate(rows, 1):
+        symbol = clean_symbol(row) or f"row-{i}"
+        print(f"[{i}/{len(rows)}] {symbol}")
+
+        try:
+            item = build_item(row, i)
+        except Exception as exc:
+            # Preserve the base row instead of dropping it.
+            item = {
+                "id": symbol,
+                "symbol": clean_symbol(row),
+                "name": str(pick(row, "name", "company", "companyName") or symbol),
+                "sector": str(pick(row, "sector", "industry") or "—"),
+                "quarter": str(pick(row, "quarter", "earningsPeriod", "period") or "—"),
+                "resultDate": pick(row, "resultDate", "result_date", "resultsDate"),
+                "resultsReleased": results_released(row),
+                "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
+                "baseScore": num(pick(row, "score")),
+                "baseScoreText": str(pick(row, "scoreText") or "—"),
+                "marketCapCr": num(pick(row, "marketCapCr", "mcapCr")),
+                "price": num(pick(row, "price", "lastPrice")),
+                "resultReality": {"label": "UNVERIFIED", "reasons": [], "risks": []},
+                "expectationReality": {"label": "UNVERIFIED", "reasons": [], "risks": []},
+                "valuationReality": {"label": "UNVERIFIED", "reasons": [], "risks": [], "metrics": {}},
+                "priceResponse": {"label": "UNVERIFIED", "points": 0},
+                "priceContext": {},
+                "fundamentalSnapshot": {"errors": [f"{type(exc).__name__}: {exc}"]},
+                "sectorTailwind": bval(pick(row, "sectorTailwind", "sectorPass")),
+                "entry": pick(row, "entry", "entryPrice"),
+                "sl": pick(row, "sl", "stopLoss"),
+                "tsl": pick(row, "tsl", "trailingStopLoss"),
+                "candidateStatus": pick(row, "candidateStatus"),
+                "allocationPct": num(pick(row, "allocationPct")),
+                "managementCommentary": None,
+                "commentaryVerified": False,
+                "convictionScore": base_points(row),
+                "verdict": "INTELLIGENCE ERROR — BASE ROW PRESERVED",
+                "reasons": [],
+                "risks": [f"Intelligence calculation failed: {type(exc).__name__}"],
+            }
+
+        items.append(item)
+        if item.get("resultsReleased"):
+            time.sleep(0.15)
+
+    if not items:
+        raise RuntimeError("Intelligence produced 0 rows. Refusing to publish.")
+
+    counts = {
+        "total": len(items),
+        "resultsDeclared": sum(x.get("resultsReleased") is True for x in items),
+        "genuineResults": sum(x.get("resultReality", {}).get("label") == "GENUINE" for x in items),
+        "lowExpectations": sum(x.get("expectationReality", {}).get("label") == "LOW EXPECTATIONS" for x in items),
+        "pricedIn": sum(x.get("expectationReality", {}).get("label") == "PRICED IN" for x in items),
+        "attractiveValuation": sum(x.get("valuationReality", {}).get("label") == "ATTRACTIVE" for x in items),
+        "highConviction": sum(x.get("verdict") == "HIGH-CONVICTION PEAD CANDIDATE" for x in items),
+    }
+
+    return {
+        "generatedAt": datetime.now(IST).isoformat(),
+        "sourceDataGeneratedAt": pick(payload, "generatedAt", "last_scan", "lastScanAt"),
+        "sourceScannerMode": payload.get("scannerMode"),
+        "sourceQualificationVersion": payload.get("qualificationVersion"),
+        "sourceStockCount": len(rows),
+        "intelligenceVersion": "pead-intelligence-v1",
+        "safety": {
+            "dataJsonReadOnly": True,
+            "zeroPublishProtection": True,
+            "minimumPublishRatio": 0.80,
+        },
+        "methodNotes": [
+            "Result Reality uses reported growth, quality/cash-flow gates and best-effort quarterly fundamentals.",
+            "Expectation Reality is driven primarily by pre-result price movement, plus result-day move and RVOL.",
+            "Valuation Reality is growth-adjusted and best-effort; missing valuation inputs remain UNVERIFIED.",
+            "Management commentary is not invented. It is shown only when already present in the source row.",
+            "This add-on does not modify the base PEAD radar or data.json.",
+        ],
+        "counts": counts,
+        "items": items,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data", default="data.json")
+    parser.add_argument("--output", default="intelligence.json")
+    args = parser.parse_args()
+
+    data_path = Path(args.data)
+    output_path = Path(args.output)
+
+    if not data_path.exists():
+        raise RuntimeError(f"{data_path} not found")
+
+    payload = build_payload(data_path)
+
+    source_count = int(payload["sourceStockCount"])
+    output_count = len(payload["items"])
+    minimum = max(1, math.floor(source_count * 0.80))
+
+    if output_count < minimum:
+        raise RuntimeError(
+            f"Safety stop: intelligence has {output_count} rows from {source_count} base rows; "
+            f"minimum allowed is {minimum}. Existing intelligence.json must be kept."
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = output_path.with_suffix(output_path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.replace(output_path)
+
+    print("PEAD INTELLIGENCE COMPLETE")
+    print(json.dumps(payload["counts"], indent=2))
+
+
+if __name__ == "__main__":
+    main()
