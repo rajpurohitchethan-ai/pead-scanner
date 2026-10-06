@@ -107,6 +107,7 @@ def clean_symbol(row: dict) -> str:
         str(pick(row, "symbol", "sym", "ticker", "code") or "")
         .upper()
         .replace(".NS", "")
+        .replace(".BO", "")
         .strip()
     )
 
@@ -265,31 +266,61 @@ def results_released(row: dict) -> bool:
     return release_detection(row).get("released") is True
 
 
-def history_for_symbol(symbol: str) -> pd.DataFrame:
-    if not symbol:
-        return pd.DataFrame()
-    try:
-        h = yf.download(
-            f"{symbol}.NS",
-            period="14mo",
-            interval="1d",
-            auto_adjust=False,
-            progress=False,
-            threads=False,
-            timeout=15,
-        )
-        if h is None or h.empty:
-            return pd.DataFrame()
-        if isinstance(h.columns, pd.MultiIndex):
-            try:
-                h = h.xs(f"{symbol}.NS", axis=1, level=1)
-            except Exception:
-                h.columns = h.columns.get_level_values(0)
-        if "Close" in h:
-            h = h[h["Close"].notna()]
-        return h.dropna(how="all")
-    except Exception:
-        return pd.DataFrame()
+def yahoo_ticker_candidates(row: dict) -> list[str]:
+    """Return best-effort Yahoo tickers, preferring explicit/BSE identifiers."""
+    candidates: list[str] = []
+
+    explicit = str(
+        pick(row, "ticker", "yahooTicker", "yahoo_symbol") or ""
+    ).strip().upper()
+    if explicit:
+        if explicit.endswith((".NS", ".BO")):
+            candidates.append(explicit)
+        else:
+            candidates.append(f"{explicit}.NS")
+
+    bse_code = str(
+        pick(row, "bseCode", "bse_code", "scripCode", "scrip_code") or ""
+    ).strip()
+    if bse_code.isdigit() and len(bse_code) == 6:
+        candidates.append(f"{bse_code}.BO")
+
+    symbol = clean_symbol(row)
+    if symbol:
+        candidates.append(f"{symbol}.NS")
+
+    return list(dict.fromkeys(x for x in candidates if x))
+
+
+def history_for_row(row: dict) -> pd.DataFrame:
+    """Fetch history using the best available NSE/BSE Yahoo ticker."""
+    for ticker in yahoo_ticker_candidates(row):
+        try:
+            h = yf.download(
+                ticker,
+                period="14mo",
+                interval="1d",
+                auto_adjust=False,
+                progress=False,
+                threads=False,
+                timeout=15,
+            )
+            if h is None or h.empty:
+                continue
+            if isinstance(h.columns, pd.MultiIndex):
+                try:
+                    h = h.xs(ticker, axis=1, level=1)
+                except Exception:
+                    h.columns = h.columns.get_level_values(0)
+            if "Close" in h:
+                h = h[h["Close"].notna()]
+            h = h.dropna(how="all")
+            if not h.empty:
+                h.attrs["ticker"] = ticker
+                return h
+        except Exception:
+            continue
+    return pd.DataFrame()
 
 
 def price_context(row: dict, h: pd.DataFrame) -> dict:
@@ -531,14 +562,33 @@ def empty_fundamentals() -> dict:
     }
 
 
-def fundamental_snapshot(symbol: str) -> dict:
+def fundamental_snapshot(row: dict) -> dict:
     out = empty_fundamentals()
     out["source"] = "yfinance best-effort"
-    if not symbol:
+    candidates = yahoo_ticker_candidates(row)
+    if not candidates:
         return out
 
+    t = None
+    chosen_ticker = None
+    for candidate in candidates:
+        try:
+            probe = yf.Ticker(candidate)
+            income_probe = probe.quarterly_income_stmt
+            if income_probe is not None and not income_probe.empty:
+                t = probe
+                chosen_ticker = candidate
+                break
+        except Exception:
+            continue
+
+    if t is None:
+        chosen_ticker = candidates[0]
+        t = yf.Ticker(chosen_ticker)
+
+    out["ticker"] = chosen_ticker
+
     try:
-        t = yf.Ticker(f"{symbol}.NS")
 
         try:
             income = t.quarterly_income_stmt
@@ -1356,13 +1406,13 @@ def verdict(row: dict, rr: dict, er: dict, conviction: int) -> str:
 def build_item(row: dict, index: int) -> dict:
     symbol = clean_symbol(row)
     released = results_released(row)
-    history = history_for_symbol(symbol)
+    history = history_for_row(row)
     pc = price_context(row, history)
     er = expectation_reality(row, pc)
 
     status = str(pick(row, "bucket", "peadStatus", "stage", "status") or "").lower()
     fs = (
-        fundamental_snapshot(symbol)
+        fundamental_snapshot(row)
         if released or status in {"caution", "qualified", "post-results", "post results"}
         else empty_fundamentals()
     )
