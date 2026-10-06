@@ -716,8 +716,50 @@ def result_reality(row: dict, fs: dict) -> dict:
         score += 1
         reasons.append("Surprise gate passed.")
 
-    label = "GENUINE" if score >= 6 and red == 0 else ("LOW QUALITY" if red >= 2 or score <= 2 else "MIXED")
-    return {"label": label, "reasons": reasons, "risks": risks}
+    # Do not call a released result "LOW QUALITY" merely because most
+    # current-quarter inputs are still missing. Missing evidence is UNVERIFIED,
+    # not negative evidence.
+    core_evidence_count = sum(x is not None for x in (rev, pat))
+    evidence_count = sum(
+        x is not None
+        for x in (
+            rev,
+            pat,
+            pat_qoq,
+            margin_delta,
+            quality_pass,
+            cash_pass if cash_pass is not None else ocf,
+            cf_ratio,
+            other_ratio,
+            surprise_pass,
+        )
+    )
+
+    if evidence_count < 4 and red < 2:
+        label = "UNVERIFIED"
+        risks.append(
+            f"Only {evidence_count} current-quarter quality input(s) are verified; "
+            "insufficient evidence to label the result weak."
+        )
+    elif core_evidence_count < 2 and red < 2:
+        label = "UNVERIFIED"
+        risks.append(
+            "Revenue YoY and PAT YoY are not both verified; result quality remains pending."
+        )
+    elif score >= 6 and red == 0:
+        label = "GENUINE"
+    elif red >= 2 or score <= 2:
+        label = "LOW QUALITY"
+    else:
+        label = "MIXED"
+
+    return {
+        "label": label,
+        "reasons": reasons,
+        "risks": risks,
+        "evidenceCount": evidence_count,
+        "coreEvidenceCount": core_evidence_count,
+    }
 
 
 def valuation_reality(row: dict, fs: dict) -> dict:
