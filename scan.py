@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -214,18 +215,98 @@ def yahoo_symbol(symbol: str) -> str:
     return f"{symbol}.NS"
 
 
-def load_companies() -> list[dict[str, Any]]:
-    with INPUT.open("r", encoding="utf-8") as f:
-        raw = json.load(f)
-
+def _extract_rows(raw: Any) -> list[dict[str, Any]]:
     if isinstance(raw, list):
         rows = raw
     elif isinstance(raw, dict):
-        rows = raw.get("companies") or raw.get("stocks") or raw.get("data") or []
+        rows = raw.get("stocks") or raw.get("companies") or raw.get("data") or []
+        if isinstance(rows, dict):
+            rows = rows.get("stocks") or rows.get("companies") or []
     else:
         rows = []
-
     return [x for x in rows if isinstance(x, dict)]
+
+
+def _row_key(row: dict[str, Any]) -> str:
+    return normalize_symbol(pick(row, "symbol", "sym", "ticker", "code"))
+
+
+def _largest_recent_git_universe(max_commits: int = 30) -> list[dict[str, Any]]:
+    """Recover the last healthy data.json universe after an accidental scanner shrink.
+
+    GitHub Actions normally has repository history available. If it is shallow or git
+    is unavailable, this simply returns an empty list and normal scanning continues.
+    """
+    best: list[dict[str, Any]] = []
+    try:
+        proc = subprocess.run(
+            ["git", "rev-list", f"--max-count={max_commits}", "HEAD", "--", "data.json"],
+            cwd=ROOT, capture_output=True, text=True, timeout=15, check=False,
+        )
+        commits = [x.strip() for x in proc.stdout.splitlines() if x.strip()]
+        for sha in commits:
+            shown = subprocess.run(
+                ["git", "show", f"{sha}:data.json"],
+                cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+            )
+            if shown.returncode != 0 or not shown.stdout.strip():
+                continue
+            try:
+                rows = _extract_rows(json.loads(shown.stdout))
+            except Exception:
+                continue
+            if len(rows) > len(best):
+                best = rows
+    except Exception:
+        return []
+    return best
+
+
+def load_companies() -> list[dict[str, Any]]:
+    """Load the working universe without allowing a small seed file to erase it.
+
+    Priority for field values is:
+      previous healthy data.json -> current data.json -> companies.json.
+    The union is by symbol, so the small manual seed can update rows while the wider
+    live-discovery universe is preserved.
+    """
+    seed_rows: list[dict[str, Any]] = []
+    if INPUT.exists():
+        try:
+            seed_rows = _extract_rows(json.loads(INPUT.read_text(encoding="utf-8")))
+        except Exception:
+            seed_rows = []
+
+    current_rows: list[dict[str, Any]] = []
+    if OUTPUT.exists():
+        try:
+            current_rows = _extract_rows(json.loads(OUTPUT.read_text(encoding="utf-8")))
+        except Exception:
+            current_rows = []
+
+    historical_rows = _largest_recent_git_universe()
+
+    merged: dict[str, dict[str, Any]] = {}
+    for source_rows in (historical_rows, current_rows, seed_rows):
+        for row in source_rows:
+            key = _row_key(row)
+            if not key:
+                continue
+            if key not in merged:
+                merged[key] = dict(row)
+            else:
+                merged[key].update({k: v for k, v in row.items() if v not in (None, "")})
+
+    rows = list(merged.values())
+    if historical_rows and len(rows) > len(seed_rows):
+        print(
+            f"Universe recovery active: seed={len(seed_rows)} current={len(current_rows)} "
+            f"historical_best={len(historical_rows)} merged={len(rows)}"
+        )
+    else:
+        print(f"Universe loaded: seed={len(seed_rows)} current={len(current_rows)} merged={len(rows)}")
+
+    return rows
 
 
 def safe_market_cap_cr(ticker: yf.Ticker, last_price: float | None) -> float | None:
@@ -384,6 +465,7 @@ def main() -> int:
         "minMarketCapCr": MIN_MCAP_CR,
         "sourceCount": len(companies),
         "scanCount": len(scanned),
+        "universeProtection": "git-history-recovery-v1",
         "errorCount": len(errors),
         "errors": errors,
         # Compatibility aliases: old and new frontends can both consume this.
