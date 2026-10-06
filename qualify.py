@@ -863,6 +863,42 @@ def _period_label(d):
     return d.strftime("%b-%y") if d is not None else None
 
 
+def _parse_snapshot_period(value):
+    """Parse BSE snapshot labels such as Sep-26 / Sep 2026 / 30-Sep-2026."""
+    if value in (None, ""):
+        return None
+    s = str(value).strip()
+    for fmt in (
+        "%b-%y", "%b %y", "%b-%Y", "%b %Y",
+        "%d-%b-%Y", "%d %b %Y", "%Y-%m-%d",
+    ):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            pass
+    try:
+        return pd.Timestamp(s).date()
+    except Exception:
+        return None
+
+
+def _snapshot_yoy_index(periods, current_index=0):
+    if not periods or current_index >= len(periods):
+        return None
+    current = _parse_snapshot_period(periods[current_index])
+    if current is None:
+        return None
+    target_year = current.year - 1
+    target_month = current.month
+    for i, label in enumerate(periods):
+        if i == current_index:
+            continue
+        d = _parse_snapshot_period(label)
+        if d is not None and d.year == target_year and d.month == target_month:
+            return i
+    return None
+
+
 def fetch_bse_result_enrichment(rows, already=None):
     enrichment = {}
     errors = []
@@ -915,6 +951,16 @@ def fetch_bse_result_enrichment(rows, already=None):
                     prev_revenue_cr = _snapshot_value(table, 1, "Revenue", "Total Income", "Net Sales")
                     prev_pat_cr = _snapshot_value(table, 1, "Net Profit", "PAT", "Profit After Tax")
 
+                    yoy_index = _snapshot_yoy_index(periods, 0)
+                    yoy_revenue_cr = (
+                        _snapshot_value(table, yoy_index, "Revenue", "Total Income", "Net Sales")
+                        if yoy_index is not None else None
+                    )
+                    yoy_pat_cr = (
+                        _snapshot_value(table, yoy_index, "Net Profit", "PAT", "Profit After Tax")
+                        if yoy_index is not None else None
+                    )
+
                     base = {
                         "resultsReleased": True,
                         "resultReleased": True,
@@ -922,12 +968,16 @@ def fetch_bse_result_enrichment(rows, already=None):
                         "resultSource": "BSE results snapshot",
                         "resultSourceUrl": f"https://www.bseindia.com/stock-share-price/x/{code}/",
                         "bseCode": code,
+                        "ticker": f"{code}.BO",
+                        "yahooTicker": f"{code}.BO",
                         "resultPeriodEnd": expected.isoformat() if expected else latest_label,
                         "latestRevenueLakh": revenue_cr * 100 if revenue_cr is not None else None,
                         "latestPatLakh": pat_cr * 100 if pat_cr is not None else None,
                         "reportedEps": eps,
                         "revenueQoQ": round2(_pct(revenue_cr, prev_revenue_cr)),
                         "patQoQ": round2(_pct(pat_cr, prev_pat_cr)),
+                        "revenueYoY": round2(_pct(revenue_cr, yoy_revenue_cr)),
+                        "patYoY": round2(_pct(pat_cr, yoy_pat_cr)),
                         "resultDataSource": "BSE official results snapshot",
                         "resultDataPeriod": latest_label,
                         "resultsEvidence": f"BSE results snapshot updated for {latest_label}"
