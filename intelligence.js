@@ -17,19 +17,12 @@
   }
 
   function n(v) {
-  if (
-    v === null ||
-    v === undefined ||
-    v === ''
-  ) {
-    return null;
-  }
+    if (v === null || v === undefined || v === '') {
+      return null;
+    }
 
-  const x = Number(v);
-
-  return Number.isFinite(x)
-    ? x
-    : null;
+    const x = Number(v);
+    return Number.isFinite(x) ? x : null;
   }
 
   function pct(v) {
@@ -45,6 +38,21 @@
   function money(v) {
     const x = n(v);
     return x == null ? '—' : `₹${x.toFixed(2)}`;
+  }
+
+  function dateTimeFmt(v) {
+    if (!v) return '—';
+
+    const d = new Date(v);
+
+    return Number.isNaN(d.getTime())
+      ? esc(v)
+      : d.toLocaleString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
   }
 
   function dateFmt(v) {
@@ -93,19 +101,24 @@
     const vm = item.valuationReality?.metrics || {};
     const fs = item.fundamentalSnapshot || {};
 
-    return `
-      <div class="metric">
-  <span>${item.resultsReleased ? 'Revenue YoY' : 'Previous Revenue YoY'}</span>
-  <b>${pct(fs.revenueYoYCalc)}</b>
-</div>
+    const rvolLabel = pc.rvolIsPartial
+      ? 'Intraday RVOL*'
+      : 'RVOL';
 
-<div class="metric">
-  <span>${item.resultsReleased ? 'PAT YoY' : 'Previous PAT YoY'}</span>
-  <b>${pct(fs.patYoYCalc)}</b>
-</div>
+    const revenueLabel = item.resultsReleased
+      ? 'Revenue YoY'
+      : 'Previous Revenue YoY';
+
+    const patLabel = item.resultsReleased
+      ? 'PAT YoY'
+      : 'Previous PAT YoY';
+
+    return `
+      <div class="metric"><span>${revenueLabel}</span><b>${pct(fs.revenueYoYCalc)}</b></div>
+      <div class="metric"><span>${patLabel}</span><b>${pct(fs.patYoYCalc)}</b></div>
       <div class="metric"><span>Pre-result 20D</span><b>${pct(pc.pre20dPct)}</b></div>
       <div class="metric"><span>Result day</span><b>${pct(pc.resultDayPct)}</b></div>
-      <div class="metric"><span>RVOL</span><b>${xfmt(pc.relativeVolume)}</b></div>
+      <div class="metric"><span>${rvolLabel}</span><b>${xfmt(pc.relativeVolume)}</b></div>
       <div class="metric"><span>52W high distance</span><b>${pct(pc.distanceFrom52wHighPct)}</b></div>
       <div class="metric"><span>P/E</span><b>${n(vm.trailingPE) == null ? '—' : n(vm.trailingPE).toFixed(1) + 'x'}</b></div>
       <div class="metric"><span>Forward P/E</span><b>${n(vm.forwardPE) == null ? '—' : n(vm.forwardPE).toFixed(1) + 'x'}</b></div>
@@ -128,7 +141,62 @@
     `;
   }
 
+  function pcNote(item) {
+    const pc = item.priceContext || {};
+
+    if (!pc.rvolIsPartial) {
+      return '';
+    }
+
+    return `
+      <div class="micro-note">
+        * Intraday RVOL is a time-adjusted estimate based on the portion of the NSE cash session elapsed.
+        It becomes normal full-day RVOL after market close.
+      </div>
+    `;
+  }
+
   function card(item) {
+    const rv = item.resultVerification || {};
+
+    const evidenceMeta = `
+      <div class="freshness">
+        <div>
+          <span>RESULT EVIDENCE</span>
+          <b class="${rv.official ? 'good' : 'warn'}">${esc(rv.label || 'UNVERIFIED')}</b>
+        </div>
+
+        <div>
+          <span>RESULT VERIFIED AT</span>
+          <b>${dateTimeFmt(rv.verifiedAt)}</b>
+        </div>
+
+        <div>
+          <span>PRICE UPDATED AT</span>
+          <b>${dateTimeFmt(item.priceTimestamp)}</b>
+        </div>
+
+        <div>
+          <span>INTELLIGENCE UPDATED</span>
+          <b>${dateTimeFmt(DATA?.generatedAt)}</b>
+        </div>
+
+        <div>
+          <span>VALUATION CONFIDENCE</span>
+          <b>${esc(item.valuationReality?.confidence || 'LIMITED')}</b>
+        </div>
+
+        <div>
+          <span>VALUATION INPUTS</span>
+          <b>${esc(item.valuationReality?.evidenceCount ?? 0)}</b>
+        </div>
+      </div>
+
+      ${
+        pcNote(item)
+      }
+    `;
+
     const commentary = item.managementCommentary
       ? `<div class="commentary"><b>Management / source commentary:</b> ${esc(item.managementCommentary)}</div>`
       : `<div class="commentary muted"><b>Management commentary:</b> not verified in source data.</div>`;
@@ -161,6 +229,8 @@
         <div class="metrics">
           ${metricRows(item)}
         </div>
+
+        ${evidenceMeta}
 
         <div class="evidence-grid">
           ${evidenceList('WHY IT WORKS', item.reasons, 'positive')}
