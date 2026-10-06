@@ -32,7 +32,7 @@ jobs:
       - name: Install scanner dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --upgrade nse yfinance pandas "mcp>=2,<3"
+          python -m pip install --upgrade nse bse yfinance pandas "mcp>=2,<3"
 
       - name: Check Python syntax
         run: |
@@ -90,48 +90,28 @@ jobs:
               print("ERROR: 0 stocks published")
               sys.exit(1)
 
-          print(
-              "Scanner:",
-              data.get("scannerMode")
-          )
+          print("Scanner:", data.get("scannerMode"))
+          print("Qualifier:", data.get("qualificationVersion"))
+          print("Market data mode:", data.get("marketDataMode"))
+          print("Discovered:", data.get("discoveredCandidateCount"))
+          print("Published:", len(rows))
+          print("Buckets:", data.get("bucketCounts"))
+          print("NSE MCP:", data.get("nseMcp"))
+          print("NSE MCP warnings:", len(data.get("nseMcpErrors") or []))
+          print("Result source stats:", data.get("resultSourceStats"))
+          print("Result source warnings:", len(data.get("resultSourceErrors") or []))
 
-          print(
-              "Qualifier:",
-              data.get("qualificationVersion")
-          )
-
-          print(
-              "Market data mode:",
-              data.get("marketDataMode")
-          )
-
-          print(
-              "Discovered:",
-              data.get("discoveredCandidateCount")
-          )
-
-          print(
-              "Published:",
-              len(rows)
-          )
-
-          print(
-              "Buckets:",
-              data.get("bucketCounts")
-          )
-
-          print(
-              "NSE MCP:",
-              data.get("nseMcp")
-          )
-
-          print(
-              "NSE MCP warnings:",
-              len(
-                  data.get("nseMcpErrors")
-                  or []
+          released = [r for r in rows if r.get("resultsReleased") is True]
+          print("Results released rows:", len(released))
+          for r in released[:25]:
+              print(
+                  "RESULT:",
+                  r.get("symbol"),
+                  "|", r.get("quarter"),
+                  "| source:", r.get("resultSource") or r.get("discoverySource"),
+                  "| Rev YoY:", r.get("revenueYoY"),
+                  "| PAT YoY:", r.get("patYoY"),
               )
-          )
           PY
 
       - name: Show PEAD candidate summary
@@ -146,10 +126,7 @@ jobs:
           ) as f:
               data = json.load(f)
 
-          rows = (
-              data.get("stocks")
-              or []
-          )
+          rows = data.get("stocks") or []
 
           order = {
               "Qualified": 0,
@@ -169,23 +146,10 @@ jobs:
               ),
           )
 
-          print(
-              "========== PEAD SUMMARY =========="
-          )
-
-          print(
-              "Buckets:",
-              data.get("bucketCounts")
-          )
-
-          print(
-              "MCP:",
-              data.get("nseMcp")
-          )
-
-          print(
-              "=================================="
-          )
+          print("========== PEAD SUMMARY ==========")
+          print("Buckets:", data.get("bucketCounts"))
+          print("MCP:", data.get("nseMcp"))
+          print("==================================")
 
           for stock in rows[:50]:
               print(
@@ -210,37 +174,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          cp data.json /tmp/pead-data.json
+          git add data.json
 
-          for attempt in 1 2 3
-          do
-            echo "Push attempt $attempt"
+          if git diff --cached --quiet; then
+            echo "No data.json changes to commit"
+            exit 0
+          fi
 
-            git fetch origin main
+          git commit -m "chore: refresh live PEAD qualification"
 
-            git reset --hard origin/main
+          git pull --rebase origin main
 
-            cp /tmp/pead-data.json data.json
-
-            git add data.json
-
-            if git diff --cached --quiet
-            then
-              echo "No data.json changes to commit"
-              exit 0
-            fi
-
-            git commit -m "chore: refresh live PEAD qualification"
-
-            if git push origin HEAD:main
-            then
-              echo "PEAD data pushed successfully"
-              exit 0
-            fi
-
-            echo "Main changed during push. Retrying..."
-            sleep 3
-          done
-
-          echo "ERROR: Could not push refreshed PEAD data after 3 attempts"
-          exit 1
+          git push origin main
