@@ -205,20 +205,46 @@ jobs:
               )
           PY
 
-      - name: Commit refreshed qualified data
+            - name: Commit refreshed qualified data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data.json
+          # Preserve the freshly generated scanner output.
+          cp data.json /tmp/pead-data.json
 
-          if git diff --cached --quiet; then
-            echo "No data.json changes to commit"
-            exit 0
-          fi
+          # Retry if another commit reaches main while this scan is running.
+          for attempt in 1 2 3
+          do
+            echo "Push attempt $attempt"
 
-          git commit -m "chore: refresh live PEAD qualification"
+            git fetch origin main
 
-          git pull --rebase origin main
+            # Start from the latest main branch instead of rebasing data.json.
+            git reset --hard origin/main
 
-          git push origin main
+            # Put the freshly generated PEAD data back.
+            cp /tmp/pead-data.json data.json
+
+            git add data.json
+
+            if git diff --cached --quiet
+            then
+              echo "No data.json changes to commit"
+              exit 0
+            fi
+
+            git commit -m "chore: refresh live PEAD qualification"
+
+            if git push origin HEAD:main
+            then
+              echo "PEAD data pushed successfully"
+              exit 0
+            fi
+
+            echo "Main changed during push. Retrying..."
+            sleep 3
+          done
+
+          echo "ERROR: Could not push refreshed PEAD data after 3 attempts"
+          exit 1
