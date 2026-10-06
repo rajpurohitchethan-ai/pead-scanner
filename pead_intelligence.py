@@ -604,8 +604,8 @@ def valuation_reality(row: dict, fs: dict) -> dict:
             risks.append(f"Forward P/E {fpe:.1f}x is above trailing P/E {pe:.1f}x.")
 
     if roe is not None:
-    if roe >= 18:
-        score += 1
-        reasons.append(f"ROE is {roe:.1f}%.")
-    elif roe < 10:
-        risks.append(f"ROE is only {roe:.1f}%.")
+        if roe >= 18:
+            score += 1
+            reasons.append(f"ROE is {roe:.1f}%.")
+        elif roe < 10:
+     
