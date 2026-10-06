@@ -1767,9 +1767,18 @@ def main():
         s = clean_symbol(out)
         print(f"[{index}/{len(rows)}] {s or 'UNKNOWN'}")
 
-        if s in result_layer:
-            out.update(result_layer[s])
+            if s in result_layer:
+        out.update(result_layer[s])
 
+    # BSE fallback is valid market data even when Yahoo fails
+    if (
+        out.get("price") is not None
+        and "BSE official" in str(out.get("priceSource") or "")
+    ):
+        out["liveStatus"] = "fallback_ok"
+        out["liveError"] = None
+
+    quote = mcp_quotes.get(s)
         quote = mcp_quotes.get(s)
         if quote:
             if quote.get("price") is not None:
