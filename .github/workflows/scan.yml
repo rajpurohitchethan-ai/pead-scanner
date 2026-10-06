@@ -205,25 +205,21 @@ jobs:
               )
           PY
 
-            - name: Commit refreshed qualified data
+      - name: Commit refreshed qualified data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Preserve the freshly generated scanner output.
           cp data.json /tmp/pead-data.json
 
-          # Retry if another commit reaches main while this scan is running.
           for attempt in 1 2 3
           do
             echo "Push attempt $attempt"
 
             git fetch origin main
 
-            # Start from the latest main branch instead of rebasing data.json.
             git reset --hard origin/main
 
-            # Put the freshly generated PEAD data back.
             cp /tmp/pead-data.json data.json
 
             git add data.json
