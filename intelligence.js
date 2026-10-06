@@ -17,10 +17,13 @@
   }
 
   function n(v) {
-    const x = Number(v);
-    return Number.isFinite(x) ? x : null;
+  if (v === null || v === undefined || v === '') {
+    return null;
   }
 
+  const x = Number(v);
+  return Number.isFinite(x) ? x : null;
+}
   function pct(v) {
     const x = n(v);
     return x == null ? '—' : `${x > 0 ? '+' : ''}${x.toFixed(1)}%`;
