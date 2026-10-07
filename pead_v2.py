@@ -83,7 +83,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.1.3"
+ENGINE_VERSION = "2.1.6"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -92,6 +92,10 @@ EVENT_RETENTION_DAYS = int(os.getenv("EVENT_RETENTION_DAYS", "550"))
 ACTIVE_ENRICH_DAYS = int(os.getenv("ACTIVE_ENRICH_DAYS", "75"))
 ACTIVE_PERIOD_DAYS = int(os.getenv("ACTIVE_PERIOD_DAYS", "120"))
 MAX_ACTIVE_ENRICH_EVENTS = int(os.getenv("MAX_ACTIVE_ENRICH_EVENTS", "120"))
+DASHBOARD_RESULT_DAYS = int(os.getenv("DASHBOARD_RESULT_DAYS", "45"))
+DASHBOARD_UPCOMING_DAYS = int(os.getenv("DASHBOARD_UPCOMING_DAYS", "45"))
+PRICE_TRAIL_MAX_POINTS = int(os.getenv("PRICE_TRAIL_MAX_POINTS", "72"))
+RECENT_RESULT_PRICE_REFRESH_HOURS = float(os.getenv("RECENT_RESULT_PRICE_REFRESH_HOURS", "1"))
 SOURCE_RETRY_ATTEMPTS = int(os.getenv("SOURCE_RETRY_ATTEMPTS", "3"))
 SOURCE_DELAY_SEC = float(os.getenv("SOURCE_DELAY_SEC", "1.25"))
 HEAVY_UPCOMING_DAYS = int(os.getenv("HEAVY_UPCOMING_DAYS", "14"))
@@ -356,6 +360,30 @@ def expected_period_end(event_date: date | None) -> date | None:
     # most recent quarter end that is at least a week before the event date.
     plausible = [d for d in candidates if 7 <= (event_date - d).days <= 120]
     return max(plausible) if plausible else max(candidates)
+
+
+def live_reporting_period(today: date | None = None) -> date | None:
+    """Fiscal period that belongs on the live PEAD dashboard.
+
+    Example: on/after 07 Oct 2026 the live reporting period is 30 Sep 2026
+    (Q2 FY27). Older quarters remain in the permanent event store but are not
+    mixed into the live current-quarter radar.
+    """
+    return expected_period_end(today or now_ist().date())
+
+
+def is_live_reporting_period(event: dict[str, Any], today: date | None = None) -> bool:
+    target = live_reporting_period(today)
+    if target is None:
+        return True
+
+    period_end = parse_date(event.get("period", {}).get("end"))
+    if period_end is not None:
+        return period_end == target
+
+    result_date = parse_date(meta_value(event, "result_date"))
+    inferred = expected_period_end(result_date) if result_date is not None else None
+    return inferred == target
 
 
 def pct_change(new: float | None, old: float | None) -> float | None:
@@ -2359,6 +2387,59 @@ def discover_events(store: EventStore, master: SymbolMaster, ctx: SourceContext)
     return stats
 
 
+def append_price_snapshot(event: dict[str, Any], price: Any, source: str | None) -> None:
+    """Keep a compact hourly price trail for active-event tracking.
+
+    Snapshots are non-authoritative UI telemetry. Official/exchange price fields
+    remain in the field store with normal source precedence.
+    """
+    p = safe_num(price)
+    if p is None or p <= 0:
+        return
+    trail = event.get("priceTrail")
+    if not isinstance(trail, list):
+        trail = []
+        event["priceTrail"] = trail
+
+    ts = iso_now()
+    hour_bucket = ts[:13]
+    snap = {
+        "timestamp": ts,
+        "price": round2(p),
+        "source": source or field_source(event, "last_price") or "UNKNOWN",
+    }
+    if trail and isinstance(trail[-1], dict) and str(trail[-1].get("timestamp") or "")[:13] == hour_bucket:
+        trail[-1] = snap
+    else:
+        trail.append(snap)
+    event["priceTrail"] = trail[-PRICE_TRAIL_MAX_POINTS:]
+
+
+def price_trail_change(event: dict[str, Any]) -> float | None:
+    trail = event.get("priceTrail")
+    if not isinstance(trail, list):
+        return None
+    prices = []
+    for rec in trail:
+        if not isinstance(rec, dict):
+            continue
+        p = safe_num(rec.get("price"))
+        if p is not None and p > 0:
+            prices.append(p)
+    if len(prices) < 2:
+        return None
+    return round2(pct_change(prices[-1], prices[-2]))
+
+
+def latest_price_timestamp(event: dict[str, Any]) -> str | None:
+    trail = event.get("priceTrail")
+    if isinstance(trail, list) and trail and isinstance(trail[-1], dict):
+        return trail[-1].get("timestamp")
+    return None
+
+
+
+
 # ---------------------------------------------------------------------------
 # Event enrichment
 # ---------------------------------------------------------------------------
@@ -2525,18 +2606,25 @@ def enrich_valuation(event: dict[str, Any], store: EventStore, master: SymbolMas
 
 
 def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
-    # Price history is expensive. Refresh active events at most every 4h before
-    # reaction completion and every 12h afterwards.
+    # Entry/reaction tracking needs fresher prices than valuation/fundamental
+    # enrichment. Recently released results are refreshed at most once per hour;
+    # upcoming events remain on the lighter 4-hour cadence.
+    sec = event.get("security", {})
+    filing_ts = parse_datetime(store.value(event, "filing_timestamp"))
+    result_date = parse_date(store.value(event, "result_date"))
+    released = boolish(store.value(event, "results_released")) is True
+
     pf = (event.get("fetch") or {}).get("PRICE_HISTORY") or {}
     last_success = parse_datetime(pf.get("lastSuccess"))
     if last_success:
         age_hours = (now_ist() - last_success).total_seconds() / 3600
-        threshold = 12 if STATE_ORDER.get(event.get("state", "DISCOVERED"), 0) >= STATE_ORDER["REACTION_READY"] else 4
+        recent_released = False
+        if released and result_date is not None:
+            result_age = (now_ist().date() - result_date).days
+            recent_released = 0 <= result_age <= DASHBOARD_RESULT_DAYS
+        threshold = RECENT_RESULT_PRICE_REFRESH_HOURS if recent_released else 4
         if age_hours < threshold:
             return
-    sec = event.get("security", {})
-    filing_ts = parse_datetime(store.value(event, "filing_timestamp"))
-    result_date = parse_date(store.value(event, "result_date"))
     reaction_date, timing = reaction_session(filing_ts, result_date)
     if reaction_date:
         store.merge_field(event, "reaction_session", reaction_date.isoformat(), source="DERIVED", note=timing)
@@ -2592,6 +2680,7 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
     for field, value in metrics.items():
         if value is not None:
             store.merge_field(event, field, value, source=price_source or "YAHOO_PRICE", raw_ref=raw_ref)
+    append_price_snapshot(event, metrics.get("last_price"), price_source)
     store.record_fetch(event, "PRICE_HISTORY", ok=True, raw_ref=raw_ref)
 
     if boolish(store.value(event, "results_released")) is True:
@@ -2602,48 +2691,79 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
 
 
 def enrichment_activity(event: dict[str, Any], today: date | None = None) -> tuple[bool, str]:
-    """Decide whether an event belongs in the live network-enrichment set.
+    """Select only the live fiscal quarter for hourly network enrichment.
 
-    The permanent event store is append-only, but the hourly job must not
-    re-fetch historical quarters forever.  Period-end is the hard archival
-    boundary; result_date controls the live reaction window.
+    Older quarters remain permanently stored for quarter memory/backtests, but
+    they do not compete with the current result season for NSE/BSE/Yahoo calls.
     """
     today = today or now_ist().date()
     result_date = parse_date(meta_value(event, "result_date"))
     period_end = parse_date(event.get("period", {}).get("end"))
-    state = str(event.get("state") or "DISCOVERED")
 
-    # Hard archive: old fiscal periods remain available for quarter-memory and
-    # comparisons, but no longer consume network calls in the live scanner.
-    if period_end is not None and (today - period_end).days > ACTIVE_PERIOD_DAYS:
-        return False, "ARCHIVE_OLD_PERIOD"
+    target = live_reporting_period(today)
+    if target is not None:
+        if period_end is not None and period_end != target:
+            if period_end < target:
+                return False, "ARCHIVE_PREVIOUS_QUARTER"
+            return False, "DEFER_FUTURE_QUARTER"
 
-    # Upcoming events outside the configured discovery horizon are stored but
-    # not enriched yet.
+        if period_end is None and result_date is not None:
+            inferred = expected_period_end(result_date)
+            if inferred is not None and inferred != target:
+                if inferred < target:
+                    return False, "ARCHIVE_PREVIOUS_QUARTER"
+                return False, "DEFER_FUTURE_QUARTER"
+
     if result_date is not None and (result_date - today).days > UPCOMING_DAYS:
         return False, "DEFER_FAR_UPCOMING"
 
-    # Recently released / current-quarter events are live.
     if result_date is not None:
         age = (today - result_date).days
         if -UPCOMING_DAYS <= age <= ACTIVE_ENRICH_DAYS:
-            return True, "ACTIVE_RESULT_WINDOW"
+            return True, "ACTIVE_LIVE_QUARTER_RESULT"
         if age > ACTIVE_ENRICH_DAYS:
             return False, "ARCHIVE_OLD_RESULT"
 
-    # If filing/result date is missing, a current fiscal period may still need
-    # identity or financial enrichment.  Do not let unknown ancient events in.
-    if period_end is not None:
-        period_age = (today - period_end).days
-        if -UPCOMING_DAYS <= period_age <= ACTIVE_PERIOD_DAYS:
-            return True, "ACTIVE_CURRENT_PERIOD"
-        return False, "ARCHIVE_PERIOD_WINDOW"
+    if period_end is not None and (target is None or period_end == target):
+        return True, "ACTIVE_LIVE_QUARTER_PERIOD"
 
-    # Date-less legacy rows are preserved on disk but skipped by the hourly
-    # network pass until discovery supplies a meaningful period/date.
-    if state in {"ENTRY_WATCH", "REACTION_PENDING", "REACTION_READY"}:
-        return True, "ACTIVE_OPEN_STATE"
-    return False, "DEFER_NO_DATE"
+    # Undated legacy rows stay stored but do not consume hourly network calls.
+    return False, "DEFER_NO_PERIOD"
+
+
+
+
+def dashboard_activity(event: dict[str, Any], today: date | None = None) -> bool:
+    """Current-quarter live dashboard only.
+
+    Q1/Q3/etc. remain in the permanent event store and quarter-memory history,
+    but the main live page shows only the active reporting period. This prevents
+    the current Q2 FY27 radar from being flooded with Q1 FY27 results.
+    """
+    today = today or now_ist().date()
+    target = live_reporting_period(today)
+    period_end = parse_date(event.get("period", {}).get("end"))
+    result_date = parse_date(meta_value(event, "result_date"))
+
+    if target is not None:
+        if period_end is not None:
+            if period_end != target:
+                return False
+        elif result_date is not None:
+            if expected_period_end(result_date) != target:
+                return False
+        else:
+            return False
+
+    if result_date is not None:
+        delta = (result_date - today).days
+        return -DASHBOARD_RESULT_DAYS <= delta <= DASHBOARD_UPCOMING_DAYS
+
+    # If the result date is not known yet, a correctly identified live-quarter
+    # event is still useful as an upcoming/current watch row.
+    return period_end == target if target is not None else period_end is not None
+
+
 
 
 def should_enrich(event: dict[str, Any]) -> bool:
@@ -2791,12 +2911,17 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
     rev_yoy = safe_num(store.value(event, "revenue_yoy_pct"))
     pat_yoy = safe_num(store.value(event, "pat_yoy_pct"))
     trend = str(store.value(event, "pat_trend") or "").upper() or None
+    pre5 = safe_num(store.value(event, "pre_result_5d_pct"))
+    pre10 = safe_num(store.value(event, "pre_result_10d_pct"))
     pre20 = safe_num(store.value(event, "pre_result_20d_pct"))
     result_ret = safe_num(store.value(event, "result_day_return_pct"))
     rvol = safe_num(store.value(event, "result_day_rvol"))
     hold5 = boolish(store.value(event, "post_result_hold_5d"))
     hold10 = boolish(store.value(event, "post_result_hold_10d"))
     breakout = boolish(store.value(event, "box_breakout"))
+    box_high = safe_num(store.value(event, "box_high"))
+    result_low = safe_num(store.value(event, "result_day_low"))
+    last_price = safe_num(store.value(event, "last_price"))
     mcap = safe_num(store.value(event, "market_cap_cr"))
     turnover = safe_num(store.value(event, "avg_turnover_20d_cr"))
     trailing_pe = safe_num(store.value(event, "trailing_pe"))
@@ -2839,7 +2964,9 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
             score -= 10
             risks.append(f"PAT trend: {trend.replace('_', ' ').title()}.")
 
-    # Expectations (max ~15)
+    # Expectations (max ~15). Missing 20D history is not treated as a zero
+    # return. Shorter verified windows may still provide a partial label.
+    expectation_has_full_window = pre20 is not None
     if pre20 is not None:
         if pre20 <= LOW_EXPECTATION_RUNUP_PCT:
             score += 15
@@ -2851,6 +2978,19 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
         else:
             expectation_label = "PRICED IN"
             risks.append(f"20D pre-result run-up {pre20:+.1f}% suggests elevated expectations.")
+    elif pre10 is not None or pre5 is not None:
+        short_values = [x for x in (pre10, pre5) if x is not None]
+        strongest_short = max(short_values) if short_values else None
+        if (pre10 is not None and pre10 >= 10) or (pre5 is not None and pre5 >= 7.5):
+            expectation_label = "ELEVATED SHORT-TERM"
+            if strongest_short is not None:
+                risks.append(f"Short-term pre-result run-up reached {strongest_short:+.1f}%; 20D history is still pending.")
+        elif short_values and max(short_values) <= LOW_EXPECTATION_RUNUP_PCT:
+            score += 5
+            expectation_label = "LOW EXPECTATIONS (PARTIAL)"
+            reasons.append("Available short-term pre-result history shows limited run-up; 20D history is pending.")
+        else:
+            expectation_label = "PARTIAL PRICE HISTORY"
     else:
         expectation_label = "AWAITING PRICE HISTORY"
 
@@ -2934,12 +3074,18 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
     else:
         price_label = "MIXED"
 
-    if trailing_pe is None and forward_pe is None and peg is None:
+    valuation_inputs = [trailing_pe, forward_pe, peg, roe, fcf_yield]
+    valuation_input_count = sum(v is not None for v in valuation_inputs)
+    if valuation_input_count < 3:
         valuation_label = "UNVERIFIED"
-    elif peg is not None and peg <= 1.2:
-        valuation_label = "ATTRACTIVE"
     elif trailing_pe is not None and trailing_pe > 80:
         valuation_label = "EXCESSIVE"
+    elif (
+        peg is not None and 0 < peg <= 1.2
+        and roe is not None and roe >= 12
+        and (trailing_pe is None or trailing_pe <= 60)
+    ):
+        valuation_label = "ATTRACTIVE"
     else:
         valuation_label = "FAIR"
 
@@ -2958,15 +3104,55 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
     high = (
         released
         and result_label == "GENUINE"
+        and expectation_has_full_window
         and expectation_label != "PRICED IN"
         and price_label == "CONFIRMED"
         and score >= 70
         and completeness >= 75
         and (mcap is not None and mcap >= MIN_MCAP_CR)
     )
-    entry_watch = high and (hold5 is True or breakout is True)
+    # Mechanical entry-state model. It identifies a setup/trigger; it never
+    # claims the user actually bought the stock.
+    mcap_ok = mcap is not None and mcap >= MIN_MCAP_CR
+    setup_eligible = (
+        released
+        and result_label in {"GENUINE", "MIXED"}
+        and price_label in {"CONFIRMED", "MIXED"}
+        and score >= 55
+        and completeness >= 60
+        and mcap_ok
+    )
+    entry_trigger_price = round2(box_high * 1.002) if setup_eligible and box_high is not None else None
+    entry_distance_pct = (
+        round2(pct_change(last_price, entry_trigger_price))
+        if last_price is not None and entry_trigger_price not in (None, 0)
+        else None
+    )
+
+    if not released:
+        entry_signal = "WAIT_RESULT"
+    elif result_label == "LOW QUALITY" or price_label == "NEGATIVE":
+        entry_signal = "NO_ENTRY"
+    elif result_label == "UNVERIFIED" or price_label == "UNVERIFIED":
+        entry_signal = "DATA_PENDING"
+    elif not setup_eligible:
+        entry_signal = "REVIEW_ONLY"
+    elif box_high is None:
+        entry_signal = "WAIT_BOX"
+    elif hold5 is False:
+        entry_signal = "WAIT_RECLAIM"
+    elif breakout is True and last_price is not None and entry_trigger_price is not None and last_price >= entry_trigger_price:
+        entry_signal = "ENTRY_TRIGGERED"
+    elif hold5 is True and entry_distance_pct is not None and -2.0 <= entry_distance_pct < 0:
+        entry_signal = "NEAR_ENTRY"
+    elif hold5 is True:
+        entry_signal = "WATCH_BREAKOUT"
+    else:
+        entry_signal = "WAIT_ACCEPTANCE"
+
+    entry_watch = entry_signal in {"WATCH_BREAKOUT", "NEAR_ENTRY", "ENTRY_TRIGGERED"}
     if entry_watch:
-        store.set_state(event, "ENTRY_WATCH", "high-conviction PEAD with post-result acceptance")
+        store.set_state(event, "ENTRY_WATCH", f"PEAD entry state: {entry_signal}")
 
     if not released:
         verdict = "AWAIT RESULT — WATCHLIST"
@@ -2994,6 +3180,11 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
         "verdict": verdict,
         "highConviction": high,
         "entryWatch": entry_watch,
+        "entrySignal": entry_signal,
+        "entryTriggerPrice": entry_trigger_price,
+        "entryDistancePct": entry_distance_pct,
+        "valuationInputCount": valuation_input_count,
+        "expectationFullWindow": expectation_has_full_window,
         "reasons": reasons[:8],
         "risks": risks[:8],
     }
@@ -3060,10 +3251,15 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
     liquidity_pass = None if turnover is None else turnover >= LIQUIDITY_TURNOVER_CR_MIN
     priced_in = d.get("expectationReality") == "PRICED IN"
     allocation = 30 if d.get("highConviction") else (20 if (d.get("score") or 0) >= 55 else (10 if not released else 0))
-    entry_trigger = bool(d.get("entryWatch")) if released else None
+    entry_signal = str(d.get("entrySignal") or ("WAIT_RESULT" if not released else "REVIEW_ONLY"))
+    entry_trigger = entry_signal == "ENTRY_TRIGGERED" if released else None
     box_high = safe_num(meta_value(event, "box_high"))
-    mechanical_entry = round2(box_high * 1.002) if entry_trigger and box_high is not None else None
-    mechanical_sl = round2(meta_value(event, "result_day_low"))
+    mechanical_entry = safe_num(d.get("entryTriggerPrice"))
+    actionable_entry = entry_signal in {"WATCH_BREAKOUT", "NEAR_ENTRY", "ENTRY_TRIGGERED"}
+    mechanical_sl = round2(meta_value(event, "result_day_low")) if actionable_entry else None
+    mechanical_tsl = mechanical_sl if entry_signal == "ENTRY_TRIGGERED" else None
+    tracked_change = price_trail_change(event)
+    price_trail = event.get("priceTrail") if isinstance(event.get("priceTrail"), list) else []
 
     checks = [
         {"label": "Results released", "value": released, "note": f"Persistent event state: {event.get('state')}"},
@@ -3105,8 +3301,11 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
         "marketCapCr": round2(meta_value(event, "market_cap_cr")),
         "marketCapPass": (safe_num(meta_value(event, "market_cap_cr")) >= MIN_MCAP_CR) if safe_num(meta_value(event, "market_cap_cr")) is not None else None,
         "price": round2(meta_value(event, "last_price")),
-        "priceTimestamp": event.get("updatedAt"),
-        "changePct": None,
+        "lastPrice": round2(meta_value(event, "last_price")),
+        "priceTimestamp": latest_price_timestamp(event) or event.get("updatedAt"),
+        "priceTrackChangePct": tracked_change,
+        "priceTrail": price_trail[-12:],
+        "changePct": tracked_change,
         "revenueYoY": round2(meta_value(event, "revenue_yoy_pct")),
         "patYoY": round2(meta_value(event, "pat_yoy_pct")),
         "patYoYTurnaround": pat_trend_value == "TURNAROUND",
@@ -3159,9 +3358,13 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
         "candidateStatus": event.get("state"),
         "allocationPct": allocation,
         "entryTriggerPass": entry_trigger,
-        "entry": mechanical_entry,
+        "entryWatchPass": actionable_entry,
+        "entrySignal": entry_signal,
+        "entryDistancePct": round2(d.get("entryDistancePct")),
+        "entry": round2(mechanical_entry) if actionable_entry else None,
+        "entryTriggerPrice": round2(mechanical_entry),
         "sl": mechanical_sl,
-        "tsl": None,
+        "tsl": mechanical_tsl,
         "liveStatus": event.get("state"),
         "liveError": "; ".join(fetch_errors[:3]) if fetch_errors else None,
         "evidence": f"Persistent v2 event · state {event.get('state')} · completeness {d.get('completenessPct', 0):.0f}%",
@@ -3209,7 +3412,7 @@ def event_to_intelligence(event: dict[str, Any]) -> dict[str, Any]:
         "expectationReality": {"label": row["expectationReality"], "reasons": [], "risks": []},
         "valuationReality": {
             "label": row["valuationReality"],
-            "confidence": "LIMITED" if all(row.get(k) is None for k in ("trailingPE", "forwardPE", "peg", "roePct")) else "NORMAL",
+            "confidence": "NORMAL" if sum(row.get(k) is not None for k in ("trailingPE", "forwardPE", "peg", "roePct", "fcfYieldPct")) >= 3 else "LIMITED",
             "metrics": {
                 "trailingPE": row["trailingPE"],
                 "forwardPE": row["forwardPE"],
@@ -3229,6 +3432,9 @@ def event_to_intelligence(event: dict[str, Any]) -> dict[str, Any]:
             "distanceFrom52wHighPct": row["distanceFrom52wHighPct"],
             "lastClose": row["price"],
             "historyAvailable": any(row.get(k) is not None for k in ("preResult5dPct", "preResult10dPct", "preResultRunupPct", "resultDayReturnPct")),
+            "trackedChangePct": row.get("priceTrackChangePct"),
+            "updatedAt": row.get("priceTimestamp"),
+            "trail": row.get("priceTrail") or [],
         },
         "fundamentalSnapshot": {
             "revenueYoYCalc": row["revenueYoY"],
@@ -3239,9 +3445,12 @@ def event_to_intelligence(event: dict[str, Any]) -> dict[str, Any]:
             "patCr": row["latestPatCr"],
             "eps": row["reportedEps"],
         },
-        "entry": None,
-        "sl": row["resultDayLow"],
-        "tsl": None,
+        "entry": row["entry"],
+        "entryTriggerPrice": row["entryTriggerPrice"],
+        "entrySignal": row["entrySignal"],
+        "entryDistancePct": row["entryDistancePct"],
+        "sl": row["sl"],
+        "tsl": row["tsl"],
         "revenueYoY": row["revenueYoY"],
         "patYoY": row["patYoY"],
         "patYoYTurnaround": row["patYoYTurnaround"],
@@ -3262,8 +3471,12 @@ def event_to_intelligence(event: dict[str, Any]) -> dict[str, Any]:
 
 def aggregate_health(store: EventStore, discovery_stats: dict[str, Any], enrichment_stats: dict[str, Any]) -> dict[str, Any]:
     events = store.all()
-    rows = [event_to_data_row(e) for e in events]
-    declared = [r for r in rows if r.get("resultsReleased") is True]
+    all_rows = [event_to_data_row(e) for e in events]
+    all_declared = [r for r in all_rows if r.get("resultsReleased") is True]
+
+    active_events = [e for e in events if dashboard_activity(e)]
+    active_rows = [event_to_data_row(e) for e in active_events]
+    declared = [r for r in active_rows if r.get("resultsReleased") is True]
     financial = [r for r in declared if r.get("latestRevenueCr") is not None and r.get("latestPatCr") is not None]
     reaction = [r for r in declared if r.get("resultDayReturnPct") is not None or r.get("relativeVolume") is not None]
     fully_scored = [r for r in declared if (r.get("dataCompletenessPct") or 0) >= 75]
@@ -3286,11 +3499,21 @@ def aggregate_health(store: EventStore, discovery_stats: dict[str, Any], enrichm
                 failed += 1
                 by_source[src]["failed"] += 1
 
-    completeness_avg = round(sum((r.get("dataCompletenessPct") or 0) for r in declared) / len(declared), 1) if declared else 0.0
+    completeness_avg = (
+        round(sum((r.get("dataCompletenessPct") or 0) for r in declared) / len(declared), 1)
+        if declared else 0.0
+    )
+    live_period = live_reporting_period()
     return {
         "generatedAt": iso_now(),
         "engineVersion": ENGINE_VERSION,
-        "eventsTracked": len(rows),
+        "livePeriodEnd": live_period.isoformat() if live_period else None,
+        "liveQuarter": fiscal_quarter(live_period),
+        "eventsTracked": len(all_rows),
+        "activeDashboardEvents": len(active_rows),
+        "archiveEvents": max(0, len(all_rows) - len(active_rows)),
+        "activeResultsFiled": len(declared),
+        "storedResultsFiled": len(all_declared),
         "resultsFiled": len(declared),
         "financialsParsed": len(financial),
         "reactionReady": len(reaction),
@@ -3302,6 +3525,8 @@ def aggregate_health(store: EventStore, discovery_stats: dict[str, Any], enrichm
         "discovery": discovery_stats,
         "enrichment": enrichment_stats,
     }
+
+
 
 
 def previous_health() -> dict[str, Any]:
@@ -3321,21 +3546,30 @@ def previous_health() -> dict[str, Any]:
 
 def quality_gate(new_health: dict[str, Any], old_health: dict[str, Any]) -> tuple[bool, list[str]]:
     reasons = []
-    current_rows = int(new_health.get("eventsTracked") or 0)
+    current_rows = int(new_health.get("activeDashboardEvents") or 0)
     current_declared = int(new_health.get("resultsFiled") or 0)
-    old_rows = int(old_health.get("eventsTracked") or 0)
+    old_rows = int(old_health.get("activeDashboardEvents") or old_health.get("eventsTracked") or 0)
     old_declared = int(old_health.get("resultsFiled") or 0)
     current_comp = float(new_health.get("declaredCompletenessPct") or 0)
     old_comp = float(old_health.get("declaredCompletenessPct") or 0)
 
+    new_quarter = str(new_health.get("liveQuarter") or "")
+    old_quarter = str(old_health.get("liveQuarter") or "")
+    comparable_quarter = bool(new_quarter and old_quarter and new_quarter == old_quarter)
+
     if current_rows == 0:
-        reasons.append("event store contains zero rows")
-    if old_rows >= 10 and current_rows < old_rows * 0.80:
-        reasons.append(f"event count dropped from {old_rows} to {current_rows} (>20%)")
-    if old_declared >= 5 and current_declared < old_declared * 0.80:
-        reasons.append(f"declared-result count dropped from {old_declared} to {current_declared} (>20%)")
-    if old_declared >= 5 and old_comp >= 40 and current_comp < max(20, old_comp - 25):
-        reasons.append(f"declared completeness collapsed from {old_comp:.1f}% to {current_comp:.1f}%")
+        reasons.append("live current-quarter dashboard contains zero rows")
+
+    # Row-count/completeness collapse checks are meaningful only inside the same
+    # fiscal reporting quarter. On the first strict-quarter migration (or when
+    # the market rolls from Q2 to Q3), a large count drop is intentional.
+    if comparable_quarter:
+        if old_rows >= 10 and current_rows < old_rows * 0.80:
+            reasons.append(f"event count dropped from {old_rows} to {current_rows} (>20%)")
+        if old_declared >= 5 and current_declared < old_declared * 0.80:
+            reasons.append(f"declared-result count dropped from {old_declared} to {current_declared} (>20%)")
+        if old_declared >= 5 and old_comp >= 40 and current_comp < max(20, old_comp - 25):
+            reasons.append(f"declared completeness collapsed from {old_comp:.1f}% to {current_comp:.1f}%")
     return len(reasons) == 0, reasons
 
 
@@ -3347,9 +3581,11 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False) -
     if not ok and not force:
         return False, reasons
 
+    stored_events = store.all()
     events = sorted(
-        store.all(),
+        [e for e in stored_events if dashboard_activity(e)],
         key=lambda e: (
+            parse_date(meta_value(e, "result_date")) or date.min,
             parse_date(e.get("period", {}).get("end")) or date.min,
             str(e.get("security", {}).get("symbol") or ""),
         ),
@@ -3357,6 +3593,8 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False) -
     )
     rows = [event_to_data_row(e) for e in events]
     items = [event_to_intelligence(e) for e in events]
+    health["activeDashboardEvents"] = len(events)
+    health["archiveEvents"] = max(0, len(stored_events) - len(events))
 
     data_payload = {
         "schemaVersion": SCHEMA_VERSION,
@@ -3365,6 +3603,8 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False) -
         "qualificationVersion": f"pead-core-v2-{ENGINE_VERSION}",
         "minMarketCapCr": MIN_MCAP_CR,
         "health": health,
+        "livePeriodEnd": health.get("livePeriodEnd"),
+        "liveQuarter": health.get("liveQuarter"),
         "stocks": rows,
     }
     counts = {
@@ -3374,13 +3614,17 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False) -
         "pricedIn": sum(x.get("expectationReality", {}).get("label") == "PRICED IN" for x in items),
         "highConviction": sum(x.get("verdict") == "HIGH-CONVICTION PEAD CANDIDATE" for x in items),
         "dataPending": sum(x.get("verdict") == "DATA PENDING — RESULT VERIFIED" for x in items),
-        "entryWatch": sum(x.get("eventState") == "ENTRY_WATCH" for x in items),
+        "entryWatch": sum(x.get("entrySignal") in {"WATCH_BREAKOUT", "NEAR_ENTRY", "ENTRY_TRIGGERED"} for x in items),
+        "entryTriggered": sum(x.get("entrySignal") == "ENTRY_TRIGGERED" for x in items),
+        "nearEntry": sum(x.get("entrySignal") == "NEAR_ENTRY" for x in items),
     }
     intel_payload = {
         "schemaVersion": SCHEMA_VERSION,
         "generatedAt": iso_now(),
         "version": f"PEAD Intelligence v2 {ENGINE_VERSION}",
         "health": health,
+        "livePeriodEnd": health.get("livePeriodEnd"),
+        "liveQuarter": health.get("liveQuarter"),
         "counts": counts,
         "items": items,
     }
@@ -3509,6 +3753,62 @@ def self_test() -> int:
     if ok or not reasons:
         failures.append("quality gate did not block collapse")
 
+    # Valuation requires at least three genuine inputs; one PEG must not label attractive.
+    with tempfile.TemporaryDirectory() as td:
+        store = EventStore(Path(td) / "events")
+        e = store.ensure_event(security={"symbol": "VALTEST", "nseSymbol": "VALTEST"}, period_end=date(2026, 9, 30))
+        store.merge_field(e, "results_released", True, source="NSE_FINANCIAL_RESULTS")
+        store.merge_field(e, "result_date", now_ist().date().isoformat(), source="NSE_FINANCIAL_RESULTS")
+        store.merge_field(e, "revenue_yoy_pct", 25, source="NSE_RESULTS_COMPARISON")
+        store.merge_field(e, "pat_trend", "PROFIT_GROWTH", source="DERIVED")
+        store.merge_field(e, "pat_yoy_pct", 30, source="DERIVED")
+        store.merge_field(e, "peg", 0.4, source="YAHOO_FUNDAMENTALS")
+        d = score_event(store, e)
+        if d.get("valuationReality") != "UNVERIFIED":
+            failures.append("valuation accepted fewer than 3 genuine inputs")
+
+    # Entry signal exposes a watch/trigger level without claiming a user fill.
+    with tempfile.TemporaryDirectory() as td:
+        store = EventStore(Path(td) / "events")
+        e = store.ensure_event(security={"symbol": "ENTRYTEST", "nseSymbol": "ENTRYTEST"}, period_end=date(2026, 9, 30))
+        for field, value, source in (
+            ("results_released", True, "NSE_FINANCIAL_RESULTS"),
+            ("result_date", now_ist().date().isoformat(), "NSE_FINANCIAL_RESULTS"),
+            ("revenue_yoy_pct", 25, "NSE_RESULTS_COMPARISON"),
+            ("pat_trend", "PROFIT_GROWTH", "DERIVED"),
+            ("pat_yoy_pct", 35, "DERIVED"),
+            ("pre_result_20d_pct", 4, "NSE_PRICE"),
+            ("result_day_return_pct", 5, "NSE_PRICE"),
+            ("result_day_rvol", 2, "NSE_PRICE"),
+            ("post_result_hold_5d", True, "NSE_PRICE"),
+            ("box_high", 100, "NSE_PRICE"),
+            ("box_breakout", False, "NSE_PRICE"),
+            ("last_price", 99.5, "NSE_PRICE"),
+            ("market_cap_cr", 5000, "YAHOO_FUNDAMENTALS"),
+            ("avg_turnover_20d_cr", 10, "NSE_PRICE"),
+            ("revenue_cr", 100, "NSE_RESULTS_COMPARISON"),
+            ("pat_cr", 15, "NSE_RESULTS_COMPARISON"),
+        ):
+            store.merge_field(e, field, value, source=source)
+        d = score_event(store, e)
+        if d.get("entrySignal") not in {"NEAR_ENTRY", "WATCH_BREAKOUT"}:
+            failures.append(f"entry watch signal missing: {d.get('entrySignal')}")
+        if safe_num(d.get("entryTriggerPrice")) is None:
+            failures.append("entry trigger price missing")
+
+    # Live-dashboard quarter isolation regression.
+    q2_day = date(2026, 10, 7)
+    if live_reporting_period(q2_day) != date(2026, 9, 30):
+        failures.append("live reporting period should be Q2 FY27 / 2026-09-30")
+    q2_event = {"period": {"end": "2026-09-30"}, "fields": {}, "state": "DISCOVERED"}
+    q1_event = {"period": {"end": "2026-06-30"}, "fields": {}, "state": "PEAD_SCORED"}
+    if not dashboard_activity(q2_event, q2_day):
+        failures.append("Q2 FY27 event missing from live dashboard")
+    if dashboard_activity(q1_event, q2_day):
+        failures.append("Q1 FY27 leaked into Q2 FY27 live dashboard")
+    if enrichment_activity(q1_event, q2_day)[0]:
+        failures.append("Q1 FY27 leaked into Q2 FY27 hourly enrichment")
+
     if failures:
         print("SELF TEST FAILED")
         for x in failures:
@@ -3526,6 +3826,10 @@ def self_test() -> int:
     print("✓ after-hours reaction session")
     print("✓ Q2 FY27 fiscal-quarter mapping")
     print("✓ publish-collapse quality gate")
+    print("✓ valuation requires 3 real inputs")
+    print("✓ entry watch/trigger signal model")
+    print("✓ active dashboard/archive separation")
+    print("✓ strict current-quarter dashboard (Q1 archive / Q2 FY27 live)")
     return 0
 
 
