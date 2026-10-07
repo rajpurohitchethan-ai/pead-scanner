@@ -90,6 +90,7 @@
       margin-top:7px;
     }
 
+
     .health-strip {
       display:grid;
       grid-template-columns:repeat(5,1fr);
@@ -135,7 +136,8 @@
     }
 
     button,
-    input {
+    input,
+    select {
       border:1px solid var(--border);
       background:var(--panel);
       color:var(--text);
@@ -156,6 +158,49 @@
     input {
       flex:1;
       min-width:220px;
+    }
+
+    select {
+      min-width:170px;
+    }
+
+    .sort-group {
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    .price-tracker {
+      display:grid;
+      grid-template-columns:repeat(5,1fr);
+      gap:8px;
+      margin:12px 0 15px;
+      padding:10px;
+      border:1px solid rgba(106,174,255,.22);
+      background:rgba(106,174,255,.04);
+      border-radius:14px;
+    }
+
+    .price-track-cell {
+      min-width:0;
+    }
+
+    .price-track-cell span {
+      display:block;
+      color:var(--muted);
+      font-size:9px;
+      text-transform:uppercase;
+    }
+
+    .price-track-cell b {
+      display:block;
+      margin-top:4px;
+      font-size:13px;
+      overflow-wrap:anywhere;
+    }
+
+    .entry-signal {
+      margin-top:8px;
     }
 
     .meta {
@@ -363,7 +408,8 @@
 
     @media (max-width:850px) {
       .summary,
-      .health-strip {
+      .health-strip,
+      .price-tracker {
         grid-template-columns:repeat(2,1fr);
       }
 
@@ -440,7 +486,7 @@
     </section>
 
     <section class="health-strip" id="health-strip">
-      <div class="health-box"><span>Events Tracked</span><b id="health-events">—</b></div>
+      <div class="health-box"><span>Active / Stored</span><b id="health-events">—</b></div>
       <div class="health-box"><span>Financials Parsed</span><b id="health-financials">—</b></div>
       <div class="health-box"><span>Reaction Ready</span><b id="health-reaction">—</b></div>
       <div class="health-box"><span>Declared Completeness</span><b id="health-completeness">—</b></div>
@@ -452,13 +498,29 @@
       <button data-filter="HIGH">High Conviction</button>
       <button data-filter="PRICED">Priced In</button>
       <button data-filter="PENDING">Data Pending</button>
+      <button data-filter="ENTRY">Entry Signals</button>
       <button data-filter="UPCOMING">Upcoming Watch</button>
-      <button data-filter="ALL">All</button>
+      <button data-filter="ALL">All Active</button>
 
       <input
         id="search"
         placeholder="Search symbol, company, sector…"
       >
+
+      <div class="sort-group">
+        <select id="sort-key" aria-label="Sort stocks">
+          <option value="conviction">Conviction</option>
+          <option value="completeness">Data complete</option>
+          <option value="resultDate">Result date</option>
+          <option value="revenue">Revenue YoY</option>
+          <option value="pat">PAT YoY</option>
+          <option value="reaction">Reaction day</option>
+          <option value="rvol">RVOL</option>
+          <option value="price">Current price</option>
+          <option value="entryDistance">Distance to entry</option>
+        </select>
+        <button id="sort-dir" type="button">Descending ↓</button>
+      </div>
 
       <button id="reload">
         Reload
@@ -480,12 +542,12 @@
     </section>
 
     <div class="note">
-      PEAD Intelligence v2 stores every symbol + quarter as a permanent event. Failed fetches
+      PEAD Intelligence v2 stores every symbol + quarter permanently while the live dashboard shows only active events. Failed fetches
       never erase verified values. Exchange data outranks fallbacks; missing evidence is shown
       as DATA PENDING rather than converted into a negative investment conclusion.
     </div>
   </main>
 
-  <script src="./intelligence.js?v=2"></script>
+  <script src="./intelligence.js?v=4"></script>
 </body>
 </html>
