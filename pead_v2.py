@@ -83,13 +83,15 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.1.2"
+ENGINE_VERSION = "2.1.3"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
 UPCOMING_DAYS = int(os.getenv("UPCOMING_DAYS", "45"))
 EVENT_RETENTION_DAYS = int(os.getenv("EVENT_RETENTION_DAYS", "550"))
-ACTIVE_ENRICH_DAYS = int(os.getenv("ACTIVE_ENRICH_DAYS", "120"))
+ACTIVE_ENRICH_DAYS = int(os.getenv("ACTIVE_ENRICH_DAYS", "75"))
+ACTIVE_PERIOD_DAYS = int(os.getenv("ACTIVE_PERIOD_DAYS", "120"))
+MAX_ACTIVE_ENRICH_EVENTS = int(os.getenv("MAX_ACTIVE_ENRICH_EVENTS", "120"))
 SOURCE_RETRY_ATTEMPTS = int(os.getenv("SOURCE_RETRY_ATTEMPTS", "3"))
 SOURCE_DELAY_SEC = float(os.getenv("SOURCE_DELAY_SEC", "1.25"))
 HEAVY_UPCOMING_DAYS = int(os.getenv("HEAVY_UPCOMING_DAYS", "14"))
@@ -2599,36 +2601,88 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
             store.set_state(event, "REACTION_READY", "post-result price/volume reaction available")
 
 
-def should_enrich(event: dict[str, Any]) -> bool:
+def enrichment_activity(event: dict[str, Any], today: date | None = None) -> tuple[bool, str]:
+    """Decide whether an event belongs in the live network-enrichment set.
+
+    The permanent event store is append-only, but the hourly job must not
+    re-fetch historical quarters forever.  Period-end is the hard archival
+    boundary; result_date controls the live reaction window.
+    """
+    today = today or now_ist().date()
     result_date = parse_date(meta_value(event, "result_date"))
     period_end = parse_date(event.get("period", {}).get("end"))
-    today = now_ist().date()
+    state = str(event.get("state") or "DISCOVERED")
 
-    # Upcoming/current-quarter events always stay active.
-    anchor = result_date or period_end
-    if anchor is None:
-        return True
-    age = (today - anchor).days
-    if age < -UPCOMING_DAYS:
-        return False
-    if age <= ACTIVE_ENRICH_DAYS:
-        return True
+    # Hard archive: old fiscal periods remain available for quarter-memory and
+    # comparisons, but no longer consume network calls in the live scanner.
+    if period_end is not None and (today - period_end).days > ACTIVE_PERIOD_DAYS:
+        return False, "ARCHIVE_OLD_PERIOD"
 
-    # Old events remain on disk forever, but stop consuming network once scored.
-    if STATE_ORDER.get(event.get("state", "DISCOVERED"), 0) >= STATE_ORDER["PEAD_SCORED"]:
-        return False
-    return age <= EVENT_RETENTION_DAYS
+    # Upcoming events outside the configured discovery horizon are stored but
+    # not enriched yet.
+    if result_date is not None and (result_date - today).days > UPCOMING_DAYS:
+        return False, "DEFER_FAR_UPCOMING"
+
+    # Recently released / current-quarter events are live.
+    if result_date is not None:
+        age = (today - result_date).days
+        if -UPCOMING_DAYS <= age <= ACTIVE_ENRICH_DAYS:
+            return True, "ACTIVE_RESULT_WINDOW"
+        if age > ACTIVE_ENRICH_DAYS:
+            return False, "ARCHIVE_OLD_RESULT"
+
+    # If filing/result date is missing, a current fiscal period may still need
+    # identity or financial enrichment.  Do not let unknown ancient events in.
+    if period_end is not None:
+        period_age = (today - period_end).days
+        if -UPCOMING_DAYS <= period_age <= ACTIVE_PERIOD_DAYS:
+            return True, "ACTIVE_CURRENT_PERIOD"
+        return False, "ARCHIVE_PERIOD_WINDOW"
+
+    # Date-less legacy rows are preserved on disk but skipped by the hourly
+    # network pass until discovery supplies a meaningful period/date.
+    if state in {"ENTRY_WATCH", "REACTION_PENDING", "REACTION_READY"}:
+        return True, "ACTIVE_OPEN_STATE"
+    return False, "DEFER_NO_DATE"
+
+
+def should_enrich(event: dict[str, Any]) -> bool:
+    return enrichment_activity(event)[0]
 
 
 def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -> dict[str, Any]:
+    all_events = store.all()
+    classified = [(event, enrichment_activity(event)) for event in all_events]
+    candidates = [event for event, (active, _) in classified if active]
+    candidates.sort(key=_enrichment_priority)
+
+    # Hard cap prevents an unexpectedly noisy exchange response from turning an
+    # hourly run into a 60-minute historical backfill. Highest-priority released
+    # and near-term events win; deferred events remain safely persisted.
+    selected = candidates[:MAX_ACTIVE_ENRICH_EVENTS]
+    deferred_by_cap = max(0, len(candidates) - len(selected))
+    reason_counts: dict[str, int] = {}
+    for _, (_, reason) in classified:
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
     stats = {
         "events": 0, "filed": 0, "financials": 0, "reactionReady": 0,
         "deferredUpcoming": 0, "errors": [],
+        "eventsTracked": len(all_events),
+        "activeCandidates": len(candidates),
+        "selectedForEnrichment": len(selected),
+        "deferredByCap": deferred_by_cap,
+        "activityReasons": reason_counts,
         "yahooBudget": _YAHOO_BUDGET_USED,
     }
-    active = [event for event in store.all() if should_enrich(event)]
-    active.sort(key=_enrichment_priority)
+    active = selected
     total = len(active)
+    print(
+        f"Enrichment plan: tracked={len(all_events)} active={len(candidates)} "
+        f"selected={len(active)} deferred_by_cap={deferred_by_cap} "
+        f"archived_old_period={reason_counts.get('ARCHIVE_OLD_PERIOD', 0)}",
+        flush=True,
+    )
 
     for idx, event in enumerate(active, 1):
         stats["events"] += 1
@@ -3390,6 +3444,40 @@ def self_test() -> int:
     if candidates != ["523343.BO"]:
         failures.append(f"BSE-only Yahoo mapping wrong: {candidates}")
 
+    # Active/archive selection regression: old periods must never consume
+    # hourly network enrichment, while current and near-term events do.
+    test_today = date(2026, 10, 7)
+    old_event = {
+        "eventId": "OLD|2021-03-31",
+        "state": "RESULT_FILED",
+        "period": {"end": "2021-03-31"},
+        "fields": {
+            "result_date": {"value": "2026-10-06"},
+            "results_released": {"value": True},
+        },
+    }
+    live_event = {
+        "eventId": "LIVE|2026-09-30",
+        "state": "RESULT_FILED",
+        "period": {"end": "2026-09-30"},
+        "fields": {
+            "result_date": {"value": "2026-10-06"},
+            "results_released": {"value": True},
+        },
+    }
+    upcoming_event = {
+        "eventId": "NEXT|2026-09-30",
+        "state": "SCHEDULED",
+        "period": {"end": "2026-09-30"},
+        "fields": {"result_date": {"value": "2026-10-20"}},
+    }
+    if enrichment_activity(old_event, test_today)[0] is not False:
+        failures.append("old fiscal period was not archived")
+    if enrichment_activity(live_event, test_today)[0] is not True:
+        failures.append("current filed result was not active")
+    if enrichment_activity(upcoming_event, test_today)[0] is not True:
+        failures.append("near-term upcoming event was not active")
+
     # PAT trend edge cases.
     cases = [
         ((55, -12), "TURNAROUND", None),
@@ -3432,6 +3520,8 @@ def self_test() -> int:
     print("✓ full-identity event never becomes None")
     print("✓ malformed fetch metadata is repaired")
     print("✓ BSE-only symbols do not invent .NS tickers")
+    print("✓ historical quarters are archived from hourly enrichment")
+    print("✓ current/near-term events remain active")
     print("✓ PAT turnaround/deterioration logic")
     print("✓ after-hours reaction session")
     print("✓ Q2 FY27 fiscal-quarter mapping")
