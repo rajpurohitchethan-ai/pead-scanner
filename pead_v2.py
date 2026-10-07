@@ -83,7 +83,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.1.1"
+ENGINE_VERSION = "2.1.2"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -92,6 +92,23 @@ EVENT_RETENTION_DAYS = int(os.getenv("EVENT_RETENTION_DAYS", "550"))
 ACTIVE_ENRICH_DAYS = int(os.getenv("ACTIVE_ENRICH_DAYS", "120"))
 SOURCE_RETRY_ATTEMPTS = int(os.getenv("SOURCE_RETRY_ATTEMPTS", "3"))
 SOURCE_DELAY_SEC = float(os.getenv("SOURCE_DELAY_SEC", "1.25"))
+HEAVY_UPCOMING_DAYS = int(os.getenv("HEAVY_UPCOMING_DAYS", "14"))
+VALUATION_UPCOMING_DAYS = int(os.getenv("VALUATION_UPCOMING_DAYS", "3"))
+YAHOO_TIMEOUT_SEC = int(os.getenv("YAHOO_TIMEOUT_SEC", "8"))
+YAHOO_NEGATIVE_TTL_HOURS = int(os.getenv("YAHOO_NEGATIVE_TTL_HOURS", "72"))
+YAHOO_PRICE_BUDGET = int(os.getenv("YAHOO_PRICE_BUDGET", "40"))
+YAHOO_FUNDAMENTALS_BUDGET = int(os.getenv("YAHOO_FUNDAMENTALS_BUDGET", "25"))
+YAHOO_QUARTERLY_BUDGET = int(os.getenv("YAHOO_QUARTERLY_BUDGET", "25"))
+YAHOO_NEGATIVE_CACHE_PATH = MASTER_DIR / "yahoo_negative_cache.json"
+
+# Per-run caches/budgets prevent repeated calls for the same security across
+# several quarterly events. The persistent negative cache prevents known Yahoo
+# 404/delisted tickers from consuming time every hour.
+_YAHOO_NEGATIVE_CACHE: dict[str, dict[str, Any]] | None = None
+_YAHOO_HISTORY_CACHE: dict[tuple[str, str], Any] = {}
+_YAHOO_FUNDAMENTALS_CACHE: dict[str, dict[str, Any]] = {}
+_YAHOO_QUARTERLY_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
+_YAHOO_BUDGET_USED = {"price": 0, "fundamentals": 0, "quarterly": 0}
 
 # Core PEAD thresholds. They are intentionally compact; secondary metrics modify
 # conviction but do not block a valid PEAD event from existing.
@@ -989,23 +1006,153 @@ class BSEAdapter:
         )
 
 
+
+def _load_yahoo_negative_cache() -> dict[str, dict[str, Any]]:
+    global _YAHOO_NEGATIVE_CACHE
+    if _YAHOO_NEGATIVE_CACHE is not None:
+        return _YAHOO_NEGATIVE_CACHE
+    cache: dict[str, dict[str, Any]] = {}
+    try:
+        if YAHOO_NEGATIVE_CACHE_PATH.exists():
+            raw = json.loads(YAHOO_NEGATIVE_CACHE_PATH.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                cache = {str(k).upper(): v for k, v in raw.items() if isinstance(v, dict)}
+    except Exception:
+        cache = {}
+    _YAHOO_NEGATIVE_CACHE = cache
+    return cache
+
+
+def _save_yahoo_negative_cache() -> None:
+    cache = _load_yahoo_negative_cache()
+    now = now_ist()
+    cleaned = {}
+    for ticker, meta in cache.items():
+        until = parse_datetime(meta.get("until"))
+        if until is None or until > now:
+            cleaned[ticker] = meta
+    global _YAHOO_NEGATIVE_CACHE
+    _YAHOO_NEGATIVE_CACHE = cleaned
+    try:
+        YAHOO_NEGATIVE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        json_dump_atomic(YAHOO_NEGATIVE_CACHE_PATH, cleaned)
+    except Exception:
+        pass
+
+
+def _yahoo_is_negative(ticker: str) -> bool:
+    ticker = str(ticker or "").upper().strip()
+    meta = _load_yahoo_negative_cache().get(ticker)
+    if not meta:
+        return False
+    until = parse_datetime(meta.get("until"))
+    if until is None:
+        return False
+    if until <= now_ist():
+        _load_yahoo_negative_cache().pop(ticker, None)
+        return False
+    return True
+
+
+def _yahoo_mark_negative(ticker: str, reason: str, hours: int | None = None) -> None:
+    ticker = str(ticker or "").upper().strip()
+    if not ticker:
+        return
+    ttl = int(hours or YAHOO_NEGATIVE_TTL_HOURS)
+    _load_yahoo_negative_cache()[ticker] = {
+        "failedAt": iso_now(),
+        "until": (now_ist() + timedelta(hours=ttl)).isoformat(),
+        "reason": str(reason or "Yahoo unavailable")[:500],
+    }
+
+
+def _yahoo_clear_negative(ticker: str) -> None:
+    _load_yahoo_negative_cache().pop(str(ticker or "").upper().strip(), None)
+
+
+def _yahoo_hard_failure(text: str) -> bool:
+    low = str(text or "").lower()
+    return any(token in low for token in (
+        "quote not found", "possibly delisted", "may be delisted",
+        "no data found", "404", "empty history", "empty info",
+    ))
+
+
+def _yahoo_budget(kind: str, limit: int) -> bool:
+    used = int(_YAHOO_BUDGET_USED.get(kind, 0))
+    if used >= max(0, int(limit)):
+        return False
+    _YAHOO_BUDGET_USED[kind] = used + 1
+    return True
+
+
+def _heavy_enrichment_due(event: dict[str, Any], store: EventStore) -> bool:
+    if boolish(store.value(event, "results_released")) is True:
+        return True
+    rd = parse_date(store.value(event, "result_date")) or parse_date(event.get("period", {}).get("end"))
+    if rd is None:
+        return False
+    days = (rd - now_ist().date()).days
+    return -ACTIVE_ENRICH_DAYS <= days <= HEAVY_UPCOMING_DAYS
+
+
+def _valuation_due(event: dict[str, Any], store: EventStore) -> bool:
+    if boolish(store.value(event, "results_released")) is True:
+        return True
+    rd = parse_date(store.value(event, "result_date"))
+    if rd is None:
+        return False
+    return 0 <= (rd - now_ist().date()).days <= VALUATION_UPCOMING_DAYS
+
+
+def _enrichment_priority(event: dict[str, Any]) -> tuple[int, int, str]:
+    released = boolish(meta_value(event, "results_released")) is True
+    rd = parse_date(meta_value(event, "result_date")) or parse_date(event.get("period", {}).get("end"))
+    today = now_ist().date()
+    if released:
+        bucket = 0
+    elif rd is not None and rd <= today:
+        bucket = 1
+    elif rd is not None and (rd - today).days <= HEAVY_UPCOMING_DAYS:
+        bucket = 2
+    else:
+        bucket = 3
+    distance = abs((rd - today).days) if rd is not None else 9999
+    return bucket, distance, str(event.get("eventId") or "")
+
+
 class YahooAdapter:
     def __init__(self, ctx: SourceContext):
         self.ctx = ctx
 
     def _ticker_candidates(self, event: dict[str, Any]) -> list[str]:
         sec = event.get("security", {})
-        out = []
+        out: list[str] = []
         explicit = str(sec.get("yahooTicker") or "").upper().strip()
-        if explicit:
-            out.append(explicit)
-        ns = normalize_symbol(sec.get("nseSymbol") or sec.get("symbol"))
-        if ns:
-            out.append(f"{ns}.NS")
-        bc = str(sec.get("bseCode") or "").strip()
-        if bc.isdigit():
-            out.append(f"{bc}.BO")
-        return list(dict.fromkeys(out))
+        nse_symbol = normalize_symbol(sec.get("nseSymbol"))
+        bse_code = str(sec.get("bseCode") or "").strip()
+
+        # Do not invent .NS for a BSE-only company. This was the main source of
+        # MICROSE.NS / MACIND.NS 404 loops. Prefer the exchange identity we
+        # actually know.
+        if nse_symbol:
+            if explicit:
+                out.append(explicit)
+            out.append(f"{nse_symbol}.NS")
+            if bse_code.isdigit():
+                out.append(f"{bse_code}.BO")
+        elif bse_code.isdigit():
+            out.append(f"{bse_code}.BO")
+            if explicit and explicit.endswith(".BO"):
+                out.append(explicit)
+        else:
+            if explicit:
+                out.append(explicit)
+            generic = normalize_symbol(sec.get("symbol"))
+            if generic and not generic.isdigit():
+                out.append(f"{generic}.NS")
+
+        return [t for t in dict.fromkeys(out) if t and not _yahoo_is_negative(t)]
 
     def history(self, event: dict[str, Any], period: str = "18mo") -> tuple[Any, str | None, str | None]:
         if yf is None:
@@ -1013,12 +1160,21 @@ class YahooAdapter:
         eid = event["eventId"]
         symbol = event.get("security", {}).get("symbol")
         errors = []
-        for ticker in self._ticker_candidates(event):
+        candidates = self._ticker_candidates(event)
+        if not candidates:
+            return None, None, "no eligible Yahoo ticker (negative-cached or unmapped)"
+        for ticker in candidates:
+            key = (ticker, period)
+            if key in _YAHOO_HISTORY_CACHE:
+                cached = _YAHOO_HISTORY_CACHE[key]
+                return cached.copy() if hasattr(cached, "copy") else cached, ticker, None
+            if not _yahoo_budget("price", YAHOO_PRICE_BUDGET):
+                return None, None, "Yahoo price budget exhausted for this run"
             started = time.perf_counter()
             try:
                 frame = yf.download(
                     ticker, period=period, interval="1d", auto_adjust=False,
-                    progress=False, threads=False, timeout=20,
+                    progress=False, threads=False, timeout=YAHOO_TIMEOUT_SEC,
                 )
                 if frame is None or frame.empty:
                     raise RuntimeError("empty history")
@@ -1027,6 +1183,8 @@ class YahooAdapter:
                         frame = frame.xs(ticker, axis=1, level=1)
                     except Exception:
                         frame.columns = frame.columns.get_level_values(0)
+                _YAHOO_HISTORY_CACHE[key] = frame.copy() if hasattr(frame, "copy") else frame
+                _yahoo_clear_negative(ticker)
                 self.ctx.log.write(
                     source="YAHOO_PRICE", endpoint="history", status="OK",
                     event_id=eid, symbol=str(symbol or ticker),
@@ -1035,10 +1193,13 @@ class YahooAdapter:
                 )
                 return frame, ticker, None
             except Exception as exc:
-                errors.append(f"{ticker}: {type(exc).__name__}: {exc}")
+                msg = f"{ticker}: {type(exc).__name__}: {exc}"
+                errors.append(msg)
+                if _yahoo_hard_failure(msg):
+                    _yahoo_mark_negative(ticker, msg)
                 self.ctx.log.write(
                     source="YAHOO_PRICE", endpoint="history", status="FAILED",
-                    event_id=eid, symbol=str(symbol or ticker), error=errors[-1],
+                    event_id=eid, symbol=str(symbol or ticker), error=msg,
                     elapsed_ms=round((time.perf_counter() - started) * 1000),
                     extra={"ticker": ticker},
                 )
@@ -1050,7 +1211,14 @@ class YahooAdapter:
         eid = event["eventId"]
         symbol = event.get("security", {}).get("symbol")
         errors = []
-        for ticker in self._ticker_candidates(event):
+        candidates = self._ticker_candidates(event)
+        if not candidates:
+            return {}, None, "no eligible Yahoo ticker (negative-cached or unmapped)"
+        for ticker in candidates:
+            if ticker in _YAHOO_FUNDAMENTALS_CACHE:
+                return dict(_YAHOO_FUNDAMENTALS_CACHE[ticker]), ticker, None
+            if not _yahoo_budget("fundamentals", YAHOO_FUNDAMENTALS_BUDGET):
+                return {}, None, "Yahoo fundamentals budget exhausted for this run"
             started = time.perf_counter()
             try:
                 t = yf.Ticker(ticker)
@@ -1074,6 +1242,8 @@ class YahooAdapter:
                 mcap = safe_num(info.get("marketCap"))
                 fcf = safe_num(info.get("freeCashflow"))
                 out["fcf_yield_pct"] = (fcf / mcap * 100) if fcf is not None and mcap not in (None, 0) else None
+                _YAHOO_FUNDAMENTALS_CACHE[ticker] = dict(out)
+                _yahoo_clear_negative(ticker)
                 self.ctx.log.write(
                     source="YAHOO_FUNDAMENTALS", endpoint="info", status="OK",
                     event_id=eid, symbol=str(symbol or ticker),
@@ -1082,10 +1252,13 @@ class YahooAdapter:
                 )
                 return out, ticker, None
             except Exception as exc:
-                errors.append(f"{ticker}: {type(exc).__name__}: {exc}")
+                msg = f"{ticker}: {type(exc).__name__}: {exc}"
+                errors.append(msg)
+                if _yahoo_hard_failure(msg):
+                    _yahoo_mark_negative(ticker, msg)
                 self.ctx.log.write(
                     source="YAHOO_FUNDAMENTALS", endpoint="info", status="FAILED",
-                    event_id=eid, symbol=str(symbol or ticker), error=errors[-1],
+                    event_id=eid, symbol=str(symbol or ticker), error=msg,
                     elapsed_ms=round((time.perf_counter() - started) * 1000),
                     extra={"ticker": ticker},
                 )
@@ -1098,7 +1271,16 @@ class YahooAdapter:
         if period_end is None:
             return {}, "period end unavailable"
         errors = []
-        for ticker in self._ticker_candidates(event):
+        candidates = self._ticker_candidates(event)
+        if not candidates:
+            return {}, "no eligible Yahoo ticker (negative-cached or unmapped)"
+        period_key = period_end.isoformat()
+        for ticker in candidates:
+            cache_key = (ticker, period_key)
+            if cache_key in _YAHOO_QUARTERLY_CACHE:
+                return dict(_YAHOO_QUARTERLY_CACHE[cache_key]), None
+            if not _yahoo_budget("quarterly", YAHOO_QUARTERLY_BUDGET):
+                return {}, "Yahoo quarterly budget exhausted for this run"
             try:
                 t = yf.Ticker(ticker)
                 stmt = t.quarterly_income_stmt
@@ -1165,9 +1347,14 @@ class YahooAdapter:
                     "ticker": ticker,
                     "statement_period": current_date.isoformat(),
                 }
+                _YAHOO_QUARTERLY_CACHE[cache_key] = dict(out)
+                _yahoo_clear_negative(ticker)
                 return out, None
             except Exception as exc:
-                errors.append(f"{ticker}: {type(exc).__name__}: {exc}")
+                msg = f"{ticker}: {type(exc).__name__}: {exc}"
+                errors.append(msg)
+                if _yahoo_hard_failure(msg):
+                    _yahoo_mark_negative(ticker, msg, hours=24)
         return {}, "; ".join(errors)
 
 
@@ -2434,14 +2621,23 @@ def should_enrich(event: dict[str, Any]) -> bool:
 
 
 def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -> dict[str, Any]:
-    stats = {"events": 0, "filed": 0, "financials": 0, "reactionReady": 0, "errors": []}
-    for event in store.all():
-        if not should_enrich(event):
-            continue
+    stats = {
+        "events": 0, "filed": 0, "financials": 0, "reactionReady": 0,
+        "deferredUpcoming": 0, "errors": [],
+        "yahooBudget": _YAHOO_BUDGET_USED,
+    }
+    active = [event for event in store.all() if should_enrich(event)]
+    active.sort(key=_enrichment_priority)
+    total = len(active)
+
+    for idx, event in enumerate(active, 1):
         stats["events"] += 1
         original_event = event
         original_event_id = str(event.get("eventId") or "unknown-event")
         try:
+            if idx == 1 or idx % 10 == 0 or idx == total:
+                print(f"Enrichment progress {idx}/{total}: {original_event_id}", flush=True)
+
             identified = fill_security_identity(event, store, master, ctx)
             if not isinstance(identified, dict):
                 raise RuntimeError(
@@ -2449,13 +2645,32 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
                     "expected event dictionary"
                 )
             event = identified
-            enrich_valuation(event, store, master, ctx)
-            if boolish(store.value(event, "results_released")) is True:
+
+            released = boolish(store.value(event, "results_released")) is True
+            if released:
                 stats["filed"] += 1
+
+            # Far-away scheduled events are stored permanently now, but heavy
+            # price/Yahoo enrichment waits until they are within the actionable
+            # PEAD window. This prevents hundreds of unnecessary API calls.
+            if not _heavy_enrichment_due(event, store):
+                stats["deferredUpcoming"] += 1
+                store.save(event)
+                continue
+
+            # Core/authoritative work comes first. Valuation is deliberately
+            # last because Yahoo info is optional and historically the slowest
+            # fallback.
+            if released:
                 enrich_financials(event, store, ctx)
                 if store.value(event, "revenue_cr") is not None and store.value(event, "pat_cr") is not None:
                     stats["financials"] += 1
+
             enrich_price(event, store, ctx)
+
+            if _valuation_due(event, store):
+                enrich_valuation(event, store, master, ctx)
+
             if STATE_ORDER.get(event.get("state", "DISCOVERED"), 0) >= STATE_ORDER["REACTION_READY"]:
                 stats["reactionReady"] += 1
             store.save(event)
@@ -2481,7 +2696,11 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
                         f"{event_id}: error-handler failure: "
                         f"{type(log_exc).__name__}: {log_exc}"
                     )
+
     master.save()
+    _save_yahoo_negative_cache()
+    stats["yahooNegativeCached"] = len(_load_yahoo_negative_cache())
+    stats["yahooBudget"] = dict(_YAHOO_BUDGET_USED)
     return stats
 
 
@@ -3162,6 +3381,15 @@ def self_test() -> int:
         if not isinstance(identified.get("fetch"), dict):
             failures.append("fetch metadata repair failed")
 
+    # BSE-only identities must never invent an NSE Yahoo ticker.
+    bse_event = {
+        "eventId": "TESTBSE|2026-09-30",
+        "security": {"symbol": "MICROSE", "bseCode": "523343"},
+    }
+    candidates = YahooAdapter(ctx=None)._ticker_candidates(bse_event)
+    if candidates != ["523343.BO"]:
+        failures.append(f"BSE-only Yahoo mapping wrong: {candidates}")
+
     # PAT trend edge cases.
     cases = [
         ((55, -12), "TURNAROUND", None),
@@ -3203,6 +3431,7 @@ def self_test() -> int:
     print("✓ source precedence")
     print("✓ full-identity event never becomes None")
     print("✓ malformed fetch metadata is repaired")
+    print("✓ BSE-only symbols do not invent .NS tickers")
     print("✓ PAT turnaround/deterioration logic")
     print("✓ after-hours reaction session")
     print("✓ Q2 FY27 fiscal-quarter mapping")
