@@ -80,9 +80,10 @@ DATA_PATH = ROOT / "data.json"
 INTELLIGENCE_PATH = ROOT / "intelligence.json"
 HEALTH_PATH = ROOT / "run_health.json"
 SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
+V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.1.0"
+ENGINE_VERSION = "2.1.1"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -279,6 +280,7 @@ def parse_datetime(value: Any) -> datetime | None:
         s = str(value).strip()
         dt = None
         for fmt in (
+            "%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S.%f",
             "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S",
             "%d-%b-%Y %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d-%m-%Y %H:%M:%S",
         ):
@@ -289,7 +291,7 @@ def parse_datetime(value: Any) -> datetime | None:
                 pass
         if dt is None and pd is not None:
             try:
-                ts = pd.to_datetime(s, errors="coerce", dayfirst=True)
+                ts = pd.to_datetime(s, errors="coerce", dayfirst=not bool(re.match(r"^\\d{4}-\\d{2}-\\d{2}", s)))
                 if not pd.isna(ts):
                     dt = ts.to_pydatetime()
             except Exception:
@@ -696,7 +698,10 @@ class EventStore:
         error: str | None = None,
         raw_ref: str | None = None,
     ) -> None:
-        fetch = event.setdefault("fetch", {})
+        fetch = event.get("fetch")
+        if not isinstance(fetch, dict):
+            fetch = {}
+            event["fetch"] = fetch
         previous = fetch.get(source) or {}
         fetch[source] = {
             "lastAttempt": iso_now(),
@@ -1918,8 +1923,15 @@ def _lakh_to_cr(value: Any) -> float | None:
 
 
 def bootstrap_from_v1(store: EventStore, master: SymbolMaster) -> int:
-    """One-time migration of the last known good v1 feed into persistent events."""
-    if any(EVENTS_DIR.glob("*.json")) or not DATA_PATH.exists():
+    """One-time, idempotent migration of the last known good v1 feed.
+
+    The old implementation skipped migration as soon as *any* v2 event file
+    existed.  A partial run could therefore create exchange-discovered events
+    and permanently prevent the previous good data.json from being preserved.
+    A committed marker is safer: until migration completes successfully, the
+    v1 feed may be replayed and merged non-destructively.
+    """
+    if V1_MIGRATION_MARKER_PATH.exists() or not DATA_PATH.exists():
         return 0
     try:
         payload = json.loads(DATA_PATH.read_text(encoding="utf-8"))
@@ -2015,6 +2027,17 @@ def bootstrap_from_v1(store: EventStore, master: SymbolMaster) -> int:
         store.save(event)
         count += 1
     master.save()
+    if count > 0:
+        V1_MIGRATION_MARKER_PATH.parent.mkdir(parents=True, exist_ok=True)
+        json_dump_atomic(
+            V1_MIGRATION_MARKER_PATH,
+            {
+                "completedAt": iso_now(),
+                "rowsProcessed": count,
+                "source": "data.json",
+                "engineVersion": ENGINE_VERSION,
+            },
+        )
     return count
 
 
@@ -2156,7 +2179,9 @@ def fill_security_identity(event: dict[str, Any], store: EventStore, master: Sym
     sec = event.get("security", {})
     symbol = normalize_symbol(sec.get("nseSymbol") or sec.get("symbol"))
     if sec.get("isin") and sec.get("bseCode") and sec.get("yahooTicker"):
-        return
+        # Fully identified securities still need to return the event.  The
+        # previous bare `return` produced None and crashed the enrichment loop.
+        return store.rekey_and_merge(event)
 
     if symbol and not sec.get("isin"):
         try:
@@ -2288,7 +2313,7 @@ def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceConte
 
 def enrich_valuation(event: dict[str, Any], store: EventStore, master: SymbolMaster, ctx: SourceContext) -> None:
     # Avoid hammering Yahoo every hour if a recent success exists.
-    fetch = event.get("fetch", {}).get("YAHOO_FUNDAMENTALS") or {}
+    fetch = (event.get("fetch") or {}).get("YAHOO_FUNDAMENTALS") or {}
     last_success = parse_datetime(fetch.get("lastSuccess"))
     if last_success and (now_ist() - last_success).total_seconds() < 12 * 3600:
         return
@@ -2313,7 +2338,7 @@ def enrich_valuation(event: dict[str, Any], store: EventStore, master: SymbolMas
 def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
     # Price history is expensive. Refresh active events at most every 4h before
     # reaction completion and every 12h afterwards.
-    pf = event.get("fetch", {}).get("PRICE_HISTORY") or {}
+    pf = (event.get("fetch") or {}).get("PRICE_HISTORY") or {}
     last_success = parse_datetime(pf.get("lastSuccess"))
     if last_success:
         age_hours = (now_ist() - last_success).total_seconds() / 3600
@@ -2414,8 +2439,16 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
         if not should_enrich(event):
             continue
         stats["events"] += 1
+        original_event = event
+        original_event_id = str(event.get("eventId") or "unknown-event")
         try:
-            event = fill_security_identity(event, store, master, ctx)
+            identified = fill_security_identity(event, store, master, ctx)
+            if not isinstance(identified, dict):
+                raise RuntimeError(
+                    f"fill_security_identity returned {type(identified).__name__}; "
+                    "expected event dictionary"
+                )
+            event = identified
             enrich_valuation(event, store, master, ctx)
             if boolish(store.value(event, "results_released")) is True:
                 stats["filed"] += 1
@@ -2427,9 +2460,27 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
                 stats["reactionReady"] += 1
             store.save(event)
         except Exception as exc:
-            stats["errors"].append(f"{event.get('eventId')}: {type(exc).__name__}: {exc}")
-            store.record_fetch(event, "ENGINE", ok=False, error=f"{type(exc).__name__}: {exc}")
-            store.save(event)
+            safe_event = event if isinstance(event, dict) else original_event
+            event_id = (
+                str(safe_event.get("eventId"))
+                if isinstance(safe_event, dict) and safe_event.get("eventId")
+                else original_event_id
+            )
+            stats["errors"].append(f"{event_id}: {type(exc).__name__}: {exc}")
+            if isinstance(safe_event, dict):
+                try:
+                    store.record_fetch(
+                        safe_event,
+                        "ENGINE",
+                        ok=False,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                    store.save(safe_event)
+                except Exception as log_exc:
+                    stats["errors"].append(
+                        f"{event_id}: error-handler failure: "
+                        f"{type(log_exc).__name__}: {log_exc}"
+                    )
     master.save()
     return stats
 
@@ -2855,7 +2906,7 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
         "resultDataSource": field_source(event, "revenue_cr") or field_source(event, "pat_cr"),
         "resultSourceUrl": meta_value(event, "xbrl_url"),
         "resultsEvidence": f"Persistent v2 event · state {event.get('state')} · completeness {d.get('completenessPct', 0):.0f}%",
-        "sourceHealth": event.get("fetch", {}),
+        "sourceHealth": event.get("fetch") or {},
     }
 
 
@@ -3086,6 +3137,31 @@ def self_test() -> int:
         assert store.merge_field(e, "revenue_cr", 105, source="NSE_XBRL") is True
         assert store.value(e, "revenue_cr") == 105
 
+    # Regression: a fully identified event must never become None.
+    with tempfile.TemporaryDirectory() as td:
+        troot = Path(td)
+        store = EventStore(troot / "events")
+        master = SymbolMaster(troot / "symbols.json")
+        e = store.ensure_event(
+            security={
+                "symbol": "TESTBSE",
+                "bseCode": "500001",
+                "isin": "INE000A01001",
+                "yahooTicker": "500001.BO",
+            },
+            period_end=date(2026, 9, 30),
+        )
+        identified = fill_security_identity(e, store, master, ctx=None)
+        if not isinstance(identified, dict):
+            failures.append("full-identity enrichment returned None")
+
+        # Also verify malformed legacy fetch metadata is repaired rather than
+        # crashing the error/fetch logger.
+        identified["fetch"] = None
+        store.record_fetch(identified, "ENGINE_TEST", ok=False, error="synthetic")
+        if not isinstance(identified.get("fetch"), dict):
+            failures.append("fetch metadata repair failed")
+
     # PAT trend edge cases.
     cases = [
         ((55, -12), "TURNAROUND", None),
@@ -3125,6 +3201,8 @@ def self_test() -> int:
     print("SELF TEST PASSED")
     print("✓ non-null merge")
     print("✓ source precedence")
+    print("✓ full-identity event never becomes None")
+    print("✓ malformed fetch metadata is repaired")
     print("✓ PAT turnaround/deterioration logic")
     print("✓ after-hours reaction session")
     print("✓ Q2 FY27 fiscal-quarter mapping")
