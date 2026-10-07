@@ -3,6 +3,8 @@
 
   let DATA = null;
   let currentFilter = 'DECLARED';
+  let sortKey = 'conviction';
+  let sortDir = 'desc';
   const $ = id => document.getElementById(id);
 
   function esc(v) {
@@ -10,7 +12,7 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[ch]));
   }
-  function n(v) { const x = Number(v); return Number.isFinite(x) ? x : null; }
+  function n(v) { if (v === null || v === undefined || v === '' || v === '—') return null; const x = Number(v); return Number.isFinite(x) ? x : null; }
   function pct(v) { const x=n(v); return x==null?'—':`${x>0?'+':''}${x.toFixed(1)}%`; }
   function xfmt(v) { const x=n(v); return x==null?'—':`${x.toFixed(2)}x`; }
   function money(v) { const x=n(v); return x==null?'—':`₹${x.toFixed(2)}`; }
@@ -30,7 +32,7 @@
   function setHealth() {
     const h=DATA?.health||{};
     const values={
-      'health-events':h.eventsTracked,
+      'health-events':h.activeDashboardEvents==null?h.eventsTracked:`${h.activeDashboardEvents}/${h.eventsTracked}`,
       'health-financials':`${h.financialsParsed??0}/${h.resultsFiled??0}`,
       'health-reaction':`${h.reactionReady??0}/${h.resultsFiled??0}`,
       'health-completeness':h.declaredCompletenessPct==null?'—':`${Number(h.declaredCompletenessPct).toFixed(0)}%`,
@@ -49,6 +51,41 @@
   function patDisplay(item, fs) {
     if (item.patYoYTurnaround || fs.patYoYTurnaround || String(item.patYoYStatus||fs.patYoYStatus||'').toUpperCase()==='TURNAROUND') return 'TURNAROUND';
     return pct(item.patYoY ?? fs.patYoYCalc);
+  }
+
+  function entryTone(signal) {
+    const s=String(signal||'').toUpperCase();
+    if (s==='ENTRY_TRIGGERED') return 'good';
+    if (s==='NEAR_ENTRY'||s==='WATCH_BREAKOUT') return 'warn';
+    if (s==='NO_ENTRY'||s==='WAIT_RECLAIM') return 'bad';
+    return 'warn';
+  }
+
+  function entryLabel(signal) {
+    return String(signal||'DATA_PENDING').replaceAll('_',' ');
+  }
+
+  function priceTracker(item) {
+    const pc=item.priceContext||{};
+    const current=n(pc.lastClose);
+    const trigger=n(item.entryTriggerPrice ?? item.entry);
+    const distance=n(item.entryDistancePct);
+    const tracked=n(pc.trackedChangePct);
+    const updated=pc.updatedAt
+      ? new Date(pc.updatedAt).toLocaleString('en-IN')
+      : '—';
+    return `
+      <div class="price-tracker">
+        <div class="price-track-cell"><span>Current price</span><b>${money(current)}</b></div>
+        <div class="price-track-cell"><span>Entry trigger</span><b>${money(trigger)}</b></div>
+        <div class="price-track-cell"><span>Distance to trigger</span><b>${pct(distance)}</b></div>
+        <div class="price-track-cell"><span>Tracked move</span><b>${pct(tracked)}</b></div>
+        <div class="price-track-cell"><span>Price updated</span><b>${esc(updated)}</b></div>
+      </div>
+      <div class="entry-signal">
+        <span class="badge ${entryTone(item.entrySignal)}">${esc(entryLabel(item.entrySignal))}</span>
+      </div>
+    `;
   }
 
   function metricRows(item) {
@@ -74,6 +111,7 @@
       <div class="metric"><span>FCF Yield</span><b>${pct(vm.fcfYieldPct)}</b></div>
       <div class="metric"><span>Entry</span><b>${money(item.entry)}</b></div>
       <div class="metric"><span>SL</span><b>${money(item.sl)}</b></div>
+      <div class="metric"><span>TSL</span><b>${money(item.tsl)}</b></div>
     `;
   }
 
@@ -105,6 +143,7 @@
           <div><small>PRICE RESPONSE</small>${badge(item.priceResponse?.label)}</div>
         </div>
         <div class="verdict ${tone(item.verdict)}">${esc(item.verdict)}</div>
+        ${priceTracker(item)}
         <div class="metrics">${metricRows(item)}</div>
         <div class="evidence-grid">
           ${evidenceList('WHY IT WORKS',item.reasons,'positive')}
@@ -123,10 +162,34 @@
       if (currentFilter==='HIGH') ok=item.verdict==='HIGH-CONVICTION PEAD CANDIDATE';
       if (currentFilter==='PRICED') ok=item.expectationReality?.label==='PRICED IN';
       if (currentFilter==='PENDING') ok=String(item.verdict||'').includes('DATA PENDING')||item.resultReality?.label==='UNVERIFIED';
+      if (currentFilter==='ENTRY') ok=['WATCH_BREAKOUT','NEAR_ENTRY','ENTRY_TRIGGERED'].includes(String(item.entrySignal||''));
       if (currentFilter==='UPCOMING') ok=item.resultsReleased!==true;
       if (currentFilter==='ALL') ok=true;
       const searchable=[item.symbol,item.name,item.sector,item.verdict,item.eventState,item.resultReality?.label,item.expectationReality?.label,item.valuationReality?.label].join(' ').toLowerCase();
       return ok&&(!q||searchable.includes(q));
+    }).sort((a,b)=>{
+      const value=(item)=>{
+        const pc=item.priceContext||{};
+        const fs=item.fundamentalSnapshot||{};
+        switch(sortKey) {
+          case 'completeness': return n(item.dataCompletenessPct);
+          case 'resultDate': return item.resultDate ? new Date(item.resultDate).getTime() : null;
+          case 'revenue': return n(item.revenueYoY ?? fs.revenueYoYCalc);
+          case 'pat': return n(item.patYoY ?? fs.patYoYCalc);
+          case 'reaction': return n(pc.resultDayPct);
+          case 'rvol': return n(pc.relativeVolume);
+          case 'price': return n(pc.lastClose);
+          case 'entryDistance': return n(item.entryDistancePct);
+          case 'conviction':
+          default: return n(item.convictionScore);
+        }
+      };
+      const av=value(a), bv=value(b);
+      if (av==null && bv==null) return String(a.symbol||'').localeCompare(String(b.symbol||''));
+      if (av==null) return 1;
+      if (bv==null) return -1;
+      const cmp=av===bv?String(a.symbol||'').localeCompare(String(b.symbol||'')):av-bv;
+      return sortDir==='asc'?cmp:-cmp;
     });
   }
 
@@ -165,6 +228,15 @@
     render();
   });
   $('search')?.addEventListener('input',render);
+  $('sort-key')?.addEventListener('change',e=>{
+    sortKey=e.target.value;
+    render();
+  });
+  $('sort-dir')?.addEventListener('click',()=>{
+    sortDir=sortDir==='desc'?'asc':'desc';
+    $('sort-dir').textContent=sortDir==='desc'?'Descending ↓':'Ascending ↑';
+    render();
+  });
   $('reload')?.addEventListener('click',load);
   load();
 })();
