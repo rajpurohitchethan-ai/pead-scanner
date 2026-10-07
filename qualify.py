@@ -1522,7 +1522,8 @@ def qualify(row, stock_history, sector_history):
         else:
             out["allocationPct"] = 10
 
-    out["qualificationVersion"] = "pead-v1.2-public-fallbacks"
+    out["qualificationVersion"] = "pead-v1.1-nse-mcp"
+    out["qualificationEnhancementVersion"] = "public-fallbacks-v1"
     return out
 
 
@@ -1676,7 +1677,8 @@ def main():
 
     payload["stocks"] = output
     payload["companies"] = output
-    payload["qualificationVersion"] = "pead-v1.2-public-fallbacks"
+    payload["qualificationVersion"] = "pead-v1.1-nse-mcp"
+    payload["qualificationEnhancementVersion"] = "public-fallbacks-v1"
     payload["marketDataMode"] = "nse-mcp-primary"
     payload["nseMcp"] = mcp_layer.get("meta") or {}
     payload["nseMcpErrors"] = mcp_layer.get("errors") or []
