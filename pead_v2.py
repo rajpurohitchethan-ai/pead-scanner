@@ -83,7 +83,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.1.6"
+ENGINE_VERSION = "2.1.7"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -3680,13 +3680,26 @@ def self_test() -> int:
             failures.append("fetch metadata repair failed")
 
     # BSE-only identities must never invent an NSE Yahoo ticker.
+    # This regression test must be independent of the persistent Yahoo
+    # negative-cache.  A real prior 404 for 523343.BO is allowed to suppress
+    # the ticker during normal operation, but it must not make the mapping
+    # self-test fail.
     bse_event = {
         "eventId": "TESTBSE|2026-09-30",
         "security": {"symbol": "MICROSE", "bseCode": "523343"},
     }
-    candidates = YahooAdapter(ctx=None)._ticker_candidates(bse_event)
-    if candidates != ["523343.BO"]:
-        failures.append(f"BSE-only Yahoo mapping wrong: {candidates}")
+    test_ticker = "523343.BO"
+    negative_cache = _load_yahoo_negative_cache()
+    saved_negative = negative_cache.pop(test_ticker, None)
+    try:
+        candidates = YahooAdapter(ctx=None)._ticker_candidates(bse_event)
+        if candidates != [test_ticker]:
+            failures.append(f"BSE-only Yahoo mapping wrong: {candidates}")
+    finally:
+        if saved_negative is not None:
+            negative_cache[test_ticker] = saved_negative
+        else:
+            negative_cache.pop(test_ticker, None)
 
     # Active/archive selection regression: old periods must never consume
     # hourly network enrichment, while current and near-term events do.
