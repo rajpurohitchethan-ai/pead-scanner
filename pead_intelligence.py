@@ -26,6 +26,8 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import yfinance as yf
 
+from public_sources import concall_for_row, screeningmantis_for_row, stockscans_for_row
+
 IST = ZoneInfo("Asia/Kolkata")
 PRICED_IN_RUNUP_PCT = 15.0
 RVOL_CONFIRM = 1.20
@@ -323,39 +325,67 @@ def history_for_row(row: dict) -> pd.DataFrame:
     return pd.DataFrame()
 
 
+def _apply_public_price_fallback(row: dict, out: dict) -> dict:
+    """Fill missing technical/reaction fields from public ScreeningMantis.
+
+    E-Day% is used only when the displayed past-earnings date matches the
+    tracked result date.  Existing exchange/Yahoo values always win.
+    """
+    try:
+        mantis = screeningmantis_for_row(row)
+    except Exception as exc:
+        mantis = {"error": f"{type(exc).__name__}: {exc}"}
+
+    out["screeningMantis"] = mantis
+    if mantis.get("error"):
+        return out
+
+    if out.get("relativeVolume") is None and mantis.get("volumeSpike") is not None:
+        out["relativeVolume"] = num(mantis.get("volumeSpike"))
+        out["rvolMode"] = "SCREENINGMANTIS_PUBLIC_1D_9D"
+
+    if out.get("distanceFrom52wHighPct") is None and mantis.get("distanceFrom52wHighPct") is not None:
+        out["distanceFrom52wHighPct"] = num(mantis.get("distanceFrom52wHighPct"))
+
+    if (
+        out.get("resultDayPct") is None
+        and mantis.get("resultDateMatched") is True
+        and mantis.get("earningsDayPct") is not None
+    ):
+        out["resultDayPct"] = num(mantis.get("earningsDayPct"))
+        out["resultDaySource"] = "ScreeningMantis public E-Day%"
+
+    if out.get("lastClose") is None and mantis.get("price") is not None:
+        # This is only a last-resort displayed public price; callers still see
+        # the source metadata and exchange/Yahoo values take precedence.
+        out["lastClose"] = num(mantis.get("price"))
+        out["lastCloseSource"] = "ScreeningMantis public table"
+
+    return out
+
+
 def price_context(row: dict, h: pd.DataFrame) -> dict:
     out = {
-        "pre5dPct": num(pick(row, "preResult5dPct", "pre5dPct")),
-        "pre10dPct": num(pick(row, "preResult10dPct", "pre10dPct")),
-        "pre20dPct": num(pick(row, "preResultRunupPct", "pre20dPct")),
-        "resultDayPct": num(pick(row, "resultDayReturnPct", "resultDayPct")),
+        "pre5dPct": None,
+        "pre10dPct": None,
+        "pre20dPct": num(row.get("preResultRunupPct")),
+        "resultDayPct": num(row.get("resultDayReturnPct")),
         "relativeVolume": num(pick(row, "relativeVolume", "rvol")),
         "rawFullDayRvol": None,
-        "rvolMode": "BASE / BSE" if pick(row, "relativeVolume", "rvol") not in (None, "") else "UNVERIFIED",
+        "rvolMode": "UNVERIFIED",
         "rvolIsPartial": False,
-        "rvolAsOf": pick(row, "priceTimestamp"),
-        "distanceFrom52wHighPct": num(
-            pick(row, "distanceFrom52wHighPct", "fifty2WeekHighDistancePct")
-        ),
+        "rvolAsOf": None,
+        "distanceFrom52wHighPct": None,
         "lastClose": num(pick(row, "price", "lastPrice", "ltp")),
-        "historyAvailable": any(
-            pick(row, k) not in (None, "")
-            for k in (
-                "preResult5dPct",
-                "preResult10dPct",
-                "preResultRunupPct",
-                "resultDayReturnPct",
-                "distanceFrom52wHighPct",
-            )
-        ),
+        "historyAvailable": False,
     }
 
     if h.empty or "Close" not in h:
-        return out
+        return _apply_public_price_fallback(row, out)
 
     close = pd.to_numeric(h["Close"], errors="coerce").dropna()
     if close.empty:
-        return out
+        return _apply_public_price_fallback(row, out)
 
     out["historyAvailable"] = True
     out["lastClose"] = float(close.iloc[-1])
@@ -442,7 +472,7 @@ def price_context(row: dict, h: pd.DataFrame) -> dict:
                     out["relativeVolume"] = raw_rvol
                     out["rvolMode"] = "FULL_DAY"
 
-    return out
+    return _apply_public_price_fallback(row, out)
 
 
 def expectation_reality(row: dict, pc: dict) -> dict:
@@ -569,6 +599,9 @@ def empty_fundamentals() -> dict:
         "returnOnEquityPct": None,
         "debtToEquity": None,
         "freeCashFlowYieldPct": None,
+        "marketCapCr": None,
+        "returnOnCapitalEmployedPct": None,
+        "publicSources": {},
         "errors": [],
     }
 
@@ -664,6 +697,60 @@ def fundamental_snapshot(row: dict) -> dict:
     except Exception as exc:
         out["errors"].append(f"ticker:{type(exc).__name__}")
 
+    # Public web fallbacks.  They FILL MISSING values only and never replace
+    # stronger yfinance/exchange data.  StockScans quarter metrics are accepted
+    # only when its latest quarter matches the tracked result period.
+    try:
+        stock = stockscans_for_row(row)
+    except Exception as exc:
+        stock = {"error": f"{type(exc).__name__}: {exc}", "source": "StockScans"}
+
+    try:
+        concall = concall_for_row(row)
+    except Exception as exc:
+        concall = {"error": f"{type(exc).__name__}: {exc}", "source": "Concall.in"}
+
+    out["publicSources"] = {"stockScans": stock, "concall": concall}
+    sources_used = [out.get("source") or "yfinance best-effort"]
+
+    if not stock.get("error"):
+        quarter_ok = stock.get("periodMatchesExpected") is not False
+        if quarter_ok:
+            mapping = {
+                "latestIncomeQuarterEnd": "latestIncomeQuarterEnd",
+                "revenueYoYCalc": "revenueYoY",
+                "patYoYCalc": "patYoY",
+                "operatingMarginNow": "operatingMarginNow",
+            }
+            for dst, key in mapping.items():
+                if out.get(dst) is None and stock.get(key) is not None:
+                    out[dst] = stock.get(key)
+
+        valuation_mapping = {
+            "trailingPE": "trailingPE",
+            "priceToBook": "priceToBook",
+            "enterpriseToEbitda": "enterpriseToEbitda",
+            "returnOnEquityPct": "returnOnEquityPct",
+            "returnOnCapitalEmployedPct": "returnOnCapitalEmployedPct",
+            "marketCapCr": "marketCapCr",
+        }
+        for dst, key in valuation_mapping.items():
+            if out.get(dst) is None and stock.get(key) is not None:
+                out[dst] = stock.get(key)
+        sources_used.append("StockScans public")
+
+    if not concall.get("error"):
+        for dst, key in (
+            ("trailingPE", "trailingPE"),
+            ("priceToBook", "priceToBook"),
+            ("marketCapCr", "marketCapCr"),
+        ):
+            if out.get(dst) is None and concall.get(key) is not None:
+                out[dst] = concall.get(key)
+        sources_used.append("Concall.in public")
+
+    out["source"] = " + ".join(dict.fromkeys(x for x in sources_used if x))
+
     return out
 
 
@@ -695,7 +782,6 @@ def result_reality(row: dict, fs: dict) -> dict:
     pat = num(pick(row, "patYoY"))
     if pat is None:
         pat = num(fs.get("patYoYCalc"))
-    pat_turnaround = bval(pick(row, "patYoYTurnaround")) is True
 
     pat_qoq = num(pick(row, "patQoQ"))
     margin_delta = num(fs.get("operatingMarginYoY"))
@@ -718,10 +804,7 @@ def result_reality(row: dict, fs: dict) -> dict:
             red += 1
             risks.append(f"Revenue YoY declined {abs(rev):.1f}%.")
 
-    if pat_turnaround:
-        score += 2
-        reasons.append("PAT turned positive YoY from a loss/zero base.")
-    elif pat is not None:
+    if pat is not None:
         if pat >= 15:
             score += 2
             reasons.append(f"PAT YoY growth is {pat:.1f}%.")
@@ -784,7 +867,7 @@ def result_reality(row: dict, fs: dict) -> dict:
     # Do not call a released result "LOW QUALITY" merely because most
     # current-quarter inputs are still missing. Missing evidence is UNVERIFIED,
     # not negative evidence.
-    core_evidence_count = int(rev is not None) + int(pat is not None or pat_turnaround)
+    core_evidence_count = sum(x is not None for x in (rev, pat))
     evidence_count = sum(
         x is not None
         for x in (
@@ -1432,18 +1515,6 @@ def build_item(row: dict, index: int) -> dict:
         else empty_fundamentals()
     )
 
-    # Base-feed exchange metrics are often fresher than Yahoo for newly
-    # released quarters. Expose them in the snapshot used by the UI.
-    row_revenue_yoy = num(pick(row, "revenueYoY"))
-    row_pat_yoy = num(pick(row, "patYoY"))
-    if row_revenue_yoy is not None:
-        fs["revenueYoYCalc"] = row_revenue_yoy
-    if row_pat_yoy is not None:
-        fs["patYoYCalc"] = row_pat_yoy
-    fs["patYoYTurnaround"] = bval(pick(row, "patYoYTurnaround")) is True
-    fs["patYoYStatus"] = pick(row, "patYoYStatus")
-    fs["patQoQBase"] = num(pick(row, "patQoQ"))
-
     rr = result_reality(row, fs)
     vr = valuation_reality(row, fs)
     pr = price_response(row, pc)
@@ -1465,6 +1536,21 @@ def build_item(row: dict, index: int) -> dict:
         "resultCommentary", "note", "evidence",
     )
 
+    public_sources = dict(fs.get("publicSources") or {})
+    public_sources["screeningMantis"] = pc.get("screeningMantis") or {}
+    stock_public = public_sources.get("stockScans") or {}
+    concall_public = public_sources.get("concall") or {}
+    management_documents = []
+    for key, title in (
+        ("earningsCallTranscriptUrl", "StockScans earnings-call transcript"),
+        ("transcriptSummaryUrl", "StockScans transcript summary"),
+        ("investorPresentationUrl", "StockScans investor presentation"),
+        ("quarterlyResultUrl", "StockScans quarterly result"),
+    ):
+        if stock_public.get(key):
+            management_documents.append({"title": title, "url": stock_public[key]})
+    management_documents.extend(concall_public.get("documents") or [])
+
     return {
         "id": symbol or f"row-{index}",
         "symbol": symbol,
@@ -1477,14 +1563,13 @@ def build_item(row: dict, index: int) -> dict:
         "baseBucket": str(pick(row, "bucket", "peadStatus", "stage", "status") or "—"),
         "baseScore": num(pick(row, "score")),
         "baseScoreText": str(pick(row, "scoreText") or "—"),
-        "marketCapCr": num(pick(row, "marketCapCr", "mcapCr", "market_cap_cr")),
+        "marketCapCr": (
+            num(pick(row, "marketCapCr", "mcapCr", "market_cap_cr"))
+            if num(pick(row, "marketCapCr", "mcapCr", "market_cap_cr")) is not None
+            else num(fs.get("marketCapCr"))
+        ),
         "price": num(pick(row, "price", "lastPrice", "ltp")),
         "priceTimestamp": pick(row, "priceTimestamp", "marketTime", "quoteTimestamp"),
-        "revenueYoY": num(pick(row, "revenueYoY")),
-        "patYoY": num(pick(row, "patYoY")),
-        "patYoYTurnaround": bval(pick(row, "patYoYTurnaround")) is True,
-        "patYoYStatus": pick(row, "patYoYStatus"),
-        "patQoQ": num(pick(row, "patQoQ")),
         "resultReality": rr,
         "expectationReality": er,
         "valuationReality": vr,
@@ -1492,6 +1577,8 @@ def build_item(row: dict, index: int) -> dict:
         "resultVerification": rv,
         "priceContext": pc,
         "fundamentalSnapshot": fs,
+        "publicSources": public_sources,
+        "managementDocuments": management_documents[:12],
         "sectorTailwind": bval(pick(row, "sectorTailwind", "sectorPass")),
         "entry": pick(row, "entry", "entryPrice"),
         "sl": pick(row, "sl", "stopLoss"),
@@ -1653,7 +1740,7 @@ def build_payload(
         "sourceScannerMode": payload.get("scannerMode"),
         "sourceQualificationVersion": payload.get("qualificationVersion"),
         "sourceStockCount": len(rows),
-        "intelligenceVersion": "pead-intelligence-v4-auto-result-detection",
+        "intelligenceVersion": "pead-intelligence-v5-public-fallbacks",
         "safety": {
             "dataJsonReadOnly": True,
             "zeroPublishProtection": True,
@@ -1673,7 +1760,10 @@ def build_payload(
             "Intraday RVOL is time-adjusted and explicitly marked as an estimate.",
             "Valuation requires at least 3 inputs before a label is assigned; otherwise it remains UNVERIFIED.",
             "Official result evidence is marked official only when the source explicitly points to NSE/BSE or an official exchange filing.",
-            "Management commentary is never invented.",
+            "StockScans public pages fill missing quarterly growth/valuation fields only when period consistency checks pass.",
+            "ScreeningMantis public E-Day% is used only when its past-earnings date matches the tracked result date; its public table may cover only the rendered subset.",
+            "Concall.in documents are read only when a company URL/ID is already mapped; no login bypass or search-engine scraping is used.",
+            "Management commentary is never invented; document links can be surfaced without claiming commentary was verified.",
             "This add-on never modifies data.json or the main PEAD radar.",
         ],
         "counts": counts,
