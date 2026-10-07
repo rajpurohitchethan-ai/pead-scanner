@@ -14,6 +14,7 @@ import pandas as pd
 import yfinance as yf
 
 from nse_mcp import fetch_nse_market_layer
+from public_sources import screeningmantis_for_row, stockscans_for_row
 
 try:
     from nse import NSE
@@ -1091,12 +1092,127 @@ def fetch_yfinance_quarterly_enrichment(row):
 
 
 def build_result_enrichment(rows):
+    """Build the strongest result layer available.
+
+    Source precedence:
+    1) NSE official filing / numeric comparison
+    2) BSE official result snapshot
+    3) StockScans PUBLIC page for missing numeric/valuation fields only
+    4) Yahoo quarterly statements as final numeric fallback
+
+    StockScans never proves result release.  It supplements an already verified
+    NSE/BSE event and is accepted only when the displayed quarter matches the
+    tracked result period.
+    """
     nse_map, nse_errors, nse_stats = fetch_nse_result_enrichment(rows)
-    bse_map, bse_errors, bse_stats = fetch_bse_result_enrichment(rows, already=nse_map)
-    merged = dict(nse_map)
-    merged.update(bse_map)
+
+    # Always query BSE as a supplemental official numeric source.  An NSE filing
+    # can prove the event but still omit growth fields present in the BSE snapshot.
+    bse_map, bse_errors, bse_stats = fetch_bse_result_enrichment(rows, already={})
+
+    merged = {symbol: dict(data) for symbol, data in nse_map.items()}
+    bse_supplemented = 0
+
+    for symbol, bse_data in bse_map.items():
+        if symbol not in merged:
+            merged[symbol] = dict(bse_data)
+            continue
+
+        existing = merged[symbol]
+        changed = False
+        for key, value in bse_data.items():
+            if value in (None, ""):
+                continue
+            if existing.get(key) in (None, ""):
+                existing[key] = value
+                changed = True
+
+        for key in ("bseCode", "ticker", "yahooTicker"):
+            value = bse_data.get(key)
+            if value not in (None, "") and existing.get(key) in (None, ""):
+                existing[key] = value
+                changed = True
+
+        if changed:
+            existing["bseSupplemented"] = True
+            existing["bseSupplementSource"] = bse_data.get("resultDataSource")
+            bse_supplemented += 1
 
     today = datetime.now(IST).date()
+
+    # Public StockScans enrichment: only for result events already verified by
+    # NSE/BSE, and only when the StockScans quarter matches the expected period.
+    stockscans_attempted = 0
+    stockscans_supplemented = 0
+    stockscans_errors = []
+    stock_keys = (
+        "latestRevenueLakh", "latestPatLakh", "reportedEps",
+        "revenueQoQ", "patQoQ", "revenueYoY", "patYoY",
+        "marketCapCr", "trailingPE", "priceToBook",
+        "enterpriseToEbitda", "returnOnEquityPct",
+        "returnOnCapitalEmployedPct", "operatingMarginNow",
+        "netMarginPct",
+    )
+
+    for row in rows:
+        symbol = clean_symbol(row)
+        if not symbol or symbol not in merged:
+            continue
+        rd = parse_date(row.get("resultDate") or row.get("result_date"))
+        if rd is None or rd > today or (today - rd).days > 90:
+            continue
+
+        existing = merged[symbol]
+        needs_public = any(existing.get(k) in (None, "") for k in (
+            "revenueYoY", "patYoY", "latestRevenueLakh", "latestPatLakh",
+            "marketCapCr", "trailingPE", "returnOnEquityPct",
+        ))
+        if not needs_public:
+            continue
+
+        stockscans_attempted += 1
+        try:
+            public = stockscans_for_row({**row, **existing})
+        except Exception as exc:
+            stockscans_errors.append(f"StockScans {symbol}: {type(exc).__name__}: {exc}")
+            continue
+
+        if public.get("error"):
+            stockscans_errors.append(f"StockScans {symbol}: {public.get('error')}")
+            continue
+        if public.get("periodMatchesExpected") is False:
+            stockscans_errors.append(
+                f"StockScans {symbol}: latest quarter {public.get('latestIncomeQuarterEnd')} "
+                "does not match tracked result period"
+            )
+            continue
+
+        changed = False
+        for key in stock_keys:
+            value = public.get(key)
+            if value in (None, ""):
+                continue
+            if existing.get(key) in (None, ""):
+                existing[key] = round2(value) if isinstance(value, (int, float)) else value
+                changed = True
+
+        if public.get("latestIncomeQuarterEnd") and existing.get("stockScansQuarterEnd") in (None, ""):
+            existing["stockScansQuarterEnd"] = public["latestIncomeQuarterEnd"]
+        existing["stockScansUrl"] = public.get("sourceUrl")
+        existing["stockScansSource"] = public.get("source")
+        for key in (
+            "quarterlyResultUrl", "investorPresentationUrl",
+            "earningsCallTranscriptUrl", "transcriptSummaryUrl",
+        ):
+            if public.get(key) and existing.get(key) in (None, ""):
+                existing[key] = public[key]
+
+        if changed:
+            existing["numericFallbackSource"] = "StockScans public company page"
+            existing["stockScansSupplemented"] = True
+            stockscans_supplemented += 1
+
+    # Yahoo is now the last numeric fallback after both exchanges + StockScans.
     yf_count = 0
     yf_supplemented = 0
     for row in rows:
@@ -1124,25 +1240,30 @@ def build_result_enrichment(rows):
             merged[symbol] = data
             yf_count += 1
         else:
-            # Preserve official NSE/BSE release proof and use Yahoo only to fill
-            # numeric fields that the exchange snapshot does not provide.
+            filled_any = False
             for key in (
                 "latestRevenueLakh", "latestPatLakh", "reportedEps",
                 "revenueQoQ", "patQoQ", "revenueYoY", "patYoY",
             ):
                 if existing.get(key) is None and data.get(key) is not None:
                     existing[key] = data[key]
-            existing["numericFallbackSource"] = data.get("resultDataSource")
-            yf_supplemented += 1
+                    filled_any = True
+            if filled_any:
+                existing["numericFallbackSource"] = data.get("resultDataSource")
+                yf_supplemented += 1
 
     stats = {
         "nse": nse_stats,
         "bse": bse_stats,
+        "bseSupplemented": bse_supplemented,
+        "stockScansAttempted": stockscans_attempted,
+        "stockScansSupplemented": stockscans_supplemented,
         "yfinanceFallbackMatched": yf_count,
         "yfinanceSupplemented": yf_supplemented,
         "totalMatched": len(merged),
     }
-    return merged, nse_errors + bse_errors, stats
+    return merged, nse_errors + bse_errors + stockscans_errors, stats
+
 
 def build_checks(row):
     market_cap = num(row.get("marketCapCr"))
@@ -1401,7 +1522,7 @@ def qualify(row, stock_history, sector_history):
         else:
             out["allocationPct"] = 10
 
-    out["qualificationVersion"] = "pead-v1.1-nse-mcp"
+    out["qualificationVersion"] = "pead-v1.2-public-fallbacks"
     return out
 
 
@@ -1464,6 +1585,32 @@ def main():
 
         if s in result_layer:
             out.update(result_layer[s])
+
+        # Opportunistic PUBLIC ScreeningMantis fallback.  Never override stronger
+        # exchange/Yahoo values.  Earnings-day return is accepted only when the
+        # displayed past-earnings date matches the tracked result date.
+        try:
+            mantis = screeningmantis_for_row(out)
+        except Exception as exc:
+            mantis = {"error": f"{type(exc).__name__}: {exc}"}
+
+        if not mantis.get("error"):
+            out["screeningMantisUrl"] = mantis.get("sourceUrl")
+            out["screeningMantisPastEarnings"] = mantis.get("pastEarnings")
+            out["screeningMantisResultDateMatched"] = mantis.get("resultDateMatched")
+            if out.get("relativeVolume") is None and mantis.get("volumeSpike") is not None:
+                out["relativeVolume"] = round2(mantis.get("volumeSpike"))
+                out["relativeVolumeSource"] = "ScreeningMantis public Vol Spike 1D/9D"
+            if mantis.get("distanceFrom52wHighPct") is not None:
+                out["distanceFrom52wHighPct"] = round2(mantis.get("distanceFrom52wHighPct"))
+            if mantis.get("resultDateMatched") is True and out.get("resultDayReturnPct") is None:
+                if mantis.get("earningsDayPct") is not None:
+                    out["resultDayReturnPct"] = round2(mantis.get("earningsDayPct"))
+                    out["resultDaySource"] = "ScreeningMantis public E-Day%"
+            if mantis.get("pre1dPct") is not None:
+                out["preResult1dPct"] = round2(mantis.get("pre1dPct"))
+            if mantis.get("post1dPct") is not None:
+                out["postResult1dPct"] = round2(mantis.get("post1dPct"))
 
         # A successful BSE fallback is valid live market data even if Yahoo failed.
         if (
@@ -1529,7 +1676,7 @@ def main():
 
     payload["stocks"] = output
     payload["companies"] = output
-    payload["qualificationVersion"] = "pead-v1.1-nse-mcp"
+    payload["qualificationVersion"] = "pead-v1.2-public-fallbacks"
     payload["marketDataMode"] = "nse-mcp-primary"
     payload["nseMcp"] = mcp_layer.get("meta") or {}
     payload["nseMcpErrors"] = mcp_layer.get("errors") or []
@@ -1538,7 +1685,7 @@ def main():
     payload["cautionCount"] = counts.get("Caution", 0)
     payload["postResultCount"] = counts.get("Post-results", 0)
     payload["upcomingCount"] = counts.get("Upcoming", 0)
-    payload["resultDataVersion"] = "exchange-results-v2-nse-bse-yf"
+    payload["resultDataVersion"] = "exchange-results-v3-nse-bse-stockscans-yf"
     payload["resultSourceStats"] = result_stats
     payload["resultSourceErrors"] = result_errors
     payload["qualificationRules"] = {
