@@ -1,22 +1,31 @@
-name: PEAD hourly scanner
+name: PEAD v2 event engine
 
 on:
   workflow_dispatch:
-
+    inputs:
+      force_publish:
+        description: "Override quality gate (manual recovery only)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
   schedule:
-    - cron: "0 * * * 1-5"
+    # 08:45–23:45 IST, Monday–Saturday. Results are often filed after market close.
+    - cron: "15 3-18 * * 1-6"
 
 permissions:
   contents: write
 
 concurrency:
-  group: pead-hourly-scanner
+  group: pead-v2-event-engine
   cancel-in-progress: false
 
 jobs:
-  scan:
+  pead-v2:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -29,160 +38,66 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install scanner dependencies
+      - name: Install PEAD v2 dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --upgrade nse bse yfinance pandas "mcp>=2,<3"
+          python -m pip install --upgrade pandas yfinance requests "nse[server]" bse
 
-      - name: Check Python syntax
+      - name: Validate engine
         run: |
-          python -m py_compile scan.py
-          python -m py_compile nse_mcp.py
-          python -m py_compile qualify.py
+          python -m py_compile pead_v2.py
+          python pead_v2.py --self-test
 
-      - name: Probe official NSE MCP tools
-        continue-on-error: true
+      - name: Run persistent event engine
+        env:
+          MIN_MCAP_CR: "1000"
+          DISCOVERY_LOOKBACK_DAYS: "75"
+          UPCOMING_DAYS: "45"
+          SOURCE_RETRY_ATTEMPTS: "3"
+          SOURCE_DELAY_SEC: "1.25"
         run: |
-          python nse_mcp.py --probe
+          if [ "${{ github.event.inputs.force_publish || 'false' }}" = "true" ]; then
+            python pead_v2.py --force-publish
+          else
+            python pead_v2.py
+          fi
 
-      - name: Run live discovery scanner
+      - name: Show data health
+        if: always()
         run: |
-          python scan.py
-
-      - name: Run PEAD qualification engine
-        run: |
-          python qualify.py
-
-      - name: Validate qualified data.json
-        run: |
-          python - <<'PY'
+          if [ -f run_health.json ]; then
+            python - <<'PY'
           import json
-          import sys
           from pathlib import Path
-
-          path = Path("data.json")
-
-          if not path.exists():
-              print("ERROR: data.json missing")
-              sys.exit(1)
-
-          data = json.loads(
-              path.read_text(
-                  encoding="utf-8"
-              )
-          )
-
-          if data.get("scannerMode") != "live-discovery":
-              print("ERROR: scanner is not live-discovery")
-              sys.exit(1)
-
-          if data.get("qualificationVersion") != "pead-v1.1-nse-mcp":
-              print("ERROR: NSE MCP qualifier did not run")
-              sys.exit(1)
-
-          rows = (
-              data.get("stocks")
-              or data.get("companies")
-              or []
-          )
-
-          if not rows:
-              print("ERROR: 0 stocks published")
-              sys.exit(1)
-
-          print("Scanner:", data.get("scannerMode"))
-          print("Qualifier:", data.get("qualificationVersion"))
-          print("Market data mode:", data.get("marketDataMode"))
-          print("Discovered:", data.get("discoveredCandidateCount"))
-          print("Published:", len(rows))
-          print("Buckets:", data.get("bucketCounts"))
-          print("NSE MCP:", data.get("nseMcp"))
-          print("NSE MCP warnings:", len(data.get("nseMcpErrors") or []))
-          print("Result source stats:", data.get("resultSourceStats"))
-          print("Result source warnings:", len(data.get("resultSourceErrors") or []))
-
-          released = [r for r in rows if r.get("resultsReleased") is True]
-          print("Results released rows:", len(released))
-          for r in released[:25]:
-              print(
-                  "RESULT:",
-                  r.get("symbol"),
-                  "|", r.get("quarter"),
-                  "| source:", r.get("resultSource") or r.get("discoverySource"),
-                  "| Rev YoY:", r.get("revenueYoY"),
-                  "| PAT YoY:", r.get("patYoY"),
-              )
+          d = json.loads(Path("run_health.json").read_text(encoding="utf-8"))
+          print("Events tracked:", d.get("eventsTracked"))
+          print("Results filed:", d.get("resultsFiled"))
+          print("Financials parsed:", d.get("financialsParsed"))
+          print("Reaction ready:", d.get("reactionReady"))
+          print("Fully scored:", d.get("fullyScored"))
+          print("Declared completeness:", d.get("declaredCompletenessPct"))
+          print("Fetch OK / failed:", d.get("fetchesOk"), "/", d.get("fetchesFailed"))
+          print("Quality gate:", d.get("qualityGate"))
           PY
+          fi
 
-      - name: Show PEAD candidate summary
+      - name: Commit persistent state and published feeds
         run: |
-          python - <<'PY'
-          import json
+          git config user.name "PEAD v2 bot"
+          git config user.email "actions@users.noreply.github.com"
 
-          with open(
-              "data.json",
-              "r",
-              encoding="utf-8"
-          ) as f:
-              data = json.load(f)
-
-          rows = data.get("stocks") or []
-
-          order = {
-              "Qualified": 0,
-              "Caution": 1,
-              "Post-results": 2,
-              "Upcoming": 3,
-          }
-
-          rows = sorted(
-              rows,
-              key=lambda x: (
-                  order.get(
-                      x.get("bucket"),
-                      9
-                  ),
-                  -(x.get("score") or 0),
-              ),
-          )
-
-          print("========== PEAD SUMMARY ==========")
-          print("Buckets:", data.get("bucketCounts"))
-          print("MCP:", data.get("nseMcp"))
-          print("==================================")
-
-          for stock in rows[:50]:
-              print(
-                  stock.get("symbol"),
-                  "|",
-                  stock.get("bucket"),
-                  "|",
-                  stock.get("scoreText"),
-                  "| price source:",
-                  stock.get("priceSource"),
-                  "| history:",
-                  stock.get("historySource"),
-                  "| entry:",
-                  stock.get("entry"),
-                  "| SL:",
-                  stock.get("sl"),
-              )
-          PY
-
-      - name: Commit refreshed qualified data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add data.json
+          # The engine creates these folders on first run. Add only if present.
+          git add pead_v2.py data.json intelligence.json run_health.json || true
+          [ -d events ] && git add events || true
+          [ -d raw ] && git add raw || true
+          [ -d logs ] && git add logs || true
+          [ -d master ] && git add master || true
+          git add intelligence.html intelligence.js || true
 
           if git diff --cached --quiet; then
-            echo "No data.json changes to commit"
+            echo "No PEAD v2 changes to commit."
             exit 0
           fi
 
-          git commit -m "chore: refresh live PEAD qualification"
-
-          git pull --rebase origin main
-
-          git push origin main
+          git commit -m "PEAD v2: persistent event update"
+          git push
