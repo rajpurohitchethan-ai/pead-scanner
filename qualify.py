@@ -6,14 +6,11 @@ import math
 import sys
 import time
 import warnings
-import re
-from html.parser import HTMLParser
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-import requests
 import yfinance as yf
 
 from nse_mcp import fetch_nse_market_layer
@@ -585,21 +582,6 @@ def _pct(new, old):
     return (new / old - 1.0) * 100.0
 
 
-def _growth_or_turnaround(new, old):
-    """Return (growth_pct, turnaround_flag).
-
-    A move from a loss/zero base to positive profit is a turnaround, not a
-    negative YoY growth percentage.
-    """
-    if new is None or old is None:
-        return None, False
-    if old <= 0 < new:
-        return None, True
-    if old == 0:
-        return None, False
-    return _pct(new, old), False
-
-
 def parse_nse_comparison(payload, row):
     records = []
     if isinstance(payload, dict):
@@ -655,7 +637,6 @@ def parse_nse_comparison(payload, row):
     prev_pat = _metric_from_record(previous, *pat_aliases)
     yoy_revenue = _metric_from_record(yoy_row, *revenue_aliases)
     yoy_pat = _metric_from_record(yoy_row, *pat_aliases)
-    pat_yoy_pct, pat_turnaround = _growth_or_turnaround(pat, yoy_pat)
 
     out = {
         "resultsReleased": True,
@@ -670,9 +651,7 @@ def parse_nse_comparison(payload, row):
         "revenueQoQ": round2(_pct(revenue, prev_revenue)),
         "patQoQ": round2(_pct(pat, prev_pat)),
         "revenueYoY": round2(_pct(revenue, yoy_revenue)),
-        "patYoY": round2(pat_yoy_pct),
-        "patYoYTurnaround": pat_turnaround,
-        "patYoYStatus": "TURNAROUND" if pat_turnaround else None,
+        "patYoY": round2(_pct(pat, yoy_pat)),
         "resultDataSource": "NSE official results comparison",
         "resultDataPeriod": current_date.isoformat(),
     }
@@ -920,252 +899,6 @@ def _snapshot_yoy_index(periods, current_index=0):
     return None
 
 
-
-class _SimpleTableParser(HTMLParser):
-    """Tiny HTML table parser; avoids adding BeautifulSoup/lxml dependencies."""
-    def __init__(self):
-        super().__init__()
-        self.tables = []
-        self._table = None
-        self._row = None
-        self._cell = None
-        self._cell_depth = 0
-
-    def handle_starttag(self, tag, attrs):
-        tag = tag.lower()
-        if tag == "table":
-            if self._table is None:
-                self._table = []
-        elif tag == "tr" and self._table is not None:
-            self._row = []
-        elif tag in ("td", "th") and self._row is not None:
-            self._cell = []
-            self._cell_depth = 1
-        elif self._cell is not None:
-            self._cell_depth += 1
-
-    def handle_endtag(self, tag):
-        tag = tag.lower()
-        if self._cell is not None and tag in ("td", "th") and self._cell_depth == 1:
-            text = " ".join("".join(self._cell).split())
-            self._row.append(text)
-            self._cell = None
-            self._cell_depth = 0
-            return
-        if self._cell is not None and self._cell_depth > 1:
-            self._cell_depth -= 1
-        if tag == "tr" and self._table is not None and self._row is not None:
-            if self._row:
-                self._table.append(self._row)
-            self._row = None
-        elif tag == "table" and self._table is not None:
-            if self._table:
-                self.tables.append(self._table)
-            self._table = None
-
-    def handle_data(self, data):
-        if self._cell is not None:
-            self._cell.append(data)
-
-
-def _quarter_label_date(value):
-    if value in (None, ""):
-        return None
-    s = " ".join(str(value).replace("\xa0", " ").split())
-    for fmt in ("%b %Y", "%b-%Y", "%b %y", "%b-%y", "%d %b %Y", "%d-%b-%Y"):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except ValueError:
-            pass
-    return None
-
-
-def _html_num(value):
-    if value in (None, ""):
-        return None
-    s = str(value).strip().replace(",", "").replace("₹", "").replace("%", "")
-    s = s.replace("−", "-").replace("—", "").replace("--", "")
-    match = re.search(r"[-+]?\d+(?:\.\d+)?", s)
-    return num(match.group(0)) if match else None
-
-
-def fetch_screener_prior_year(code, expected_period_end):
-    """Best-effort historical comparator only.
-
-    Current-quarter release proof remains BSE/NSE. Screener is used only to
-    obtain the same quarter one year earlier when BSE's compact snapshot omits it.
-    """
-    if not code or expected_period_end is None:
-        return {}
-    url = f"https://www.screener.in/company/{code}/"
-    try:
-        response = requests.get(
-            url,
-            timeout=12,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 Chrome/134.0 Safari/537.36"
-                )
-            },
-        )
-        if not response.ok:
-            return {}
-
-        parser = _SimpleTableParser()
-        parser.feed(response.text)
-
-        target_year = expected_period_end.year - 1
-        target_month = expected_period_end.month
-
-        for table in parser.tables:
-            header = None
-            sales_row = None
-            pat_row = None
-            opm_row = None
-
-            for row in table:
-                if not row:
-                    continue
-                first = row[0].strip().lower()
-                parsed_dates = [_quarter_label_date(x) for x in row]
-                if sum(d is not None for d in parsed_dates) >= 4:
-                    header = row
-                if first.startswith("sales") or first.startswith("revenue"):
-                    sales_row = row
-                if first.startswith("net profit") or first in {"pat", "profit after tax"}:
-                    pat_row = row
-                if first.startswith("opm"):
-                    opm_row = row
-
-            if header is None or (sales_row is None and pat_row is None):
-                continue
-
-            for idx, label in enumerate(header):
-                d = _quarter_label_date(label)
-                if d is None or d.year != target_year or d.month != target_month:
-                    continue
-                return {
-                    "priorYearRevenueCr": (
-                        _html_num(sales_row[idx])
-                        if sales_row is not None and idx < len(sales_row)
-                        else None
-                    ),
-                    "priorYearPatCr": (
-                        _html_num(pat_row[idx])
-                        if pat_row is not None and idx < len(pat_row)
-                        else None
-                    ),
-                    "priorYearOpmPct": (
-                        _html_num(opm_row[idx])
-                        if opm_row is not None and idx < len(opm_row)
-                        else None
-                    ),
-                    "historicalComparatorSource": url,
-                    "historicalComparatorPeriod": d.isoformat(),
-                }
-    except Exception:
-        return {}
-    return {}
-
-
-def bse_price_context(bse, code, result_date):
-    """Official BSE 12M price/volume fallback for BSE-only securities."""
-    if not code:
-        return {}
-    try:
-        payload = bse.equityPriceVolumeT12M(str(code)) or {}
-        block = payload.get("Data") or {}
-        fields = block.get("fields") or []
-        rows = block.get("data") or []
-        if not fields or not rows:
-            return {}
-
-        lookup = {str(name).lower(): i for i, name in enumerate(fields)}
-        date_i = lookup.get("dttm")
-        close_i = lookup.get("vale1")
-        volume_i = lookup.get("vole")
-        if date_i is None or close_i is None:
-            return {}
-
-        recs = []
-        for row in rows:
-            if not isinstance(row, (list, tuple)):
-                continue
-            try:
-                d = pd.to_datetime(row[date_i], errors="coerce")
-                close = num(row[close_i])
-                volume = num(row[volume_i]) if volume_i is not None and volume_i < len(row) else None
-                if pd.isna(d) or close is None:
-                    continue
-                recs.append((pd.Timestamp(d), close, volume))
-            except Exception:
-                continue
-
-        if not recs:
-            return {}
-
-        frame = pd.DataFrame(recs, columns=["Date", "Close", "Volume"]).sort_values("Date")
-        frame = frame.drop_duplicates("Date", keep="last").reset_index(drop=True)
-        close = frame["Close"].astype(float)
-
-        result_idx = None
-        if result_date is not None:
-            for idx, d in enumerate(frame["Date"]):
-                if pd.Timestamp(d).date() >= result_date:
-                    result_idx = idx
-                    break
-
-        end_idx = len(frame) if result_idx is None else result_idx
-        pre = frame.iloc[:end_idx].copy()
-
-        def pre_move(n):
-            if len(pre) < n:
-                return None
-            start = num(pre["Close"].iloc[-n])
-            finish = num(pre["Close"].iloc[-1])
-            return round2(_pct(finish, start))
-
-        out = {
-            "preResult5dPct": pre_move(5),
-            "preResult10dPct": pre_move(10),
-            "preResultRunupPct": pre_move(20),
-            "resultDayReturnPct": None,
-            "relativeVolume": None,
-            "distanceFrom52wHighPct": None,
-            "price": round2(close.iloc[-1]),
-            "lastPrice": round2(close.iloc[-1]),
-            "priceTimestamp": pd.Timestamp(frame["Date"].iloc[-1]).isoformat(),
-            "historySource": "BSE official 12M price/volume",
-            "priceSource": "BSE official 12M price/volume",
-        }
-
-        high_52 = num(close.max())
-        latest = num(close.iloc[-1])
-        if high_52 not in (None, 0) and latest is not None:
-            out["distanceFrom52wHighPct"] = round2(_pct(latest, high_52))
-
-        if result_idx is not None and result_idx < len(frame):
-            result_close = num(frame["Close"].iloc[result_idx])
-            previous_close = num(frame["Close"].iloc[result_idx - 1]) if result_idx > 0 else None
-            if previous_close not in (None, 0) and result_close is not None:
-                out["resultDayReturnPct"] = round2(_pct(result_close, previous_close))
-
-            if volume_i is not None:
-                result_vol = num(frame["Volume"].iloc[result_idx])
-                prior_volumes = pd.to_numeric(
-                    frame["Volume"].iloc[max(0, result_idx - 20):result_idx],
-                    errors="coerce",
-                ).dropna()
-                avg_vol = float(prior_volumes.mean()) if not prior_volumes.empty else None
-                if result_vol is not None and avg_vol not in (None, 0):
-                    out["relativeVolume"] = round2(result_vol / avg_vol)
-
-        return out
-    except Exception:
-        return {}
-
-
 def fetch_bse_result_enrichment(rows, already=None):
     enrichment = {}
     errors = []
@@ -1228,17 +961,6 @@ def fetch_bse_result_enrichment(rows, already=None):
                         if yoy_index is not None else None
                     )
 
-                    historical = fetch_screener_prior_year(code, expected)
-                    prior_yoy_revenue_cr = historical.get("priorYearRevenueCr")
-                    prior_yoy_pat_cr = historical.get("priorYearPatCr")
-                    effective_yoy_pat_cr = (
-                        yoy_pat_cr if yoy_pat_cr is not None else prior_yoy_pat_cr
-                    )
-                    pat_yoy_pct, pat_turnaround = _growth_or_turnaround(
-                        pat_cr,
-                        effective_yoy_pat_cr,
-                    )
-
                     base = {
                         "resultsReleased": True,
                         "resultReleased": True,
@@ -1254,29 +976,14 @@ def fetch_bse_result_enrichment(rows, already=None):
                         "reportedEps": eps,
                         "revenueQoQ": round2(_pct(revenue_cr, prev_revenue_cr)),
                         "patQoQ": round2(_pct(pat_cr, prev_pat_cr)),
-                        "revenueYoY": round2(
-                            _pct(
-                                revenue_cr,
-                                yoy_revenue_cr if yoy_revenue_cr is not None else prior_yoy_revenue_cr,
-                            )
-                        ),
-                        "patYoY": round2(pat_yoy_pct),
-                        "patYoYTurnaround": pat_turnaround,
-                        "patYoYStatus": "TURNAROUND" if pat_turnaround else None,
+                        "revenueYoY": round2(_pct(revenue_cr, yoy_revenue_cr)),
+                        "patYoY": round2(_pct(pat_cr, yoy_pat_cr)),
                         "resultDataSource": "BSE official results snapshot",
                         "resultDataPeriod": latest_label,
                         "resultsEvidence": f"BSE results snapshot updated for {latest_label}"
                         + (f"; Revenue ₹{revenue_cr:.2f} Cr" if revenue_cr is not None else "")
                         + (f"; PAT ₹{pat_cr:.2f} Cr" if pat_cr is not None else "") + ".",
                     }
-                    if historical:
-                        base["historicalComparatorSource"] = historical.get("historicalComparatorSource")
-                        base["historicalComparatorPeriod"] = historical.get("historicalComparatorPeriod")
-
-                    price_ctx = bse_price_context(bse, code, rd)
-                    if price_ctx:
-                        base.update({k: v for k, v in price_ctx.items() if v is not None})
-
                     enrichment[symbol] = base
                     stats["matched"] += 1
                 except Exception as exc:
@@ -1360,7 +1067,6 @@ def fetch_yfinance_quarterly_enrichment(row):
                     yoy_col = None
             yoy_revenue = num(stmt.loc[rev_row, yoy_col]) if rev_row is not None and yoy_col is not None else None
             yoy_pat = num(stmt.loc[pat_row, yoy_col]) if pat_row is not None and yoy_col is not None else None
-            pat_yoy_pct, pat_turnaround = _growth_or_turnaround(pat, yoy_pat)
 
             return {
                 "resultsReleased": True,
@@ -1373,9 +1079,7 @@ def fetch_yfinance_quarterly_enrichment(row):
                 "revenueQoQ": round2(_pct(revenue, prev_revenue)),
                 "patQoQ": round2(_pct(pat, prev_pat)),
                 "revenueYoY": round2(_pct(revenue, yoy_revenue)),
-                "patYoY": round2(pat_yoy_pct),
-                "patYoYTurnaround": pat_turnaround,
-                "patYoYStatus": "TURNAROUND" if pat_turnaround else None,
+                "patYoY": round2(_pct(pat, yoy_pat)),
                 "resultDataSource": "yfinance quarterly statement fallback",
                 "resultDataPeriod": current_date.isoformat(),
                 "resultsEvidence": f"Quarterly statement for {current_date.isoformat()} verified via Yahoo Finance fallback.",
@@ -1425,7 +1129,6 @@ def build_result_enrichment(rows):
             for key in (
                 "latestRevenueLakh", "latestPatLakh", "reportedEps",
                 "revenueQoQ", "patQoQ", "revenueYoY", "patYoY",
-                "patYoYTurnaround", "patYoYStatus",
             ):
                 if existing.get(key) is None and data.get(key) is not None:
                     existing[key] = data[key]
@@ -1475,52 +1178,44 @@ def qualify(row, stock_history, sector_history):
     out["resultReleased"] = results_released
     out["resultsEvidence"] = release_evidence
 
-    # Never overwrite exchange/BSE fallback data with NULL values
-# from an empty Yahoo/NSE history dataframe.
-if stock_history is not None and not stock_history.empty:
+    # Preserve exchange/BSE fallback values when Yahoo/NSE history is empty.
+    # Only overwrite existing fields with verified, non-null calculations.
+    if stock_history is not None and not stock_history.empty:
+        tech_data = technicals(stock_history)
+        out.update({
+            key: value
+            for key, value in tech_data.items()
+            if value is not None
+        })
 
-    tech_data = technicals(stock_history)
-    out.update({
-        k: v
-        for k, v in tech_data.items()
-        if v is not None
-    })
-
-    result_data = result_metrics(stock_history, result_date)
-    out.update({
-        k: v
-        for k, v in result_data.items()
-        if v is not None
-    })
+        result_data = result_metrics(stock_history, result_date)
+        out.update({
+            key: value
+            for key, value in result_data.items()
+            if value is not None
+        })
 
     revenue_yoy = num(out.get("revenueYoY"))
     pat_yoy = num(out.get("patYoY"))
     pat_qoq = num(out.get("patQoQ"))
-    pat_turnaround = bool_value(out.get("patYoYTurnaround")) is True
 
-    if not results_released or revenue_yoy is None or (pat_yoy is None and not pat_turnaround):
+    if not results_released or revenue_yoy is None or pat_yoy is None:
         earnings_pass = None
     else:
         earnings_pass = (
             revenue_yoy >= REV_YOY_MIN
-            and (pat_turnaround or (pat_yoy is not None and pat_yoy >= PAT_YOY_MIN))
+            and pat_yoy >= PAT_YOY_MIN
             and (pat_qoq is None or pat_qoq >= PAT_QOQ_FLOOR)
         )
 
     out["earningsAccelerationPass"] = earnings_pass
     out["revenuePatPass"] = earnings_pass
-    if revenue_yoy is not None and pat_turnaround:
-        out["earningsEvidence"] = (
-            f"Revenue YoY {revenue_yoy:.1f}%, PAT turned profitable YoY"
-            + (f", PAT QoQ {pat_qoq:.1f}%" if pat_qoq is not None else "")
-        )
-    elif revenue_yoy is not None and pat_yoy is not None:
-        out["earningsEvidence"] = (
-            f"Revenue YoY {revenue_yoy:.1f}%, PAT YoY {pat_yoy:.1f}%"
-            + (f", PAT QoQ {pat_qoq:.1f}%" if pat_qoq is not None else "")
-        )
-    else:
-        out["earningsEvidence"] = "Growth data unavailable"
+    out["earningsEvidence"] = (
+        f"Revenue YoY {revenue_yoy:.1f}%, PAT YoY {pat_yoy:.1f}%"
+        + (f", PAT QoQ {pat_qoq:.1f}%" if pat_qoq is not None else "")
+        if revenue_yoy is not None and pat_yoy is not None
+        else "Growth data unavailable"
+    )
 
     latest_revenue = num(out.get("latestRevenueLakh"))
     latest_pat = num(out.get("latestPatLakh"))
@@ -1767,10 +1462,10 @@ def main():
         s = clean_symbol(out)
         print(f"[{index}/{len(rows)}] {s or 'UNKNOWN'}")
 
-                   if s in result_layer:
+        if s in result_layer:
             out.update(result_layer[s])
 
-        # BSE fallback is valid market data even when Yahoo fails
+        # A successful BSE fallback is valid live market data even if Yahoo failed.
         if (
             out.get("price") is not None
             and "BSE official" in str(out.get("priceSource") or "")
@@ -1779,7 +1474,6 @@ def main():
             out["liveError"] = None
 
         quote = mcp_quotes.get(s)
-       
         if quote:
             if quote.get("price") is not None:
                 out["price"] = quote["price"]
@@ -1797,18 +1491,18 @@ def main():
         if s in mcp_histories:
             stock_history = records_to_df(mcp_histories[s])
             out["historySource"] = "NSE MCP Bhavcopy"
-       else:
-    yt = yahoo_ticker(out)
-    stock_history = history_for_yf(fallback_history, yt)
+        else:
+            yt = yahoo_ticker(out)
+            stock_history = history_for_yf(fallback_history, yt)
 
-    if stock_history is not None and not stock_history.empty:
-        out["historySource"] = "yfinance fallback"
-    else:
-        # Preserve BSE/NSE history source already obtained
-        out["historySource"] = (
-            out.get("historySource")
-            or "PRICE HISTORY UNAVAILABLE"
-        )
+            if stock_history is not None and not stock_history.empty:
+                out["historySource"] = "yfinance fallback"
+            else:
+                # Keep a source already supplied by scan/BSE enrichment.
+                out["historySource"] = (
+                    out.get("historySource")
+                    or "PRICE HISTORY UNAVAILABLE"
+                )
 
         sector_history = history_for_yf(fallback_history, sector_proxy(out))
         out["sectorHistorySource"] = "yfinance index fallback"
