@@ -65,7 +65,7 @@
 
     .summary {
       display:grid;
-      grid-template-columns:repeat(4,1fr);
+      grid-template-columns:repeat(5,1fr);
       gap:10px;
       margin:22px 0;
     }
@@ -88,6 +88,43 @@
       display:block;
       font-size:28px;
       margin-top:7px;
+    }
+
+    .health-strip {
+      display:grid;
+      grid-template-columns:repeat(5,1fr);
+      gap:10px;
+      margin:-10px 0 20px;
+    }
+
+    .health-strip .health-box {
+      background:rgba(106,174,255,.04);
+      border:1px solid var(--border);
+      padding:12px 14px;
+      border-radius:14px;
+    }
+
+    .health-box span {
+      display:block;
+      color:var(--muted);
+      font-size:10px;
+      text-transform:uppercase;
+    }
+
+    .health-box b {
+      display:block;
+      margin-top:5px;
+      font-size:18px;
+    }
+
+    .health-box.good b { color:var(--green); }
+    .health-box.warn b { color:var(--amber); }
+    .health-box.bad b { color:var(--red); }
+
+    .state-line {
+      margin-top:6px;
+      color:var(--muted);
+      font-size:11px;
     }
 
     .controls {
@@ -227,146 +264,6 @@
       border:1px solid rgba(255,113,136,.25);
     }
 
-    .context-grid {
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:9px;
-      margin:10px 0 16px;
-    }
-
-    .context-grid > div {
-      background:rgba(106,174,255,.045);
-      border:1px solid rgba(106,174,255,.16);
-      border-radius:13px;
-      padding:11px;
-      min-width:0;
-    }
-
-    .context-grid small {
-      display:block;
-      color:var(--muted);
-      font-size:9px;
-      margin-bottom:7px;
-    }
-
-    .context-grid span:not(.badge) {
-      display:block;
-      color:var(--muted);
-      font-size:10px;
-      line-height:1.45;
-      margin-top:6px;
-    }
-
-    .context-grid b {
-      display:block;
-      font-size:11px;
-      line-height:1.4;
-    }
-
-    .action-bias {
-      margin:12px 0;
-      border:1px solid currentColor;
-      border-radius:12px;
-      padding:11px 12px;
-    }
-
-    .action-bias b {
-      display:block;
-      font-size:12px;
-    }
-
-    .action-bias span {
-      display:block;
-      color:var(--muted);
-      font-size:11px;
-      line-height:1.5;
-      margin-top:5px;
-    }
-
-    .freshness {
-      display:grid;
-      grid-template-columns:repeat(4,1fr);
-      gap:8px;
-      margin:10px 0 14px;
-    }
-
-    .freshness > div {
-      background:rgba(106,174,255,.045);
-      border:1px solid rgba(106,174,255,.16);
-      border-radius:10px;
-      padding:9px;
-    }
-
-    .freshness span {
-      display:block;
-      color:var(--muted);
-      font-size:8px;
-      margin-bottom:4px;
-    }
-
-    .freshness b {
-      display:block;
-      font-size:10px;
-      line-height:1.35;
-      overflow-wrap:anywhere;
-    }
-
-    .micro-note {
-      color:var(--muted);
-      font-size:10px;
-      line-height:1.5;
-      margin:-4px 0 13px;
-      padding:8px 10px;
-      border-left:2px solid var(--amber);
-      background:rgba(255,195,61,.04);
-    }
-
-    .neutral h4 {
-      color:var(--blue);
-    }
-
-    .quarter-history {
-      margin-top:13px;
-      border-top:1px solid var(--border);
-      padding-top:11px;
-    }
-
-    .quarter-history summary {
-      cursor:pointer;
-      color:#dbe7f6;
-      font-size:12px;
-      font-weight:700;
-    }
-
-    .timeline {
-      margin-top:10px;
-    }
-
-    .timeline-row {
-      display:flex;
-      justify-content:space-between;
-      gap:12px;
-      padding:9px 0;
-      border-bottom:1px solid rgba(37,49,72,.7);
-    }
-
-    .timeline-row b {
-      display:block;
-      font-size:11px;
-    }
-
-    .timeline-row span {
-      display:block;
-      color:var(--muted);
-      font-size:9px;
-      margin-top:3px;
-    }
-
-    .timeline-right {
-      text-align:right;
-      max-width:52%;
-    }
-
     .verdict {
       font-size:14px;
       font-weight:800;
@@ -465,19 +362,12 @@
     }
 
     @media (max-width:850px) {
-      .summary {
+      .summary,
+      .health-strip {
         grid-template-columns:repeat(2,1fr);
       }
 
       .reality-grid {
-        grid-template-columns:repeat(2,1fr);
-      }
-
-      .context-grid {
-        grid-template-columns:1fr;
-      }
-
-      .freshness {
         grid-template-columns:repeat(2,1fr);
       }
 
@@ -512,36 +402,56 @@
       <div>
         <h1>PEAD Intelligence Lab</h1>
         <div class="subtitle">
-          Single read-only intelligence layer for result quality, expectation gap,
-          valuation, quarter-to-quarter memory, J-Curve context and post-result
-          confirmation. The working PEAD radar is not modified by this page.
+          Persistent PEAD v2 event engine: official result capture, financial parsing,
+          expectation analysis, reaction-session confirmation and Darvas-style entry watch.
         </div>
       </div>
 
       <div class="safe">
-        BASE PROTECTED · data.json READ ONLY · CONTEXT MERGED HERE
+        PERSISTENT EVENT STORE · NON-NULL MERGE
       </div>
     </div>
 
     <section class="summary">
-      <div class="box"><span>Analyzed</span><b id="total">—</b></div>
-      <div class="box"><span>Results Declared</span><b id="declared">—</b></div>
-      <div class="box"><span>Genuine Results</span><b id="genuine">—</b></div>
-      <div class="box"><span>Priced In</span><b id="priced">—</b></div>
-      <div class="box"><span>High Conviction</span><b id="high">—</b></div>
-      <div class="box"><span>Low Expectation Gap</span><b id="lowGap">—</b></div>
-      <div class="box"><span>Elevated / Extreme</span><b id="highGap">—</b></div>
-      <div class="box"><span>Second Chance</span><b id="secondChance">—</b></div>
+      <div class="box">
+        <span>Analyzed</span>
+        <b id="total">—</b>
+      </div>
+
+      <div class="box">
+        <span>Results Declared</span>
+        <b id="declared">—</b>
+      </div>
+
+      <div class="box">
+        <span>Genuine Results</span>
+        <b id="genuine">—</b>
+      </div>
+
+      <div class="box">
+        <span>Priced In</span>
+        <b id="priced">—</b>
+      </div>
+
+      <div class="box">
+        <span>High Conviction</span>
+        <b id="high">—</b>
+      </div>
+    </section>
+
+    <section class="health-strip" id="health-strip">
+      <div class="health-box"><span>Events Tracked</span><b id="health-events">—</b></div>
+      <div class="health-box"><span>Financials Parsed</span><b id="health-financials">—</b></div>
+      <div class="health-box"><span>Reaction Ready</span><b id="health-reaction">—</b></div>
+      <div class="health-box"><span>Declared Completeness</span><b id="health-completeness">—</b></div>
+      <div class="health-box"><span>Fetch Failures</span><b id="health-failures">—</b></div>
     </section>
 
     <div class="controls">
       <button data-filter="DECLARED" class="active">Results Declared</button>
       <button data-filter="HIGH">High Conviction</button>
       <button data-filter="PRICED">Priced In</button>
-      <button data-filter="LOW_GAP">Low Expectations</button>
-      <button data-filter="HIGH_GAP">High Expectations</button>
-      <button data-filter="SECOND_CHANCE">Second Chance</button>
-      <button data-filter="CONFIRMED_AGAIN">Confirmed Again</button>
+      <button data-filter="PENDING">Data Pending</button>
       <button data-filter="UPCOMING">Upcoming Watch</button>
       <button data-filter="ALL">All</button>
 
@@ -570,13 +480,12 @@
     </section>
 
     <div class="note">
-      PEAD Intelligence v3 keeps the existing result-quality/valuation framework and now
-      adds Expectation Gap, quarter-to-quarter memory and lightweight J-Curve context
-      on this same page. Missing evidence stays UNVERIFIED rather than being guessed.
-      No third page or third workflow is required.
+      PEAD Intelligence v2 stores every symbol + quarter as a permanent event. Failed fetches
+      never erase verified values. Exchange data outranks fallbacks; missing evidence is shown
+      as DATA PENDING rather than converted into a negative investment conclusion.
     </div>
   </main>
 
-  <script src="./intelligence.js?v=3"></script>
+  <script src="./intelligence.js?v=2"></script>
 </body>
 </html>
