@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.5.3"
+ENGINE_VERSION = "2.6.0"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -100,7 +100,7 @@ PRICE_TRAIL_MAX_POINTS = int(os.getenv("PRICE_TRAIL_MAX_POINTS", "72"))
 RECENT_RESULT_PRICE_REFRESH_HOURS = float(os.getenv("RECENT_RESULT_PRICE_REFRESH_HOURS", "1"))
 SOURCE_RETRY_ATTEMPTS = int(os.getenv("SOURCE_RETRY_ATTEMPTS", "3"))
 SOURCE_DELAY_SEC = float(os.getenv("SOURCE_DELAY_SEC", "1.25"))
-HEAVY_UPCOMING_DAYS = int(os.getenv("HEAVY_UPCOMING_DAYS", "30"))
+HEAVY_UPCOMING_DAYS = int(os.getenv("HEAVY_UPCOMING_DAYS", "45"))   # = dashboard window (2.6.0)
 VALUATION_UPCOMING_DAYS = int(os.getenv("VALUATION_UPCOMING_DAYS", "3"))
 YAHOO_TIMEOUT_SEC = int(os.getenv("YAHOO_TIMEOUT_SEC", "8"))
 YAHOO_NEGATIVE_TTL_HOURS = int(os.getenv("YAHOO_NEGATIVE_TTL_HOURS", "72"))
@@ -659,10 +659,14 @@ class EventStore:
         return self._aliases
 
     def resolve(self, event_id: str) -> str:
-        a, seen = self.aliases(), set()
+        a, seen, start = self.aliases(), set(), event_id
         while event_id in a and event_id not in seen:
             seen.add(event_id)
             event_id = a[event_id]
+        # A dangling alias (target deleted/rekeyed) must not resurrect the
+        # old target id; fall back to the id that was asked for.
+        if event_id != start and not self._path(event_id).exists():
+            return start
         return event_id
 
     def add_alias(self, old_id: str, new_id: str) -> None:
@@ -1087,7 +1091,10 @@ class NSEAdapter:
             )
             raise
 
-    def financial_results(self, from_dt: datetime, to_dt: datetime, symbol: str | None = None, event_id: str | None = None):
+    def financial_results(self, from_dt: datetime | None, to_dt: datetime | None, symbol: str | None = None,
+                          event_id: str | None = None):
+        # 2.5.4: NSE's date-filtered query returns a handful of stale rows; a
+        # per-symbol query WITHOUT dates returns that company's filings.
         return self._call(
             "financial_results",
             lambda: self.client.financial_results(
@@ -1361,7 +1368,7 @@ def _valuation_due(event: dict[str, Any], store: EventStore) -> bool:
     return 0 <= (rd - now_ist().date()).days <= VALUATION_UPCOMING_DAYS
 
 
-def _enrichment_priority(event: dict[str, Any]) -> tuple[int, int, str]:
+def _enrichment_priority(event: dict[str, Any]) -> tuple[int, int, int, str]:
     released = boolish(meta_value(event, "results_released")) is True
     rd = parse_date(meta_value(event, "result_date")) or parse_date(event.get("period", {}).get("end"))
     today = now_ist().date()
@@ -1374,7 +1381,20 @@ def _enrichment_priority(event: dict[str, Any]) -> tuple[int, int, str]:
     else:
         bucket = 3
     distance = abs((rd - today).days) if rd is not None else 9999
-    return bucket, distance, str(event.get("eventId") or "")
+    # 2.5.4: events whose price/sector are already fresh drop behind those
+    # that still need work, so the 120 slots rotate through the whole list
+    # (HINDUNILVR, TATAPOWER... never got a price because the same nearest
+    # 120 events won every run).
+    fetch = event.get("fetch") or {}
+    def age_h(key: str) -> float:
+        t = parse_datetime((fetch.get(key) or {}).get("lastSuccess")) or parse_datetime((fetch.get(key) or {}).get("lastAttempt"))
+        return (now_ist() - t).total_seconds() / 3600 if t else 1e9
+    never_priced = not (event.get("plus") or {}).get("price") and not (fetch.get("PRICE_HISTORY") or {}).get("lastSuccess")
+    price_due = age_h("PRICE_HISTORY") >= (1 if released else 4)
+    meta_due = age_h("EXCHANGE_META") >= EXCHANGE_META_REFRESH_HOURS
+    # 0 never priced, 1 price due, 2 only sector/valuation due, 3 nothing due
+    tier = 0 if (released or never_priced) else 1 if price_due else 2 if meta_due else 3
+    return bucket, tier, distance, str(event.get("eventId") or "")
 
 
 class YahooAdapter:
@@ -2484,7 +2504,8 @@ def nse_history_to_frame(records: Any):
         })
     if not rows:
         return None
-    return pd.DataFrame(rows).dropna(subset=["Close"]).sort_values("Date").reset_index(drop=True)
+    frame = pd.DataFrame(rows).dropna(subset=["Close"]).sort_values("Date").drop_duplicates("Date", keep="last").reset_index(drop=True)
+    return pead_plus.adjust_corporate_actions(frame)
 
 
 def bse_history_to_frame(payload: Any):
@@ -2525,7 +2546,7 @@ def bse_history_to_frame(payload: Any):
         })
     if not out:
         return None
-    return pd.DataFrame(out).sort_values("Date").drop_duplicates("Date", keep="last").reset_index(drop=True)
+    return pead_plus.adjust_corporate_actions(pd.DataFrame(out).sort_values("Date").drop_duplicates("Date", keep="last").reset_index(drop=True))
 
 
 def normalize_yahoo_frame(frame: Any):
@@ -2967,6 +2988,8 @@ def build_evidence_index(raw_root: Path = RAW_DIR) -> dict[str, list[dict[str, A
     sources = (
         (raw_root / "bse" / "DISCOVERY", "result_announcements-*.json", normalize_bse_announcement),
         (raw_root / "nse" / "DISCOVERY", "financial_results-*.json", normalize_nse_filing),
+        # 2.5.4: per-company NSE result listings are evidence too.
+        (raw_root / "nse", "[!D]*/financial_results-*.json", normalize_nse_filing),
     )
     for folder, pattern, normalizer in sources:
         if not folder.exists():
@@ -3159,7 +3182,8 @@ def merge_duplicate_events(store: EventStore) -> list[dict[str, Any]]:
     return merged
 
 
-def integrity_pass(store: EventStore, *, today: date | None = None, raw_root: Path = RAW_DIR) -> dict[str, Any]:
+def integrity_pass(store: EventStore, *, today: date | None = None, raw_root: Path = RAW_DIR,
+                   master: "SymbolMaster | None" = None) -> dict[str, Any]:
     """Idempotent repair run before scoring/publishing.
 
     1. Every declared event must be backed by an exchange filing for the SAME
@@ -3177,8 +3201,12 @@ def integrity_pass(store: EventStore, *, today: date | None = None, raw_root: Pa
     index = build_evidence_index(raw_root)
     stats: dict[str, Any] = {"checked": 0, "reverified": 0, "revoked": 0, "postResultPurged": 0,
                              "snapshotsReplayed": 0, "financialsApplied": 0, "revocations": []}
+    repaired = repair_lookup_mismatches(store, master, raw_root)
+    stats["identityRepaired"] = len(repaired)
+    stats["revocations"].extend(repaired)
     merges = merge_duplicate_events(store)
     stats["duplicatesMerged"] = len(merges)
+    stats["declaredMerged"] = sum(1 for r in merges if r.get("bothDeclared"))
     # Merges change the event count, so they are part of the approval signature.
     stats["revocations"].extend(merges)
     for event in store.all():
@@ -3348,6 +3376,122 @@ def latest_price_timestamp(event: dict[str, Any]) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+def pick_lookup_row(rows: Any, symbol: str | None, name: Any = None) -> dict[str, Any] | None:
+    """NSE lookup is a fuzzy search: "ALKALI" returns GUJALKALI first,
+    "AGRITECH" returns DHANUKA, "DEEPA" returns DEEPAKNTR. Accept only the row
+    whose symbol is exactly the one asked for, or a row whose company name
+    matches the name we already have (2.5.4). Otherwise: no NSE mapping."""
+    if not isinstance(rows, list):
+        return None
+    rows = [r for r in rows if isinstance(r, dict)]
+    want = normalize_symbol(symbol)
+    for r in rows:
+        if want and normalize_symbol(r.get("symbol")) == want:
+            return r
+    if name:
+        for r in rows[:3]:
+            if r.get("companyName") and same_company({"name": name}, {"name": r.get("companyName")}):
+                return r
+    return None
+
+
+def _lookup_guesses(raw_root: Path = RAW_DIR) -> dict[str, dict[str, Any]]:
+    """Saved NSE lookups whose first row was NOT the symbol asked for:
+    {queried symbol: {"guess": symbol taken, "exact": exact row or None}}."""
+    out: dict[str, dict[str, Any]] = {}
+    base = raw_root / "nse"
+    if not base.exists():
+        return out
+    for folder in base.glob("NSE_*"):
+        q = normalize_symbol(folder.name[4:].rsplit("_", 1)[0])
+        for f in folder.glob("lookup-*.json"):
+            try:
+                payload = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            rows = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+                continue
+            guess = normalize_symbol(rows[0].get("symbol"))
+            if q and guess and guess != q:
+                exact = next((r for r in rows if isinstance(r, dict) and normalize_symbol(r.get("symbol")) == q), None)
+                out[q] = {"guess": guess, "exact": exact}
+    return out
+
+
+_NSE_IDENTITY_KEYS = ("nseSymbol", "yahooTicker", "basicIndustry", "macroSector", "sectorIndex", "exchangeSector",
+                      "sector", "industry")
+
+
+def repair_lookup_mismatches(store: EventStore, master: "SymbolMaster | None" = None,
+                             raw_root: Path = RAW_DIR) -> list[dict[str, Any]]:
+    """Undo identities created by the old first-row NSE lookup (pre-2.5.4).
+    An event whose BSE symbol Q was looked up on NSE and got another company's
+    symbol N loses N and every NSE/Yahoo-sourced field (prices, quote, sector,
+    concall) so the next run refetches them for the right company. N is
+    replaced by Q only when NSE lists Q itself under a matching name."""
+    guesses = _lookup_guesses(raw_root)
+    if not guesses:
+        return []
+    bse_names: dict[str, str] = {}
+    if master is not None:
+        for k, v in (master.data.get("securities") or {}).items():
+            if isinstance(v, dict) and k.startswith("NSE:") and not v.get("nseSymbol") and v.get("name"):
+                bse_names[normalize_symbol(k[4:])] = v["name"]
+    fixed: list[dict[str, Any]] = []
+    for e in store.all():
+        sec = e.get("security") or {}
+        n = normalize_symbol(sec.get("nseSymbol"))
+        for q in {normalize_symbol(sec.get("bseSymbol")), normalize_symbol(sec.get("symbol"))} - {None, "", n}:
+            g = guesses.get(q)
+            if not n or not g or g["guess"] != n:
+                continue
+            bse_name = bse_names.get(q)
+            exact = g["exact"]
+            new_n = None
+            if exact and (not bse_name or same_company({"name": bse_name}, {"name": exact.get("companyName")})):
+                new_n = q
+            old_id = e["eventId"]
+            for k in _NSE_IDENTITY_KEYS:
+                sec.pop(k, None)
+            if new_n:
+                sec["nseSymbol"] = new_n
+                sec["yahooTicker"] = f"{new_n}.NS"
+            elif str(sec.get("bseCode") or "").isdigit():
+                sec["yahooTicker"] = f"{sec['bseCode']}.BO"
+            sec["symbol"] = q
+            if bse_name or (exact and new_n):
+                sec["name"] = bse_name or exact.get("companyName")
+            sec["identityRepaired"] = {"wrongNseSymbol": n, "at": iso_now()}
+            for f_name in list((e.get("fields") or {}).keys()):
+                src = str((e["fields"][f_name] or {}).get("source") or "")
+                if src.startswith(("NSE_PRICE", "NSE_QUOTE", "YAHOO", "NSE_COMPARISON", "NSE_XBRL")) or src == "DERIVED_PRICE":
+                    e["fields"].pop(f_name, None)
+            for extra in ("plus", "priceTrail", "concall", "tradeLog", "mergedFrom"):
+                e.pop(extra, None)
+            # Aliases that pointed at this event under the wrong NSE symbol go.
+            for k in [k for k, v in store.aliases().items() if v == old_id or (n and k.startswith(f"NSE:{n}|"))]:
+                store.aliases().pop(k, None)
+            store.save(e)
+            if store._alias_path().exists() or store.aliases():
+                json_dump_atomic(store._alias_path(), store.aliases())
+            merged = store.rekey_and_merge(e)
+            if merged.get("eventId") != old_id:
+                store.aliases().pop(old_id, None)          # never route N back here
+                json_dump_atomic(store._alias_path(), store.aliases())
+            if master is not None:
+                for k in [k for k, v in master.data["securities"].items()
+                          if isinstance(v, dict) and normalize_symbol(v.get("nseSymbol")) == n
+                          and str(v.get("bseCode") or "") == str(sec.get("bseCode") or "")]:
+                    master.data["securities"].pop(k, None)
+            fixed.append({"eventId": old_id, "symbol": q, "at": iso_now(), "before": {"nseSymbol": n},
+                          "reasons": [f"IDENTITY_REPAIRED:{n}->{new_n or 'BSE_ONLY'}"]})
+            break
+    if fixed and master is not None:
+        master.save()
+    return fixed
+
+
 def fill_security_identity(event: dict[str, Any], store: EventStore, master: SymbolMaster, ctx: SourceContext) -> dict[str, Any]:
     sec = event.get("security", {})
     symbol = normalize_symbol(sec.get("nseSymbol") or sec.get("symbol"))
@@ -3361,8 +3505,8 @@ def fill_security_identity(event: dict[str, Any], store: EventStore, master: Sym
             with NSEAdapter(ctx) as nse:
                 payload, raw_ref = nse.lookup(symbol, event["eventId"])
                 rows = payload.get("data") if isinstance(payload, dict) else []
-                if isinstance(rows, list) and rows:
-                    rec = rows[0]
+                rec = pick_lookup_row(rows, symbol, sec.get("name"))
+                if rec is not None:
                     isin = extract_isin(rec)
                     if isin:
                         sec["isin"] = isin
@@ -3603,6 +3747,54 @@ def _has_snapshot(event: dict[str, Any], *sources: str) -> bool:
     return any((snaps.get(s) or {}).get("validation", {}).get("status") in {"VERIFIED", "FLAGGED"} for s in sources)
 
 
+def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[str, Any]], period_end: date,
+                                   basis: str | None, fetch_parse) -> dict[str, Any]:
+    """NSE's quarterly XBRL often carries only the current period. When the
+    year-ago (or previous-quarter) figures are missing from the document, read
+    them from that quarter's own XBRL filing - same basis, same revenue/PAT
+    concept - instead of leaving YoY blank (engine 2.5.4)."""
+    if not parsed or parsed.get("revenue_cr") is None:
+        return parsed
+    meta = parsed.setdefault("_meta", {})
+    concepts = meta.get("concepts") or {}
+    basis = basis if basis in {"CONSOLIDATED", "STANDALONE"} else (parsed.get("basis") if parsed.get("basis") in {"CONSOLIDATED", "STANDALONE"} else None)
+    for shift, need in ((-4, parsed.get("prior_year_revenue_cr") is None or parsed.get("prior_year_pat_cr") is None),
+                        (-1, parsed.get("revenue_qoq_pct") is None)):
+        if not need:
+            continue
+        target = _shift_quarters(period_end, shift)
+        row = listing_row(listing, target, basis)
+        if row is None:
+            continue
+        try:
+            other = fetch_parse(row["xbrlUrl"], target) or {}
+        except Exception as exc:
+            meta.setdefault("issues", []).append(f"COMPARATIVE_FETCH_FAILED:{target.isoformat()}:{type(exc).__name__}")
+            continue
+        oc = (other.get("_meta") or {}).get("concepts") or {}
+        same_rev = oc.get("revenue") == concepts.get("revenue")
+        same_pat = oc.get("pat") == concepts.get("pat")
+        rev_o = other.get("revenue_cr") if same_rev else None
+        pat_o = other.get("pat_cr") if same_pat else None
+        if shift == -4:
+            if parsed.get("prior_year_revenue_cr") is None and rev_o is not None:
+                parsed["prior_year_revenue_cr"] = rev_o
+                parsed["revenue_yoy_pct"] = round2(pct_change(parsed["revenue_cr"], rev_o))
+            if parsed.get("prior_year_pat_cr") is None and pat_o is not None:
+                parsed["prior_year_pat_cr"] = pat_o
+                trend, yoy = pat_trend(parsed.get("pat_cr"), pat_o)
+                parsed["pat_trend"], parsed["pat_yoy_pct"] = trend, round2(yoy)
+        else:
+            if rev_o is not None:
+                parsed["revenue_qoq_pct"] = round2(pct_change(parsed["revenue_cr"], rev_o))
+            if pat_o is not None and pat_o > 0 and parsed.get("pat_cr") is not None:
+                parsed["pat_qoq_pct"] = round2(pct_change(parsed["pat_cr"], pat_o))
+        if rev_o is not None or pat_o is not None:
+            meta["comparativesFromSameDocument"] = False
+            meta.setdefault("comparativeSources", {})[target.isoformat()] = row["xbrlUrl"]
+    return parsed
+
+
 def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
     if boolish(store.value(event, "results_released")) is not True:
         return
@@ -3610,8 +3802,9 @@ def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceConte
     if period_end is None:
         return
     sec = event.get("security", {})
-    symbol = normalize_symbol(sec.get("nseSymbol") or sec.get("symbol"))
+    symbol = normalize_symbol(sec.get("nseSymbol"))
     bse_code = str(sec.get("bseCode") or "").strip()
+    listing = nse_result_listing(event, store, ctx) if sec.get("nseSymbol") else []
     chosen = select_xbrl_filing(event)
     xbrl_url = (chosen or {}).get("xbrlUrl") or store.value(event, "xbrl_url")
 
@@ -3622,6 +3815,8 @@ def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceConte
         if existing.get("documentUrl") != str(xbrl_url) or (existing.get("validation") or {}).get("status") == "REJECTED":
             try:
                 parsed, raw_ref = XBRLParser(ctx).fetch_parse(str(xbrl_url), event["eventId"], period_end, source)
+                fill_comparatives_from_listing(parsed, listing, period_end, (chosen or {}).get("basis"),
+                                               lambda url, pe: XBRLParser(ctx).fetch_parse(url, event["eventId"], pe, source)[0])
                 snap = store_financial_snapshot(event, source, parsed, raw_ref=raw_ref, document_url=str(xbrl_url))
                 ok = (snap.get("validation") or {}).get("status") != "REJECTED"
                 store.record_fetch(event, source, ok=ok, raw_ref=raw_ref,
@@ -3735,11 +3930,10 @@ def parse_bse_meta(payload: Any) -> dict[str, Any]:
 def sector_key(sec: dict[str, Any]) -> str | None:
     """One sector name per company for peer comparison: the exchange 'Sector'
     level (≈22 groups) when known, else basic industry, else Yahoo sector."""
-    for k in ("exchangeSector", "basicIndustry", "industry", "sector"):
-        v = str(sec.get(k) or "").strip()
-        if v and v not in {"—", "-", "NA"}:
-            return v
-    return None
+    # 2.5.4: always one of NSE's ~22 sector names (pead_plus.canonical_sector),
+    # whichever source label we have; most specific exchange label first.
+    return pead_plus.canonical_sector(sec.get("exchangeSector"), sec.get("basicIndustry"), sec.get("industry"),
+                                      sec.get("sector"), sec.get("macroSector"))
 
 
 def enrich_exchange_meta(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
@@ -3800,19 +3994,29 @@ def refresh_index_cache(ctx: SourceContext) -> dict[str, Any]:
     """Nifty 500 daily closes for market regime and relative strength.
     Fetched at most once per day; a failed fetch keeps the old cache."""
     cache = load_index_cache()
-    if cache.get("fetchedOn") == now_ist().date().isoformat() and cache.get("closes"):
+    last = (cache.get("dates") or [None])[-1]
+    recent = bool(last) and (now_ist().date() - date.fromisoformat(last)).days <= 4
+    if cache.get("fetchedOn") == now_ist().date().isoformat() and cache.get("closes") and recent:
         return cache
     try:
         end = now_ist().date()
+        # 2.5.4: NSE returns at most ~70 sessions per request, so a 330-day
+        # request silently stopped in February. Fetch 80-day windows.
+        found: dict[str, float] = {}
         with NSEAdapter(ctx) as nse:
-            rows, _ = nse.index_history("NIFTY 500", end - timedelta(days=330), end)
-        points = []
-        for r in rows or []:
-            d = parse_date(first(r, "EOD_TIMESTAMP", "HistoricalDate", "date"))
-            c = safe_num(first(r, "EOD_CLOSE_INDEX_VAL", "CLOSE", "close"))
-            if d and c:
-                points.append((d.isoformat(), c))
-        points.sort()
+            w_end = end
+            while w_end > end - timedelta(days=330):
+                w_start = max(w_end - timedelta(days=80), end - timedelta(days=330))
+                rows, _ = nse.index_history("NIFTY 500", w_start, w_end)
+                for r in rows or []:
+                    d = parse_date(first(r, "EOD_TIMESTAMP", "HistoricalDate", "date"))
+                    c = safe_num(first(r, "EOD_CLOSE_INDEX_VAL", "CLOSE", "close"))
+                    if d and c:
+                        found[d.isoformat()] = c
+                w_end = w_start - timedelta(days=1)
+        points = sorted(found.items())
+        if points and (end - date.fromisoformat(points[-1][0])).days > 6:
+            raise RuntimeError(f"index history ends {points[-1][0]}, not recent")
         if len(points) >= 55:
             cache = {"index": "NIFTY 500", "fetchedOn": end.isoformat(),
                      "dates": [p[0] for p in points], "closes": [p[1] for p in points]}
@@ -3853,6 +4057,69 @@ def fetch_cooling_down(event: dict[str, Any], source: str, hours: float) -> bool
     return bool(meta.get("status") == "FAILED" and last and (now_ist() - last).total_seconds() < hours * 3600)
 
 
+NSE_LISTING_REFRESH_HOURS = float(os.getenv("NSE_LISTING_REFRESH_HOURS", "3"))
+
+
+def nse_result_listing(event: dict[str, Any], store: EventStore, ctx: SourceContext, *, force: bool = False) -> list[dict[str, Any]]:
+    """This company's NSE result filings (period, basis, XBRL link, time),
+    cached on the event as nseResultListing (engine 2.5.4). Refreshed every
+    NSE_LISTING_REFRESH_HOURS until the event quarter's own filing appears."""
+    sec = event.get("security") or {}
+    symbol = normalize_symbol(sec.get("nseSymbol"))
+    cache = event.get("nseResultListing") or {}
+    rows = cache.get("rows") or []
+    if not symbol:
+        return rows
+    period_end = (event.get("period") or {}).get("end")
+    has_current = any(r.get("periodEnd") == period_end and r.get("xbrlUrl") for r in rows)
+    fetched = parse_datetime(cache.get("fetchedAt"))
+    max_age = 24 if has_current else NSE_LISTING_REFRESH_HOURS
+    if not force and fetched and (now_ist() - fetched).total_seconds() < max_age * 3600:
+        return rows
+    if fetch_cooling_down(event, "NSE_RESULT_LISTING", 1) or not _extra_budget_ok(1):
+        return rows
+    try:
+        with NSEAdapter(ctx) as nse:
+            payload, raw_ref = nse.financial_results(None, None, symbol=symbol, event_id=event["eventId"])
+        out = []
+        for item in payload or []:
+            c = normalize_nse_filing(item) if isinstance(item, dict) else None
+            if not c or normalize_symbol(c["security"].get("symbol")) != symbol or not c.get("periodEnd"):
+                continue
+            ts = c.get("filingTimestamp")
+            out.append({"periodEnd": c["periodEnd"].isoformat(), "fromDate": c["fromDate"].isoformat() if c.get("fromDate") else None,
+                        "basis": c.get("basis"), "cumulative": c.get("cumulative"), "xbrlUrl": c.get("xbrlUrl"),
+                        "filedAt": ts.isoformat() if ts else None})
+            if c["periodEnd"].isoformat() == period_end:
+                record_filing(event, c, raw_ref)
+                # NSE-only companies were never declared (the market-wide NSE
+                # listing is broken); the company's own listing declares them.
+                if (ts and ts.date() >= c["periodEnd"] and c.get("cumulative") is not True
+                        and boolish(store.value(event, "results_released")) is not True):
+                    store.merge_field(event, "results_released", True, source="NSE_FINANCIAL_RESULTS", raw_ref=raw_ref)
+                    store.merge_field(event, "filing_timestamp", ts.isoformat(), source="NSE_FINANCIAL_RESULTS", raw_ref=raw_ref)
+                    store.merge_field(event, "result_date", ts.date().isoformat(), source="NSE_FINANCIAL_RESULTS", raw_ref=raw_ref)
+        out.sort(key=lambda r: (r["periodEnd"], str(r.get("filedAt") or "")), reverse=True)
+        event["nseResultListing"] = {"fetchedAt": iso_now(), "rows": out[:24]}
+        store.record_fetch(event, "NSE_RESULT_LISTING", ok=True, raw_ref=raw_ref)
+        return out[:24]
+    except Exception as exc:
+        store.record_fetch(event, "NSE_RESULT_LISTING", ok=False, error=f"{type(exc).__name__}: {exc}")
+        return rows
+
+
+def listing_row(rows: list[dict[str, Any]], period_end: date, basis: str | None = None) -> dict[str, Any] | None:
+    """Quarterly (non-cumulative) XBRL row for a period; same basis when given."""
+    want = period_end.isoformat()
+    opts = [r for r in rows if r.get("periodEnd") == want and r.get("xbrlUrl") and r.get("cumulative") is not True
+            and (not r.get("fromDate") or 80 <= (period_end - date.fromisoformat(r["fromDate"])).days <= 100)]
+    if basis in {"CONSOLIDATED", "STANDALONE"}:
+        opts = [r for r in opts if r.get("basis") == basis]
+    if not opts:
+        return None
+    return max(opts, key=lambda r: (r.get("basis") == "CONSOLIDATED", str(r.get("filedAt") or "")))
+
+
 def enrich_previous_quarter(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
     """Exact filing time of the previous quarter's result (for Q1->Q2 buckets),
     from NSE's per-symbol filing list or BSE's per-scrip announcements."""
@@ -3876,15 +4143,12 @@ def enrich_previous_quarter(event: dict[str, Any], store: EventStore, ctx: Sourc
     found: list[tuple[datetime, str, str | None]] = []
     errors = []
     if symbol:
-        try:
-            with NSEAdapter(ctx) as nse:
-                payload, raw_ref = nse.financial_results(start, end, symbol=symbol, event_id=event["eventId"])
-            for item in payload or []:
-                c = normalize_nse_filing(item) if isinstance(item, dict) else None
-                if c and c.get("periodEnd") == prev_end and c.get("filingTimestamp"):
-                    found.append((c["filingTimestamp"], "NSE_FINANCIAL_RESULTS", raw_ref))
-        except Exception as exc:
-            errors.append(f"NSE: {type(exc).__name__}: {exc}")
+        for r in nse_result_listing(event, store, ctx):
+            ts = parse_datetime(r.get("filedAt"))
+            if r.get("periodEnd") == prev_end.isoformat() and ts:
+                found.append((ts, "NSE_FINANCIAL_RESULTS", (event.get("fetch") or {}).get("NSE_RESULT_LISTING", {}).get("rawRef")))
+        if not found and fetch_cooling_down(event, "NSE_RESULT_LISTING", 1):
+            errors.append("NSE: result listing unavailable")
     if not found and bse_code:
         try:
             with BSEAdapter(ctx) as bse:
@@ -4031,7 +4295,9 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
     raw_ref = None
     errors = []
 
-    symbol = normalize_symbol(sec.get("nseSymbol") or sec.get("symbol"))
+    # Only a confirmed NSE symbol: a BSE scrip id can be another company's
+    # NSE symbol (2.5.4).
+    symbol = normalize_symbol(sec.get("nseSymbol"))
     if symbol:
         try:
             start = (price_boundary or now_ist().date()) - timedelta(days=420)
@@ -4091,6 +4357,8 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
                 "chart": x.get("chart"),
                 "priceSource": price_source,
                 "computedAt": iso_now(),
+                "plusVersion": PLUS_VERSION,
+                "corporateActions": frame.attrs.get("corporateActions"),
             }
     except Exception as exc:
         store.record_fetch(event, "PLUS_FEATURES", ok=False, error=f"{type(exc).__name__}: {exc}")
@@ -4376,6 +4644,11 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
         quality_ok = True
     else:
         quality_ok = None
+    # 2.5.3: a stored "held" verdict from an undated notice (pre-2.5.3 rule)
+    # is corrected without waiting for the next announcements fetch.
+    if event.get("concall"):
+        event["concall"] = pead_plus.recheck_concall(event["concall"], parse_date(store.value(event, "result_date")),
+                                                     now_ist().date())
     plan = pead_plus.trade_plan(released=released, reaction_traded=reaction_traded, quality_ok=quality_ok, x=px,
                                 last_price=last_price, result_return=result_ret, rvol=rvol,
                                 result_low=result_low, result_high=result_high, box_high=box_high,
@@ -4779,6 +5052,13 @@ def _raw_folders_for(event: dict[str, Any], base: Path) -> list[Path]:
     return [f for pre in prefixes for f in base.glob(f"{pre}_*") if f.is_dir()]
 
 
+def _payload_symbol(payload: Any) -> str | None:
+    rows = payload if isinstance(payload, list) else (payload.get("data") if isinstance(payload, dict) else None)
+    if isinstance(rows, list) and rows and isinstance(rows[0], dict) and rows[0].get("chSymbol"):
+        return normalize_symbol(rows[0]["chSymbol"])
+    return None
+
+
 def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Path = RAW_DIR) -> bool:
     """Recompute price analytics from the newest saved price payload (NSE OHLC
     preferred, BSE close-only fallback). Used when no fresh fetch happened, so
@@ -4788,16 +5068,23 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
         for folder in _raw_folders_for(event, base):
             for f in folder.glob("*.json"):
                 candidates.append((kind == "NSE", f.stat().st_mtime, f, kind))
-    frame, source = None, None
-    for _, _, f, kind in sorted(candidates, reverse=True):
+    # 2.5.4: pick the payload with the LATEST session (file mtimes are all
+    # equal after a git checkout, so "newest file" picked a random one).
+    frame, source, best_key = None, None, None
+    nse_sym = normalize_symbol((event.get("security") or {}).get("nseSymbol"))
+    for is_nse, _, f, kind in candidates:
         try:
             payload = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
             continue
-        frame = nse_history_to_frame(payload) if kind == "NSE" else bse_history_to_frame(payload)
-        if frame is not None and not frame.empty:
-            source = f"{kind}_PRICE"
-            break
+        if kind == "NSE" and _payload_symbol(payload) not in (None, nse_sym):
+            continue   # another company's prices (pre-2.5.4 lookup mix-up)
+        fr = nse_history_to_frame(payload) if kind == "NSE" else bse_history_to_frame(payload)
+        if fr is None or fr.empty:
+            continue
+        key = (fr["Date"].iloc[-1], is_nse, len(fr))
+        if best_key is None or key > best_key:
+            frame, source, best_key = fr, f"{kind}_PRICE", key
     if frame is None or getattr(frame, "empty", True):
         return False
     released = boolish(store.value(event, "results_released")) is True
@@ -4811,7 +5098,15 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     if not x:
         return False
     event["plus"] = {"price": {k: v for k, v in x.items() if k != "chart"}, "chart": x.get("chart"),
-                     "priceSource": source, "computedAt": iso_now(), "replayedFromRaw": True}
+                     "priceSource": source, "computedAt": iso_now(), "replayedFromRaw": True,
+                     "plusVersion": PLUS_VERSION, "corporateActions": frame.attrs.get("corporateActions")}
+    # Pre-result context (run-up, 52-week distance, turnover, last price) from
+    # the same split-adjusted frame.
+    m_all = price_metrics(frame, reaction or result_date, wstart)
+    for field in ("pre_result_5d_pct", "pre_result_10d_pct", "pre_result_20d_pct", "distance_52w_high_pct",
+                  "last_price", "avg_turnover_20d_cr"):
+        if m_all.get(field) is not None:
+            store.force_field(event, field, m_all[field], source=source, note="replayed from saved price data")
     # OHLC from NSE fixes result-day high/low that were close-only before.
     if traded and source == "NSE_PRICE":
         m = price_metrics(frame, reaction, wstart)
@@ -4822,10 +5117,14 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
+PLUS_VERSION = "2.6.0"   # bump to rebuild every stored chart/price analytic once
+
+
 def replay_plus(store: EventStore) -> int:
     n = 0
     for event in store.all():
-        if not dashboard_activity(event) or (event.get("plus") or {}).get("price"):
+        plus = event.get("plus") or {}
+        if not dashboard_activity(event) or (plus.get("price") and plus.get("plusVersion") == PLUS_VERSION):
             continue
         if rebuild_plus_from_raw(store, event):
             store.save(event)
@@ -4948,7 +5247,8 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
         "sym": sec.get("symbol") or sec.get("nseSymbol"),
         "name": sec.get("name") or sec.get("symbol") or "Unknown",
         "sector": plus.get("sectorKey") or sec.get("sector") or sec.get("industry") or "—",
-        "industry": sec.get("basicIndustry") or sec.get("industry"),
+        "industry": next((v for v in (sec.get("basicIndustry"), sec.get("industry"), sec.get("sector"))
+                          if str(v or "").strip() not in {"", "—", "-"} and v != plus.get("sectorKey")), None),
         "isin": sec.get("isin"),
         "bseCode": sec.get("bseCode"),
         "ticker": sec.get("yahooTicker"),
@@ -5323,9 +5623,13 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
     items = [event_to_intelligence(e) for e in events]
     sectors = sector_universe(store, stored_events)
     index_cache = load_index_cache()
-    regime = pead_plus.market_regime(index_cache.get("closes"))
+    as_of = (index_cache.get("dates") or [None])[-1]
+    stale = not as_of or (now_ist().date() - date.fromisoformat(as_of)).days > 7
+    regime = pead_plus.market_regime(None if stale else index_cache.get("closes"))
+    if stale and as_of:
+        regime["note"] = f"Index data is stale (last {as_of}); market regime not shown."
     regime["index"] = index_cache.get("index")
-    regime["asOf"] = (index_cache.get("dates") or [None])[-1]
+    regime["asOf"] = as_of
     timing = pead_plus.entry_timing_scorecard([e.get("tradeLog") for e in stored_events])
     card = pead_plus.scorecard([
         {"q1Return": (it["plus"].get("price") or {}).get("q1_reaction_return_pct"),
@@ -5729,7 +6033,7 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
 
     # Pre-discovery integrity pass: deterministic over committed evidence, so
     # its signature is stable between a blocked run and the approving run.
-    integrity_stats = integrity_pass(store)
+    integrity_stats = integrity_pass(store, master=master)
     signature = integrity_signature(integrity_stats["revocations"])
     print_integrity_summary(integrity_stats, signature)
     write_integrity_report(integrity_stats, signature)
@@ -5760,14 +6064,10 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         enrichment_stats = enrich_events(store, master, ctx)
         print("Enrichment:", json.dumps(enrichment_stats, default=str))
         refresh_index_cache(ctx)
-        post = integrity_pass(store)
-        post_merges = [r for r in post["revocations"] if any(str(x).startswith("DUPLICATE_MERGED_INTO") for x in r.get("reasons") or [])]
+        post = integrity_pass(store, master=master)
         if post["revoked"] or post["postResultPurged"]:
             print_integrity_summary(post, integrity_signature(post["revocations"]))
 
-    all_merges = [r for r in integrity_stats["revocations"] if any(str(x).startswith("DUPLICATE_MERGED_INTO") for x in r.get("reasons") or [])]
-    if not skip_network:
-        all_merges += post_merges
     replayed = replay_plus(store)
     print(f"Analytics replayed from saved price files for {replayed} events")
     score_stats = score_all(store)
@@ -5777,17 +6077,28 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
     health["bootstrapMigrated"] = migrated
     health["bootstrapIntelligenceFilled"] = migrated_intel
     health["scoreStats"] = score_stats
+    # Install check (2.6.0): every file must come from the same release.
+    plus_v = getattr(pead_plus, "MODULE_VERSION", "missing")
+    health["installCheck"] = {"engine": ENGINE_VERSION, "pead_plus": plus_v,
+                              "ok": plus_v == ENGINE_VERSION}
     health["integrity"] = {
         "signature": signature,
         "checked": integrity_stats["checked"],
         "reverified": integrity_stats["reverified"],
-        "revoked": len(integrity_stats["revocations"]),
+        # Declaration revocations only; duplicate folds and identity repairs
+        # are reported separately (2.5.4) so the health tile is not alarming.
+        "revoked": sum(1 for r in integrity_stats["revocations"]
+                       if not any(str(x).startswith(("DUPLICATE_MERGED_INTO", "IDENTITY_REPAIRED")) for x in r.get("reasons") or [])),
+        "identityRepaired": sum(1 for r in integrity_stats["revocations"]
+                                if any(str(x).startswith("IDENTITY_REPAIRED") for x in r.get("reasons") or [])),
         "postResultPurged": integrity_stats["postResultPurged"],
         "financialsApplied": integrity_stats["financialsApplied"],
         # Duplicate folds shrink the row count without losing any company;
         # the quality gate discounts them (2.5.3).
-        "duplicatesMerged": len(all_merges),
-        "declaredMerged": sum(1 for r in all_merges if r.get("bothDeclared")),
+        # Only folds of events that existed before this run (i.e. were in the
+        # last published baseline) are added back by the quality gate.
+        "duplicatesMerged": int(integrity_stats.get("duplicatesMerged") or 0),
+        "declaredMerged": int(integrity_stats.get("declaredMerged") or 0),
     }
     published, reasons = publish(store, health, force=force_publish, approved_signature=approved_signature)
     if published:
