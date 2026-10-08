@@ -83,7 +83,7 @@
         <div class="price-track-cell"><span>Current price</span><b>${money(current)}</b></div>
         <div class="price-track-cell"><span>Entry trigger</span><b>${money(trigger)}</b></div>
         <div class="price-track-cell"><span>Distance to trigger</span><b>${pct(distance)}</b></div>
-        <div class="price-track-cell"><span>Tracked move</span><b>${pct(tracked)}</b></div>
+        <div class="price-track-cell" title="Change since this event's first tracked price"><span>Move since tracked</span><b>${pct(tracked)}</b></div>
         <div class="price-track-cell"><span>Price updated</span><b>${esc(updated)}</b></div>
       </div>
       <div class="entry-signal">
@@ -100,7 +100,7 @@
       <div class="metric"><span>Data complete</span><b>${n(item.dataCompletenessPct)==null?'—':n(item.dataCompletenessPct).toFixed(0)+'%'}</b></div>
       <div class="metric"><span>Revenue YoY</span><b>${pct(item.revenueYoY ?? fs.revenueYoYCalc)}</b></div>
       <div class="metric"><span>PAT YoY</span><b>${patDisplay(item,fs)}</b></div>
-      <div class="metric" title="${esc((item.financialIssues||[]).join(', '))}"><span>Financials</span><b>${item.financialSource?esc(String(item.financialSource).replace(/_/g,' '))+' · '+esc(item.financialBasis||'UNKNOWN')+(item.financialStatus==='FLAGGED'?' ⚠':''):'—'}</b></div>
+      <div class="metric" title="${esc((item.financialIssues||[]).join(', '))}"><span>Financials</span><b>${item.financialSource?esc(String(item.financialSource).replace(/_/g,' '))+' · '+esc(item.financialBasis||'UNKNOWN')+(item.financialStatus==='FLAGGED'?' ⚠':''):((item.financialIssues||[]).includes('UNIT_SUSPECT')?'Rejected: exchange figures in wrong unit':'—')}</b></div>
       <div class="metric"><span>Pre-result 5D</span><b>${pct(pc.pre5dPct)}</b></div>
       <div class="metric"><span>Pre-result 10D</span><b>${pct(pc.pre10dPct)}</b></div>
       <div class="metric"><span>Pre-result 20D</span><b>${pct(pc.pre20dPct)}</b></div>
