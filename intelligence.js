@@ -36,11 +36,15 @@
       'health-financials':`${h.financialsParsed??0}/${h.resultsFiled??0}`,
       'health-reaction':`${h.reactionReady??0}/${h.resultsFiled??0}`,
       'health-completeness':h.declaredCompletenessPct==null?'—':`${Number(h.declaredCompletenessPct).toFixed(0)}%`,
-      'health-failures':h.fetchesFailed??0
+      'health-failures':h.fetchesFailed??0,
+      'health-fin-verified':h.financialsVerified==null?'—':`${h.financialsVerified}/${h.financialsFlagged??0}`,
+      'health-revoked':h.integrity?.revoked==null?'—':h.integrity.revoked
     };
     Object.entries(values).forEach(([id,val])=>{ if ($(id)) $(id).textContent=val??'—'; });
     const failureBox=$('health-failures')?.closest('.health-box');
     if (failureBox) failureBox.classList.add((h.fetchesFailed??0)>10?'bad':(h.fetchesFailed??0)>0?'warn':'good');
+    const flagBox=$('health-fin-verified')?.closest('.health-box');
+    if (flagBox && h.financialsVerified!=null) flagBox.classList.add((h.financialsFlagged??0)>0?'warn':'good');
     const compBox=$('health-completeness')?.closest('.health-box');
     if (compBox) {
       const c=Number(h.declaredCompletenessPct??0);
@@ -96,6 +100,7 @@
       <div class="metric"><span>Data complete</span><b>${n(item.dataCompletenessPct)==null?'—':n(item.dataCompletenessPct).toFixed(0)+'%'}</b></div>
       <div class="metric"><span>Revenue YoY</span><b>${pct(item.revenueYoY ?? fs.revenueYoYCalc)}</b></div>
       <div class="metric"><span>PAT YoY</span><b>${patDisplay(item,fs)}</b></div>
+      <div class="metric" title="${esc((item.financialIssues||[]).join(', '))}"><span>Financials</span><b>${item.financialSource?esc(String(item.financialSource).replace(/_/g,' '))+' · '+esc(item.financialBasis||'UNKNOWN')+(item.financialStatus==='FLAGGED'?' ⚠':''):'—'}</b></div>
       <div class="metric"><span>Pre-result 5D</span><b>${pct(pc.pre5dPct)}</b></div>
       <div class="metric"><span>Pre-result 10D</span><b>${pct(pc.pre10dPct)}</b></div>
       <div class="metric"><span>Pre-result 20D</span><b>${pct(pc.pre20dPct)}</b></div>
