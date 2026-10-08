@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.6.0"
+ENGINE_VERSION = "2.6.1"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -158,6 +158,7 @@ BASE_SOURCE_RANK = {
     "NSE_XBRL": 100,
     "BSE_XBRL": 100,
     "NSE_FINANCIAL_RESULTS": 98,
+    "NSE_INTEGRATED_FILING": 98,
     "BSE_RESULT_ANNOUNCEMENT": 98,
     "NSE_RESULTS_COMPARISON": 95,
     "BSE_RESULTS_SNAPSHOT": 92,
@@ -213,7 +214,7 @@ def source_rank(field: str, source: str) -> int:
         if source == "YAHOO_PRICE":
             return 60
     if field in {"results_released", "filing_timestamp", "result_date"}:
-        if source in {"NSE_FINANCIAL_RESULTS", "BSE_RESULT_ANNOUNCEMENT"}:
+        if source in {"NSE_FINANCIAL_RESULTS", "NSE_INTEGRATED_FILING", "BSE_RESULT_ANNOUNCEMENT"}:
             return 110
     if field in {"isin", "nse_symbol", "bse_code"}:
         if source in {"NSE_FINANCIAL_RESULTS", "BSE_RESULT_ANNOUNCEMENT", "EXCHANGE_IDENTITY"}:
@@ -634,6 +635,25 @@ class FetchLogger:
 # ---------------------------------------------------------------------------
 
 
+def _identity_conflict(existing: dict[str, Any], incoming: dict[str, Any]) -> bool:
+    """True when an incoming security clearly is a different company from the
+    event its key resolved to (different BSE code / ISIN, or unrelated names)."""
+    ia, ib = str(existing.get("isin") or "").upper(), str(incoming.get("isin") or "").upper()
+    if ia and ib and (ia == ib or (_issuer_code(ia) and _issuer_code(ia) == _issuer_code(ib))):
+        return False
+    for k in ("bseCode", "isin"):
+        a, b = str(existing.get(k) or "").strip().upper(), str(incoming.get(k) or "").strip().upper()
+        if a and b and a != b and not (k == "isin" and b in [str(x).upper() for x in existing.get("altIsins") or []]):
+            if k == "isin" and _issuer_code(a) and _issuer_code(a) == _issuer_code(b):
+                continue
+            return True
+    na, nb = existing.get("name"), incoming.get("name")
+    if (na and nb and not ib and normalize_symbol(nb) != normalize_symbol(incoming.get("symbol"))
+            and not same_company({"name": na}, {"name": nb})):
+        return True
+    return False
+
+
 class EventStore:
     def __init__(self, root: Path = EVENTS_DIR):
         self.root = root
@@ -713,6 +733,14 @@ class EventStore:
         )
         eid = self.resolve(event_id_for(security_key, period_end))
         event = self.load(eid)
+        if event is not None and _identity_conflict(event.get("security") or {}, security):
+            # 2.6.1: a BSE scrip id that equals another company's NSE symbol
+            # (BRIGHT = Bright Outdoor Media on BSE, Bright Solar on NSE) must
+            # not land in that company's event; key it by its BSE code.
+            code = str(security.get("bseCode") or "").strip()
+            alt = f"BSE:{code}" if code.isdigit() else f"SYM:{normalize_symbol(security.get('symbol'))}:{normalize_symbol(security.get('name'))}"
+            eid = self.resolve(event_id_for(alt, period_end))
+            event = self.load(eid)
         if event is None:
             event = {
                 "schemaVersion": SCHEMA_VERSION,
@@ -1103,6 +1131,28 @@ class NSEAdapter:
             ) or [],
             event_id=event_id, symbol=symbol,
         )
+
+    def integrated_filings(self, symbol: str, event_id: str | None = None):
+        """NSE "Integrated Filing - Financials" index for one company (engine 2.6.1).
+        Since the Mar-2025 quarter SEBI moved quarterly results here; the old
+        corporates-financial-results index stops at Dec-2024."""
+        def go():
+            url = f"{getattr(self.client, 'base_url', 'https://www.nseindia.com/api')}/integrated-filing-results"
+            params = {"index": "equities", "symbol": symbol, "type": "Integrated Filing- Financials"}
+            transport = getattr(self.client, "_transport", None)
+            if transport is not None:
+                resp = transport.request(url, params=params)
+            elif hasattr(self.client, "_req"):
+                resp = self.client._req(url, params=params)
+            else:
+                sess = getattr(self.client, "session", None) or getattr(self.client, "_NSE__session", None)
+                if sess is None:
+                    raise RuntimeError("NSE client has no request transport")
+                resp = sess.get(url, params=params)
+            data = resp.json() if hasattr(resp, "json") else resp
+            rows = data.get("data", []) if isinstance(data, dict) else (data or [])
+            return [r for r in rows if isinstance(r, dict) and "financ" in str(r.get("type") or "").lower()]
+        return self._call("integrated_filings", go, event_id=event_id, symbol=symbol)
 
     def board_meetings(self, from_dt: datetime, to_dt: datetime):
         return self._call(
@@ -1745,20 +1795,28 @@ XBRL_REVENUE_CONCEPTS = [
     "netsalesincomefromoperations", "incomefromoperations", "revenuefromcontractswithcustomers",
 ]
 XBRL_BANK_REVENUE_CONCEPTS = ["interestearned", "totalinterestearned"]
+# Insurers (in-capmkt insurance taxonomy, verified on ICICIGI / SBILIFE Q1 FY27 filings).
+XBRL_INSURANCE_REVENUE_CONCEPTS = ["premiumearned", "netpremiumincome", "netpremiumwritten", "grosspremiumincome",
+                                   "grosspremiumswritten"]
 XBRL_TOTAL_INCOME_CONCEPTS = ["income", "totalincome", "totalrevenue"]
 XBRL_PAT_OWNER_CONCEPTS = [
     "profitlossforperiodattributabletoownersofparent", "profitorlossattributabletoownersofparent",
     "profitlossattributabletoownersofparent", "netprofitlossforperiodattributabletoownersofparent",
     "profitlossfortheperiodattributabletoownersofparent",
+    # banking taxonomy (HDFCBANK consolidated Q1 FY27)
+    "profitlossaftertaxesminorityinterestandshareofprofitlossofassociates",
 ]
 XBRL_PAT_CONCEPTS = [
     "profitlossforperiod", "profitloss", "netprofitlossforperiod", "profitlossfortheperiod",
     "netprofitloss", "netprofitlossfortheperiod", "profitaftertax",
+    # insurance taxonomy
+    "profitlossaftertax", "profitlossaftertaxandextraordinaryitems", "profitlossaftertaxbeforeextraordinaryitems",
 ]
 XBRL_EPS_CONCEPTS = [
     "basicearningslosspershareforcontinuinganddiscontinuedoperations",
     "basicearningslosspersharefromcontinuinganddiscontinuedoperations",
     "basicearningslosspershare", "basicearningspershare", "basiceps",
+    "basicearningspershareafterextraordinaryitems", "basicearningspersharebeforeextraordinaryitems",
 ]
 QUARTER_DAYS = (80, 100)
 
@@ -1854,7 +1912,15 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
             values = {round(f["value"], 4) for f in facts if f["name"] == concept and f["context"] in ctx_ids}
             if not values:
                 continue
-            fact = next(f for f in facts if f["name"] == concept and f["context"] in ctx_ids)
+            use_ids = ctx_ids
+            if len(values) > 1:
+                # Pre-2025 NSE results XBRL labels its year-to-date context
+                # ("FourD") with quarter dates; the period column is "OneD".
+                one = {c for c in ctx_ids if c.lower().startswith("one")}
+                one_vals = {round(f["value"], 4) for f in facts if f["name"] == concept and f["context"] in one}
+                if len(one_vals) == 1:
+                    values, use_ids = one_vals, one
+            fact = next(f for f in facts if f["name"] == concept and f["context"] in use_ids)
             if len(values) > 1:
                 issues.append(f"CONFLICTING_FACTS:{concept}")
                 return None, concept
@@ -1882,6 +1948,9 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
     if rev is None and rev_concept is None:
         rev, rev_concept = pick(XBRL_BANK_REVENUE_CONCEPTS, current_ctx)
         revenue_concepts, revenue_definition = XBRL_BANK_REVENUE_CONCEPTS, "INTEREST_EARNED"
+    if rev is None and rev_concept is None:
+        rev, rev_concept = pick(XBRL_INSURANCE_REVENUE_CONCEPTS, current_ctx)
+        revenue_concepts, revenue_definition = XBRL_INSURANCE_REVENUE_CONCEPTS, "PREMIUM_INCOME"
     if rev is None and rev_concept is None:
         rev, rev_concept = pick(XBRL_TOTAL_INCOME_CONCEPTS, current_ctx)
         revenue_concepts, revenue_definition = XBRL_TOTAL_INCOME_CONCEPTS, "TOTAL_INCOME"
@@ -2055,6 +2124,42 @@ def normalize_nse_filing(item: dict[str, Any]) -> dict[str, Any] | None:
         "periodSource": period_source,
         "fromDate": parse_date(first(item, "fromDate")),
         "headline": f"{first(item, 'relatingTo', default='')} {first(item, 'period', default='')} {first(item, 'consolidated', default='')}".strip(),
+        "raw": item,
+    }
+
+
+def normalize_nse_integrated(item: dict[str, Any]) -> dict[str, Any] | None:
+    """Row of NSE's Integrated Filing (Financials) index -> filing candidate."""
+    if "financ" not in str(item.get("type") or "").lower():
+        return None
+    symbol = normalize_symbol(first(item, "symbol"))
+    period_end = parse_date(first(item, "qe_Date", "qeDate"))
+    if not symbol or period_end is None:
+        return None
+    filed = parse_datetime(first(item, "broadcast_Date", "broadcastDate", "creation_Date"))
+    revised = parse_datetime(item.get("revised_Date"))
+    nature = str(item.get("consolidated") or "").strip().lower()
+    basis = "CONSOLIDATED" if nature.startswith("consolidated") else ("STANDALONE" if nature.startswith("standalone") else "UNKNOWN")
+    xbrl = str(item.get("xbrl") or "").strip()
+    if not xbrl.startswith("http") or xbrl.rstrip("/").endswith("/null"):
+        xbrl = None
+    m = period_end.month - 2
+    from_date = date(period_end.year if m > 0 else period_end.year - 1, m if m > 0 else m + 12, 1)
+    return {
+        "security": {"symbol": symbol, "nseSymbol": symbol, "isin": None,
+                     "name": first(item, "cmName", "smName", default=symbol)},
+        "periodEnd": period_end,
+        "quarter": fiscal_quarter(period_end),
+        "released": True,
+        "filingTimestamp": filed,
+        "revisedAt": revised,
+        "source": "NSE_INTEGRATED_FILING",
+        "xbrlUrl": xbrl,
+        "basis": basis,
+        "cumulative": False,
+        "periodSource": "EXCHANGE_PERIOD_FIELD",
+        "fromDate": from_date,
+        "headline": f"Integrated Filing - Financials {item.get('consolidated') or ''} {item.get('type_Sub') or ''}".strip(),
         "raw": item,
     }
 
@@ -2990,6 +3095,7 @@ def build_evidence_index(raw_root: Path = RAW_DIR) -> dict[str, list[dict[str, A
         (raw_root / "nse" / "DISCOVERY", "financial_results-*.json", normalize_nse_filing),
         # 2.5.4: per-company NSE result listings are evidence too.
         (raw_root / "nse", "[!D]*/financial_results-*.json", normalize_nse_filing),
+        (raw_root / "nse", "[!D]*/integrated_filings-*.json", normalize_nse_integrated),
     )
     for folder, pattern, normalizer in sources:
         if not folder.exists():
@@ -3021,7 +3127,7 @@ def _revoke_release(store: EventStore, event: dict[str, Any], reasons: list[str]
         store.revoke_field(event, field, f"release evidence invalid: {reason}")
     rd_meta = (event.get("fields") or {}).get("result_date") or {}
     rd = parse_date(rd_meta.get("value"))
-    if rd_meta.get("status") == "OK" and (rd_meta.get("source") in {"BSE_RESULT_ANNOUNCEMENT", "NSE_FINANCIAL_RESULTS"} or (rd and rd < today)):
+    if rd_meta.get("status") == "OK" and (rd_meta.get("source") in {"BSE_RESULT_ANNOUNCEMENT", "NSE_FINANCIAL_RESULTS", "NSE_INTEGRATED_FILING"} or (rd and rd < today)):
         store.revoke_field(event, "result_date", f"release evidence invalid: {reason}")
     for field in FINANCIAL_FIELDS:
         store.revoke_field(event, field, "financials belonged to a revoked declaration")
@@ -3487,8 +3593,53 @@ def repair_lookup_mismatches(store: EventStore, master: "SymbolMaster | None" = 
             fixed.append({"eventId": old_id, "symbol": q, "at": iso_now(), "before": {"nseSymbol": n},
                           "reasons": [f"IDENTITY_REPAIRED:{n}->{new_n or 'BSE_ONLY'}"]})
             break
+    fixed += _repair_bse_lookup_mismatches(store, raw_root)
     if fixed and master is not None:
         master.save()
+    return fixed
+
+
+def _repair_bse_lookup_mismatches(store: EventStore, raw_root: Path = RAW_DIR) -> list[dict[str, Any]]:
+    """Undo BSE codes attached by a BSE lookup that returned a different
+    company (NSE:BRIGHT 'Bright Solar' got 543831 'Bright Outdoor Media')."""
+    base = raw_root / "bse"
+    if not base.exists():
+        return []
+    fixed = []
+    for e in store.all():
+        sec = e.get("security") or {}
+        code, name = str(sec.get("bseCode") or ""), sec.get("name")
+        if not code or not name or not sec.get("nseSymbol"):
+            continue
+        prefix = safe_filename(e["eventId"]).rsplit("_", 1)[0]
+        wrong = None
+        for f in base.glob(f"{prefix}_*/lookup-*.json"):
+            try:
+                pl = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if isinstance(pl, dict) and str(pl.get("bse_code") or "") == code and pl.get("company_name") \
+                    and not same_company({"name": name}, {"name": pl["company_name"]}):
+                wrong = pl["company_name"]
+                break
+        if not wrong:
+            continue
+        for k in ("bseCode", "bseSymbol", "bseGroup"):
+            sec.pop(k, None)
+        if str(sec.get("yahooTicker") or "").endswith(".BO"):
+            sec["yahooTicker"] = f"{normalize_symbol(sec['nseSymbol'])}.NS"
+        sec["identityRepaired"] = {"wrongBseCode": code, "wrongBseName": wrong, "at": iso_now()}
+        for f_name in list((e.get("fields") or {}).keys()):
+            src = str((e["fields"][f_name] or {}).get("source") or "")
+            if src.startswith("BSE_") or (f_name in {"reaction_session", "filing_session"} and src == "DERIVED"):
+                e["fields"].pop(f_name, None)
+        if str((e.get("plus") or {}).get("priceSource") or "").startswith("BSE"):
+            e.pop("plus", None)
+        for extra in ("concall", "tradeLog", "financialSnapshots", "financialIntegrity"):
+            e.pop(extra, None)
+        store.save(e)
+        fixed.append({"eventId": e["eventId"], "symbol": sec.get("symbol"), "at": iso_now(), "before": {"bseCode": code},
+                      "reasons": [f"IDENTITY_REPAIRED:BSE {code} ({wrong}) removed"]})
     return fixed
 
 
@@ -3520,6 +3671,14 @@ def fill_security_identity(event: dict[str, Any], store: EventStore, master: Sym
         try:
             with BSEAdapter(ctx) as bse:
                 payload, raw_ref = bse.lookup(str(sec.get("name") or symbol), event["eventId"])
+                bse_name = payload.get("company_name") or payload.get("companyName") if isinstance(payload, dict) else None
+                # 2.6.1: BSE lookup is a search too ("Bright Solar" -> BRIGHT
+                # OUTDOOR MEDIA 543831); accept it only for the same company.
+                if isinstance(payload, dict) and sec.get("name") and bse_name and not same_company(
+                        {"name": sec.get("name")}, {"name": bse_name}):
+                    store.record_fetch(event, "BSE_LOOKUP", ok=False, raw_ref=raw_ref,
+                                       error=f"lookup returned another company: {bse_name}")
+                    payload = None
                 if isinstance(payload, dict):
                     code = payload.get("bse_code") or payload.get("bseCode")
                     isin = payload.get("isin") or payload.get("ISIN")
@@ -4074,16 +4233,28 @@ def nse_result_listing(event: dict[str, Any], store: EventStore, ctx: SourceCont
     has_current = any(r.get("periodEnd") == period_end and r.get("xbrlUrl") for r in rows)
     fetched = parse_datetime(cache.get("fetchedAt"))
     max_age = 24 if has_current else NSE_LISTING_REFRESH_HOURS
+    if cache.get("v") != 2:
+        fetched = None          # 2.6.1: listings cached before Integrated Filing support
     if not force and fetched and (now_ist() - fetched).total_seconds() < max_age * 3600:
         return rows
     if fetch_cooling_down(event, "NSE_RESULT_LISTING", 1) or not _extra_budget_ok(1):
         return rows
     try:
+        candidates_raw: list[tuple[dict[str, Any], str | None]] = []
+        raw_ref = None
         with NSEAdapter(ctx) as nse:
-            payload, raw_ref = nse.financial_results(None, None, symbol=symbol, event_id=event["eventId"])
+            try:
+                payload, raw_ref = nse.integrated_filings(symbol, event_id=event["eventId"])
+                candidates_raw += [(normalize_nse_integrated(i), raw_ref) for i in payload or [] if isinstance(i, dict)]
+                store.record_fetch(event, "NSE_INTEGRATED_FILING", ok=True, raw_ref=raw_ref)
+            except Exception as exc:
+                store.record_fetch(event, "NSE_INTEGRATED_FILING", ok=False, error=f"{type(exc).__name__}: {exc}")
+            if not any(c for c, _ in candidates_raw):
+                # Pre-2025 quarters and a fallback if the integrated index fails.
+                payload, raw_ref = nse.financial_results(None, None, symbol=symbol, event_id=event["eventId"])
+                candidates_raw += [(normalize_nse_filing(i), raw_ref) for i in payload or [] if isinstance(i, dict)]
         out = []
-        for item in payload or []:
-            c = normalize_nse_filing(item) if isinstance(item, dict) else None
+        for c, raw_ref in candidates_raw:
             if not c or normalize_symbol(c["security"].get("symbol")) != symbol or not c.get("periodEnd"):
                 continue
             ts = c.get("filingTimestamp")
@@ -4096,11 +4267,12 @@ def nse_result_listing(event: dict[str, Any], store: EventStore, ctx: SourceCont
                 # listing is broken); the company's own listing declares them.
                 if (ts and ts.date() >= c["periodEnd"] and c.get("cumulative") is not True
                         and boolish(store.value(event, "results_released")) is not True):
-                    store.merge_field(event, "results_released", True, source="NSE_FINANCIAL_RESULTS", raw_ref=raw_ref)
-                    store.merge_field(event, "filing_timestamp", ts.isoformat(), source="NSE_FINANCIAL_RESULTS", raw_ref=raw_ref)
-                    store.merge_field(event, "result_date", ts.date().isoformat(), source="NSE_FINANCIAL_RESULTS", raw_ref=raw_ref)
+                    src = c.get("source") or "NSE_FINANCIAL_RESULTS"
+                    store.merge_field(event, "results_released", True, source=src, raw_ref=raw_ref)
+                    store.merge_field(event, "filing_timestamp", ts.isoformat(), source=src, raw_ref=raw_ref)
+                    store.merge_field(event, "result_date", ts.date().isoformat(), source=src, raw_ref=raw_ref)
         out.sort(key=lambda r: (r["periodEnd"], str(r.get("filedAt") or "")), reverse=True)
-        event["nseResultListing"] = {"fetchedAt": iso_now(), "rows": out[:24]}
+        event["nseResultListing"] = {"fetchedAt": iso_now(), "v": 2, "rows": out[:24]}
         store.record_fetch(event, "NSE_RESULT_LISTING", ok=True, raw_ref=raw_ref)
         return out[:24]
     except Exception as exc:
@@ -4146,7 +4318,7 @@ def enrich_previous_quarter(event: dict[str, Any], store: EventStore, ctx: Sourc
         for r in nse_result_listing(event, store, ctx):
             ts = parse_datetime(r.get("filedAt"))
             if r.get("periodEnd") == prev_end.isoformat() and ts:
-                found.append((ts, "NSE_FINANCIAL_RESULTS", (event.get("fetch") or {}).get("NSE_RESULT_LISTING", {}).get("rawRef")))
+                found.append((ts, "NSE_INTEGRATED_FILING", (event.get("fetch") or {}).get("NSE_RESULT_LISTING", {}).get("rawRef")))
         if not found and fetch_cooling_down(event, "NSE_RESULT_LISTING", 1):
             errors.append("NSE: result listing unavailable")
     if not found and bse_code:
@@ -5079,6 +5251,8 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
             continue
         if kind == "NSE" and _payload_symbol(payload) not in (None, nse_sym):
             continue   # another company's prices (pre-2.5.4 lookup mix-up)
+        if kind == "BSE" and not (event.get("security") or {}).get("bseCode"):
+            continue   # BSE code removed as another company's (2.6.1)
         fr = nse_history_to_frame(payload) if kind == "NSE" else bse_history_to_frame(payload)
         if fr is None or fr.empty:
             continue
@@ -5664,6 +5838,12 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "buckets": {code: sum(((x["plus"].get("bucket") or {}).get("code") == code) for x in items) for code in pead_plus.BUCKETS},
         "nearEntry": sum(x.get("entrySignal") == "NEAR_ENTRY" for x in items),
     }
+    try:
+        health["selfAudit"] = pead_plus.self_audit(items, regime, health, now_ist().date())
+        json_dump_atomic(LOG_DIR / "self_audit.json", health["selfAudit"])
+    except Exception as exc:   # the audit must never block publishing
+        health["selfAudit"] = {"status": "FAIL", "checks": [{"check": "Self-audit ran", "status": "FAIL", "count": 1,
+                                                            "examples": [f"{type(exc).__name__}: {exc}"], "note": ""}]}
     intel_payload = {
         "schemaVersion": SCHEMA_VERSION,
         "generatedAt": iso_now(),
