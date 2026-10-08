@@ -128,7 +128,7 @@
     const rail = { go: 's-go', watch: 's-watch', no: 's-no', pending: 's-pending' }[sTone] || 's-pending';
     const b = p.bucket, st = STRENGTH[p.strength], tail = p.sector?.tailwind, liq = p.liquidity || {};
     const tags = [];
-    if (p.sectorKey) tags.push(`<span class="tag">${esc(p.sectorKey)}</span>`);
+    if (p.sectorKey) tags.push(`<span class="tag" title="${esc(it.industry || '')}">${esc(p.sectorKey)}${it.industry ? ` · ${esc(it.industry)}` : ''}</span>`);
     if (b) tags.push(`<span class="tag ${BUCKET_TONE[b.code] || ''}" title="${esc(b.why)}">${esc(b.label)}</span>`);
     if (st) tags.push(`<span class="tag ${st[1]}">${st[0]}</span>`);
     if (tail) tags.push(`<span class="tag ${TAIL_TONE[tail] || ''}">Sector ${tail.toLowerCase()}</span>`);
@@ -144,7 +144,7 @@
         <div class="fact"><h3>Expectations before</h3><p><span class="big ${cls(pc.pre20dPct)}">${pct(pc.pre20dPct)}</span>20-day run-up</p>
           <p><span class="big">${pct(pc.distanceFrom52wHighPct)}</span>from 52-week high</p></div>
         <div class="fact"><h3>Valuation</h3><p><span class="big">${num(v.pe) !== null ? num(v.pe).toFixed(1) + 'x' : '—'}</span>P/E${num(v.sectorPe) !== null && Math.abs(num(v.sectorPe) - (num(v.pe) ?? 0)) >= 0.05 ? ` vs sector ${num(v.sectorPe).toFixed(1)}x` : ''}</p>
-          <p><span class="big">${num(v.roe) !== null ? num(v.roe).toFixed(1) + '%' : '—'}</span>ROE${num(it.marketCapCr) !== null ? `, market cap ${cr(it.marketCapCr)}` : ''}</p></div>
+          <p><span class="big">${v.tinyBook ? 'n/m' : num(v.roe) !== null ? num(v.roe).toFixed(1) + '%' : '—'}</span>${v.tinyBook ? `ROE (${esc(v.bookNote || 'tiny book value')}, P/B ${num(v.pb) !== null ? num(v.pb).toFixed(0) + 'x' : 'n/a'})` : 'ROE'}${num(it.marketCapCr) !== null ? `, market cap ${cr(it.marketCapCr)}` : ''}</p></div>
       </div>`;
     const lv = (label, val, k = '') => `<div class="lv ${k}"><span>${label}</span><b>${val}</b></div>`;
     const levels = num(plan.entry) !== null ? `<div class="levels">
@@ -266,19 +266,31 @@
       ${box('Results declared', h.resultsFiled)}${box('Financials verified', h.financialsVerified)}
       ${box('Financials flagged', h.financialsFlagged)}${box('Reaction measured', h.reactionReady)}
       ${box('Tradeable (liquid)', c.liquid)}${box('Completeness of declared', h.declaredCompletenessPct != null ? Math.round(h.declaredCompletenessPct) + '%' : '—')}
-      ${box('Fetch failures', h.fetchesFailed)}${box('Integrity revocations', h.integrity?.revoked)}
+      ${box('Fetch failures', h.fetchesFailed)}${box('Integrity revocations', h.integrity?.revoked)}${box('Duplicates merged', h.integrity?.duplicatesMerged)}${box('Wrong-company links fixed', h.integrity?.identityRepaired)}
+      ${box('Price history ready', `${(S.data.items || []).filter(i => P(i).price).length} / ${(S.data.items || []).length}`)}
+      ${box('Sector known', `${(S.data.items || []).filter(i => P(i).sectorKey).length} / ${(S.data.items || []).length}`)}
+      ${box('Market data as of', esc(S.data.regime?.asOf || '—'))}
     </div><p class="foot">Engine ${esc(S.data.version || '')}. Generated ${S.data.generatedAt ? new Date(S.data.generatedAt).toLocaleString('en-IN') : '—'}.</p>`;
   }
 
   // ---------- header / chips ----------
+  const PAGE_VERSION = '2.6.0';   // must match the engine version (install check)
+  function installBanner() {
+    const d = S.data || {}, ic = (d.health || {}).installCheck || {};
+    const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
+    const bad = [];
+    if (engine && engine !== PAGE_VERSION) bad.push(`page files are ${PAGE_VERSION} but the engine (pead_v2.py) is ${engine}`);
+    if (ic.ok === false) bad.push(`pead_plus.py is ${ic.pead_plus} but pead_v2.py is ${ic.engine}`);
+    return bad.length ? `<div class="install-bad"><b>Files out of sync.</b> ${esc(bad.join('; '))}. Re-upload all files from the same update.</div>` : '';
+  }
   function header() {
     const d = S.data, r = d.regime || {}, c = d.counts || {};
     $('sub').textContent = `${d.liveQuarter || 'Live quarter'} results season, updated ${d.generatedAt ? new Date(d.generatedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}`;
     const tone = { 'RISK-ON': 'on', MIXED: 'mixed', 'RISK-OFF': 'off' }[r.label] || '';
-    $('regime').innerHTML = r.label ? `<span class="dot ${tone}"></span><b>Market ${esc(r.label.toLowerCase())}</b>. ${esc(r.note)}${num(r.ret20dPct) !== null ? ` ${esc(r.index || 'Index')} ${pct(r.ret20dPct)} over 20 days.` : ''}` : '<span class="dot"></span>Market regime appears after the next data refresh.';
+    $('regime').innerHTML = r.label ? `<span class="dot ${tone}"></span><b>Market ${esc(r.label.toLowerCase())}</b>. ${esc(r.note)}${num(r.ret20dPct) !== null ? ` ${esc(r.index || 'Index')} ${pct(r.ret20dPct)} over 20 days.` : ''}` : `<span class="dot"></span>${esc(r.note && r.note !== 'Index history unavailable' ? r.note : 'Market regime appears after the next data refresh.')}`;
     const decl = declared(), act = decl.filter(it => sig(it)[1] === 'go').length;
     const soon = upcoming().filter(it => { const n = daysTo(it.resultDate); return n !== null && n >= 0 && n <= 7; }).length;
-    $('season').innerHTML = `<strong>${decl.length}</strong> results declared, <strong>${act}</strong> with an actionable setup, <strong>${soon}</strong> companies reporting in the next 7 days.`;
+    $('season').innerHTML = installBanner() + `<strong>${decl.length}</strong> results declared, <strong>${act}</strong> with an actionable setup, <strong>${soon}</strong> companies reporting in the next 7 days.`;
     $('c-setups').textContent = decl.length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
   }
 
