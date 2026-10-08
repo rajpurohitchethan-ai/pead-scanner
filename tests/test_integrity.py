@@ -293,5 +293,73 @@ class PublishGate(unittest.TestCase):
         self.assertEqual(p.integrity_signature(a), p.integrity_signature(list(reversed(a))))
 
 
+class RealDataRegressions(unittest.TestCase):
+    """Bugs seen on the live dashboard on 08-Oct-2026."""
+
+    def setUp(self):
+        self.td = tempfile.TemporaryDirectory()
+        self.store = p.EventStore(Path(self.td.name) / "events")
+
+    def tearDown(self):
+        self.td.cleanup()
+
+    def test_golkonda_wrong_unit_rejected_and_hidden(self):
+        snap = {"currency_unit": "in Cr.", "results_in_crores": {
+            "fields": ["title", "Sep-26", "Jun-26", "FY25-26"],
+            "data": [["Revenue", "1,399.00", "0.15", "0.44"], ["Net Profit", "-0.03", "0.10", "-0.03"],
+                     ["EPS", "-0.06", "0.18", "-0.06"]]}}
+        parsed = p.parse_bse_snapshot(snap, date(2026, 9, 30))
+        e = self.store.ensure_event(security={"symbol": "GOLKONDA", "bseCode": "513309", "isin": "INE327C01031"},
+                                    period_end=date(2026, 9, 30))
+        self.store.merge_field(e, "revenue_cr", 1399.0, source="BSE_RESULTS_SNAPSHOT")   # stale verified value
+        snap_rec = p.store_financial_snapshot(e, "BSE_RESULTS_SNAPSHOT", parsed)
+        self.assertEqual(snap_rec["validation"]["status"], "REJECTED")
+        self.assertIn("UNIT_SUSPECT", snap_rec["validation"]["issues"])
+        p.apply_financial_snapshots(self.store, e)
+        self.assertIsNone(self.store.value(e, "revenue_cr"))
+
+    def test_alstone_profit_unit_error_rejected(self):
+        snap = {"currency_unit": "in Cr.", "results_in_crores": {
+            "fields": ["title", "Sep-26", "Jun-26", "FY25-26"],
+            "data": [["Revenue", "784.88", "--", "--"], ["Net Profit", "-106.72", "0.07", "2.88"], ["EPS", "-0.17", "--", "--"]]}}
+        parsed = p.parse_bse_snapshot(snap, date(2026, 9, 30))
+        v = p.validate_financial_snapshot(parsed, "BSE_RESULTS_SNAPSHOT", date(2026, 9, 30))
+        self.assertEqual(v["status"], "REJECTED")
+
+    def test_normal_small_cap_still_verified(self):
+        snap = {"currency_unit": "in Cr.", "results_in_crores": {
+            "fields": ["title", "Sep-26", "Jun-26", "FY25-26"],
+            "data": [["Revenue", "20.93", "23.74", "114.04"], ["Net Profit", "0.57", "0.65", "2.65"], ["EPS", "1.62", "1.84", "7.51"]]}}
+        parsed = p.parse_bse_snapshot(snap, date(2026, 9, 30))   # Hawa Engineers
+        self.assertEqual(p.validate_financial_snapshot(parsed, "BSE_RESULTS_SNAPSHOT", date(2026, 9, 30))["status"], "VERIFIED")
+
+    def test_stored_snapshot_revalidated_with_new_rules(self):
+        e = self.store.ensure_event(security={"symbol": "X", "isin": "INE000000001"}, period_end=date(2026, 9, 30))
+        e["financialSnapshots"] = {"BSE_RESULTS_SNAPSHOT": {
+            "source": "BSE_RESULTS_SNAPSHOT", "periodEnd": "2026-09-30", "basis": "UNKNOWN",
+            "values": {"revenue_cr": 1399.0, "pat_cr": -0.03, "revenue_qoq_pct": 932566.67},
+            "validation": {"status": "VERIFIED", "issues": ["BASIS_UNKNOWN", "NO_PRIOR_YEAR_COLUMN"]}}}
+        integ = p.apply_financial_snapshots(self.store, e)
+        self.assertEqual(integ["status"], "NO_VERIFIED_SNAPSHOT")
+        self.assertIn("BASIS_UNKNOWN", e["financialSnapshots"]["BSE_RESULTS_SNAPSHOT"]["validation"]["issues"])
+
+    def test_duplicate_company_events_merged_into_isin_event(self):
+        a = self.store.ensure_event(security={"symbol": "GOLKONDA", "bseCode": "513309"}, period_end=date(2026, 9, 30))
+        self.store.merge_field(a, "result_day_rvol", 1.4, source="BSE_PRICE")
+        self.store.save(a)
+        b = self.store.ensure_event(security={"symbol": "GOLKONDA", "bseCode": "513309", "isin": "INE327C01031"},
+                                    period_end=date(2026, 9, 30))
+        self.store.save(b)
+        self.assertEqual(len(p.merge_duplicate_events(self.store)), 1)
+        events = self.store.all()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["eventId"], b["eventId"])
+        self.assertEqual(self.store.value(events[0], "result_day_rvol"), 1.4)
+
+    def test_tracked_move_is_since_first_tracked_price(self):
+        e = {"priceTrail": [{"price": 81.36}, {"price": 80.5}, {"price": 80.5}]}
+        self.assertEqual(p.price_trail_change(e), -1.06)
+
+
 if __name__ == "__main__":
     unittest.main()
