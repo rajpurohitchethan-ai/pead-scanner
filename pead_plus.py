@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.6.0"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.6.1"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -821,3 +821,83 @@ def canonical_sector(*labels) -> str | None:
             if any(_re.search(r"(?<![a-z])" + _re.escape(k), low) for k in keys):
                 return sector
     return None
+
+
+# ---------------------------------------------------------------------------
+# Self-audit (2.6.1): the engine checks its own published output every run, so
+# problems show up on the Data health tab (and logs/self_audit.json) instead
+# of being found later on a screenshot.
+# ---------------------------------------------------------------------------
+
+def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict[str, Any], today: date) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+
+    def add(name: str, bad: list[str], *, fail: bool = False, note: str = "", warn_if_any: bool = True):
+        status = "OK" if not bad else ("FAIL" if fail else ("WARN" if warn_if_any else "OK"))
+        checks.append({"check": name, "status": status, "count": len(bad), "examples": bad[:8], "note": note})
+
+    def d(v):
+        try:
+            return date.fromisoformat(str(v)[:10])
+        except Exception:
+            return None
+
+    ic = health.get("installCheck") or {}
+    add("All files from the same release", [] if ic.get("ok", True) else [f"pead_plus {ic.get('pead_plus')} vs engine {ic.get('engine')}"], fail=True)
+    as_of = d(regime.get("asOf"))
+    add("Market index data is current", [] if as_of and (today - as_of).days <= 4 else [str(regime.get("asOf"))], fail=True)
+
+    seen: dict[tuple, list[str]] = {}
+    for it in items:
+        key = (it.get("symbol"), _re.sub(r"[^a-z0-9]", "", str(it.get("name") or "").lower().replace("limited", "").replace("ltd", "")))
+        seen.setdefault(key, []).append(it.get("eventId"))
+    add("Each company listed once", [k[0] for k, v in seen.items() if len(v) > 1], fail=True)
+
+    future_reaction = [it["symbol"] for it in items if not it.get("resultsReleased")
+                       and (it.get("priceContext") or {}).get("resultDayPct") is not None]
+    add("No reaction data before a result", future_reaction, fail=True)
+
+    declared = [it for it in items if it.get("resultsReleased")]
+    no_fin_old, no_fin_new, no_yoy = [], [], []
+    for it in declared:
+        rd = d(it.get("resultDate"))
+        age = (today - rd).days if rd else 0
+        fs = it.get("fundamentalSnapshot") or {}
+        if fs.get("revenueCr") is None:
+            (no_fin_old if age >= 2 else no_fin_new).append(it["symbol"])
+        elif it.get("revenueYoY") is None and it.get("patYoYStatus") is None:
+            no_yoy.append(it["symbol"])
+    add("Declared results have revenue/profit (filed 2+ days ago)", no_fin_old, fail=True,
+        note="Exchange filing not parsed; check the NSE_XBRL / BSE_RESULTS_SNAPSHOT fetch errors.")
+    add("Declared results have revenue/profit (filed in last 2 days)", no_fin_new,
+        note="Normal for a few hours after filing; the engine re-checks every run.")
+    add("Declared results have year-on-year figures", no_yoy,
+        note="Shown as quarter-on-quarter until the year-ago figures are found.")
+
+    overdue = []
+    for it in declared:
+        rs = d(it.get("reactionSession"))
+        if rs and rs < today and (it.get("priceContext") or {}).get("resultDayPct") is None:
+            overdue.append(it["symbol"])
+    add("Reaction measured once the session has closed", overdue, fail=True)
+
+    no_price = [it["symbol"] for it in items if not (it.get("plus") or {}).get("price")]
+    add("Every company has price history", no_price, note="Filled in rotation, new companies first.")
+    stale = []
+    for it in items:
+        rd = d(it.get("resultDate"))
+        last = d(((it.get("plus") or {}).get("price") or {}).get("last_session"))
+        if rd and 0 <= (rd - today).days <= 7 and last and (today - last).days > 4:
+            stale.append(it["symbol"])
+    add("Prices fresh for companies reporting within 7 days", stale)
+    no_sector = [it["symbol"] for it in items if not (it.get("plus") or {}).get("sectorKey")]
+    share = len(no_sector) / max(1, len(items))
+    checks.append({"check": "Sector known", "status": "OK" if share <= 0.10 else "WARN", "count": len(no_sector),
+                   "examples": no_sector[:8], "note": f"{(1 - share) * 100:.0f}% known; exchange data is fetched in rotation."})
+
+    odd = [it["symbol"] for it in items if (_num((it.get("priceContext") or {}).get("resultDayPct")) or 0) and abs(_num(it["priceContext"]["resultDayPct"])) > 40]
+    odd += [it["symbol"] for it in declared if (_num(it.get("revenueYoY")) or 0) > 1000]
+    add("No implausible values (>40% reaction, >1000% revenue growth)", odd, note="Usually a split or a unit error in the filing.")
+
+    status = "FAIL" if any(c["status"] == "FAIL" for c in checks) else ("WARN" if any(c["status"] == "WARN" for c in checks) else "OK")
+    return {"status": status, "checkedOn": today.isoformat(), "checks": checks}
