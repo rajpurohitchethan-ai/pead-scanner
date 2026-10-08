@@ -61,7 +61,14 @@ jobs:
         run: |
           python -m py_compile pead_v2.py
           python pead_v2.py --self-test
-          python -m unittest discover -s tests -v
+                    if [ -f tests/test_integrity.py ]; then
+            python -m unittest discover -s tests -v
+          elif [ -f test_integrity.py ]; then
+            python test_integrity.py -v
+          else
+            echo "::error::test_integrity.py is missing (expected tests/test_integrity.py)"
+            exit 1
+          fi
 
       - name: Integrity report (dry run, no publish)
         if: github.event.inputs.mode == 'integrity_report'
