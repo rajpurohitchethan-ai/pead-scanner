@@ -83,7 +83,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.1.7"
+ENGINE_VERSION = "2.2.0"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -106,6 +106,7 @@ YAHOO_PRICE_BUDGET = int(os.getenv("YAHOO_PRICE_BUDGET", "40"))
 YAHOO_FUNDAMENTALS_BUDGET = int(os.getenv("YAHOO_FUNDAMENTALS_BUDGET", "25"))
 YAHOO_QUARTERLY_BUDGET = int(os.getenv("YAHOO_QUARTERLY_BUDGET", "25"))
 YAHOO_NEGATIVE_CACHE_PATH = MASTER_DIR / "yahoo_negative_cache.json"
+PENDING_INTEGRITY_PATH = MASTER_DIR / "pending_integrity.json"
 
 # Per-run caches/budgets prevent repeated calls for the same security across
 # several quarterly events. The persistent negative cache prevents known Yahoo
@@ -267,6 +268,31 @@ def normalize_symbol(value: Any) -> str:
     return re.sub(r"[^A-Z0-9&_-]", "", s)
 
 
+_ISO_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}")
+
+
+def _parse_iso(s: str) -> datetime | None:
+    """Parse ISO-8601 strings (YYYY-MM-DD[THH:MM:SS[.fff][tz]]) without ever
+    applying day-first heuristics.
+
+    Regression: BSE DT_TM values such as "2026-09-11T16:08:22.73" were sent to
+    pandas with dayfirst=True and came back as 2026-11-09. That single bug moved
+    September Q1 filings into the future and into the Q2 FY27 live quarter.
+    """
+    if not _ISO_PREFIX.match(s):
+        return None
+    t = s.replace("Z", "+00:00")
+    # Python < 3.11 fromisoformat rejects fractional seconds that are not 3/6
+    # digits, so normalise them first ("22.73" -> "22.730000").
+    m = re.match(r"^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})\.(\d+)(.*)$", t)
+    if m:
+        t = f"{m.group(1)}.{(m.group(2) + '000000')[:6]}{m.group(3)}"
+    try:
+        return datetime.fromisoformat(t)
+    except ValueError:
+        return None
+
+
 def parse_date(value: Any) -> date | None:
     if value in (None, ""):
         return None
@@ -275,9 +301,18 @@ def parse_date(value: Any) -> date | None:
     if isinstance(value, date):
         return value
     s = str(value).strip()
+    iso = _parse_iso(s)
+    if iso is not None:
+        return iso.date()
+    if _ISO_PREFIX.match(s):
+        # Looks ISO but is malformed: never guess with day-first rules.
+        try:
+            return datetime.strptime(s[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None
     for fmt in (
-        "%Y-%m-%d", "%d-%b-%Y", "%d-%m-%Y", "%d/%m/%Y", "%d/%m/%y",
-        "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%d-%b-%Y %H:%M:%S",
+        "%d-%b-%Y", "%d-%m-%Y", "%d/%m/%Y", "%d/%m/%y", "%d.%m.%Y",
+        "%d-%b-%Y %H:%M:%S", "%d-%b-%Y %H:%M", "%d %b %Y", "%d %B %Y",
         "%b-%y", "%b %Y", "%b-%Y",
     ):
         try:
@@ -286,6 +321,7 @@ def parse_date(value: Any) -> date | None:
             pass
     if pd is not None:
         try:
+            # Only non-ISO, human formats reach this point (e.g. "11-Oct-2026").
             ts = pd.to_datetime(s, errors="coerce", dayfirst=True)
             if not pd.isna(ts):
                 return ts.date()
@@ -299,26 +335,26 @@ def parse_datetime(value: Any) -> datetime | None:
         return None
     if isinstance(value, datetime):
         dt = value
+    elif isinstance(value, date):
+        dt = datetime.combine(value, dtime(12, 0))
     else:
         s = str(value).strip()
-        dt = None
-        for fmt in (
-            "%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S.%f",
-            "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S",
-            "%d-%b-%Y %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d-%m-%Y %H:%M:%S",
-        ):
-            try:
-                dt = datetime.strptime(s, fmt)
-                break
-            except ValueError:
-                pass
-        if dt is None and pd is not None:
-            try:
-                ts = pd.to_datetime(s, errors="coerce", dayfirst=not bool(re.match(r"^\\d{4}-\\d{2}-\\d{2}", s)))
-                if not pd.isna(ts):
-                    dt = ts.to_pydatetime()
-            except Exception:
-                pass
+        dt = _parse_iso(s) if len(s) > 10 else None
+        if dt is None and _ISO_PREFIX.match(s):
+            d = parse_date(s)
+            dt = datetime.combine(d, dtime(12, 0)) if d else None
+            if dt is None:
+                return None
+        if dt is None:
+            for fmt in (
+                "%d-%b-%Y %H:%M:%S", "%d-%b-%Y %H:%M", "%d/%m/%Y %H:%M:%S",
+                "%d-%m-%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d-%m-%Y %H:%M",
+            ):
+                try:
+                    dt = datetime.strptime(s, fmt)
+                    break
+                except ValueError:
+                    pass
         if dt is None:
             d = parse_date(s)
             if d is None:
@@ -735,6 +771,62 @@ class EventStore:
             }
             return True
         return False
+
+    def force_field(
+        self,
+        event: dict[str, Any],
+        field: str,
+        value: Any,
+        *,
+        source: str,
+        raw_ref: str | None = None,
+        note: str | None = None,
+    ) -> bool:
+        """Authoritative write used only by integrity logic (atomic financial
+        snapshot selection, evidence re-verification). Unlike merge_field it may
+        replace a higher-ranked value that was proven wrong or belongs to a
+        different snapshot, and it keeps the previous value in history."""
+        if value is None or value == "":
+            return False
+        fields = event.setdefault("fields", {})
+        existing = fields.get(field)
+        if isinstance(existing, dict) and existing.get("status") == "OK" and existing.get("value") == value and existing.get("source") == source:
+            return False
+        if isinstance(existing, dict):
+            hist = event.setdefault("fieldHistory", {}).setdefault(field, [])
+            hist.append({k: existing.get(k) for k in ("value", "source", "fetchedAt", "status", "note")} | {"replacedAt": iso_now()})
+            del hist[:-5]
+        fields[field] = {
+            "value": value,
+            "source": source,
+            "fetchedAt": iso_now(),
+            "status": "OK",
+            "rank": source_rank(field, source),
+            "rawRef": raw_ref,
+            "note": note,
+        }
+        return True
+
+    def revoke_field(self, event: dict[str, Any], field: str, reason: str) -> bool:
+        """Withdraw a value that is proven invalid (not merely missing).
+
+        The value is kept for audit with status REVOKED; meta/value readers
+        treat it as absent so the UI shows —. Failed fetches never call this.
+        """
+        meta = (event.get("fields") or {}).get(field)
+        if not isinstance(meta, dict) or meta.get("status") != "OK":
+            return False
+        meta["status"] = "REVOKED"
+        meta["revokedAt"] = iso_now()
+        meta["revokedReason"] = reason
+        return True
+
+    def force_state(self, event: dict[str, Any], state: str, reason: str) -> None:
+        """Move state backwards when the evidence that advanced it was invalid."""
+        if event.get("state") == state:
+            return
+        event["state"] = state
+        event.setdefault("stateHistory", []).append({"state": state, "at": iso_now(), "reason": reason})
 
     def record_fetch(
         self,
@@ -1327,7 +1419,7 @@ class YahooAdapter:
                 if not cols:
                     raise RuntimeError("statement has no date columns")
                 current_date, current_col = min(cols, key=lambda x: abs((x[0] - period_end).days))
-                if abs((current_date - period_end).days) > 45:
+                if abs((current_date - period_end).days) > 5:
                     raise RuntimeError("latest statement does not match event quarter")
 
                 def row_name(names):
@@ -1374,6 +1466,7 @@ class YahooAdapter:
                     "revenue_qoq_pct": pct_change(current_rev, prev_rev),
                     "pat_qoq_pct": pct_change(current_pat, prev_pat) if prev_pat not in (None, 0) and prev_pat > 0 else None,
                     "basis": "UNKNOWN",
+                    "statementPeriodEnd": period_end.isoformat() if abs((current_date - period_end).days) <= 5 else current_date.isoformat(),
                     "ticker": ticker,
                     "statement_period": current_date.isoformat(),
                 }
@@ -1480,121 +1573,7 @@ class XBRLParser:
         return docs
 
     def parse(self, blob: bytes, period_end: date) -> dict[str, Any]:
-        facts = []
-        contexts: dict[str, dict[str, Any]] = {}
-        for doc in self._documents(blob):
-            try:
-                root = ET.fromstring(doc)
-            except Exception:
-                continue
-            for elem in root.iter():
-                local = self._local(elem.tag).lower()
-                if local == "context":
-                    cid = elem.attrib.get("id")
-                    if not cid:
-                        continue
-                    text = " ".join((x.text or "") for x in elem.iter())
-                    starts = [parse_date(x.text) for x in elem.iter() if self._local(x.tag).lower() == "startdate"]
-                    ends = [parse_date(x.text) for x in elem.iter() if self._local(x.tag).lower() in {"enddate", "instant"}]
-                    contexts[cid] = {
-                        "start": next((x for x in starts if x), None),
-                        "end": next((x for x in ends if x), None),
-                        "text": text.lower(),
-                    }
-                    continue
-                cref = elem.attrib.get("contextRef") or elem.attrib.get("contextref")
-                if not cref:
-                    continue
-                scale = 0
-                try:
-                    scale = int(elem.attrib.get("scale") or 0)
-                except Exception:
-                    scale = 0
-                value = self._num_text(elem.text, scale)
-                if value is None:
-                    continue
-                facts.append({
-                    "name": local,
-                    "context": cref,
-                    "value": value,
-                    "unit": elem.attrib.get("unitRef") or elem.attrib.get("unitref"),
-                })
-
-        def candidates(names: list[str], target_end: date):
-            scored = []
-            for fact in facts:
-                name = fact["name"]
-                name_score = None
-                for idx, wanted in enumerate(names):
-                    if wanted == name:
-                        name_score = 30 - idx
-                        break
-                    if wanted in name:
-                        name_score = 15 - idx
-                        break
-                if name_score is None:
-                    continue
-                ctx = contexts.get(fact["context"], {})
-                end = ctx.get("end")
-                start = ctx.get("start")
-                if end is None or abs((end - target_end).days) > 8:
-                    continue
-                duration_score = 0
-                if start is not None:
-                    days = (end - start).days
-                    if 75 <= days <= 105:
-                        duration_score = 20
-                    elif 160 <= days <= 200:
-                        duration_score = 4
-                    elif days > 250:
-                        duration_score = -10
-                text = ctx.get("text", "")
-                basis_score = 4 if "consolidated" in text else (-2 if "standalone" in text else 0)
-                scored.append((name_score + duration_score + basis_score, fact, ctx))
-            return sorted(scored, key=lambda x: x[0], reverse=True)
-
-        def choose(names: list[str], target_end: date):
-            rows = candidates(names, target_end)
-            return rows[0] if rows else None
-
-        current_rev = choose(self.REVENUE_NAMES, period_end)
-        current_pat = choose(self.PAT_NAMES, period_end)
-        current_eps = choose(self.EPS_NAMES, period_end)
-        prior_end = date(period_end.year - 1, period_end.month, period_end.day)
-        prior_rev = choose(self.REVENUE_NAMES, prior_end)
-        prior_pat = choose(self.PAT_NAMES, prior_end)
-
-        def crore(row):
-            if not row:
-                return None
-            value = row[1]["value"]
-            unit = str(row[1].get("unit") or "").upper()
-            if "INR" in unit or abs(value) > 1e6:
-                return value / 1e7
-            return value
-
-        rev_cr = crore(current_rev)
-        pat_cr = crore(current_pat)
-        prior_rev_cr = crore(prior_rev)
-        prior_pat_cr = crore(prior_pat)
-        trend, pat_yoy = pat_trend(pat_cr, prior_pat_cr)
-        basis_text = ""
-        for row in (current_rev, current_pat):
-            if row:
-                basis_text += " " + str(row[2].get("text") or "")
-        basis = "CONSOLIDATED" if "consolidated" in basis_text else ("STANDALONE" if "standalone" in basis_text else "UNKNOWN")
-
-        return {
-            "revenue_cr": round2(rev_cr),
-            "pat_cr": round2(pat_cr),
-            "eps": round2(current_eps[1]["value"]) if current_eps else None,
-            "prior_year_revenue_cr": round2(prior_rev_cr),
-            "prior_year_pat_cr": round2(prior_pat_cr),
-            "revenue_yoy_pct": round2(pct_change(rev_cr, prior_rev_cr)),
-            "pat_yoy_pct": round2(pat_yoy),
-            "pat_trend": trend,
-            "basis": basis,
-        }
+        return parse_xbrl_financials(self._documents(blob), period_end)
 
     def fetch_parse(self, url: str, event_id: str, period_end: date, source: str) -> tuple[dict[str, Any], str]:
         blob, raw_ref = self._fetch(url, event_id, source)
@@ -1602,8 +1581,273 @@ class XBRLParser:
 
 
 # ---------------------------------------------------------------------------
+# XBRL financial extraction (strict)
+# ---------------------------------------------------------------------------
+
+# Exact concept names (lower-case local names). Order = preference. No substring
+# matching: "profitloss" must never resolve to ProfitLossBeforeTax.
+XBRL_REVENUE_CONCEPTS = [
+    "revenuefromoperations", "totalrevenuefromoperations", "revenuefromoperationsnet",
+    "netsalesincomefromoperations", "incomefromoperations", "revenuefromcontractswithcustomers",
+]
+XBRL_BANK_REVENUE_CONCEPTS = ["interestearned", "totalinterestearned"]
+XBRL_TOTAL_INCOME_CONCEPTS = ["income", "totalincome", "totalrevenue"]
+XBRL_PAT_OWNER_CONCEPTS = [
+    "profitlossforperiodattributabletoownersofparent", "profitorlossattributabletoownersofparent",
+    "profitlossattributabletoownersofparent", "netprofitlossforperiodattributabletoownersofparent",
+    "profitlossfortheperiodattributabletoownersofparent",
+]
+XBRL_PAT_CONCEPTS = [
+    "profitlossforperiod", "profitloss", "netprofitlossforperiod", "profitlossfortheperiod",
+    "netprofitloss", "netprofitlossfortheperiod", "profitaftertax",
+]
+XBRL_EPS_CONCEPTS = [
+    "basicearningslosspershareforcontinuinganddiscontinuedoperations",
+    "basicearningslosspersharefromcontinuinganddiscontinuedoperations",
+    "basicearningslosspershare", "basicearningspershare", "basiceps",
+]
+QUARTER_DAYS = (80, 100)
+
+
+def _xbrl_local(tag: str) -> str:
+    return tag.split("}")[-1].split(":")[-1]
+
+
+def _shift_quarters(d: date, quarters: int) -> date:
+    month_index = d.year * 12 + (d.month - 1) + 3 * quarters
+    y, m = divmod(month_index, 12)
+    m += 1
+    last = {1: 31, 2: 29 if (y % 4 == 0 and (y % 100 != 0 or y % 400 == 0)) else 28, 3: 31, 4: 30,
+            5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31}[m]
+    return date(y, m, min(d.day if d.day < 28 else last, last))
+
+
+def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str, Any]:
+    """Extract one quarter's revenue/PAT/EPS from an exchange XBRL instance.
+
+    Rules that prevent mixed or wrong numbers:
+    * only contexts without segment/scenario dimensions (no segment revenue);
+    * only 80–100 day duration contexts (no half-year / YTD cumulative values);
+    * exact concept names, in preference order (no PBT/OCI/minority leakage);
+    * prior-year and previous-quarter comparatives come from the SAME document,
+      so basis (standalone/consolidated) and restatements always match;
+    * monetary facts must be in an INR unit; values are converted to crore.
+    """
+    contexts: dict[str, dict[str, Any]] = {}
+    units: dict[str, str] = {}
+    facts: list[dict[str, Any]] = []
+    text_facts: dict[str, str] = {}
+    for doc in documents:
+        try:
+            root = ET.fromstring(doc)
+        except Exception:
+            continue
+        for elem in root.iter():
+            local = _xbrl_local(elem.tag).lower()
+            if local == "context":
+                cid = elem.attrib.get("id")
+                if not cid:
+                    continue
+                info: dict[str, Any] = {"start": None, "end": None, "instant": None, "dimensional": False}
+                for x in elem.iter():
+                    name = _xbrl_local(x.tag).lower()
+                    if name == "startdate":
+                        info["start"] = parse_date(x.text)
+                    elif name == "enddate":
+                        info["end"] = parse_date(x.text)
+                    elif name == "instant":
+                        info["instant"] = parse_date(x.text)
+                    elif name in {"explicitmember", "typedmember"}:
+                        info["dimensional"] = True
+                contexts[cid] = info
+                continue
+            if local == "unit":
+                uid = elem.attrib.get("id")
+                if uid:
+                    units[uid] = " ".join((x.text or "").strip() for x in elem.iter() if _xbrl_local(x.tag).lower() == "measure").upper()
+                continue
+            cref = elem.attrib.get("contextRef") or elem.attrib.get("contextref")
+            if not cref:
+                continue
+            text = (elem.text or "").strip()
+            unit_ref = elem.attrib.get("unitRef") or elem.attrib.get("unitref")
+            if unit_ref is None:
+                if text and local not in text_facts:
+                    text_facts[local] = text
+                continue
+            num = text.replace(",", "")
+            if not re.fullmatch(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?", num):
+                continue
+            value = float(num)
+            if elem.attrib.get("sign") == "-":
+                value = -value
+            facts.append({"name": local, "context": cref, "unit": unit_ref, "value": value})
+
+    issues: list[str] = []
+
+    def quarter_contexts(target_end: date) -> set[str]:
+        out = set()
+        for cid, c in contexts.items():
+            if c["dimensional"] or c["start"] is None or c["end"] is None:
+                continue
+            days = (c["end"] - c["start"]).days
+            if QUARTER_DAYS[0] <= days <= QUARTER_DAYS[1] and abs((c["end"] - target_end).days) <= 3:
+                out.add(cid)
+        return out
+
+    def pick(concepts: list[str], ctx_ids: set[str], monetary: bool = True) -> tuple[float | None, str | None]:
+        for concept in concepts:
+            values = {round(f["value"], 4) for f in facts if f["name"] == concept and f["context"] in ctx_ids}
+            if not values:
+                continue
+            fact = next(f for f in facts if f["name"] == concept and f["context"] in ctx_ids)
+            if len(values) > 1:
+                issues.append(f"CONFLICTING_FACTS:{concept}")
+                return None, concept
+            unit = units.get(fact["unit"], str(fact["unit"]).upper())
+            if monetary:
+                if "INR" not in unit or "SHARE" in unit:
+                    issues.append(f"NON_INR_UNIT:{concept}:{unit}")
+                    return None, concept
+                return fact["value"] / 1e7, concept
+            return fact["value"], concept
+        return None, None
+
+    current_ctx = quarter_contexts(period_end)
+    prior_ctx = quarter_contexts(_shift_quarters(period_end, -4))
+    prev_ctx = quarter_contexts(_shift_quarters(period_end, -1))
+    if not current_ctx:
+        issues.append("NO_QUARTER_CONTEXT_FOR_PERIOD")
+
+    nature = " ".join(v for k, v in text_facts.items() if "natureofreport" in k or "standaloneconsolidated" in k).lower()
+    basis = "CONSOLIDATED" if "consolidated" in nature and "standalone" not in nature else ("STANDALONE" if "standalone" in nature else "UNKNOWN")
+
+    revenue_definition = "REVENUE_FROM_OPERATIONS"
+    rev, rev_concept = pick(XBRL_REVENUE_CONCEPTS, current_ctx)
+    revenue_concepts = XBRL_REVENUE_CONCEPTS
+    if rev is None and rev_concept is None:
+        rev, rev_concept = pick(XBRL_BANK_REVENUE_CONCEPTS, current_ctx)
+        revenue_concepts, revenue_definition = XBRL_BANK_REVENUE_CONCEPTS, "INTEREST_EARNED"
+    if rev is None and rev_concept is None:
+        rev, rev_concept = pick(XBRL_TOTAL_INCOME_CONCEPTS, current_ctx)
+        revenue_concepts, revenue_definition = XBRL_TOTAL_INCOME_CONCEPTS, "TOTAL_INCOME"
+        if rev is not None:
+            issues.append("REVENUE_IS_TOTAL_INCOME")
+
+    pat_concepts = (XBRL_PAT_OWNER_CONCEPTS + XBRL_PAT_CONCEPTS) if basis != "STANDALONE" else XBRL_PAT_CONCEPTS
+    pat, pat_concept = pick(pat_concepts, current_ctx)
+    # Comparatives must use the SAME concept as the current quarter.
+    same_rev = [rev_concept] if rev_concept else revenue_concepts
+    same_pat = [pat_concept] if pat_concept else pat_concepts
+    prior_rev, _ = pick(same_rev, prior_ctx)
+    prior_pat, _ = pick(same_pat, prior_ctx)
+    prev_rev, _ = pick(same_rev, prev_ctx)
+    prev_pat, _ = pick(same_pat, prev_ctx)
+    eps, eps_concept = pick(XBRL_EPS_CONCEPTS, current_ctx, monetary=False)
+
+    trend, pat_yoy = pat_trend(pat, prior_pat)
+    return {
+        "revenue_cr": round2(rev),
+        "pat_cr": round2(pat),
+        "eps": round2(eps),
+        "prior_year_revenue_cr": round2(prior_rev),
+        "prior_year_pat_cr": round2(prior_pat),
+        "revenue_yoy_pct": round2(pct_change(rev, prior_rev)),
+        "pat_yoy_pct": round2(pat_yoy),
+        "pat_trend": trend,
+        "revenue_qoq_pct": round2(pct_change(rev, prev_rev)),
+        "pat_qoq_pct": round2(pct_change(pat, prev_pat)) if prev_pat is not None and prev_pat > 0 else None,
+        "basis": basis,
+        "_meta": {
+            "periodEnd": period_end.isoformat(),
+            "revenueDefinition": revenue_definition if rev is not None else None,
+            "concepts": {"revenue": rev_concept, "pat": pat_concept, "eps": eps_concept},
+            "issues": issues,
+            "comparativesFromSameDocument": True,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Discovery normalization
 # ---------------------------------------------------------------------------
+
+
+_MONTHS = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "oct": 10,
+    "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+_QUARTER_ENDS = {(3, 31), (6, 30), (9, 30), (12, 31)}
+
+
+def extract_period_from_text(text: Any, filed_on: date | None = None) -> date | None:
+    """Return the fiscal quarter-end explicitly named in a filing headline.
+
+    BSE announcements carry the period only in free text ("quarter ended
+    31.12.2025", "Half year ended on 30th September,2026", "June 30, 2026").
+    Inferring the period from the filing date alone mislabels late filers: a
+    Q4 FY25 result filed on 07-Oct-2026 is NOT a Q2 FY27 result.
+    Only real quarter-end dates on/before the filing date are accepted.
+    """
+    if not text:
+        return None
+    t = re.sub(r"\s+", " ", str(text))
+    found: list[date] = []
+
+    def add(y: Any, m: Any, d: Any) -> None:
+        try:
+            y, m, d = int(y), int(m), int(d)
+        except (TypeError, ValueError):
+            return
+        if y < 100:
+            y += 2000
+        if (m, d) not in _QUARTER_ENDS or not (2000 <= y <= 2100):
+            return
+        candidate = date(y, m, d)
+        if filed_on is not None and candidate > filed_on:
+            return
+        found.append(candidate)
+
+    for d, m, y in re.findall(r"(?<!\d)(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})(?!\d)", t):
+        add(y, m, d)
+    for d, mon, y in re.findall(r"(?<!\d)(\d{1,2})(?:st|nd|rd|th)?[\s.\-]*(?:of\s+)?([A-Za-z]{3,9})[\s,.\-]*(\d{4})", t):
+        if mon.lower() in _MONTHS:
+            add(y, _MONTHS[mon.lower()], d)
+    for mon, d, y in re.findall(r"([A-Za-z]{3,9})[\s.\-]*(\d{1,2})(?:st|nd|rd|th)?[\s,]*(\d{4})", t):
+        if mon.lower() in _MONTHS:
+            add(y, _MONTHS[mon.lower()], d)
+    # "Q2 FY27", "Q2 FY 2026-27", "Q2FY2027".
+    for q, a, b in re.findall(r"\bQ([1-4])\s*(?:FY|F\.Y\.?)\s*'?(\d{2,4})(?:\s*[-/]\s*(\d{2,4}))?", t, flags=re.I):
+        fy_end = int(b or a)
+        fy_end = fy_end + 2000 if fy_end < 100 else fy_end
+        q = int(q)
+        y, m, d = {1: (fy_end - 1, 6, 30), 2: (fy_end - 1, 9, 30), 3: (fy_end - 1, 12, 31), 4: (fy_end, 3, 31)}[q]
+        add(y, m, d)
+    # "quarter ended June 2026" / "Sep-2026": month + year names a quarter end.
+    for mon, y in re.findall(r"\b([A-Za-z]{3,9})[\s,.\-']*(\d{4})(?!\d)", t):
+        m = _MONTHS.get(mon.lower())
+        if m in (3, 6, 9, 12):
+            add(y, m, 31 if m in (3, 12) else 30)
+    if found:
+        return max(found)
+    # Last resort: "half year ended on 30th September" (no year). Use the most
+    # recent such quarter end on/before the filing date.
+    if filed_on is not None:
+        pairs = re.findall(r"(?<!\d)(\d{1,2})(?:st|nd|rd|th)?\s*(?:of\s+)?([A-Za-z]{3,9})\b", t)
+        pairs += [(d, mon) for mon, d in re.findall(r"\b([A-Za-z]{3,9})\s+(\d{1,2})(?:st|nd|rd|th)?\b", t)]
+        for d, mon in pairs:
+            m = _MONTHS.get(mon.lower())
+            if m is None:
+                continue
+            for y in (filed_on.year, filed_on.year - 1):
+                before = len(found)
+                add(y, m, d)
+                if len(found) > before:
+                    break
+    return max(found) if found else None
+
 
 
 def extract_isin(item: dict[str, Any]) -> str | None:
@@ -1632,8 +1876,13 @@ def normalize_nse_filing(item: dict[str, Any]) -> dict[str, Any] | None:
         return None
     filing_ts = parse_datetime(first(item, "broadCastDate", "broadcastDate", "filingDate", "date"))
     period_end = parse_date(first(item, "toDate", "periodEnded", "periodEnd", "endDate"))
+    period_source = "EXCHANGE_PERIOD_FIELD"
     if period_end is None:
         period_end = expected_period_end(filing_ts.date() if filing_ts else None)
+        period_source = "INFERRED_FROM_FILING_DATE"
+    consolidated = str(first(item, "consolidated", default="") or "").strip().lower()
+    basis = "CONSOLIDATED" if consolidated == "consolidated" else ("STANDALONE" if consolidated in {"non-consolidated", "standalone"} else "UNKNOWN")
+    cumulative = str(first(item, "cumulative", default="") or "").strip().lower()
     return {
         "security": {
             "symbol": symbol,
@@ -1647,6 +1896,11 @@ def normalize_nse_filing(item: dict[str, Any]) -> dict[str, Any] | None:
         "filingTimestamp": filing_ts,
         "source": "NSE_FINANCIAL_RESULTS",
         "xbrlUrl": extract_xbrl_url(item),
+        "basis": basis,
+        "cumulative": cumulative == "cumulative",
+        "periodSource": period_source,
+        "fromDate": parse_date(first(item, "fromDate")),
+        "headline": f"{first(item, 'relatingTo', default='')} {first(item, 'period', default='')} {first(item, 'consolidated', default='')}".strip(),
         "raw": item,
     }
 
@@ -1689,7 +1943,14 @@ def normalize_bse_announcement(item: dict[str, Any]) -> dict[str, Any] | None:
     event_ts = parse_datetime(first(item, "NEWS_DT", "DT_TM", "NEWS_DATE", "BroadcastDate", "date"))
     if event_ts is None:
         return None
-    period_end = expected_period_end(event_ts.date())
+    headline = " ".join(str(first(item, k, default="") or "") for k in ("HEADLINE", "NEWSSUB", "MORE"))
+    text_period = extract_period_from_text(headline, event_ts.date())
+    if text_period is not None:
+        period_end, period_source = text_period, "FILING_TEXT"
+    else:
+        period_end, period_source = expected_period_end(event_ts.date()), "INFERRED_FROM_FILING_DATE"
+    low = headline.lower()
+    basis = "CONSOLIDATED" if "consolidated" in low else ("STANDALONE" if "standalone" in low else "UNKNOWN")
     return {
         "security": {
             "symbol": symbol,
@@ -1704,6 +1965,9 @@ def normalize_bse_announcement(item: dict[str, Any]) -> dict[str, Any] | None:
         "filingTimestamp": event_ts,
         "source": "BSE_RESULT_ANNOUNCEMENT",
         "xbrlUrl": extract_xbrl_url(item),
+        "basis": basis,
+        "periodSource": period_source,
+        "headline": headline.strip()[:300],
         "raw": item,
     }
 
@@ -1731,12 +1995,70 @@ def normalize_bse_calendar(item: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+FILING_HISTORY_MAX = 20
+
+
+def record_filing(event: dict[str, Any], candidate: dict[str, Any], raw_ref: str | None) -> None:
+    """Keep every exchange filing seen for this event (evidence + XBRL choice)."""
+    filing_ts = candidate.get("filingTimestamp")
+    entry = {
+        "source": candidate.get("source"),
+        "filedAt": filing_ts.isoformat() if filing_ts else None,
+        "periodEnd": candidate["periodEnd"].isoformat() if candidate.get("periodEnd") else None,
+        "periodSource": candidate.get("periodSource"),
+        "basis": candidate.get("basis") or "UNKNOWN",
+        "cumulative": candidate.get("cumulative"),
+        "xbrlUrl": candidate.get("xbrlUrl"),
+        "headline": candidate.get("headline"),
+        "rawRef": raw_ref,
+        "seenAt": iso_now(),
+    }
+    filings = event.setdefault("filings", [])
+    key = (entry["source"], entry["filedAt"], entry["xbrlUrl"])
+    for existing in filings:
+        if (existing.get("source"), existing.get("filedAt"), existing.get("xbrlUrl")) == key:
+            existing.update({k: v for k, v in entry.items() if v is not None})
+            break
+    else:
+        filings.append(entry)
+    filings.sort(key=lambda f: str(f.get("filedAt") or ""))
+    del filings[:-FILING_HISTORY_MAX]
+
+
+def select_xbrl_filing(event: dict[str, Any]) -> dict[str, Any] | None:
+    """Pick one XBRL document for the event quarter.
+
+    Preference: matching period > consolidated > non-cumulative > latest filed
+    (a later filing for the same period is usually a revision). Standalone and
+    consolidated documents are never blended; the parser reads only one.
+    """
+    period_end = event.get("period", {}).get("end")
+    options = [f for f in event.get("filings") or [] if f.get("xbrlUrl") and f.get("periodEnd") == period_end]
+    if not options:
+        return None
+    return max(
+        options,
+        key=lambda f: (
+            f.get("basis") == "CONSOLIDATED",
+            f.get("cumulative") is not True,
+            str(f.get("filedAt") or ""),
+        ),
+    )
+
+
 def apply_discovery(store: EventStore, master: SymbolMaster, candidate: dict[str, Any], raw_ref: str | None = None) -> dict[str, Any]:
     security = candidate["security"]
     master.merge(security)
-    event = store.ensure_event(security=security, period_end=candidate.get("periodEnd"), quarter=candidate.get("quarter"))
+    period_end = candidate.get("periodEnd")
+    filing_ts = candidate.get("filingTimestamp")
+    if candidate.get("released") and period_end and filing_ts and filing_ts.date() < period_end:
+        # A result cannot be filed before its own period ends. This only happens
+        # when a date was parsed wrongly; never let it create a declared event.
+        return {}
+    event = store.ensure_event(security=security, period_end=period_end, quarter=candidate.get("quarter"))
     source = candidate["source"]
     if candidate.get("released"):
+        record_filing(event, candidate, raw_ref)
         store.merge_field(event, "results_released", True, source=source, raw_ref=raw_ref)
         effective_result_date = (
             candidate.get("filingTimestamp").date()
@@ -1753,8 +2075,12 @@ def apply_discovery(store: EventStore, master: SymbolMaster, candidate: dict[str
             store.merge_field(event, "result_date", candidate["resultDate"].isoformat(), source=source, raw_ref=raw_ref)
         if boolish(store.value(event, "results_released")) is not True:
             store.set_state(event, "SCHEDULED", "board meeting/result calendar discovered")
-    if candidate.get("xbrlUrl"):
-        store.merge_field(event, "xbrl_url", candidate["xbrlUrl"], source=source, raw_ref=raw_ref)
+    chosen = select_xbrl_filing(event)
+    if chosen:
+        store.force_field(
+            event, "xbrl_url", chosen["xbrlUrl"], source=chosen.get("source") or source,
+            raw_ref=chosen.get("rawRef"), note=f"basis={chosen.get('basis')} cumulative={chosen.get('cumulative')}",
+        )
     store.save(event)
     return event
 
@@ -1785,68 +2111,121 @@ def metric(record: dict[str, Any], *aliases: str) -> float | None:
     return None
 
 
+def _exact_metric(record: dict[str, Any] | None, *keys: str) -> tuple[float | None, str | None]:
+    """Exact-key lookup only (no substring fallback that could pick PBT/OCI)."""
+    if not isinstance(record, dict):
+        return None, None
+    for key in keys:
+        x = safe_num(record.get(key))
+        if x is not None:
+            return x, key
+    return None, None
+
+
 def parse_nse_comparison(payload: dict[str, Any], period_end: date) -> dict[str, Any]:
+    """NSE 'results comparison' (5 quarters, values in ₹ lakh).
+
+    * Revenue = re_net_sale (revenue from operations). re_total_inc includes
+      other income and is used only as a flagged fallback.
+    * Only true quarterly rows (80–100 day from→to span) are used, so half-year
+      or annual rows can never be read as a quarter.
+    * Current row must end within 3 days of the event period end.
+    * This endpoint publishes the standalone statement; the basis is recorded as
+      STANDALONE with an explicit assumption flag.
+    """
     records = []
     if isinstance(payload, dict):
         records = payload.get("resCmpData") or payload.get("data") or []
     if not isinstance(records, list):
         return {}
-    rows = [(record_period_end(r), r) for r in records if isinstance(r, dict)]
-    rows = [(d, r) for d, r in rows if d is not None]
-    if not rows:
-        return {}
-    current = min(rows, key=lambda x: abs((x[0] - period_end).days))
-    if abs((current[0] - period_end).days) > 45:
-        return {}
+    rows: list[tuple[date, dict[str, Any]]] = []
+    for r in records:
+        if not isinstance(r, dict):
+            continue
+        to_d = parse_date(first(r, "re_to_dt", "toDate"))
+        from_d = parse_date(first(r, "re_from_dt", "fromDate"))
+        if to_d is None:
+            continue
+        if from_d is not None and not (QUARTER_DAYS[0] <= (to_d - from_d).days <= QUARTER_DAYS[1]):
+            continue
+        rows.append((to_d, r))
 
-    def find_near(target: date, max_days: int = 50):
-        choices = [(abs((d - target).days), r) for d, r in rows if d != current[0]]
-        if not choices:
+    def row_for(target: date) -> dict[str, Any] | None:
+        matches = [r for d, r in rows if abs((d - target).days) <= 3]
+        if not matches:
             return None
-        dist, rec = min(choices, key=lambda x: x[0])
-        return rec if dist <= max_days else None
+        # A later filing for the same quarter (revision) wins.
+        return max(matches, key=lambda r: str(first(r, "re_seq_num", default="") or ""))
 
-    current_rec = current[1]
-    prev_candidates = sorted([(d, r) for d, r in rows if d < current[0]], reverse=True)
-    prev_rec = prev_candidates[0][1] if prev_candidates else None
-    prior_rec = find_near(date(current[0].year - 1, current[0].month, min(current[0].day, 28)))
+    current = row_for(period_end)
+    if current is None:
+        return {}
+    prior = row_for(_shift_quarters(period_end, -4))
+    prev = row_for(_shift_quarters(period_end, -1))
+    bank = str(payload.get("bankNonBnking") or "").upper() == "Y"
 
-    revenue_aliases = ("re_total_inc", "total_income", "totalincome", "revenue", "revenue_from_operations")
-    pat_aliases = ("re_net_profit", "net_profit", "netprofit", "profit_after_tax", "pat")
-    eps_aliases = ("re_basic_eps", "basic_eps", "eps")
+    issues: list[str] = ["BASIS_ASSUMED_STANDALONE"]
+    rev_keys = ("re_int_earned", "re_net_sale") if bank else ("re_net_sale",)
+    revenue, rev_key = _exact_metric(current, *rev_keys)
+    definition = "INTEREST_EARNED" if rev_key == "re_int_earned" else "REVENUE_FROM_OPERATIONS"
+    if revenue is None:
+        revenue, rev_key = _exact_metric(current, "re_total_inc", "re_tot_inc")
+        definition = "TOTAL_INCOME"
+        if revenue is not None:
+            issues.append("REVENUE_IS_TOTAL_INCOME")
+    pat, pat_key = _exact_metric(current, "re_net_profit", "re_con_pro_loss")
+    eps, _ = _exact_metric(current, "re_basic_eps_for_cont_dic_opr", "re_basic_eps")
+    same_rev = (rev_key,) if rev_key else ()
+    same_pat = (pat_key,) if pat_key else ()
+    prior_rev, _ = _exact_metric(prior, *same_rev)
+    prior_pat, _ = _exact_metric(prior, *same_pat)
+    prev_rev, _ = _exact_metric(prev, *same_rev)
+    prev_pat, _ = _exact_metric(prev, *same_pat)
 
-    revenue_lakh = metric(current_rec, *revenue_aliases)
-    pat_lakh = metric(current_rec, *pat_aliases)
-    eps = metric(current_rec, *eps_aliases)
-    prev_revenue_lakh = metric(prev_rec or {}, *revenue_aliases)
-    prev_pat_lakh = metric(prev_rec or {}, *pat_aliases)
-    prior_revenue_lakh = metric(prior_rec or {}, *revenue_aliases)
-    prior_pat_lakh = metric(prior_rec or {}, *pat_aliases)
+    def cr(lakh: float | None) -> float | None:
+        return lakh / 100 if lakh is not None else None
 
-    revenue_cr = revenue_lakh / 100 if revenue_lakh is not None else None
-    pat_cr = pat_lakh / 100 if pat_lakh is not None else None
-    prior_revenue_cr = prior_revenue_lakh / 100 if prior_revenue_lakh is not None else None
-    prior_pat_cr = prior_pat_lakh / 100 if prior_pat_lakh is not None else None
-    trend, pat_yoy = pat_trend(pat_cr, prior_pat_cr)
-
+    trend, pat_yoy = pat_trend(cr(pat), cr(prior_pat))
     return {
-        "revenue_cr": round2(revenue_cr),
-        "pat_cr": round2(pat_cr),
+        "revenue_cr": round2(cr(revenue)),
+        "pat_cr": round2(cr(pat)),
         "eps": round2(eps),
-        "prior_year_revenue_cr": round2(prior_revenue_cr),
-        "prior_year_pat_cr": round2(prior_pat_cr),
-        "revenue_yoy_pct": round2(pct_change(revenue_cr, prior_revenue_cr)),
+        "prior_year_revenue_cr": round2(cr(prior_rev)),
+        "prior_year_pat_cr": round2(cr(prior_pat)),
+        "revenue_yoy_pct": round2(pct_change(revenue, prior_rev)),
         "pat_yoy_pct": round2(pat_yoy),
         "pat_trend": trend,
-        "revenue_qoq_pct": round2(pct_change(revenue_lakh, prev_revenue_lakh)),
-        "pat_qoq_pct": round2(pct_change(pat_lakh, prev_pat_lakh)) if prev_pat_lakh not in (None, 0) and prev_pat_lakh > 0 else None,
-        "basis": "CONSOLIDATED" if any("consolid" in str(v).lower() for v in current_rec.values()) else "UNKNOWN",
+        "revenue_qoq_pct": round2(pct_change(revenue, prev_rev)),
+        "pat_qoq_pct": round2(pct_change(pat, prev_pat)) if prev_pat is not None and prev_pat > 0 else None,
+        "basis": "STANDALONE",
+        "_meta": {
+            "periodEnd": period_end.isoformat(),
+            "revenueDefinition": definition if revenue is not None else None,
+            "concepts": {"revenue": rev_key, "pat": pat_key},
+            "issues": issues,
+            "comparativesFromSameDocument": True,
+            "filedOn": str(first(current, "re_create_dt", default="") or "") or None,
+        },
     }
 
 
 def parse_bse_snapshot(snapshot: dict[str, Any], period_end: date) -> dict[str, Any]:
-    block = snapshot.get("results_in_crores") if isinstance(snapshot, dict) else None
+    """BSE 'results snapshot' (₹ crore, latest 1–2 quarters + last FY).
+
+    * The event quarter must be an exact month/year column; there is no
+      "use the first column if close enough" fallback any more.
+    * QoQ uses only the column for the immediately preceding quarter, never a
+      full-year (FYxx-yy) column.
+    * BSE does not say whether these are standalone or consolidated figures and
+      provides no prior-year quarter, so YoY stays null (—) from this source.
+    """
+    if not isinstance(snapshot, dict):
+        return {}
+    block = snapshot.get("results_in_crores")
     if not isinstance(block, dict):
+        return {}
+    unit = str(snapshot.get("currency_unit") or "").lower()
+    if unit and "cr" not in unit:
         return {}
     fields = block.get("fields") or []
     data = block.get("data") or []
@@ -1857,63 +2236,52 @@ def parse_bse_snapshot(snapshot: dict[str, Any], period_end: date) -> dict[str, 
     def norm_title(x: str) -> str:
         return re.sub(r"[^a-z0-9]+", " ", x.lower()).strip()
 
-    table: dict[str, list[Any]] = {}
-    for row in data:
-        if not isinstance(row, list) or not row:
-            continue
-        table[norm_title(str(row[0]))] = row[1:]
+    table = {norm_title(str(row[0])): row[1:] for row in data if isinstance(row, list) and row}
 
-    def row_values(*names: str):
-        for title, values in table.items():
-            if any(norm_title(name) == title or norm_title(name) in title for name in names):
-                return values
-        return []
+    def column_for(target: date) -> int | None:
+        for i, label in enumerate(periods):
+            if not re.fullmatch(r"[A-Za-z]{3}-\d{2}", label):
+                continue  # skip FY25-26, Period2, etc.
+            d = parse_date(label)
+            if d and d.year == target.year and d.month == target.month:
+                return i
+        return None
 
-    def val(values, idx):
-        return safe_num(values[idx]) if idx is not None and 0 <= idx < len(values) else None
-
-    period_dates = [parse_date(p) for p in periods]
-    current_idx = None
-    for i, d in enumerate(period_dates):
-        if d and d.year == period_end.year and d.month == period_end.month:
-            current_idx = i
-            break
+    current_idx = column_for(period_end)
     if current_idx is None:
-        current_idx = 0
-        latest = period_dates[0] if period_dates else None
-        if latest is not None and abs((latest - period_end).days) > 45:
-            return {}
+        return {}
+    prev_idx = column_for(_shift_quarters(period_end, -1))
+    prior_idx = column_for(_shift_quarters(period_end, -4))
 
-    prior_idx = None
-    for i, d in enumerate(period_dates):
-        if d and d.year == period_end.year - 1 and d.month == period_end.month:
-            prior_idx = i
-            break
-    prev_idx = current_idx + 1 if current_idx + 1 < len(periods) else None
+    def val(title: str, idx: int | None) -> float | None:
+        values = table.get(title)
+        if values is None or idx is None or not (0 <= idx < len(values)):
+            return None
+        return safe_num(values[idx])
 
-    revs = row_values("Revenue", "Total Income", "Net Sales")
-    pats = row_values("Net Profit", "PAT", "Profit After Tax")
-    epss = row_values("EPS")
-    revenue_cr = val(revs, current_idx)
-    pat_cr = val(pats, current_idx)
-    prior_revenue_cr = val(revs, prior_idx)
-    prior_pat_cr = val(pats, prior_idx)
-    prev_revenue_cr = val(revs, prev_idx)
-    prev_pat_cr = val(pats, prev_idx)
-    trend, pat_yoy = pat_trend(pat_cr, prior_pat_cr)
-
+    revenue, pat, eps = val("revenue", current_idx), val("net profit", current_idx), val("eps", current_idx)
+    prev_rev, prev_pat = val("revenue", prev_idx), val("net profit", prev_idx)
+    prior_rev, prior_pat = val("revenue", prior_idx), val("net profit", prior_idx)
+    trend, pat_yoy = pat_trend(pat, prior_pat)
     return {
-        "revenue_cr": round2(revenue_cr),
-        "pat_cr": round2(pat_cr),
-        "eps": round2(val(epss, current_idx)),
-        "prior_year_revenue_cr": round2(prior_revenue_cr),
-        "prior_year_pat_cr": round2(prior_pat_cr),
-        "revenue_yoy_pct": round2(pct_change(revenue_cr, prior_revenue_cr)),
+        "revenue_cr": round2(revenue),
+        "pat_cr": round2(pat),
+        "eps": round2(eps),
+        "prior_year_revenue_cr": round2(prior_rev),
+        "prior_year_pat_cr": round2(prior_pat),
+        "revenue_yoy_pct": round2(pct_change(revenue, prior_rev)),
         "pat_yoy_pct": round2(pat_yoy),
         "pat_trend": trend,
-        "revenue_qoq_pct": round2(pct_change(revenue_cr, prev_revenue_cr)),
-        "pat_qoq_pct": round2(pct_change(pat_cr, prev_pat_cr)) if prev_pat_cr not in (None, 0) and prev_pat_cr > 0 else None,
+        "revenue_qoq_pct": round2(pct_change(revenue, prev_rev)),
+        "pat_qoq_pct": round2(pct_change(pat, prev_pat)) if prev_pat is not None and prev_pat > 0 else None,
         "basis": "UNKNOWN",
+        "_meta": {
+            "periodEnd": period_end.isoformat(),
+            "revenueDefinition": "BSE_SNAPSHOT_REVENUE" if revenue is not None else None,
+            "concepts": {"revenue": "Revenue", "pat": "Net Profit"},
+            "issues": ["BASIS_UNKNOWN"] + ([] if prior_idx is not None else ["NO_PRIOR_YEAR_COLUMN"]),
+            "comparativesFromSameDocument": True,
+        },
     }
 
 
@@ -2387,6 +2755,238 @@ def discover_events(store: EventStore, master: SymbolMaster, ctx: SourceContext)
     return stats
 
 
+# ---------------------------------------------------------------------------
+# Integrity pass: re-verify declarations against saved exchange evidence
+# ---------------------------------------------------------------------------
+
+POST_RESULT_FIELDS = (
+    "result_day_return_pct", "result_day_rvol", "result_day_low", "result_day_high",
+    "post_result_hold_5d", "post_result_hold_10d", "box_high", "box_breakout",
+)
+RELEASE_FIELDS = ("results_released", "filing_timestamp", "result_source", "reaction_session", "filing_session")
+
+
+def _security_keys(sec: dict[str, Any]) -> set[str]:
+    keys = set()
+    if sec.get("isin"):
+        keys.add("ISIN:" + str(sec["isin"]).upper())
+    if sec.get("bseCode"):
+        keys.add("BSE:" + str(sec["bseCode"]).strip())
+    if sec.get("nseSymbol"):
+        keys.add("NSE:" + normalize_symbol(sec["nseSymbol"]))
+    return keys
+
+
+def build_evidence_index(raw_root: Path = RAW_DIR) -> dict[str, list[dict[str, Any]]]:
+    """Re-normalise every saved exchange discovery payload with today's
+    (corrected) parsers. Evidence = official filing + explicit/derived period."""
+    index: dict[str, list[dict[str, Any]]] = {}
+    sources = (
+        (raw_root / "bse" / "DISCOVERY", "result_announcements-*.json", normalize_bse_announcement),
+        (raw_root / "nse" / "DISCOVERY", "financial_results-*.json", normalize_nse_filing),
+    )
+    for folder, pattern, normalizer in sources:
+        if not folder.exists():
+            continue
+        for path in sorted(folder.glob(pattern)):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            items = payload if isinstance(payload, list) else (payload.get("data") or payload.get("Table") or []) if isinstance(payload, dict) else []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                c = normalizer(item)
+                if not c or not c.get("released") or not c.get("periodEnd") or not c.get("filingTimestamp"):
+                    continue
+                c = dict(c)
+                c.pop("raw", None)
+                c["rawRef"] = str(path.relative_to(raw_root.parent)) if raw_root.parent in path.parents else str(path)
+                for key in _security_keys(c["security"]):
+                    index.setdefault(key, []).append(c)
+    return index
+
+
+def _revoke_release(store: EventStore, event: dict[str, Any], reasons: list[str], today: date) -> dict[str, Any]:
+    reason = "; ".join(reasons)
+    before = {f: store.value(event, f) for f in ("results_released", "result_date", "filing_timestamp")}
+    for field in RELEASE_FIELDS + POST_RESULT_FIELDS:
+        store.revoke_field(event, field, f"release evidence invalid: {reason}")
+    rd_meta = (event.get("fields") or {}).get("result_date") or {}
+    rd = parse_date(rd_meta.get("value"))
+    if rd_meta.get("status") == "OK" and (rd_meta.get("source") in {"BSE_RESULT_ANNOUNCEMENT", "NSE_FINANCIAL_RESULTS"} or (rd and rd < today)):
+        store.revoke_field(event, "result_date", f"release evidence invalid: {reason}")
+    for field in FINANCIAL_FIELDS:
+        store.revoke_field(event, field, "financials belonged to a revoked declaration")
+    event.pop("financialIntegrity", None)
+    has_calendar = store.value(event, "result_date") is not None
+    store.force_state(event, "SCHEDULED" if has_calendar else "DISCOVERED", f"declaration revoked: {reason}")
+    entry = {"at": iso_now(), "reasons": reasons, "before": before}
+    event.setdefault("integrity", {}).setdefault("revocations", []).append(entry)
+    return entry
+
+
+def rederive_snapshots_from_raw(event: dict[str, Any], raw_root: Path = RAW_DIR) -> int:
+    """Replay saved NSE/BSE result payloads through the strict parsers."""
+    period_end = parse_date(event.get("period", {}).get("end"))
+    if period_end is None:
+        return 0
+    # Payloads are company-level (multi-quarter) and the parsers select the
+    # event's own period column/row, so any saved payload for the same company
+    # (including folders of duplicate/sibling events) can be replayed safely.
+    sec = event.get("security") or {}
+    prefixes = {safe_filename(event["eventId"]).rsplit("_", 1)[0]}
+    if sec.get("isin"):
+        prefixes.add(safe_filename(str(sec["isin"]).upper()))
+    if sec.get("nseSymbol") or sec.get("symbol"):
+        prefixes.add(safe_filename("NSE:" + normalize_symbol(sec.get("nseSymbol") or sec.get("symbol"))))
+    replay = (
+        ("NSE_RESULTS_COMPARISON", raw_root / "nse", "results_comparison-*.json", parse_nse_comparison),
+        ("BSE_RESULTS_SNAPSHOT", raw_root / "bse", "results_snapshot-*.json", parse_bse_snapshot),
+    )
+    added = 0
+    for source, base, pattern, parser in replay:
+        if not base.exists() or _has_snapshot(event, source):
+            continue
+        paths = sorted(
+            path for prefix in prefixes for folder in base.glob(f"{prefix}_*") if folder.is_dir()
+            for path in folder.glob(pattern)
+        )
+        for path in sorted(set(paths), key=lambda x: x.stat().st_mtime):
+            try:
+                parsed = parser(json.loads(path.read_text(encoding="utf-8")) or {}, period_end)
+            except Exception:
+                continue
+            if parsed:
+                rel = str(path.relative_to(raw_root.parent)) if raw_root.parent in path.parents else str(path)
+                snap = store_financial_snapshot(event, source, parsed, raw_ref=rel)
+                added += int(snap["validation"]["status"] != "REJECTED")
+    return added
+
+
+def integrity_pass(store: EventStore, *, today: date | None = None, raw_root: Path = RAW_DIR) -> dict[str, Any]:
+    """Idempotent repair run before scoring/publishing.
+
+    1. Every declared event must be backed by an exchange filing for the SAME
+       period (re-checked with corrected date/period parsing). Matching evidence
+       re-writes filing timestamp and result date; a filing in the future, a
+       filing dated before period end, a filing for another period, or a
+       migrated v1 'released' flag with no evidence revokes the declaration.
+    2. Post-result fields (reaction, RVOL, box…) can only exist after a valid
+       release whose reaction session has occurred.
+    3. Financial snapshots are replayed from saved raw payloads and exactly one
+       validated snapshot is applied.
+    Revocation keeps the old values with status REVOKED for audit.
+    """
+    today = today or now_ist().date()
+    index = build_evidence_index(raw_root)
+    stats: dict[str, Any] = {"checked": 0, "reverified": 0, "revoked": 0, "postResultPurged": 0,
+                             "snapshotsReplayed": 0, "financialsApplied": 0, "revocations": []}
+    for event in store.all():
+        period_end = parse_date(event.get("period", {}).get("end"))
+        if period_end is None:
+            continue
+        changed = False
+        released = boolish(store.value(event, "results_released")) is True
+        if released:
+            stats["checked"] += 1
+            sec_keys = _security_keys(event.get("security") or {})
+            evidence = [c for k in sec_keys for c in index.get(k, [])]
+            matching = [c for c in evidence if c["periodEnd"] == period_end]
+            if matching:
+                best = min(matching, key=lambda c: c["filingTimestamp"])
+                ts = best["filingTimestamp"]
+                store.force_field(event, "results_released", True, source=best["source"], raw_ref=best["rawRef"],
+                                  note="re-verified from saved exchange evidence")
+                store.force_field(event, "filing_timestamp", ts.isoformat(), source=best["source"], raw_ref=best["rawRef"])
+                store.force_field(event, "result_date", ts.date().isoformat(), source=best["source"], raw_ref=best["rawRef"])
+                for c in matching:
+                    record_filing(event, c, c["rawRef"])
+                new_session, timing = reaction_session(ts, None)
+                old_session = store.value(event, "reaction_session")
+                if new_session and old_session != new_session.isoformat():
+                    store.force_field(event, "reaction_session", new_session.isoformat(), source="DERIVED", note=timing)
+                    store.force_field(event, "filing_session", timing, source="DERIVED")
+                    for f in POST_RESULT_FIELDS:
+                        store.revoke_field(event, f, f"reaction session corrected {old_session} -> {new_session}; recompute")
+                    (event.setdefault("fetch", {}).get("PRICE_HISTORY") or {}).pop("lastSuccess", None)
+                stats["reverified"] += 1
+                changed = True
+            else:
+                rel = (event.get("fields") or {}).get("results_released") or {}
+                fts = parse_datetime(store.value(event, "filing_timestamp"))
+                rd = parse_date(store.value(event, "result_date"))
+                filed_on = fts.date() if fts else rd
+                reasons = []
+                if filed_on and filed_on > today:
+                    reasons.append("FUTURE_FILING_DATE")
+                if filed_on and filed_on < period_end:
+                    reasons.append("FILED_BEFORE_PERIOD_END")
+                if "migrated" in str(rel.get("note") or "") and not rel.get("rawRef"):
+                    reasons.append("UNVERIFIED_MIGRATED_RELEASE")
+                other_periods = sorted({c["periodEnd"].isoformat() for c in evidence})
+                if other_periods:
+                    reasons.append("EVIDENCE_IS_FOR_OTHER_PERIOD:" + ",".join(other_periods))
+                if reasons:
+                    entry = _revoke_release(store, event, reasons, today)
+                    stats["revoked"] += 1
+                    stats["revocations"].append({"eventId": event["eventId"], "symbol": event.get("security", {}).get("symbol"), **entry})
+                    changed = True
+                    released = False
+
+        elif period_end == live_reporting_period(today) or period_end >= today - timedelta(days=200):
+            # Promote a scheduled/discovered event only on an official filing that
+            # EXPLICITLY names this period (never on a date-inferred period).
+            sec_keys = _security_keys(event.get("security") or {})
+            explicit = [
+                c for k in sec_keys for c in index.get(k, [])
+                if c["periodEnd"] == period_end and c.get("periodSource") in {"FILING_TEXT", "EXCHANGE_PERIOD_FIELD"}
+                and c["filingTimestamp"].date() <= today
+            ]
+            if explicit:
+                best = min(explicit, key=lambda c: c["filingTimestamp"])
+                ts = best["filingTimestamp"]
+                store.force_field(event, "results_released", True, source=best["source"], raw_ref=best["rawRef"],
+                                  note="declared from saved exchange evidence (explicit period)")
+                store.force_field(event, "filing_timestamp", ts.isoformat(), source=best["source"], raw_ref=best["rawRef"])
+                store.force_field(event, "result_date", ts.date().isoformat(), source=best["source"], raw_ref=best["rawRef"])
+                store.force_field(event, "result_source", best["source"], source=best["source"], raw_ref=best["rawRef"])
+                session, timing = reaction_session(ts, None)
+                if session:
+                    store.force_field(event, "reaction_session", session.isoformat(), source="DERIVED", note=timing)
+                    store.force_field(event, "filing_session", timing, source="DERIVED")
+                for c in explicit:
+                    record_filing(event, c, c["rawRef"])
+                store.set_state(event, "RESULT_FILED", "official filing naming this period found in saved evidence")
+                (event.setdefault("fetch", {}).get("PRICE_HISTORY") or {}).pop("lastSuccess", None)
+                stats["promoted"] = stats.get("promoted", 0) + 1
+                released = True
+                changed = True
+
+        # Post-result fields are impossible without a released, already-traded reaction session.
+        reaction = parse_date(store.value(event, "reaction_session"))
+        if not released or (reaction is not None and reaction > today):
+            purged = sum(store.revoke_field(event, f, "no valid released result / reaction session not yet traded") for f in POST_RESULT_FIELDS)
+            if purged:
+                stats["postResultPurged"] += 1
+                changed = True
+            if not released:
+                for field in FINANCIAL_FIELDS:
+                    changed |= store.revoke_field(event, field, "financial fields require a verified release for this period")
+
+        if released:
+            replayed = rederive_snapshots_from_raw(event, raw_root)
+            stats["snapshotsReplayed"] += replayed
+            if event.get("financialSnapshots") or any(((event.get("fields") or {}).get(f) or {}).get("status") == "OK" for f in FINANCIAL_FIELDS):
+                integ = apply_financial_snapshots(store, event)
+                stats["financialsApplied"] += int(integ.get("selectedSource") is not None)
+                changed = True
+        if changed:
+            store.save(event)
+    return stats
+
+
 def append_price_snapshot(event: dict[str, Any], price: Any, source: str | None) -> None:
     """Keep a compact hourly price trail for active-event tracking.
 
@@ -2496,12 +3096,167 @@ def fill_security_identity(event: dict[str, Any], store: EventStore, master: Sym
     return store.rekey_and_merge(event)
 
 
-def merge_financials(store: EventStore, event: dict[str, Any], data: dict[str, Any], source: str, raw_ref: str | None = None) -> int:
-    changed = 0
+# ---------------------------------------------------------------------------
+# Financial snapshots: validate per source, apply exactly one atomically
+# ---------------------------------------------------------------------------
+
+FINANCIAL_SNAPSHOT_RANK = {
+    "NSE_XBRL": 110, "BSE_XBRL": 110,
+    "NSE_RESULTS_COMPARISON": 100,
+    "BSE_RESULTS_SNAPSHOT": 96,
+    "YAHOO_QUARTERLY": 55,
+}
+# Issues that make a snapshot unusable.
+SNAPSHOT_REJECT_ISSUES = ("NO_CORE_VALUES", "PERIOD_MISMATCH", "NEGATIVE_REVENUE", "NO_QUARTER_CONTEXT_FOR_PERIOD")
+# Issues that keep the snapshot usable but require a visible review flag.
+SNAPSHOT_FLAG_ISSUES = (
+    "EXTREME_REVENUE_YOY", "PAT_EXCEEDS_REVENUE", "REVENUE_IS_TOTAL_INCOME",
+    "UNOFFICIAL_SOURCE", "CROSS_SOURCE_MISMATCH", "CONFLICTING_FACTS", "NON_INR_UNIT",
+    "ZERO_REVENUE",
+)
+CROSS_SOURCE_TOLERANCE_PCT = 2.0
+
+
+def validate_financial_snapshot(parsed: dict[str, Any], source: str, period_end: date | None) -> dict[str, Any]:
+    meta = parsed.get("_meta") or {}
+    issues = list(meta.get("issues") or [])
+    rev = safe_num(parsed.get("revenue_cr"))
+    pat = safe_num(parsed.get("pat_cr"))
+    if rev is None and pat is None:
+        issues.append("NO_CORE_VALUES")
+    if period_end is not None and meta.get("periodEnd") and meta["periodEnd"] != period_end.isoformat():
+        issues.append("PERIOD_MISMATCH")
+    if rev is not None and rev < 0:
+        issues.append("NEGATIVE_REVENUE")
+    if rev == 0:
+        issues.append("ZERO_REVENUE")
+    rev_yoy = safe_num(parsed.get("revenue_yoy_pct"))
+    if rev_yoy is not None and abs(rev_yoy) > 300:
+        issues.append("EXTREME_REVENUE_YOY")
+    if rev is not None and pat is not None and rev > 0 and pat > 1.5 * rev:
+        issues.append("PAT_EXCEEDS_REVENUE")
+    if FINANCIAL_SNAPSHOT_RANK.get(source, 0) < 90:
+        issues.append("UNOFFICIAL_SOURCE")
+    issues = sorted(set(issues))
+    if any(i.split(":")[0] in SNAPSHOT_REJECT_ISSUES for i in issues):
+        status = "REJECTED"
+    elif any(i.split(":")[0] in SNAPSHOT_FLAG_ISSUES for i in issues):
+        status = "FLAGGED"
+    else:
+        status = "VERIFIED"
+    return {"status": status, "issues": issues}
+
+
+def store_financial_snapshot(
+    event: dict[str, Any], source: str, parsed: dict[str, Any], *, raw_ref: str | None = None, document_url: str | None = None,
+) -> dict[str, Any]:
+    """Persist one source's complete parse. A rejected/empty parse never
+    replaces an earlier usable snapshot from the same source."""
+    period_end = parse_date(event.get("period", {}).get("end"))
+    validation = validate_financial_snapshot(parsed, source, period_end)
+    meta = parsed.get("_meta") or {}
+    snapshot = {
+        "source": source,
+        "fetchedAt": iso_now(),
+        "rawRef": raw_ref,
+        "documentUrl": document_url,
+        "periodEnd": meta.get("periodEnd"),
+        "basis": parsed.get("basis") or "UNKNOWN",
+        "revenueDefinition": meta.get("revenueDefinition"),
+        "concepts": meta.get("concepts"),
+        "values": {k: parsed.get(k) for k in FINANCIAL_FIELDS if k != "basis" and parsed.get(k) is not None},
+        "validation": validation,
+    }
+    snaps = event.setdefault("financialSnapshots", {})
+    old = snaps.get(source)
+    if validation["status"] == "REJECTED" and isinstance(old, dict) and (old.get("validation") or {}).get("status") != "REJECTED":
+        old["lastRejected"] = {"at": snapshot["fetchedAt"], "issues": validation["issues"], "rawRef": raw_ref}
+        return old
+    snaps[source] = snapshot
+    return snapshot
+
+
+def _snapshot_completeness(snap: dict[str, Any]) -> int:
+    v = snap.get("values") or {}
+    return sum(v.get(k) is not None for k in ("revenue_cr", "pat_cr", "prior_year_revenue_cr", "prior_year_pat_cr", "eps"))
+
+
+def apply_financial_snapshots(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
+    """Choose ONE usable snapshot and make it the visible financial record.
+
+    Every visible financial field (revenue, PAT, YoY, QoQ, trend, basis) then
+    comes from the same document. A field the winner lacks is shown as —, never
+    borrowed from another source, because borrowing is how consolidated revenue
+    ended up next to a standalone prior-year figure.
+    """
+    period_end = event.get("period", {}).get("end")
+    snaps = [s for s in (event.get("financialSnapshots") or {}).values() if isinstance(s, dict)]
+    usable = [
+        s for s in snaps
+        if (s.get("validation") or {}).get("status") in {"VERIFIED", "FLAGGED"} and s.get("periodEnd") == period_end
+    ]
+    integrity: dict[str, Any] = {"checkedAt": iso_now(), "snapshotsConsidered": len(snaps)}
+    if not usable:
+        integrity.update({"status": "NO_VERIFIED_SNAPSHOT", "selectedSource": None})
+        # Unverified legacy numbers must not masquerade as parsed financials.
+        for field in FINANCIAL_FIELDS:
+            meta = (event.get("fields") or {}).get(field) or {}
+            if meta.get("status") == "OK" and (meta.get("source") in {"V1_MIGRATION", "DERIVED"} or "migrated" in str(meta.get("note") or "")):
+                store.revoke_field(event, field, "unverified legacy value; no exchange snapshot for this period")
+        event["financialIntegrity"] = integrity
+        return integrity
+
+    winner = max(
+        usable,
+        key=lambda s: (FINANCIAL_SNAPSHOT_RANK.get(s["source"], 0), _snapshot_completeness(s), str(s.get("fetchedAt") or "")),
+    )
+    cross = []
+    w_rev = safe_num((winner.get("values") or {}).get("revenue_cr"))
+    for other in usable:
+        if other is winner:
+            continue
+        o_rev = safe_num((other.get("values") or {}).get("revenue_cr"))
+        if w_rev in (None, 0) or o_rev is None:
+            continue
+        diff = abs(o_rev / w_rev - 1) * 100
+        same_basis = winner.get("basis") == other.get("basis") and winner.get("basis") != "UNKNOWN"
+        cross.append({"source": other["source"], "basis": other.get("basis"), "revenueCr": o_rev, "diffPct": round2(diff), "sameBasis": same_basis})
+        if same_basis and diff > CROSS_SOURCE_TOLERANCE_PCT:
+            v = winner.setdefault("validation", {"status": "VERIFIED", "issues": []})
+            if "CROSS_SOURCE_MISMATCH" not in v["issues"]:
+                v["issues"] = sorted(v["issues"] + ["CROSS_SOURCE_MISMATCH"])
+            v["status"] = "FLAGGED"
+
+    values = dict(winner.get("values") or {})
+    values["basis"] = winner.get("basis") or "UNKNOWN"
+    note = f"snapshot {winner['source']} basis={values['basis']}"
     for field in FINANCIAL_FIELDS:
-        if field in data and data[field] not in (None, ""):
-            changed += int(store.merge_field(event, field, data[field], source=source, raw_ref=raw_ref))
-    return changed
+        value = values.get(field)
+        if value is not None:
+            store.force_field(event, field, value, source=winner["source"], raw_ref=winner.get("rawRef"), note=note)
+        else:
+            meta = (event.get("fields") or {}).get(field) or {}
+            if meta.get("status") == "OK" and meta.get("source") != winner["source"]:
+                store.revoke_field(event, field, f"not in selected {winner['source']} snapshot (cross-source mixing prevented)")
+    integrity.update({
+        "status": (winner.get("validation") or {}).get("status"),
+        "issues": (winner.get("validation") or {}).get("issues"),
+        "selectedSource": winner["source"],
+        "basis": values["basis"],
+        "revenueDefinition": winner.get("revenueDefinition"),
+        "concepts": winner.get("concepts"),
+        "periodEnd": winner.get("periodEnd"),
+        "crossCheck": cross,
+    })
+    event["financialIntegrity"] = integrity
+    if store.value(event, "revenue_cr") is not None and store.value(event, "pat_cr") is not None:
+        store.set_state(event, "FINANCIALS_PARSED", f"verified {winner['source']} snapshot applied")
+    return integrity
+
+
+def _has_snapshot(event: dict[str, Any], *sources: str) -> bool:
+    snaps = event.get("financialSnapshots") or {}
+    return any((snaps.get(s) or {}).get("validation", {}).get("status") in {"VERIFIED", "FLAGGED"} for s in sources)
 
 
 def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
@@ -2513,72 +3268,65 @@ def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceConte
     sec = event.get("security", {})
     symbol = normalize_symbol(sec.get("nseSymbol") or sec.get("symbol"))
     bse_code = str(sec.get("bseCode") or "").strip()
-    xbrl_url = store.value(event, "xbrl_url")
+    chosen = select_xbrl_filing(event)
+    xbrl_url = (chosen or {}).get("xbrlUrl") or store.value(event, "xbrl_url")
 
-    # 1) XBRL: highest authority when present.
+    # 1) Exchange XBRL (highest authority). Re-fetch only for a new document.
     if xbrl_url:
-        source = "NSE_XBRL" if "nse" in str(xbrl_url).lower() or sec.get("nseSymbol") else "BSE_XBRL"
-        try:
-            parsed, raw_ref = XBRLParser(ctx).fetch_parse(str(xbrl_url), event["eventId"], period_end, source)
-            if any(parsed.get(k) is not None for k in ("revenue_cr", "pat_cr", "revenue_yoy_pct", "pat_trend")):
-                merge_financials(store, event, parsed, source, raw_ref)
-                store.record_fetch(event, source, ok=True, raw_ref=raw_ref)
-            else:
-                store.record_fetch(event, source, ok=False, error="XBRL parsed but core financial facts were not resolved", raw_ref=raw_ref)
-        except Exception as exc:
-            store.record_fetch(event, source, ok=False, error=f"{type(exc).__name__}: {exc}")
+        source = "NSE_XBRL" if "nse" in str(xbrl_url).lower() else "BSE_XBRL"
+        existing = (event.get("financialSnapshots") or {}).get(source) or {}
+        if existing.get("documentUrl") != str(xbrl_url) or (existing.get("validation") or {}).get("status") == "REJECTED":
+            try:
+                parsed, raw_ref = XBRLParser(ctx).fetch_parse(str(xbrl_url), event["eventId"], period_end, source)
+                snap = store_financial_snapshot(event, source, parsed, raw_ref=raw_ref, document_url=str(xbrl_url))
+                ok = (snap.get("validation") or {}).get("status") != "REJECTED"
+                store.record_fetch(event, source, ok=ok, raw_ref=raw_ref,
+                                   error=None if ok else "XBRL rejected: " + ",".join(snap["validation"]["issues"]))
+            except Exception as exc:
+                store.record_fetch(event, source, ok=False, error=f"{type(exc).__name__}: {exc}")
 
-    # 2) NSE results comparison — excellent compact 5-quarter series.
-    needs_core = any(store.value(event, k) is None for k in ("revenue_cr", "pat_cr", "prior_year_revenue_cr", "prior_year_pat_cr"))
-    if symbol and needs_core:
+    # 2) NSE results comparison: also used as an independent cross-check.
+    if symbol and not _has_snapshot(event, "NSE_RESULTS_COMPARISON"):
         try:
             with NSEAdapter(ctx) as nse:
                 payload, raw_ref = nse.results_comparison(symbol, event["eventId"])
-                parsed = parse_nse_comparison(payload or {}, period_end)
-                if parsed:
-                    merge_financials(store, event, parsed, "NSE_RESULTS_COMPARISON", raw_ref)
-                    store.record_fetch(event, "NSE_RESULTS_COMPARISON", ok=True, raw_ref=raw_ref)
-                else:
-                    store.record_fetch(event, "NSE_RESULTS_COMPARISON", ok=False, error="comparison payload did not match event quarter", raw_ref=raw_ref)
+            parsed = parse_nse_comparison(payload or {}, period_end)
+            if parsed:
+                snap = store_financial_snapshot(event, "NSE_RESULTS_COMPARISON", parsed, raw_ref=raw_ref)
+                store.record_fetch(event, "NSE_RESULTS_COMPARISON", ok=snap["validation"]["status"] != "REJECTED", raw_ref=raw_ref,
+                                   error=",".join(snap["validation"]["issues"]) or None)
+            else:
+                store.record_fetch(event, "NSE_RESULTS_COMPARISON", ok=False, error="no quarterly row for event period", raw_ref=raw_ref)
         except Exception as exc:
             store.record_fetch(event, "NSE_RESULTS_COMPARISON", ok=False, error=f"{type(exc).__name__}: {exc}")
 
-    # 3) BSE snapshot — critical for BSE-only companies.
-    needs_core = any(store.value(event, k) is None for k in ("revenue_cr", "pat_cr"))
-    if bse_code and needs_core:
+    # 3) BSE snapshot: essential for BSE-only companies.
+    if bse_code and not _has_snapshot(event, "NSE_XBRL", "BSE_XBRL", "NSE_RESULTS_COMPARISON", "BSE_RESULTS_SNAPSHOT"):
         try:
             with BSEAdapter(ctx) as bse:
                 payload, raw_ref = bse.results_snapshot(bse_code, event["eventId"], symbol)
-                parsed = parse_bse_snapshot(payload or {}, period_end)
-                if parsed:
-                    merge_financials(store, event, parsed, "BSE_RESULTS_SNAPSHOT", raw_ref)
-                    store.record_fetch(event, "BSE_RESULTS_SNAPSHOT", ok=True, raw_ref=raw_ref)
-                else:
-                    store.record_fetch(event, "BSE_RESULTS_SNAPSHOT", ok=False, error="snapshot did not match event quarter", raw_ref=raw_ref)
+            parsed = parse_bse_snapshot(payload or {}, period_end)
+            if parsed:
+                snap = store_financial_snapshot(event, "BSE_RESULTS_SNAPSHOT", parsed, raw_ref=raw_ref)
+                store.record_fetch(event, "BSE_RESULTS_SNAPSHOT", ok=snap["validation"]["status"] != "REJECTED", raw_ref=raw_ref)
+            else:
+                store.record_fetch(event, "BSE_RESULTS_SNAPSHOT", ok=False, error="snapshot has no column for event quarter", raw_ref=raw_ref)
         except Exception as exc:
             store.record_fetch(event, "BSE_RESULTS_SNAPSHOT", ok=False, error=f"{type(exc).__name__}: {exc}")
 
-    # 4) Yahoo quarterly only fills remaining gaps. It cannot downgrade exchange values.
-    needs_core = any(store.value(event, k) is None for k in ("revenue_cr", "pat_cr", "prior_year_revenue_cr", "prior_year_pat_cr"))
-    if needs_core:
+    # 4) Yahoo only when no exchange snapshot exists; always FLAGGED.
+    if not _has_snapshot(event, *[s for s in FINANCIAL_SNAPSHOT_RANK if s != "YAHOO_QUARTERLY"]):
         data, err = YahooAdapter(ctx).quarterly(event)
         if data:
-            merge_financials(store, event, data, "YAHOO_QUARTERLY")
+            data = dict(data)
+            data["_meta"] = {"periodEnd": data.pop("statementPeriodEnd", None) or period_end.isoformat(),
+                             "revenueDefinition": "YAHOO_TOTAL_REVENUE", "issues": ["BASIS_UNKNOWN"]}
+            store_financial_snapshot(event, "YAHOO_QUARTERLY", data)
             store.record_fetch(event, "YAHOO_QUARTERLY", ok=True)
         elif err:
             store.record_fetch(event, "YAHOO_QUARTERLY", ok=False, error=err)
 
-    if store.value(event, "revenue_cr") is not None and store.value(event, "pat_cr") is not None:
-        # Recompute PAT trend from stored current/prior if prior exists, ensuring
-        # legacy negative-base percentages cannot survive as the primary label.
-        current_pat = safe_num(store.value(event, "pat_cr"))
-        prior_pat = safe_num(store.value(event, "prior_year_pat_cr"))
-        trend, yoy = pat_trend(current_pat, prior_pat)
-        if trend:
-            store.merge_field(event, "pat_trend", trend, source="DERIVED", note="negative/zero-base safe PAT trend")
-        if yoy is not None:
-            store.merge_field(event, "pat_yoy_pct", round2(yoy), source="DERIVED", note="computed only on positive prior PAT")
-        store.set_state(event, "FINANCIALS_PARSED", "current-quarter revenue/PAT available")
+    apply_financial_snapshots(store, event)
 
 
 def enrich_valuation(event: dict[str, Any], store: EventStore, master: SymbolMaster, ctx: SourceContext) -> None:
@@ -2677,9 +3425,14 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
         return
 
     metrics = price_metrics(frame, price_boundary)
+    reaction_traded = released and reaction_date is not None and reaction_date <= now_ist().date()
     for field, value in metrics.items():
-        if value is not None:
-            store.merge_field(event, field, value, source=price_source or "YAHOO_PRICE", raw_ref=raw_ref)
+        if value is None:
+            continue
+        if field in POST_RESULT_FIELDS and not reaction_traded:
+            # Scheduled-only or future sessions must never carry reaction data.
+            continue
+        store.merge_field(event, field, value, source=price_source or "YAHOO_PRICE", raw_ref=raw_ref)
     append_price_snapshot(event, metrics.get("last_price"), price_source)
     store.record_fetch(event, "PRICE_HISTORY", ok=True, raw_ref=raw_ref)
 
@@ -3293,6 +4046,11 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
         "resultPeriodEnd": period.get("end"),
         "resultDate": result_date,
         "resultsReleased": released,
+        "financialSource": (event.get("financialIntegrity") or {}).get("selectedSource") if released else None,
+        "financialBasis": (event.get("financialIntegrity") or {}).get("basis") if released else None,
+        "financialStatus": (event.get("financialIntegrity") or {}).get("status") if released else None,
+        "financialIssues": (event.get("financialIntegrity") or {}).get("issues") if released else None,
+        "revenueDefinition": (event.get("financialIntegrity") or {}).get("revenueDefinition") if released else None,
         "resultReleased": released,
         "peadStatus": event.get("state"),
         "bucket": "Post-results" if released else "Upcoming",
@@ -3403,6 +4161,10 @@ def event_to_intelligence(event: dict[str, Any]) -> dict[str, Any]:
         "quarter": row["quarter"],
         "resultDate": row["resultDate"],
         "resultsReleased": row["resultsReleased"],
+        "financialSource": row.get("financialSource"),
+        "financialBasis": row.get("financialBasis"),
+        "financialStatus": row.get("financialStatus"),
+        "financialIssues": row.get("financialIssues"),
         "eventState": row["eventState"],
         "dataCompletenessPct": row["dataCompletenessPct"],
         "baseScoreText": row["scoreText"],
@@ -3478,6 +4240,11 @@ def aggregate_health(store: EventStore, discovery_stats: dict[str, Any], enrichm
     active_rows = [event_to_data_row(e) for e in active_events]
     declared = [r for r in active_rows if r.get("resultsReleased") is True]
     financial = [r for r in declared if r.get("latestRevenueCr") is not None and r.get("latestPatCr") is not None]
+    fin_status: dict[str, int] = {}
+    for e in active_events:
+        if boolish(meta_value(e, "results_released")) is True:
+            st = (e.get("financialIntegrity") or {}).get("status") or "NOT_CHECKED"
+            fin_status[st] = fin_status.get(st, 0) + 1
     reaction = [r for r in declared if r.get("resultDayReturnPct") is not None or r.get("relativeVolume") is not None]
     fully_scored = [r for r in declared if (r.get("dataCompletenessPct") or 0) >= 75]
 
@@ -3516,6 +4283,9 @@ def aggregate_health(store: EventStore, discovery_stats: dict[str, Any], enrichm
         "storedResultsFiled": len(all_declared),
         "resultsFiled": len(declared),
         "financialsParsed": len(financial),
+        "financialsVerified": fin_status.get("VERIFIED", 0),
+        "financialsFlagged": fin_status.get("FLAGGED", 0),
+        "financialsNoSnapshot": fin_status.get("NO_VERIFIED_SNAPSHOT", 0) + fin_status.get("NOT_CHECKED", 0),
         "reactionReady": len(reaction),
         "fullyScored": len(fully_scored),
         "declaredCompletenessPct": completeness_avg,
@@ -3530,7 +4300,13 @@ def aggregate_health(store: EventStore, discovery_stats: dict[str, Any], enrichm
 
 
 def previous_health() -> dict[str, Any]:
-    for path in (HEALTH_PATH, INTELLIGENCE_PATH, DATA_PATH):
+    """Health of the last PUBLISHED feed.
+
+    Regression: run_health.json is rewritten even when a run is blocked, so
+    reading it first let the next hourly run compare against the blocked run
+    and pass. The published data.json is the only valid baseline.
+    """
+    for path in (DATA_PATH, INTELLIGENCE_PATH, HEALTH_PATH):
         if not path.exists():
             continue
         try:
@@ -3544,8 +4320,21 @@ def previous_health() -> dict[str, Any]:
     return {}
 
 
-def quality_gate(new_health: dict[str, Any], old_health: dict[str, Any]) -> tuple[bool, list[str]]:
+def integrity_signature(revocations: list[dict[str, Any]]) -> str | None:
+    """Stable fingerprint of a set of declaration revocations."""
+    if not revocations:
+        return None
+    lines = sorted(
+        f"{r.get('eventId')}|{','.join(sorted(x.split(':')[0] for x in r.get('reasons') or []))}" for r in revocations
+    )
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()[:12]
+
+
+def quality_gate(new_health: dict[str, Any], old_health: dict[str, Any], approved_signature: str | None = None) -> tuple[bool, list[str]]:
     reasons = []
+    integrity = new_health.get("integrity") or {}
+    signature = integrity.get("signature")
+    baseline_approved = bool(signature and approved_signature and signature == approved_signature)
     current_rows = int(new_health.get("activeDashboardEvents") or 0)
     current_declared = int(new_health.get("resultsFiled") or 0)
     old_rows = int(old_health.get("activeDashboardEvents") or old_health.get("eventsTracked") or 0)
@@ -3566,17 +4355,29 @@ def quality_gate(new_health: dict[str, Any], old_health: dict[str, Any]) -> tupl
     if comparable_quarter:
         if old_rows >= 10 and current_rows < old_rows * 0.80:
             reasons.append(f"event count dropped from {old_rows} to {current_rows} (>20%)")
-        if old_declared >= 5 and current_declared < old_declared * 0.80:
-            reasons.append(f"declared-result count dropped from {old_declared} to {current_declared} (>20%)")
-        if old_declared >= 5 and old_comp >= 40 and current_comp < max(20, old_comp - 25):
+        if old_declared >= 5 and current_declared < old_declared * 0.80 and not baseline_approved:
+            msg = f"declared-result count dropped from {old_declared} to {current_declared} (>20%)"
+            if signature:
+                msg += (f"; {integrity.get('revoked', 0)} declarations were revoked by the integrity pass. "
+                        f"Review logs/integrity_{now_ist().date().isoformat()}.json and re-run with "
+                        f"--approve-baseline {signature} if the revocations are correct")
+            reasons.append(msg)
+        if old_declared >= 5 and old_comp >= 40 and current_comp < max(20, old_comp - 25) and not baseline_approved:
             reasons.append(f"declared completeness collapsed from {old_comp:.1f}% to {current_comp:.1f}%")
+    if approved_signature and not baseline_approved:
+        reasons.append(
+            f"--approve-baseline {approved_signature} does not match this run's integrity signature "
+            f"{signature or '(no revocations)'}; nothing was approved"
+        )
     return len(reasons) == 0, reasons
 
 
-def publish(store: EventStore, health: dict[str, Any], *, force: bool = False) -> tuple[bool, list[str]]:
+def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, approved_signature: str | None = None) -> tuple[bool, list[str]]:
     old = previous_health()
-    ok, reasons = quality_gate(health, old)
-    health["qualityGate"] = {"passed": ok, "reasons": reasons, "previous": old}
+    old.pop("qualityGate", None)
+    ok, reasons = quality_gate(health, old, approved_signature)
+    health["qualityGate"] = {"passed": ok, "reasons": reasons, "previous": old,
+                             "approvedBaseline": approved_signature if ok and approved_signature else None}
     json_dump_atomic(HEALTH_PATH, health)
     if not ok and not force:
         return False, reasons
@@ -3851,7 +4652,111 @@ def self_test() -> int:
 # ---------------------------------------------------------------------------
 
 
-def run(*, skip_network: bool = False, force_publish: bool = False) -> int:
+def write_integrity_report(stats: dict[str, Any], signature: str | None, *, dry_run: bool = False) -> Path:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    path = LOG_DIR / f"integrity_{now_ist().date().isoformat()}{'_dryrun' if dry_run else ''}.json"
+    json_dump_atomic(path, {"generatedAt": iso_now(), "signature": signature, "dryRun": dry_run, **stats})
+    return path
+
+
+def print_integrity_summary(stats: dict[str, Any], signature: str | None) -> None:
+    print(f"Integrity: checked {stats['checked']} declared events, re-verified {stats['reverified']}, "
+          f"promoted {stats.get('promoted', 0)}, revoked {stats['revoked']}, post-result purged {stats['postResultPurged']}, "
+          f"snapshots replayed {stats['snapshotsReplayed']}, financial snapshots applied {stats['financialsApplied']}")
+    for r in stats.get("revocations", []):
+        before = r.get("before") or {}
+        print(f"  REVOKE {str(r.get('symbol') or ''):<14} {r['eventId']:<32} "
+              f"filed={before.get('filing_timestamp')} reasons={','.join(r.get('reasons') or [])}")
+    if signature:
+        print(f"Integrity signature: {signature}")
+
+
+def integrity_report(*, today: date | None = None) -> int:
+    """Dry run: apply the integrity pass to a COPY of the event store, print the
+    projected live counts and the signature needed to approve the baseline."""
+    import shutil
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        tmp_events = Path(td) / "events"
+        shutil.copytree(EVENTS_DIR, tmp_events)
+        store = EventStore(tmp_events)
+        before = aggregate_health(store, {}, {})
+        stats = integrity_pass(store, today=today)
+        score_all(store)
+        after = aggregate_health(store, {}, {})
+    signature = integrity_signature(stats["revocations"])
+    print_integrity_summary(stats, signature)
+    published = previous_health()
+    print("\nLive-quarter counts       published   store-now   after-repair")
+    for key in ("resultsFiled", "financialsParsed", "financialsVerified", "financialsFlagged", "reactionReady", "fullyScored"):
+        print(f"  {key:<24}{str(published.get(key, '—')):>10}{str(before.get(key, '—')):>12}{str(after.get(key, '—')):>15}")
+    path = write_integrity_report(stats | {"projected": after, "storeBefore": before}, signature, dry_run=True)
+    print(f"\nReport: {path.relative_to(ROOT)}")
+    if signature:
+        print(f"If every revocation above is correct, approve with:  python pead_v2.py --approve-baseline {signature}")
+    return 0
+
+
+def validate_xbrl_file(target: str, period_end: date) -> int:
+    """Parse one XBRL instance (local path or URL) and print what was used."""
+    if re.match(r"^https?://", target):
+        ctx = SourceContext(raw=RawCache(), log=FetchLogger())
+        blob, _ = XBRLParser(ctx)._fetch(target, "VALIDATE", "NSE_XBRL" if "nse" in target.lower() else "BSE_XBRL")
+    else:
+        blob = Path(target).read_bytes()
+    docs = XBRLParser(SourceContext(raw=RawCache(), log=FetchLogger()))._documents(blob)
+    parsed = parse_xbrl_financials(docs, period_end)
+    validation = validate_financial_snapshot(parsed, "NSE_XBRL", period_end)
+    print(json.dumps({"parsed": parsed, "validation": validation}, indent=2, default=str))
+    return 0 if validation["status"] != "REJECTED" else 3
+
+
+def validate_financials(limit: int = 30) -> int:
+    """Live cross-source check (network): for current-quarter declared events,
+    fetch XBRL, NSE comparison and BSE snapshot independently into a COPY of the
+    store and report agreement. Nothing is published."""
+    import shutil
+    import tempfile
+    rows = []
+    with tempfile.TemporaryDirectory() as td:
+        tmp_events = Path(td) / "events"
+        shutil.copytree(EVENTS_DIR, tmp_events)
+        store = EventStore(tmp_events)
+        ctx = SourceContext(raw=RawCache(), log=FetchLogger())
+        integrity_pass(store)
+        events = [e for e in store.all() if dashboard_activity(e) and boolish(store.value(e, "results_released")) is True][:limit]
+        for event in events:
+            event["financialSnapshots"] = {}
+            try:
+                enrich_financials(event, store, ctx)
+            except Exception as exc:
+                event.setdefault("financialIntegrity", {})["error"] = f"{type(exc).__name__}: {exc}"
+            integ = event.get("financialIntegrity") or {}
+            for src, snap in (event.get("financialSnapshots") or {}).items():
+                v = snap.get("values") or {}
+                rows.append({
+                    "symbol": event.get("security", {}).get("symbol"), "eventId": event["eventId"], "source": src,
+                    "selected": src == integ.get("selectedSource"), "basis": snap.get("basis"),
+                    "revenueCr": v.get("revenue_cr"), "patCr": v.get("pat_cr"), "revYoY": v.get("revenue_yoy_pct"),
+                    "patTrend": v.get("pat_trend"), "status": (snap.get("validation") or {}).get("status"),
+                    "issues": (snap.get("validation") or {}).get("issues"), "concepts": snap.get("concepts"),
+                })
+            if not event.get("financialSnapshots"):
+                rows.append({"symbol": event.get("security", {}).get("symbol"), "eventId": event["eventId"],
+                             "source": None, "status": "NO_SNAPSHOT", "fetch": event.get("fetch")})
+    path = LOG_DIR / f"financial_validation_{now_ist().date().isoformat()}.json"
+    json_dump_atomic(path, {"generatedAt": iso_now(), "rows": rows})
+    print(f"{'SYMBOL':<14}{'SOURCE':<24}{'SEL':<5}{'BASIS':<14}{'REV CR':>10}{'PAT CR':>10}{'REV YOY':>9}  STATUS / ISSUES")
+    for r in rows:
+        print(f"{str(r.get('symbol') or ''):<14}{str(r.get('source') or '—'):<24}{('*' if r.get('selected') else ''):<5}"
+              f"{str(r.get('basis') or ''):<14}{str(r.get('revenueCr') if r.get('revenueCr') is not None else '—'):>10}"
+              f"{str(r.get('patCr') if r.get('patCr') is not None else '—'):>10}{str(r.get('revYoY') if r.get('revYoY') is not None else '—'):>9}"
+              f"  {r.get('status')} {','.join(r.get('issues') or [])}")
+    print(f"\nReport: {path.relative_to(ROOT)}")
+    return 0
+
+
+def run(*, skip_network: bool = False, force_publish: bool = False, approved_signature: str | None = None) -> int:
     EVENTS_DIR.mkdir(parents=True, exist_ok=True)
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -3867,6 +4772,31 @@ def run(*, skip_network: bool = False, force_publish: bool = False) -> int:
     migrated_intel = bootstrap_from_v1_intelligence(store) if migrated else 0
     print(f"Bootstrap migrated {migrated} v1 data rows; intelligence gaps filled on {migrated_intel} events")
 
+    # Pre-discovery integrity pass: deterministic over committed evidence, so
+    # its signature is stable between a blocked run and the approving run.
+    integrity_stats = integrity_pass(store)
+    signature = integrity_signature(integrity_stats["revocations"])
+    print_integrity_summary(integrity_stats, signature)
+    write_integrity_report(integrity_stats, signature)
+    # Revocations already written to the store by an earlier (blocked) run stay
+    # pending until a publish succeeds, so the approval signature is stable even
+    # if the event store was persisted between runs.
+    pending: dict[str, Any] = {}
+    if PENDING_INTEGRITY_PATH.exists():
+        try:
+            pending = json.loads(PENDING_INTEGRITY_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pending = {}
+    if pending.get("signature"):
+        if signature and signature != pending["signature"]:
+            merged = {r["eventId"]: r for r in (pending.get("revocations") or []) + integrity_stats["revocations"]}
+            integrity_stats["revocations"] = list(merged.values())
+            signature = integrity_signature(integrity_stats["revocations"])
+        elif not signature:
+            signature = pending["signature"]
+            integrity_stats["revocations"] = pending.get("revocations") or []
+        integrity_stats["revoked"] = len(integrity_stats["revocations"])
+
     discovery_stats = {"skipped": True, "errors": []}
     enrichment_stats = {"skipped": True, "errors": []}
     if not skip_network:
@@ -3874,6 +4804,9 @@ def run(*, skip_network: bool = False, force_publish: bool = False) -> int:
         print("Discovery:", json.dumps(discovery_stats, default=str))
         enrichment_stats = enrich_events(store, master, ctx)
         print("Enrichment:", json.dumps(enrichment_stats, default=str))
+        post = integrity_pass(store)
+        if post["revoked"] or post["postResultPurged"]:
+            print_integrity_summary(post, integrity_signature(post["revocations"]))
 
     score_stats = score_all(store)
     print("Scoring:", score_stats)
@@ -3882,11 +4815,24 @@ def run(*, skip_network: bool = False, force_publish: bool = False) -> int:
     health["bootstrapMigrated"] = migrated
     health["bootstrapIntelligenceFilled"] = migrated_intel
     health["scoreStats"] = score_stats
-    published, reasons = publish(store, health, force=force_publish)
+    health["integrity"] = {
+        "signature": signature,
+        "checked": integrity_stats["checked"],
+        "reverified": integrity_stats["reverified"],
+        "revoked": integrity_stats["revoked"],
+        "postResultPurged": integrity_stats["postResultPurged"],
+        "financialsApplied": integrity_stats["financialsApplied"],
+    }
+    published, reasons = publish(store, health, force=force_publish, approved_signature=approved_signature)
     if published:
+        if PENDING_INTEGRITY_PATH.exists():
+            PENDING_INTEGRITY_PATH.unlink()
         print("PUBLISHED data.json and intelligence.json")
         print(json.dumps(health, indent=2, default=str))
         return 0
+    if signature:
+        json_dump_atomic(PENDING_INTEGRITY_PATH, {"signature": signature, "since": iso_now(),
+                                                  "revocations": integrity_stats["revocations"]})
     print("PUBLISH BLOCKED — last known good files kept")
     for reason in reasons:
         print(" -", reason)
@@ -3898,10 +4844,25 @@ def main() -> int:
     parser.add_argument("--self-test", action="store_true", help="run deterministic unit-style checks")
     parser.add_argument("--skip-network", action="store_true", help="bootstrap/score/publish without external fetching")
     parser.add_argument("--force-publish", action="store_true", help="override quality gate (manual recovery only)")
+    parser.add_argument("--integrity-report", action="store_true",
+                        help="dry run: show which declarations the integrity pass would revoke and the approval signature")
+    parser.add_argument("--approve-baseline", metavar="SIGNATURE",
+                        help="publish even though declared counts drop, ONLY if the revocation set matches this signature")
+    parser.add_argument("--validate-financials", action="store_true",
+                        help="network: cross-check XBRL / NSE / BSE financials for live declared events (no publish)")
+    parser.add_argument("--validate-xbrl", metavar="PATH_OR_URL", help="parse a single XBRL file/URL and print the result")
+    parser.add_argument("--period", metavar="YYYY-MM-DD", help="period end for --validate-xbrl (default: live quarter)")
+    parser.add_argument("--limit", type=int, default=30, help="max events for --validate-financials")
     args = parser.parse_args()
     if args.self_test:
         return self_test()
-    return run(skip_network=args.skip_network, force_publish=args.force_publish)
+    if args.integrity_report:
+        return integrity_report()
+    if args.validate_xbrl:
+        return validate_xbrl_file(args.validate_xbrl, parse_date(args.period) or live_reporting_period())
+    if args.validate_financials:
+        return validate_financials(args.limit)
+    return run(skip_network=args.skip_network, force_publish=args.force_publish, approved_signature=args.approve_baseline)
 
 
 if __name__ == "__main__":
