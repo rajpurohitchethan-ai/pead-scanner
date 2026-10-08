@@ -194,6 +194,19 @@ class Concall(unittest.TestCase):
         self.assertEqual(s3["transcriptUrl"], "t")
         self.assertEqual(pp.concall_status([], date(2026, 10, 8), date(2026, 10, 9))["status"], "NONE_FOUND")
 
+    def test_early_notice_stays_pending_until_after_result(self):
+        # TCS-style: notice filed a week before the result, letter dated on the
+        # filing day, call date not readable -> pending until result + 2 days.
+        from datetime import datetime
+        early = {"filedAt": datetime(2026, 10, 1, 20), "text": "October 1, 2026. Intimation of earnings call", "url": "n"}
+        self.assertEqual(pp.call_date_from_text(early["text"], date(2026, 10, 1)), date(2026, 10, 1))
+        s = pp.concall_status([early], date(2026, 10, 8), date(2026, 10, 8))
+        self.assertEqual((s["status"], s["callDate"], s["pendingUntil"]), ("SCHEDULED", None, "2026-10-10"))
+        self.assertEqual(pp.concall_status([early], date(2026, 10, 8), date(2026, 10, 11))["status"], "DONE")
+        # Letter date plus the real call date: the later one wins.
+        both = "Date: 01-10-2026. Earnings call on October 8, 2026 at 7 pm"
+        self.assertEqual(pp.call_date_from_text(both, date(2026, 10, 1)), date(2026, 10, 8))
+
     def test_plan_waits_for_concall(self):
         x = {"sessions_since_reaction": 1, "reaction_close": 103, "ema10": 99, "ema21": 97, "ema63": 92}
         base = dict(released=True, reaction_traded=True, quality_ok=True, result_return=6, rvol=3, result_low=97, result_high=104)
@@ -256,6 +269,65 @@ class IntradayReaction(unittest.TestCase):
         self.assertEqual(x["reaction_window_sessions"], 2)
         self.assertEqual(x["sessions_since_reaction"], 1)
         self.assertEqual(x["chart"]["reactionIndex"], 40 - (len(f) - 75) if len(f) > 75 else 40)
+
+
+class DuplicateMergeTests(unittest.TestCase):
+    """2.5.2 showed 82 companies twice (NSE copy + BSE copy)."""
+
+    def _store(self):
+        d = tempfile.mkdtemp()
+        return p.EventStore(Path(d) / "events")
+
+    def _ev(self, st, sec, fields=None):
+        e = st.ensure_event(security=sec, period_end=date(2026, 9, 30))
+        for k, v in (fields or {}).items():
+            st.merge_field(e, k, v, source="TEST")
+        st.save(e)
+        return e
+
+    def test_symbol_vs_bse_code_copies_fold(self):
+        st = self._store()
+        self._ev(st, {"isin": "INE179A01014", "nseSymbol": "PGHH", "symbol": "PGHH", "name": "Procter & Gamble Hygiene and Health Care Limited", "sector": "Personal Care"})
+        self._ev(st, {"symbol": "PGHH", "bseSymbol": "PGHH", "bseCode": "500459", "name": "Procter & Gamble Hygiene and Health Care Ltd", "sector": "—"},
+                 {"last_price": 15000})
+        merges = p.merge_duplicate_events(st)
+        evs = st.all()
+        self.assertEqual((len(merges), len(evs)), (1, 1))
+        e = evs[0]
+        self.assertEqual(e["security"]["sector"], "Personal Care")      # placeholder did not overwrite
+        self.assertEqual(e["security"]["bseCode"], "500459")
+        self.assertEqual(st.value(e, "last_price"), 15000)
+        # Discovery under the old key reuses the survivor instead of re-creating it.
+        again = st.ensure_event(security={"bseCode": "500459", "symbol": "PGHH"}, period_end=date(2026, 9, 30))
+        self.assertEqual(again["eventId"], e["eventId"])
+        self.assertEqual(p.merge_duplicate_events(st), [])
+
+    def test_post_split_isin_folds_and_is_kept_as_alias(self):
+        st = self._store()
+        self._ev(st, {"isin": "INE690A01010", "nseSymbol": "TTKPRESTIG", "name": "TTK Prestige Limited"})
+        self._ev(st, {"isin": "INE690A01028", "bseSymbol": "TTKPRESTIG", "bseCode": "517506", "name": "TTK Prestige Ltd"})
+        p.merge_duplicate_events(st)
+        evs = st.all()
+        self.assertEqual(len(evs), 1)
+        self.assertEqual(evs[0]["security"]["altIsins"], ["INE690A01028"])
+        self.assertIn("INE690A01028|2026-09-30", evs[0]["mergedFrom"])
+
+    def test_different_companies_are_not_merged(self):
+        st = self._store()
+        self._ev(st, {"isin": "INE457A01014", "nseSymbol": "MAHABANK", "symbol": "ABAN", "name": "Bank of Maharashtra"})
+        self._ev(st, {"isin": "INE421A01028", "bseSymbol": "ABAN", "bseCode": "523204", "name": "Aban Offshore Ltd"})
+        self.assertEqual(p.merge_duplicate_events(st), [])
+        self.assertTrue(p.same_company({"name": "Kabra Extrusiontechnik Ltd"}, {"name": "Kabra Extrusion Technik Limited"}))
+        self.assertTrue(p.same_company({"name": "Dr Reddys Laboratories Ltd"}, {"name": "Dr. Reddy's Laboratories Limited"}))
+
+    def test_gate_discounts_duplicate_folds(self):
+        old = {"activeDashboardEvents": 379, "resultsFiled": 7, "liveQuarter": "Q2 FY27", "declaredCompletenessPct": 27}
+        new = {"activeDashboardEvents": 297, "resultsFiled": 7, "liveQuarter": "Q2 FY27", "declaredCompletenessPct": 27,
+               "integrity": {"signature": "abc", "duplicatesMerged": 82, "declaredMerged": 0}}
+        ok, reasons = p.quality_gate(new, old)
+        self.assertTrue(ok, reasons)
+        new["integrity"]["duplicatesMerged"] = 0
+        self.assertFalse(p.quality_gate(new, old)[0])     # a real drop still blocks
 
 
 if __name__ == "__main__":
