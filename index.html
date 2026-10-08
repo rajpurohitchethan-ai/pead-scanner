@@ -1,283 +1,219 @@
-<!DOCTYPE html>ji ko
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>PEAD Qualification Radar | Chethan's Multi-Gate Criteria Terminal</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PEAD Radar</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script>
-tailwind.config = {
-darkMode: 'class',
-theme: {
-extend: {
-fontFamily: {
-sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-mono: ['"JetBrains Mono"', 'monospace'],
-},
-colors: {
-dark: {
-950: '#06090E',
-900: '#0B0F17',
-850: '#0F1420',
-800: '#161D2E',
-750: '#1E273D',
-700: '#28334E',
-600: '#3B4868',
-}
-}
-}
-}
-}
-</script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-body { background-color: #06090E; color: #E2E8F0; font-family: 'Plus Jakarta Sans', sans-serif; }
-.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: #0B0F17; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #28334E; border-radius: 4px; }
-.hidden { display: none !important; }
-.card-active {
-border-color: #22c55e !important;
-background-color: #131c2e !important;
-box-shadow: 0 0 16px rgba(34, 197, 94, 0.22);
+:root{
+  --paper:#EEF1F5; --sheet:#FFFFFF; --sheet-2:#F5F7FA; --line:#D6DCE5; --line-2:#E6EAF0;
+  --ink:#15233F; --ink-2:#4A5874; --ink-3:#7A869C;
+  --gain:#0E7A5F; --gain-bg:#E3F3EE; --loss:#B42318; --loss-bg:#FBE9E7;
+  --act:#3B3FB6; --act-bg:#E8E9FA; --watch:#A86A12; --watch-bg:#FBF1DF;
+  --grid:#E3E8EF; --price:#15233F; --ema:#8A96AD;
+  --num:"IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --text:"Instrument Sans", system-ui, sans-serif;
+  color-scheme: light;
 }
-.tab-active {
-background-color: rgba(16, 185, 129, 0.15) !important;
-color: #6ee7b7 !important;
-border-color: rgba(16, 185, 129, 0.4) !important;
-box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
-font-weight: 700 !important;
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F1622; --sheet:#162133; --sheet-2:#1B283D; --line:#2A3A55; --line-2:#22314A;
+    --ink:#E7EDF7; --ink-2:#AAB6CB; --ink-3:#7F8CA4;
+    --gain:#3CC79F; --gain-bg:#12352D; --loss:#F07A6C; --loss-bg:#3A1D1D;
+    --act:#9EA2FF; --act-bg:#262A5A; --watch:#E6B25C; --watch-bg:#3A2D14;
+    --grid:#22314A; --price:#E7EDF7; --ema:#6F7D97; color-scheme: dark;
+  }
 }
-.btn-toggle-calc-active {
-background-color: rgba(245, 158, 11, 0.2) !important;
-border-color: rgba(245, 158, 11, 0.5) !important;
-color: #fbbf24 !important;
+:root[data-theme="dark"]{
+  --paper:#0F1622; --sheet:#162133; --sheet-2:#1B283D; --line:#2A3A55; --line-2:#22314A;
+  --ink:#E7EDF7; --ink-2:#AAB6CB; --ink-3:#7F8CA4;
+  --gain:#3CC79F; --gain-bg:#12352D; --loss:#F07A6C; --loss-bg:#3A1D1D;
+  --act:#9EA2FF; --act-bg:#262A5A; --watch:#E6B25C; --watch-bg:#3A2D14;
+  --grid:#22314A; --price:#E7EDF7; --ema:#6F7D97; color-scheme: dark;
 }
-.btn-toggle-rules-active {
-background-color: rgba(59, 130, 246, 0.2) !important;
-border-color: rgba(59, 130, 246, 0.5) !important;
-color: #93c5fd !important;
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--text)}
+a{color:var(--act)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--act);outline-offset:2px}
+.n{font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.wrap{max-width:1120px;margin:0 auto;padding:20px 16px 64px}
+
+/* Header */
+.mast{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.mast h1{margin:0;font-size:30px;line-height:1.1;font-weight:700;letter-spacing:-.02em}
+.mast h1 small{display:block;font-size:14px;font-weight:500;color:var(--ink-2);letter-spacing:0;margin-top:6px}
+.regime{max-width:420px;font-size:14px;color:var(--ink-2)}
+.regime b{color:var(--ink)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--ink-3)}
+.dot.on{background:var(--gain)}.dot.mixed{background:var(--watch)}.dot.off{background:var(--loss)}
+.season{margin:14px 0 4px;font-size:16px;color:var(--ink-2)}
+.season strong{color:var(--ink);font-weight:600}
+
+/* Tabs and controls */
+.tabs{display:flex;gap:4px;margin:18px 0 12px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:0;background:none;padding:9px 14px;border-radius:999px;color:var(--ink-2);font-weight:600;white-space:nowrap;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+.tab .c{font-family:var(--num);font-weight:500;opacity:.75;margin-left:5px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.controls input[type=search]{flex:1 1 200px;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sheet)}
+.controls select{padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--sheet)}
+.toggle{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sheet);cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--act);margin:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 14px}
+.chip{border:1px solid var(--line);background:var(--sheet);padding:5px 11px;border-radius:999px;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.chip[aria-pressed="true"]{border-color:var(--act);color:var(--act);background:var(--act-bg)}
+
+/* Sizing panel */
+.sizing{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:10px 12px;margin-bottom:14px;border:1px dashed var(--line);border-radius:10px;font-size:14px;color:var(--ink-2)}
+.sizing label{display:inline-flex;align-items:center;gap:6px}
+.sizing input{width:110px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--sheet)}
+.sizing input.sm{width:64px}
+
+/* Setup cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:14px}
+.card{position:relative;background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:16px 16px 14px 20px;overflow:hidden}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--line)}
+.card.s-go::before{background:var(--act)}
+.card.s-watch::before{background:var(--watch)}
+.card.s-no::before{background:var(--loss)}
+.card.s-pending::before{background:var(--ink-3)}
+.card.dim{opacity:.72}
+.head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.sym{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0}
+.co{color:var(--ink-2);font-size:14px;margin-top:1px}
+.score{text-align:right;flex:none}
+.score .v{font-family:var(--num);font-size:30px;font-weight:600;line-height:1}
+.score .l{font-size:12px;color:var(--ink-3)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px}
+.tag{font-size:12.5px;padding:3px 9px;border-radius:999px;background:var(--sheet-2);color:var(--ink-2);border:1px solid var(--line-2)}
+.tag.go{background:var(--act-bg);color:var(--act);border-color:transparent;font-weight:600}
+.tag.good{background:var(--gain-bg);color:var(--gain);border-color:transparent}
+.tag.bad{background:var(--loss-bg);color:var(--loss);border-color:transparent}
+.tag.warn{background:var(--watch-bg);color:var(--watch);border-color:transparent}
+.meta{font-size:13px;color:var(--ink-3);margin-top:6px}
+.meta.call{margin-top:3px}
+.meta.call a{font-weight:600;text-decoration:none;margin-left:4px}
+.chart{display:block;width:100%;height:auto;margin:12px 0 4px;border-radius:6px;background:var(--sheet-2)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink-3);margin-bottom:8px}
+.legend i{display:inline-block;width:14px;height:2px;vertical-align:4px;margin-right:5px;background:var(--ink-3)}
+.legend .le{background:var(--act)}.legend .ls{background:var(--loss)}.legend .lm{background:var(--ema);height:0;border-top:2px dashed var(--ema)}
+.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 16px;margin:10px 0}
+.fact h3{margin:0 0 3px;font-size:12.5px;font-weight:600;color:var(--ink-3)}
+.fact p{margin:0;font-size:14px;color:var(--ink-2)}
+.fact .big{font-family:var(--num);font-size:17px;font-weight:600;color:var(--ink);margin-right:8px}
+.up,.fact .big.up{color:var(--gain)} .down,.fact .big.down{color:var(--loss)}
+.plan{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px;background:var(--sheet-2)}
+.plan-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.plan-sig{font-weight:700}
+.plan-sig.go{color:var(--act)} .plan-sig.watch{color:var(--watch)} .plan-sig.no{color:var(--loss)} .plan-sig.pending{color:var(--ink-3)}
+.plan-why{font-size:13.5px;color:var(--ink-2);margin:4px 0 0}
+.levels{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.lv span{display:block;font-size:12px;color:var(--ink-3)}
+.lv b{font-family:var(--num);font-size:17px;font-weight:600}
+.lv.e b{color:var(--act)} .lv.s b{color:var(--loss)}
+.qty{font-size:13px;color:var(--ink-2);margin-top:8px}
+details.why{margin-top:10px}
+details.why summary{cursor:pointer;font-size:13.5px;color:var(--ink-2);font-weight:600}
+.why-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;font-size:13.5px}
+.why-cols h4{margin:0 0 4px;font-size:13px}
+.why-cols ul{margin:0;padding-left:18px;color:var(--ink-2)}
+.why-cols .pos h4{color:var(--gain)} .why-cols .neg h4{color:var(--loss)}
+.links{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:13.5px}
+.links a{text-decoration:none;font-weight:600}
+.links a:hover{text-decoration:underline}
+
+/* Ledger (watchlist) */
+.day{margin:18px 0 6px;font-weight:700;font-size:15px;display:flex;gap:10px;align-items:baseline}
+.day small{font-weight:500;color:var(--ink-3)}
+.ledger{background:var(--sheet);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.row{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.3fr) repeat(3,minmax(0,.8fr)) 20px;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--line-2);cursor:pointer}
+.row:first-child{border-top:0}
+.row:hover{background:var(--sheet-2)}
+.row .s{font-weight:700}
+.row .nm{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .k{font-size:11.5px;color:var(--ink-3)}
+.row .v{font-family:var(--num);font-weight:600}
+.row .chev{color:var(--ink-3);transition:transform .15s}
+.row[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.row-detail{padding:4px 12px 14px;border-top:1px dashed var(--line-2);background:var(--sheet-2)}
+.hdr{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.3fr) repeat(3,minmax(0,.8fr)) 20px;gap:10px;padding:0 12px 6px;font-size:12px;color:var(--ink-3)}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;background:var(--sheet);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-top:1px solid var(--line-2)}
+th{font-size:12.5px;color:var(--ink-3);font-weight:600;border-top:0;background:var(--sheet-2)}
+td.r,th.r{text-align:right}
+.bar{position:relative;height:8px;background:var(--line-2);border-radius:4px;min-width:90px}
+.bar i{position:absolute;top:0;bottom:0;border-radius:4px}
+.note{font-size:13.5px;color:var(--ink-2);max-width:70ch}
+.fact .note{font-size:12px;margin-top:4px}
+.install-bad{background:#7f1d1d;color:#fff;border-radius:10px;padding:10px 12px;margin:0 0 10px;font-size:14px;line-height:1.4}
+.health{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.hbox{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:12px}
+.hbox span{font-size:12.5px;color:var(--ink-3)}
+.hbox b{display:block;font-family:var(--num);font-size:22px;font-weight:600;margin-top:2px}
+.empty{background:var(--sheet);border:1px dashed var(--line);border-radius:14px;padding:28px 20px;text-align:center;color:var(--ink-2)}
+.empty button{margin-top:10px;border:1px solid var(--act);background:var(--act-bg);color:var(--act);padding:8px 14px;border-radius:999px;font-weight:600;cursor:pointer}
+.foot{margin-top:28px;font-size:12.5px;color:var(--ink-3);max-width:80ch}
+.theme-btn{border:1px solid var(--line);background:var(--sheet);border-radius:999px;padding:5px 11px;cursor:pointer;font-size:12.5px;margin-top:8px;color:var(--ink-2)}
+
+@media (max-width:640px){
+  .wrap{padding:14px 12px 56px}
+  .mast h1{font-size:24px}
+  .levels{grid-template-columns:repeat(2,1fr)}
+  .why-cols{grid-template-columns:1fr}
+  .row,.hdr{grid-template-columns:minmax(0,1.5fr) repeat(2,minmax(0,.9fr)) 16px}
+  .row .opt,.hdr .opt{display:none}
+  .hide-sm{display:none}
 }
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
-<body class="min-h-screen text-slate-200 antialiased selection:bg-emerald-500/30 selection:text-emerald-300 pb-16">
-<header class="border-b border-dark-750 bg-dark-900/95 backdrop-blur sticky top-0 z-40">
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-<div class="flex items-center space-x-3">
-<div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
-<svg class="w-5 h-5 text-dark-900 font-bold" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-<path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-</svg>
-</div>
-<div>
-<div class="flex items-center space-x-2">
-<span class="font-extrabold text-base tracking-tight text-white">PEAD QUALIFICATION RADAR</span>
-<span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Chethan's Radar</span>
-</div>
-<p class="text-[10px] sm:text-[11px] text-slate-400">Chethan's Multi-Gate Qualification Terminal &middot; Strict Criteria Verification</p>
-</div>
-</div>
-<div class="flex items-center space-x-2 sm:space-x-3">
-<button onclick="forceScanRefresh()" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 text-xs font-semibold transition active:scale-95">
-<svg id="refreshIcon" class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-<span class="hidden sm:inline">Reload Data</span>
-<span class="sm:hidden">Reload</span>
-</button>
-</div>
-</div>
-</header>
-<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
-<div class="rounded-2xl border border-dark-700 bg-gradient-to-r from-dark-850 via-dark-800 to-dark-850 p-4 sm:p-5 shadow-xl space-y-4">
-<div class="space-y-1.5">
-<div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
-<span class="text-[10px] sm:text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Chethan's PEAD Framework</span>
-<span class="text-[10px] sm:text-xs font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">NSE/BSE &middot; Mcap &gt; ₹1,000 Cr</span>
-</div>
-<h1 class="text-lg sm:text-2xl font-bold text-white tracking-tight">Is PEAD Qualified or Not? Multi-Gate Criteria Verification.</h1>
-<p class="text-xs sm:text-sm text-slate-300 leading-relaxed">No trade entries or assumptions before earnings. A stock qualifies for PEAD only when all 8 checks are satisfied: results released, Mcap &gt; ₹1,000 Cr, earnings acceleration, quality, cash flow, surprise, post-result price/volume confirmation and liquidity. A pre-result run-up above 15% flags the stock as priced in.</p>
-</div>
-<div class="bg-dark-900/90 rounded-xl p-3.5 border border-dark-700 text-xs font-mono space-y-1.5">
-<div class="flex items-center justify-between pb-1 border-b border-dark-750">
-<span class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">LATEST SCREENING ATTEMPT</span>
-<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">Live from GitHub scan</span>
-</div>
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] pt-1">
-<div><span class="text-slate-500 block text-[10px]">LAST SCAN</span><span class="font-bold text-white" id="lastScanText">loading…</span></div>
-<div><span class="text-slate-500 block text-[10px]">NEXT SCAN</span><span class="text-emerald-400 font-bold">hourly, weekdays</span></div>
-<div><span class="text-slate-500 block text-[10px]">PRICE AT</span><span class="text-slate-300">loading…</span></div>
-<div><span class="text-slate-500 block text-[10px]">MODE</span><span class="text-emerald-300 font-semibold">GitHub hourly</span></div>
-</div>
-</div>
-</div>
-<div>
-<div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-<span>Filter by PEAD Criteria Qualification:</span>
-<span class="text-emerald-400 font-mono text-[10px]">Tap to filter</span>
-</div>
-<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-<button onclick="selectStageTab('ALL', true)" id="cardAll" class="text-left bg-dark-850 border border-dark-750 rounded-xl p-3.5 sm:p-4 transition hover:border-slate-500/50 active:scale-95 cursor-pointer">
-<div class="flex items-center justify-between text-slate-400 mb-1"><span class="text-[11px] font-semibold uppercase tracking-wider">All Monitored</span><span class="w-2 h-2 rounded-full bg-slate-400"></span></div>
-<div class="text-2xl font-extrabold font-mono text-white">0</div>
-<div class="text-[11px] text-slate-400 mt-1">Full universe &rarr;</div>
-</button>
-<button onclick="selectStageTab('Post-results', true)" id="cardPostResults" class="text-left bg-dark-850 border border-dark-750 rounded-xl p-3.5 sm:p-4 transition hover:border-amber-500/50 active:scale-95 cursor-pointer">
-<div class="flex items-center justify-between text-slate-400 mb-1"><span class="text-[11px] font-semibold uppercase tracking-wider">In Review</span><span class="w-2 h-2 rounded-full bg-amber-400"></span></div>
-<div class="text-2xl font-extrabold font-mono text-amber-300">0</div>
-<div class="text-[11px] text-amber-400/90 mt-1">&rarr;</div>
-</button>
-<button onclick="selectStageTab('Upcoming', true)" id="cardUpcoming" class="text-left bg-dark-850 border border-dark-750 rounded-xl p-3.5 sm:p-4 transition hover:border-blue-500/50 active:scale-95 cursor-pointer">
-<div class="flex items-center justify-between text-slate-400 mb-1"><span class="text-[11px] font-semibold uppercase tracking-wider">Awaiting Results</span><span class="w-2 h-2 rounded-full bg-blue-400"></span></div>
-<div class="text-2xl font-extrabold font-mono text-blue-300">0</div>
-<div class="text-[11px] text-slate-400 mt-1">&rarr;</div>
-</button>
-<button onclick="selectStageTab('Caution', true)" id="cardCaution" class="text-left bg-dark-850 border border-dark-750 rounded-xl p-3.5 sm:p-4 transition hover:border-rose-500/50 active:scale-95 cursor-pointer">
-<div class="flex items-center justify-between text-slate-400 mb-1"><span class="text-[11px] font-semibold uppercase tracking-wider">Caution / Priced In</span><span class="w-2 h-2 rounded-full bg-rose-400"></span></div>
-<div class="text-2xl font-extrabold font-mono text-rose-300">0</div>
-<div class="text-[11px] text-rose-400/90 mt-1">&rarr;</div>
-</button>
-<button onclick="selectStageTab('Qualified', true)" id="cardQualified" class="text-left bg-dark-850 border border-dark-750 rounded-xl p-3.5 sm:p-4 transition hover:border-emerald-500/50 active:scale-95 col-span-2 sm:col-span-1 cursor-pointer">
-<div class="flex items-center justify-between text-slate-400 mb-1"><span class="text-[11px] font-semibold uppercase tracking-wider">Fully Qualified</span><span class="w-2 h-2 rounded-full bg-emerald-400"></span></div>
-<div class="text-2xl font-extrabold font-mono text-emerald-400">0</div>
-<div class="text-[11px] text-slate-400 mt-1">All 8 checks met &rarr;</div>
-</button>
-</div>
-</div>
-<div class="flex flex-wrap items-center justify-between border-b border-dark-750 pb-3 gap-2">
-<div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
-<button type="button" onclick="selectStageTab('ALL', true)" id="tabBtnAll" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-dark-800 text-slate-300 border border-dark-700 hover:text-white hover:bg-dark-750 transition cursor-pointer">All Stocks (0)</button>
-<button type="button" onclick="selectStageTab('Upcoming', true)" id="tabBtnUpcoming" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-dark-800 text-slate-300 border border-dark-700 hover:text-white hover:bg-dark-750 transition cursor-pointer">Awaiting Results (0)</button>
-<button type="button" onclick="selectStageTab('Post-results', true)" id="tabBtnPost" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-dark-800 text-slate-300 border border-dark-700 hover:text-white hover:bg-dark-750 transition cursor-pointer">Results Declared (0)</button>
-<button type="button" onclick="selectStageTab('Caution', true)" id="tabBtnCaution" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-dark-800 text-slate-300 border border-dark-700 hover:text-white hover:bg-dark-750 transition cursor-pointer">Caution / Priced In (0)</button>
-<button type="button" onclick="selectStageTab('Qualified', true)" id="tabBtnQualified" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-dark-800 text-slate-300 border border-dark-700 hover:text-white hover:bg-dark-750 transition cursor-pointer">Fully Qualified (0)</button>
-<button type="button" onclick="toggleSection('rulesSection')" id="tabBtnRules" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-dark-800 text-blue-300 border border-blue-500/30 hover:bg-dark-750 transition flex items-center space-x-1 cursor-pointer"><span>📋 6-Gate Criteria Guide</span></button>
-<button type="button" onclick="toggleSection('sizingSection')" id="tabBtnCalculator" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-dark-800 text-amber-300 border border-amber-500/30 hover:bg-dark-750 transition flex items-center space-x-1 cursor-pointer"><span>🧮 Sizing Calculator</span></button>
-</div>
-<div class="w-full sm:w-auto">
-<input type="text" id="searchInput" placeholder="Search symbol or sector..." onkeyup="filterRadarTable()" class="w-full sm:w-56 bg-dark-900 border border-dark-750 rounded-xl px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
-</div>
-</div>
-<div id="activeTabBanner" class="p-3 rounded-xl bg-dark-850 border border-dark-750 flex items-center justify-between text-xs">
-<div class="flex items-center space-x-2"><span class="w-2 h-2 rounded-full bg-emerald-400"></span><span class="font-bold text-white" id="currentViewTitle">Loading…</span></div>
-<span class="text-slate-400 text-[11px] font-mono" id="currentViewCount">0 records</span>
-</div>
-<div class="bg-dark-850 border border-dark-750 rounded-2xl overflow-hidden shadow-xl" id="radarTableContainer">
-<div class="overflow-x-auto custom-scrollbar">
-<table class="w-full text-left border-collapse text-xs" id="stocksTable">
-<thead>
-<tr class="border-b border-dark-750 bg-dark-900/80 text-slate-400 font-mono text-[11px] uppercase tracking-wider">
-<th class="py-3.5 px-4">Company &amp; Market Cap</th>
-<th class="py-3.5 px-4">Earnings Period / Status</th>
-<th class="py-3.5 px-4">Results Declared</th>
-<th class="py-3.5 px-4">Mcap &gt; ₹1k Cr</th>
-<th class="py-3.5 px-4">Revenue / PAT Acceleration</th>
-<th class="py-3.5 px-4">Earnings Quality</th>
-<th class="py-3.5 px-4">Cash Flow / Surprise</th>
-<th class="py-3.5 px-4 text-center">PEAD Status</th>
-<th class="py-3.5 px-4 text-center">8-Point Score</th>
-<th class="py-3.5 px-4 text-right">Detailed Checklist</th>
-</tr>
-</thead>
-<tbody class="divide-y divide-dark-750/70" id="stocksTableBody"></tbody>
-</table>
-</div>
-<div id="emptyViewMessage" class="hidden p-8 text-center text-slate-400 text-xs font-mono space-y-1">
-<div class="text-sm font-bold text-slate-300">No stocks in this criteria view.</div>
-<div class="text-[11px] text-slate-500" id="emptyViewDesc">Candidates enter 'Fully Qualified' strictly after earnings release and all 8 checks.</div>
-</div>
-</div>
-<div id="sizingSection" class="hidden bg-dark-850 border border-dark-750 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
-<div class="flex items-center justify-between border-b border-dark-750 pb-3">
-<div>
-<h2 class="text-sm font-bold text-white uppercase tracking-wider font-mono">Chethan's Position Sizing &amp; Target Calculator</h2>
-<p class="text-xs text-slate-400 mt-0.5">Entry, Stop Loss, Position Size (1% portfolio risk cap), and Targets</p>
-</div>
-<button onclick="toggleSection('sizingSection')" class="text-slate-400 hover:text-white text-xs">&times; Close</button>
-</div>
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-<div><label class="text-[11px] font-semibold text-slate-400 uppercase">Total Portfolio Capital (₹)</label>
-<input type="number" id="calcPortfolio" value="1000000" oninput="calculateTrade()" class="w-full bg-dark-900 border border-dark-750 rounded-xl p-2 text-xs font-mono text-white mt-1 focus:outline-none focus:border-emerald-500" /></div>
-<div><label class="text-[11px] font-semibold text-slate-400 uppercase">Result-Day High / Entry (₹)</label>
-<input type="number" id="calcEntry" value="2650" oninput="calculateTrade()" class="w-full bg-dark-900 border border-dark-750 rounded-xl p-2 text-xs font-mono text-white mt-1 focus:outline-none focus:border-emerald-500" /></div>
-<div><label class="text-[11px] font-semibold text-slate-400 uppercase">Reaction Low / Stop Loss (₹)</label>
-<input type="number" id="calcSL" value="2540" oninput="calculateTrade()" class="w-full bg-dark-900 border border-dark-750 rounded-xl p-2 text-xs font-mono text-white mt-1 focus:outline-none focus:border-emerald-500" /></div>
-</div>
-<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1 text-xs font-mono">
-<div class="p-3 rounded-xl bg-dark-900 border border-dark-750"><div class="text-[10px] text-slate-400 uppercase">Trade Risk %</div><div id="resRiskPct" class="text-base font-bold text-emerald-400 mt-0.5">4.15%</div></div>
-<div class="p-3 rounded-xl bg-dark-900 border border-dark-750"><div class="text-[10px] text-slate-400 uppercase">Risk per Share</div><div id="resRiskPerShare" class="text-base font-bold text-white mt-0.5">₹110.00</div></div>
-<div class="p-3 rounded-xl bg-dark-900 border border-dark-750"><div class="text-[10px] text-slate-400 uppercase">Max Qty (1% Risk)</div><div id="resMaxShares" class="text-base font-bold text-blue-400 mt-0.5">90 Shares</div></div>
-<div class="p-3 rounded-xl bg-dark-900 border border-dark-750"><div class="text-[10px] text-slate-400 uppercase">Target 1 (1.5R)</div><div id="resTarget1" class="text-base font-bold text-amber-300 mt-0.5">₹2,815.00</div></div>
-<div class="p-3 rounded-xl bg-dark-900 border border-dark-750 col-span-2 sm:col-span-1"><div class="text-[10px] text-slate-400 uppercase">Target 2 (J-Curve 2.5R)</div><div id="resTarget2" class="text-base font-bold text-purple-400 mt-0.5">₹2,925.00</div></div>
-</div>
-</div>
-<div id="rulesSection" class="hidden bg-dark-850 border border-dark-750 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
-<div class="flex items-center justify-between border-b border-dark-750 pb-3">
-<h2 class="text-sm font-bold text-white uppercase tracking-wider font-mono">Chethan's 6-Gate Entry &amp; Exit Rules</h2>
-<button onclick="toggleSection('rulesSection')" class="text-slate-400 hover:text-white text-xs">&times; Close</button>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-<div class="p-3.5 rounded-xl bg-dark-900 border border-dark-750 space-y-1.5"><div class="text-[10px] font-mono uppercase text-emerald-400 font-bold">1. Eligibility</div><h3 class="text-xs font-bold text-white">Market Cap &amp; Timing</h3><p class="text-[11px] text-slate-300 leading-relaxed">Mcap &gt; ₹1,000 Cr on NSE/BSE. Zero pre-result entries. Pre-move test: flat base passes; rally &gt;15% triggers "Priced In" wait.</p></div>
-<div class="p-3.5 rounded-xl bg-dark-900 border border-dark-750 space-y-1.5"><div class="text-[10px] font-mono uppercase text-blue-400 font-bold">2. When to Enter</div><h3 class="text-xs font-bold text-white">RDH Reclaim + 2x Volume</h3><p class="text-[11px] text-slate-300 leading-relaxed">Enter only on a decisive close/reclaim above the Result-Day High (RDH) on volume &gt;2x the 20-DMA volume.</p></div>
-<div class="p-3.5 rounded-xl bg-dark-900 border border-dark-750 space-y-1.5"><div class="text-[10px] font-mono uppercase text-rose-400 font-bold">3. Stop Loss (SL)</div><h3 class="text-xs font-bold text-white">Reaction Day Low (&le;4-5%)</h3><p class="text-[11px] text-slate-300 leading-relaxed">Hard SL anchored at the post-result reaction candle low. Risk capped: (Entry &minus; SL) / Entry &times; 100 &le; 4% to 5%.</p></div>
-<div class="p-3.5 rounded-xl bg-dark-900 border border-dark-750 space-y-1.5"><div class="text-[10px] font-mono uppercase text-purple-400 font-bold">4. Trailing SL (TSL)</div><h3 class="text-xs font-bold text-white">10-EMA &amp; 20-DMA Trail</h3><p class="text-[11px] text-slate-300 leading-relaxed">Move SL to Breakeven at +1R (+5% gain). Trail tactical swings on the 10-EMA. Trail multi-quarter J-curves along the 20-DMA.</p></div>
-<div class="p-3.5 rounded-xl bg-dark-900 border border-dark-750 space-y-1.5"><div class="text-[10px] font-mono uppercase text-amber-400 font-bold">5. How Much to Put</div><h3 class="text-xs font-bold text-white">Allocation Ladder (10% &rarr; 30%)</h3><p class="text-[11px] text-slate-300 leading-relaxed">0% while unconfirmed; 10% on initial RDH breakout; 20% &amp; 30% only as secondary consolidation bases validate. Max 1% portfolio risk.</p></div>
-<div class="p-3.5 rounded-xl bg-dark-900 border border-dark-750 space-y-1.5"><div class="text-[10px] font-mono uppercase text-teal-400 font-bold">6. Sector Tailwind</div><h3 class="text-xs font-bold text-white">Above 10, 20, 50 &amp; 200 DMA</h3><p class="text-[11px] text-slate-300 leading-relaxed">Tailwind awarded strictly when sector index is above 10, 20, 50, and 200 DMA. Otherwise Neutral / Unrated.</p></div>
-</div>
-</div>
+<body>
+<main class="wrap">
+  <header class="mast">
+    <h1>PEAD radar<small id="sub">Loading results season…</small></h1>
+    <div class="regime"><div id="regime"></div><button class="theme-btn" id="theme" type="button">Dark mode</button></div>
+  </header>
+  <p class="season" id="season"></p>
+
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" data-tab="setups" aria-selected="true">Declared results<span class="c" id="c-setups"></span></button>
+    <button class="tab" role="tab" data-tab="watch" aria-selected="false">Upcoming watchlist<span class="c" id="c-watch"></span></button>
+    <button class="tab" role="tab" data-tab="sectors" aria-selected="false">Sectors<span class="c" id="c-sectors"></span></button>
+    <button class="tab" role="tab" data-tab="score" aria-selected="false">Scorecard</button>
+    <button class="tab" role="tab" data-tab="health" aria-selected="false">Data health</button>
+  </nav>
+
+  <div class="controls" id="controls">
+    <input type="search" id="q" placeholder="Search symbol, company or sector" aria-label="Search">
+    <label class="toggle"><input type="checkbox" id="liquid" checked> Tradeable only</label>
+    <select id="sort" aria-label="Sort by">
+      <option value="conviction">Sort: conviction</option>
+      <option value="date">Sort: result date</option>
+      <option value="reaction">Sort: reaction day</option>
+      <option value="since">Sort: move since result</option>
+      <option value="runup">Sort: 20-day run-up</option>
+      <option value="distance">Sort: distance to entry</option>
+    </select>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="sizing" id="sizing">
+    <span>Position size for</span>
+    <label>capital ₹ <input class="n" id="cap" type="number" min="0" step="10000" value="1000000"></label>
+    <label>risk per trade <input class="n sm" id="risk" type="number" min="0.1" max="5" step="0.1" value="1">%</label>
+  </div>
+
+  <section id="view" aria-live="polite"></section>
+
+  <p class="foot" id="foot">A mechanical screen, not advice. Levels appear only when a rule-based setup exists; missing data shows as —, never as zero.</p>
 </main>
-<div id="stockModal" style="display: none;" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-<div class="bg-dark-850 border border-dark-700 rounded-2xl max-w-xl w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
-<div class="flex items-center justify-between border-b border-dark-750 pb-3">
-<div>
-<div class="flex items-center space-x-2">
-<span id="mSymbol" class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">SYMBOL</span>
-<span id="mStage" class="text-xs text-slate-400 font-mono">Stage</span>
-</div>
-<h3 id="mName" class="text-lg font-bold text-white mt-1">Company Name</h3>
-<p id="mSector" class="text-xs text-slate-400">Sector</p>
-</div>
-<button onclick="closeModal()" class="w-8 h-8 rounded-lg bg-dark-750 hover:bg-dark-700 text-slate-300 flex items-center justify-center transition">&times;</button>
-</div>
-<div class="space-y-4 text-xs">
-<div id="mVerdictBanner" class="p-3.5 rounded-xl border font-mono flex items-center justify-between">
-<div>
-<div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">PEAD Qualification Verdict</div>
-<div id="mVerdictTitle" class="text-sm font-extrabold text-white mt-0.5">IN REVIEW</div>
-</div>
-<div class="text-right"><span id="mScoreBadge" class="px-2.5 py-1 rounded-full text-xs font-bold border">0 of 8</span></div>
-</div>
-<div class="space-y-3">
-<div class="text-[11px] font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center justify-between border-b border-dark-750 pb-1.5">
-<span>Chethan's 8-Point PEAD Qualification Checklist</span>
-<span class="text-amber-400 font-mono text-[10px]">All 8 Must Be Satisfied</span>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] font-mono" id="mChecklistGrid"></div>
-</div>
-<div class="space-y-2.5 bg-dark-900/80 rounded-xl p-3.5 border border-dark-750 text-xs">
-<div class="flex items-center justify-between border-b border-dark-750 pb-1.5">
-<span class="font-bold text-slate-200 font-mono text-[11px] uppercase tracking-wider">Earnings Surprise, Expectations &amp; Thesis Review</span>
-<span class="text-slate-500 text-[10px] font-mono">DATED EVIDENCE TRACKER</span>
-</div>
-<p class="text-[11px] text-slate-400 leading-relaxed">Review results, commentary and conference calls together. A pre-result run-up can signal priced-in expectations; absence of a run-up does not prove a surprise. A 52-week high is a discovery lead, not an entry trigger.</p>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px] pt-1" id="mThesisGrid"></div>
-</div>
-<div class="p-3 bg-dark-900 rounded-xl border border-dark-750 space-y-1">
-<div class="text-[10px] font-mono text-slate-400 uppercase font-semibold">Official Evidence &amp; Criteria Verification Notes</div>
-<div id="mEvidence" class="text-slate-200 leading-relaxed font-mono text-[11px]">Evidence notes...</div>
-</div>
-<div class="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 space-y-1 text-slate-300 text-[11px]">
-<div class="text-[10px] font-mono uppercase text-blue-400 font-bold">Why Pre-Earnings Stocks Cannot Be Qualified:</div>
-<p class="leading-relaxed">PEAD stands for <em>Post-Earnings Announcement Drift</em>. Entering or declaring qualification prior to results is speculative anticipation. A stock only qualifies when the earnings print is strong and institutional volume reclaims the Result-Day High.</p>
-</div>
-</div>
-<div class="flex items-center justify-between pt-2 border-t border-dark-750">
-<button type="button" onclick="loadStockInCalculator()" id="mCalcBtn" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer"><span>🧮 Load in Position Calculator</span></button>
-<button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-dark-750 hover:bg-dark-700 text-xs font-semibold text-white transition cursor-pointer">Close</button>
-</div>
-</div>
-</div>
-<script src="app.js?v=20"></script>
+<script src="intelligence.js?v=30"></script>
 </body>
 </html>
-<!-- END OF FILE -->
