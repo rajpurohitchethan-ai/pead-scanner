@@ -26,6 +26,7 @@
     ENTRY_BREAKOUT: ['Breakout entry triggered', 'go'], NEAR_ENTRY: ['Near entry', 'go'],
     PULLBACK_ZONE: ['In pullback zone', 'go'], WATCH: ['Watching the base', 'watch'],
     EXTENDED: ['Extended, wait for pullback', 'watch'], RISK_TOO_WIDE: ['Stop too wide', 'watch'],
+    WAIT_CONCALL: ['Waiting for concall', 'watch'],
     NO_ENTRY: ['No entry', 'no'], DATA_PENDING: ['Data pending', 'pending'],
     WAIT_REACTION: ['Awaiting reaction session', 'pending'], WAIT_RESULT: ['Awaiting result', 'pending'],
   };
@@ -86,11 +87,22 @@
     const e = num(plan.entry), s = num(plan.sl);
     const cap = num(store.get('cap', 1000000)), risk = num(store.get('risk', 1));
     if (e === null || s === null || e <= s || !cap || !risk) return '';
-    const atRisk = cap * risk / 100;
-    const qty = Math.floor(atRisk / (e - s));
+    const frac = num(plan.sizeFraction) ?? 1;
+    const fullQty = Math.floor(cap * risk / 100 / (e - s));
+    const qty = Math.floor(fullQty * frac);
     if (qty < 1) return '<p class="qty">Risk budget is smaller than one share’s stop distance.</p>';
-    const used = qty * e;
-    return `<p class="qty">${qty.toLocaleString('en-IN')} shares risks ${inr(atRisk, 0)} and uses ${inr(used, 0)} (${(used / cap * 100).toFixed(0)}% of capital).</p>`;
+    const atRisk = qty * (e - s), used = qty * e;
+    const lead = frac < 1 ? `Starter: ${qty.toLocaleString('en-IN')} of ${fullQty.toLocaleString('en-IN')} shares` : `${qty.toLocaleString('en-IN')} shares`;
+    return `<p class="qty">${lead} risks ${inr(atRisk, 0)} and uses ${inr(used, 0)} (${(used / cap * 100).toFixed(0)}% of capital).</p>`;
+  }
+
+  // ---------- concall ----------
+  function concallLine(c) {
+    if (!c) return '';
+    const link = (url, label) => url ? ` <a href="${esc(url)}" target="_blank" rel="noopener">${label}</a>` : '';
+    if (c.status === 'SCHEDULED') return `<p class="meta call">Concall ${c.callDate ? dt(c.callDate) : 'announced, date in filing'}.${link(c.noticeUrl, 'Notice')}</p>`;
+    if (c.status === 'DONE') return `<p class="meta call">Concall held${c.callDate ? ' ' + dt(c.callDate) : ''}.${link(c.transcriptUrl, 'Transcript')}${link(c.audioUrl, 'Audio')}${!c.transcriptUrl && !c.audioUrl ? link(c.noticeUrl, 'Notice') : ''}</p>`;
+    return '<p class="meta call">No concall filed yet.</p>';
   }
 
   // ---------- setup card ----------
@@ -116,7 +128,7 @@
           <p><span class="big ${cls(x1.return_since_result_pct)}">${pct(x1.return_since_result_pct)}</span>since result${x1.sessions_since_reaction != null ? `, ${x1.sessions_since_reaction} sessions` : ''}</p></div>
         <div class="fact"><h3>Expectations before</h3><p><span class="big ${cls(pc.pre20dPct)}">${pct(pc.pre20dPct)}</span>20-day run-up</p>
           <p><span class="big">${pct(pc.distanceFrom52wHighPct)}</span>from 52-week high</p></div>
-        <div class="fact"><h3>Valuation</h3><p><span class="big">${num(v.pe) !== null ? num(v.pe).toFixed(1) + 'x' : '—'}</span>P/E${num(v.sectorPe) !== null ? ` vs sector ${num(v.sectorPe).toFixed(1)}x` : ''}</p>
+        <div class="fact"><h3>Valuation</h3><p><span class="big">${num(v.pe) !== null ? num(v.pe).toFixed(1) + 'x' : '—'}</span>P/E${num(v.sectorPe) !== null && Math.abs(num(v.sectorPe) - (num(v.pe) ?? 0)) >= 0.05 ? ` vs sector ${num(v.sectorPe).toFixed(1)}x` : ''}</p>
           <p><span class="big">${num(v.roe) !== null ? num(v.roe).toFixed(1) + '%' : '—'}</span>ROE${num(it.marketCapCr) !== null ? `, market cap ${cr(it.marketCapCr)}` : ''}</p></div>
       </div>`;
     const lv = (label, val, k = '') => `<div class="lv ${k}"><span>${label}</span><b>${val}</b></div>`;
@@ -132,10 +144,11 @@
       <div class="head"><div><h2 class="sym">${esc(it.symbol)}</h2><div class="co">${esc(it.name)}</div></div>
         <div class="score"><div class="v">${num(it.convictionScore) ?? '—'}</div><div class="l">conviction</div></div></div>
       <div class="tags">${tags.join('')}</div>
-      <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${dt(it.reactionSession)}` : ''}${num(pc.lastClose) !== null ? `, last ${inr(pc.lastClose)}` : ''}</div>
+      <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? dt(it.reactionWindowStart) + '–' : ''}${dt(it.reactionSession)}` : ''}${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? ' (filed in market hours)' : ''}${num(pc.lastClose) !== null ? `, last ${inr(pc.lastClose)}` : ''}</div>
+      ${concallLine(p.concall)}
       ${chart(it)}
       ${facts}
-      <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
+      <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}${plan.stage === 'STARTER' && num(plan.entry) !== null ? ' <span class="tag warn">Starter, 1/3 size</span>' : plan.stage === 'FULL' && num(plan.entry) !== null ? ' <span class="tag go">Full size</span>' : ''}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
         <p class="plan-why">${esc(plan.why || 'Plan not computed yet.')}</p>${levels}</div>
       ${(reasons.length || risks.length) ? `<details class="why"><summary>Why it scores ${num(it.convictionScore) ?? '—'}</summary><div class="why-cols">
         <div class="pos"><h4>Supporting</h4><ul>${reasons.map(r => `<li>${esc(r)}</li>`).join('') || '<li>Nothing verified yet.</li>'}</ul></div>
@@ -222,6 +235,11 @@
     return `<p class="note">${esc(sc.metric)}. This checks the core idea behind the buckets: did stocks with a strong Q1 reaction keep drifting? It fills in as more results are tracked; treat small samples as anecdotes.</p>
       <table><thead><tr><th>Group</th><th class="r">Stocks</th><th class="r">Average</th><th class="r">Median</th><th class="r">Positive</th></tr></thead><tbody>
       ${sc.rows.map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n ${cls(r.avg)}">${pct(r.avg)}</td><td class="r n ${cls(r.median)}">${pct(r.median)}</td><td class="r n">${num(r.winRate) === null ? '—' : num(r.winRate).toFixed(0) + '%'}</td></tr>`).join('')}
+      </tbody></table>
+      <h2 class="day">Entry timing: on the result vs after the concall</h2>
+      <p class="note">Every triggered entry is recorded once: the starter taken before the call, and the full entry after it (or when no call is held). Returns run to today, or to the stop if it was hit.</p>
+      <table><thead><tr><th>Entry</th><th class="r">Trades</th><th class="r">Average</th><th class="r">Median</th><th class="r">Positive</th><th class="r">Stopped</th></tr></thead><tbody>
+      ${(sc.timing || []).map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n ${cls(r.avg)}">${pct(r.avg)}</td><td class="r n ${cls(r.median)}">${pct(r.median)}</td><td class="r n">${num(r.winRate) === null ? '—' : num(r.winRate).toFixed(0) + '%'}</td><td class="r n">${r.stopped ?? 0}</td></tr>`).join('')}
       </tbody></table>`;
   }
 
