@@ -194,6 +194,13 @@ class Concall(unittest.TestCase):
         self.assertEqual(s3["transcriptUrl"], "t")
         self.assertEqual(pp.concall_status([], date(2026, 10, 8), date(2026, 10, 9))["status"], "NONE_FOUND")
 
+    def test_recheck_stored_held_verdict(self):
+        old = {"status": "DONE", "callDate": None, "noticeUrl": "n", "transcriptUrl": None, "audioUrl": None}
+        self.assertEqual(pp.recheck_concall(old, date(2026, 10, 8), date(2026, 10, 8))["status"], "SCHEDULED")
+        self.assertEqual(pp.recheck_concall(old, date(2026, 10, 8), date(2026, 10, 11))["status"], "DONE")
+        proven = old | {"transcriptUrl": "t"}
+        self.assertEqual(pp.recheck_concall(proven, date(2026, 10, 8), date(2026, 10, 8))["status"], "DONE")
+
     def test_early_notice_stays_pending_until_after_result(self):
         # TCS-style: notice filed a week before the result, letter dated on the
         # filing day, call date not readable -> pending until result + 2 days.
@@ -328,6 +335,105 @@ class DuplicateMergeTests(unittest.TestCase):
         self.assertTrue(ok, reasons)
         new["integrity"]["duplicatesMerged"] = 0
         self.assertFalse(p.quality_gate(new, old)[0])     # a real drop still blocks
+
+
+class LookupIdentityTests(unittest.TestCase):
+    ROWS = [{"symbol": "GUJALKALI", "companyName": "Gujarat Alkalies and Chemicals Limited"},
+            {"symbol": "TUTIALKA", "companyName": "Tuticorin Alkali Chemicals"}]
+
+    def test_fuzzy_first_row_is_rejected(self):
+        self.assertIsNone(p.pick_lookup_row(self.ROWS, "ALKALI", "Alkali Metals Ltd"))
+        rows = [{"symbol": "SWARAJENG", "companyName": "Swaraj Engines Limited"},
+                {"symbol": "SWARAJ", "companyName": "Swaraj Suiting Limited"}]
+        self.assertEqual(p.pick_lookup_row(rows, "SWARAJ")["symbol"], "SWARAJ")
+        self.assertEqual(p.pick_lookup_row(rows, "SWRJ", "Swaraj Engines Ltd")["symbol"], "SWARAJENG")
+
+    def test_repair_strips_wrong_company_data(self):
+        root = Path(tempfile.mkdtemp())
+        st = p.EventStore(root / "events")
+        raw = root / "raw"
+        (raw / "nse" / "NSE_ALKALI_2026-09-30").mkdir(parents=True)
+        (raw / "nse" / "NSE_ALKALI_2026-09-30" / "lookup-1.json").write_text(json.dumps({"data": self.ROWS}))
+        master = p.SymbolMaster(root / "master" / "symbols.json")
+        master.data["securities"]["NSE:ALKALI"] = {"symbol": "ALKALI", "bseCode": "533029", "name": "Alkali Metals Ltd"}
+        e = st.ensure_event(security={"symbol": "ALKALI", "bseSymbol": "ALKALI", "bseCode": "533029",
+                                      "nseSymbol": "GUJALKALI", "name": "Gujarat Alkalies and Chemicals Limited"},
+                            period_end=date(2026, 9, 30))
+        st.merge_field(e, "last_price", 596.65, source="NSE_PRICE")
+        st.merge_field(e, "result_date", "2026-10-12", source="BSE_RESULT_ANNOUNCEMENT")
+        st.save(e)
+        fixed = p.repair_lookup_mismatches(st, master, raw)
+        self.assertEqual(len(fixed), 1)
+        ev = st.all()[0]
+        self.assertNotIn("nseSymbol", ev["security"])
+        self.assertEqual(ev["security"]["name"], "Alkali Metals Ltd")
+        self.assertIsNone(st.value(ev, "last_price"))                 # wrong company's price gone
+        self.assertEqual(st.value(ev, "result_date"), "2026-10-12")   # BSE facts kept
+        self.assertEqual(p.repair_lookup_mismatches(st, master, raw), [])
+
+
+class AuditFixTests(unittest.TestCase):
+    """Engine 2.5.4 full-audit fixes."""
+
+    def test_split_adjustment(self):
+        days = pd.date_range("2026-08-01", periods=10, freq="B")
+        close = [1000, 1010, 1020, 1015, 102, 103, 104, 105, 104, 106]   # 1:10 split on day 5
+        f = pd.DataFrame({"Date": days, "Open": close, "High": [c * 1.01 for c in close], "Low": [c * 0.99 for c in close],
+                          "Close": close, "Volume": [100] * 4 + [1000] * 6})
+        out = pp.adjust_corporate_actions(f)
+        self.assertAlmostEqual(out["Close"].iloc[0], 100.0)
+        self.assertAlmostEqual(out["Volume"].iloc[0], 1000.0)
+        self.assertEqual(out.attrs["corporateActions"][0]["factor"], 0.1)
+        crash = f.copy()
+        crash["Close"] = [100, 101, 102, 100, 52, 50, 49, 48, 47, 46]       # -48% intraday collapse, not a ratio gap
+        crash["High"] = [101, 102, 103, 101, 99, 51, 50, 49, 48, 47]
+        self.assertEqual(pp.adjust_corporate_actions(crash)["Close"].iloc[0], 100)
+
+    def test_one_sector_taxonomy(self):
+        self.assertEqual(pp.canonical_sector("Finance"), "Financial Services")
+        self.assertEqual(pp.canonical_sector(None, "—", "Computers - Software"), "Information Technology")
+        self.assertEqual(pp.canonical_sector("Industrial Gases"), "Chemicals")
+        self.assertIsNone(pp.canonical_sector("Miscellaneous", "-"))
+        self.assertEqual(p.sector_key({"sector": "Cement And Cement Products"}), "Construction Materials")
+
+    def test_regime_needs_200_sessions(self):
+        r = pp.market_regime([100 + i * 0.1 for i in range(70)])
+        self.assertIsNone(r["dma200"])
+        self.assertEqual(r["label"], "RISK-ON")
+
+    def test_negative_book_is_not_meaningful(self):
+        v = pp.valuation_view(10, None, -3827, None, -20)
+        self.assertTrue(v["tinyBook"])
+        self.assertEqual(v["bookNote"], "negative book value")
+        self.assertFalse(pp.valuation_view(30, None, 79, None, 60)["tinyBook"])   # high P/B alone is fine
+
+    def test_yoy_from_year_ago_filing(self):
+        listing = [
+            {"periodEnd": "2026-09-30", "fromDate": "2026-07-01", "basis": "CONSOLIDATED", "cumulative": False, "xbrlUrl": "cur"},
+            {"periodEnd": "2025-09-30", "fromDate": "2025-07-01", "basis": "STANDALONE", "cumulative": False, "xbrlUrl": "ya_s"},
+            {"periodEnd": "2025-09-30", "fromDate": "2025-07-01", "basis": "CONSOLIDATED", "cumulative": False, "xbrlUrl": "ya_c"},
+            {"periodEnd": "2026-06-30", "fromDate": "2026-04-01", "basis": "CONSOLIDATED", "cumulative": False, "xbrlUrl": "pq_c"},
+        ]
+        concepts = {"revenue": "revenuefromoperations", "pat": "profitlossforperiodattributabletoownersofparent"}
+        docs = {"ya_c": {"revenue_cr": 1000.0, "pat_cr": 100.0, "_meta": {"concepts": concepts}},
+                "pq_c": {"revenue_cr": 1100.0, "pat_cr": 110.0, "_meta": {"concepts": concepts}}}
+        calls = []
+        def fetch(url, pe):
+            calls.append(url)
+            return docs[url]
+        parsed = {"revenue_cr": 1200.0, "pat_cr": 130.0, "prior_year_revenue_cr": None, "prior_year_pat_cr": None,
+                  "revenue_qoq_pct": None, "_meta": {"concepts": concepts}}
+        p.fill_comparatives_from_listing(parsed, listing, date(2026, 9, 30), "CONSOLIDATED", fetch)
+        self.assertEqual(calls, ["ya_c", "pq_c"])                     # same basis only
+        self.assertEqual((parsed["revenue_yoy_pct"], parsed["pat_yoy_pct"]), (20.0, 30.0))
+        self.assertAlmostEqual(parsed["revenue_qoq_pct"], 9.09, places=2)
+        self.assertFalse(parsed["_meta"]["comparativesFromSameDocument"])
+        # A different PAT concept in the old filing is not mixed in.
+        other = {"ya_c": {"revenue_cr": 1000.0, "pat_cr": 90.0, "_meta": {"concepts": {**concepts, "pat": "profitloss"}}}}
+        parsed2 = {"revenue_cr": 1200.0, "pat_cr": 130.0, "revenue_qoq_pct": 1.0, "_meta": {"concepts": concepts}}
+        p.fill_comparatives_from_listing(parsed2, listing, date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: other[u])
+        self.assertEqual(parsed2["revenue_yoy_pct"], 20.0)
+        self.assertIsNone(parsed2.get("pat_yoy_pct"))
 
 
 if __name__ == "__main__":
