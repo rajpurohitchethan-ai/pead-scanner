@@ -2250,6 +2250,7 @@ def parse_bse_snapshot(snapshot: dict[str, Any], period_end: date) -> dict[str, 
     current_idx = column_for(period_end)
     if current_idx is None:
         return {}
+    fy_idx = next((i for i, label in enumerate(periods) if re.fullmatch(r"FY\d{2}-\d{2}", label)), None)
     prev_idx = column_for(_shift_quarters(period_end, -1))
     prior_idx = column_for(_shift_quarters(period_end, -4))
 
@@ -2281,6 +2282,7 @@ def parse_bse_snapshot(snapshot: dict[str, Any], period_end: date) -> dict[str, 
             "concepts": {"revenue": "Revenue", "pat": "Net Profit"},
             "issues": ["BASIS_UNKNOWN"] + ([] if prior_idx is not None else ["NO_PRIOR_YEAR_COLUMN"]),
             "comparativesFromSameDocument": True,
+            "reference": {"fy_revenue_cr": val("revenue", fy_idx), "fy_pat_cr": val("net profit", fy_idx)},
         },
     }
 
@@ -2424,7 +2426,7 @@ def price_metrics(frame: Any, reaction_date: date | None) -> dict[str, Any]:
         volume = pd.to_numeric(f["Volume"], errors="coerce")
         turnover = close * volume / 1e7
         if turnover.tail(20).notna().any():
-            out["avg_turnover_20d_cr"] = round2(turnover.tail(20).mean())
+            out["avg_turnover_20d_cr"] = round(float(turnover.tail(20).mean()), 4)
 
     if reaction_idx is not None and reaction_idx < len(f):
         if reaction_idx > 0:
@@ -2865,6 +2867,50 @@ def rederive_snapshots_from_raw(event: dict[str, Any], raw_root: Path = RAW_DIR)
     return added
 
 
+def merge_duplicate_events(store: EventStore) -> list[dict[str, Any]]:
+    """One company + one period = one event.
+
+    Regression: GOLKONDA appeared twice (NSE:GOLKONDA|… without ISIN and
+    INE327C01031|… with ISIN) because discovery first saw the company without
+    its ISIN. Events without an ISIN that share a BSE code or NSE symbol with an
+    ISIN-keyed event for the same period are folded into the ISIN event.
+    """
+    events = store.all()
+    by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for e in events:
+        sec = e.get("security") or {}
+        pe = (e.get("period") or {}).get("end")
+        if sec.get("isin") and pe:
+            for k in ("bseCode", "nseSymbol"):
+                if sec.get(k):
+                    by_key[(f"{k}:{str(sec[k]).strip().upper()}", pe)] = e
+    merged: list[dict[str, Any]] = []
+    for e in events:
+        sec = e.get("security") or {}
+        pe = (e.get("period") or {}).get("end")
+        if sec.get("isin") or not pe:
+            continue
+        target = None
+        for k in ("bseCode", "nseSymbol"):
+            if sec.get(k):
+                target = by_key.get((f"{k}:{str(sec[k]).strip().upper()}", pe)) or target
+        if target is None or target.get("eventId") == e.get("eventId"):
+            continue
+        dup_id = e["eventId"]
+        sec["isin"] = target["security"]["isin"]
+        # rekey_and_merge copies verified fields into the ISIN event (normal
+        # source precedence) and deletes the duplicate file.
+        store.rekey_and_merge(e)
+        for extra in ("filings", "financialSnapshots", "priceTrail"):
+            if e.get(extra) and not (store.load(target["eventId"]) or {}).get(extra):
+                t = store.load(target["eventId"])
+                t[extra] = e[extra]
+                store.save(t)
+        merged.append({"eventId": dup_id, "symbol": sec.get("symbol"), "at": iso_now(),
+                       "reasons": [f"DUPLICATE_MERGED_INTO:{target['eventId']}"], "before": {}})
+    return merged
+
+
 def integrity_pass(store: EventStore, *, today: date | None = None, raw_root: Path = RAW_DIR) -> dict[str, Any]:
     """Idempotent repair run before scoring/publishing.
 
@@ -2883,6 +2929,10 @@ def integrity_pass(store: EventStore, *, today: date | None = None, raw_root: Pa
     index = build_evidence_index(raw_root)
     stats: dict[str, Any] = {"checked": 0, "reverified": 0, "revoked": 0, "postResultPurged": 0,
                              "snapshotsReplayed": 0, "financialsApplied": 0, "revocations": []}
+    merges = merge_duplicate_events(store)
+    stats["duplicatesMerged"] = len(merges)
+    # Merges change the event count, so they are part of the approval signature.
+    stats["revocations"].extend(merges)
     for event in store.all():
         period_end = parse_date(event.get("period", {}).get("end"))
         if period_end is None:
@@ -3028,7 +3078,9 @@ def price_trail_change(event: dict[str, Any]) -> float | None:
             prices.append(p)
     if len(prices) < 2:
         return None
-    return round2(pct_change(prices[-1], prices[-2]))
+    # Move since the first tracked price (hour-over-hour was almost always
+    # 0.0% for thinly traded stocks and looked like a fake zero).
+    return round2(pct_change(prices[-1], prices[0]))
 
 
 def latest_price_timestamp(event: dict[str, Any]) -> str | None:
@@ -3107,7 +3159,11 @@ FINANCIAL_SNAPSHOT_RANK = {
     "YAHOO_QUARTERLY": 55,
 }
 # Issues that make a snapshot unusable.
-SNAPSHOT_REJECT_ISSUES = ("NO_CORE_VALUES", "PERIOD_MISMATCH", "NEGATIVE_REVENUE", "NO_QUARTER_CONTEXT_FOR_PERIOD")
+SNAPSHOT_REJECT_ISSUES = ("NO_CORE_VALUES", "PERIOD_MISMATCH", "NEGATIVE_REVENUE", "NO_QUARTER_CONTEXT_FOR_PERIOD", "UNIT_SUSPECT")
+# Issues produced by validate_financial_snapshot itself (recomputed every run);
+# anything else in a snapshot's issue list came from the parser and is kept.
+VALIDATOR_ISSUES = {"NO_CORE_VALUES", "PERIOD_MISMATCH", "NEGATIVE_REVENUE", "ZERO_REVENUE", "EXTREME_REVENUE_YOY",
+                    "PAT_EXCEEDS_REVENUE", "UNOFFICIAL_SOURCE", "UNIT_SUSPECT", "CROSS_SOURCE_MISMATCH"}
 # Issues that keep the snapshot usable but require a visible review flag.
 SNAPSHOT_FLAG_ISSUES = (
     "EXTREME_REVENUE_YOY", "PAT_EXCEEDS_REVENUE", "REVENUE_IS_TOTAL_INCOME",
@@ -3135,6 +3191,25 @@ def validate_financial_snapshot(parsed: dict[str, Any], source: str, period_end:
         issues.append("EXTREME_REVENUE_YOY")
     if rev is not None and pat is not None and rev > 0 and pat > 1.5 * rev:
         issues.append("PAT_EXCEEDS_REVENUE")
+    # A >20x jump or collapse versus the previous quarter almost always means
+    # the company/exchange filed in the wrong unit (₹ instead of ₹ lakh, etc.).
+    # Regression: Golkonda Sep-26 revenue 1,399 Cr vs 0.15 Cr in Jun-26.
+    rev_qoq = safe_num(parsed.get("revenue_qoq_pct"))
+    if rev_qoq is not None and (rev_qoq > 1900 or rev_qoq < -95):
+        issues.append("UNIT_SUSPECT")
+    if rev_yoy is not None and (rev_yoy > 1900 or rev_yoy < -95):
+        issues.append("UNIT_SUSPECT")
+    # Profit 50x larger than last quarter's (in either direction) and at least
+    # ₹1 Cr: Alstone Sep-26 PAT -106.72 Cr vs +0.07 Cr in Jun-26.
+    pat_qoq = safe_num(parsed.get("pat_qoq_pct"))
+    if pat is not None and abs(pat) >= 1 and pat_qoq is not None and abs(pat_qoq) > 5000:
+        issues.append("UNIT_SUSPECT")
+    # One quarter larger than 10x the entire previous financial year.
+    ref = meta.get("reference") or {}
+    for key, value in (("fy_revenue_cr", rev), ("fy_pat_cr", pat)):
+        fy = safe_num(ref.get(key))
+        if fy not in (None, 0) and value is not None and abs(value) >= 1 and abs(value) > 10 * abs(fy):
+            issues.append("UNIT_SUSPECT")
     if FINANCIAL_SNAPSHOT_RANK.get(source, 0) < 90:
         issues.append("UNOFFICIAL_SOURCE")
     issues = sorted(set(issues))
@@ -3164,6 +3239,7 @@ def store_financial_snapshot(
         "basis": parsed.get("basis") or "UNKNOWN",
         "revenueDefinition": meta.get("revenueDefinition"),
         "concepts": meta.get("concepts"),
+        "reference": meta.get("reference"),
         "values": {k: parsed.get(k) for k in FINANCIAL_FIELDS if k != "basis" and parsed.get(k) is not None},
         "validation": validation,
     }
@@ -3191,18 +3267,35 @@ def apply_financial_snapshots(store: EventStore, event: dict[str, Any]) -> dict[
     """
     period_end = event.get("period", {}).get("end")
     snaps = [s for s in (event.get("financialSnapshots") or {}).values() if isinstance(s, dict)]
+    # Validation rules evolve: re-check every stored snapshot so a value that
+    # passed an older, weaker validator cannot stay visible.
+    pe = parse_date(period_end)
+    for snap in snaps:
+        old_v = snap.get("validation") or {}
+        parser_issues = [i for i in old_v.get("issues") or [] if i.split(":")[0] not in VALIDATOR_ISSUES]
+        replay = dict(snap.get("values") or {})
+        replay["_meta"] = {"periodEnd": snap.get("periodEnd"), "issues": parser_issues, "reference": snap.get("reference")}
+        snap["validation"] = validate_financial_snapshot(replay, snap.get("source") or "", pe)
     usable = [
         s for s in snaps
         if (s.get("validation") or {}).get("status") in {"VERIFIED", "FLAGGED"} and s.get("periodEnd") == period_end
     ]
     integrity: dict[str, Any] = {"checkedAt": iso_now(), "snapshotsConsidered": len(snaps)}
     if not usable:
-        integrity.update({"status": "NO_VERIFIED_SNAPSHOT", "selectedSource": None})
-        # Unverified legacy numbers must not masquerade as parsed financials.
+        rejected = sorted({i for s in snaps for i in (s.get("validation") or {}).get("issues") or []
+                           if i.split(":")[0] in SNAPSHOT_REJECT_ISSUES})
+        integrity.update({"status": "NO_VERIFIED_SNAPSHOT", "selectedSource": None, "issues": rejected or None})
+        # Unverified legacy numbers, and numbers from a snapshot that is now
+        # rejected, must not masquerade as parsed financials.
         for field in FINANCIAL_FIELDS:
             meta = (event.get("fields") or {}).get(field) or {}
-            if meta.get("status") == "OK" and (meta.get("source") in {"V1_MIGRATION", "DERIVED"} or "migrated" in str(meta.get("note") or "")):
-                store.revoke_field(event, field, "unverified legacy value; no exchange snapshot for this period")
+            if meta.get("status") != "OK":
+                continue
+            if (meta.get("source") in {"V1_MIGRATION", "DERIVED"} or "migrated" in str(meta.get("note") or "")
+                    or meta.get("source") in FINANCIAL_SNAPSHOT_RANK):
+                store.revoke_field(event, field, "no usable exchange snapshot for this period: " + ",".join(rejected or ["none"]))
+        if event.get("state") == "FINANCIALS_PARSED":
+            store.force_state(event, "RESULT_FILED", "financial snapshot rejected on re-validation")
         event["financialIntegrity"] = integrity
         return integrity
 
@@ -3789,7 +3882,9 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
             score += 5
         else:
             score -= 4
-            risks.append(f"20D turnover ₹{turnover:.1f} Cr is thin.")
+            shown = (f"₹{turnover:.1f} Cr" if turnover >= 0.1
+                     else f"₹{turnover * 100:.1f} lakh" if turnover >= 0.01 else "under ₹1 lakh")
+            risks.append(f"20D average turnover {shown}/day is thin.")
     if roe is not None and roe >= 15:
         score += 3
     if fcf_yield is not None and fcf_yield > 0:
@@ -4353,12 +4448,17 @@ def quality_gate(new_health: dict[str, Any], old_health: dict[str, Any], approve
     # fiscal reporting quarter. On the first strict-quarter migration (or when
     # the market rolls from Q2 to Q3), a large count drop is intentional.
     if comparable_quarter:
-        if old_rows >= 10 and current_rows < old_rows * 0.80:
-            reasons.append(f"event count dropped from {old_rows} to {current_rows} (>20%)")
+        if old_rows >= 10 and current_rows < old_rows * 0.80 and not baseline_approved:
+            msg = f"event count dropped from {old_rows} to {current_rows} (>20%)"
+            if signature:
+                msg += (f"; the integrity pass made {integrity.get('revoked', 0)} revocations/duplicate merges. "
+                        f"Review logs/integrity_{now_ist().date().isoformat()}.json and re-run with "
+                        f"--approve-baseline {signature} if they are correct")
+            reasons.append(msg)
         if old_declared >= 5 and current_declared < old_declared * 0.80 and not baseline_approved:
             msg = f"declared-result count dropped from {old_declared} to {current_declared} (>20%)"
             if signature:
-                msg += (f"; {integrity.get('revoked', 0)} declarations were revoked by the integrity pass. "
+                msg += (f"; the integrity pass made {integrity.get('revoked', 0)} revocations/duplicate merges. "
                         f"Review logs/integrity_{now_ist().date().isoformat()}.json and re-run with "
                         f"--approve-baseline {signature} if the revocations are correct")
             reasons.append(msg)
@@ -4660,7 +4760,7 @@ def write_integrity_report(stats: dict[str, Any], signature: str | None, *, dry_
 
 
 def print_integrity_summary(stats: dict[str, Any], signature: str | None) -> None:
-    print(f"Integrity: checked {stats['checked']} declared events, re-verified {stats['reverified']}, "
+    print(f"Integrity: merged {stats.get('duplicatesMerged', 0)} duplicate events; checked {stats['checked']} declared events, re-verified {stats['reverified']}, "
           f"promoted {stats.get('promoted', 0)}, revoked {stats['revoked']}, post-result purged {stats['postResultPurged']}, "
           f"snapshots replayed {stats['snapshotsReplayed']}, financial snapshots applied {stats['financialsApplied']}")
     for r in stats.get("revocations", []):
@@ -4819,7 +4919,7 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         "signature": signature,
         "checked": integrity_stats["checked"],
         "reverified": integrity_stats["reverified"],
-        "revoked": integrity_stats["revoked"],
+        "revoked": len(integrity_stats["revocations"]),
         "postResultPurged": integrity_stats["postResultPurged"],
         "financialsApplied": integrity_stats["financialsApplied"],
     }
