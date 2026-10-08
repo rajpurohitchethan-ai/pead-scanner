@@ -42,6 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
+STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
 def _num(x: Any) -> float | None:
@@ -137,7 +138,8 @@ def _chart(f, reaction_idx: int | None, points: int = 75) -> dict[str, Any]:
 
 
 def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
-                      q1_reaction_date: date | None = None, q2_boundary: date | None = None) -> dict[str, Any]:
+                      q1_reaction_date: date | None = None, q2_boundary: date | None = None,
+                      window_start: date | None = None) -> dict[str, Any]:
     """Price-derived PEAD features. `reaction_date` is the Q2 reaction session
     (only used when the result is released and that session has traded);
     `q1_reaction_date` replays the previous quarter's reaction on the same chart."""
@@ -164,15 +166,25 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
         out["atr14"] = _r2(close.diff().abs().tail(14).mean() * 1.25)   # close-only proxy (BSE data)
 
     ri = _idx_on_or_after(f, reaction_date) if released else None
-    chart_marker = ri
-    if ri is not None and ri > 0:
-        pre_close = _num(close.iloc[ri - 1])
+    # Intraday filings: the reaction window starts on the filing day.
+    wi = ri
+    if ri is not None and window_start is not None and reaction_date is not None and window_start < reaction_date:
+        w = _idx_on_or_after(f, window_start)
+        wi = w if w is not None and w <= ri else ri
+    chart_marker = wi
+    if ri is not None and wi is not None and wi > 0:
+        pre_close = _num(close.iloc[wi - 1])
         r_close = _num(close.iloc[ri])
-        r_open = _num(f["Open"].iloc[ri])
-        r_low = _num(f["Low"].iloc[ri]) or r_close
-        r_high = _num(f["High"].iloc[ri]) or r_close
-        after = f.iloc[ri:]
-        out.update(_reaction_volume_flags(f, ri))
+        r_open = _num(f["Open"].iloc[wi])
+        win = f.iloc[wi:ri + 1]
+        r_low = _num(win["Low"].min()) if win["Low"].notna().any() else _num(win["Close"].min())
+        r_high = _num(win["High"].max()) if win["High"].notna().any() else _num(win["Close"].max())
+        r_low = r_low or r_close
+        r_high = r_high or r_close
+        after = f.iloc[wi:]
+        vol_day = int(win["Volume"].idxmax()) if win["Volume"].notna().any() else ri
+        out.update(_reaction_volume_flags(f, vol_day))
+        out["reaction_window_sessions"] = int(ri - wi + 1)
         out.update({
             "reaction_close": _r2(r_close),
             "reaction_open": _r2(r_open),
@@ -293,12 +305,19 @@ ACTIONABLE = {"ENTRY_EARLY", "ENTRY_PULLBACK", "ENTRY_BREAKOUT", "NEAR_ENTRY", "
 
 def trade_plan(*, released: bool, reaction_traded: bool, quality_ok: bool | None, x: dict[str, Any],
                last_price: Any, result_return: Any, rvol: Any, result_low: Any, result_high: Any,
-               box_high: Any = None) -> dict[str, Any]:
+               box_high: Any = None, concall: dict[str, Any] | None = None,
+               red_flags: list[str] | None = None) -> dict[str, Any]:
     """Mechanical plan for one event. Levels are published only when the
-    signal is actionable; otherwise the plan explains what it is waiting for."""
+    signal is actionable; otherwise the plan explains what it is waiting for.
+
+    Concall handling (hybrid): while a call is pending, clean numbers allow a
+    STARTER position (1/3 size) on a valid pattern; numbers with red flags
+    wait for the call. After the call (or when no call is held) the plan is
+    the FULL position."""
     last = _num(last_price)
     plan: dict[str, Any] = {"signal": None, "why": None, "entry": None, "sl": None, "riskPct": None,
-                            "tslSwing": None, "tslPosition": None, "rNow": None, "style": None}
+                            "tslSwing": None, "tslPosition": None, "rNow": None, "style": None,
+                            "stage": None, "sizeFraction": None, "redFlags": list(red_flags or [])}
 
     def done(signal: str, why: str) -> dict[str, Any]:
         plan["signal"], plan["why"] = signal, why
@@ -316,6 +335,19 @@ def trade_plan(*, released: bool, reaction_traded: bool, quality_ok: bool | None
         return done("DATA_PENDING", "Earnings growth not verified yet: entry levels stay hidden until YoY numbers are available.")
     if x.get("base_broken"):
         return done("NO_ENTRY", "Price closed below the result-day low: the post-result base is broken.")
+    pending = call_pending(concall)
+    when = None
+    if pending:
+        when = concall.get("callDate")
+        try:
+            when = date.fromisoformat(when).strftime("%d %b") if when else None
+        except ValueError:
+            pass
+        if red_flags:
+            return done("WAIT_CONCALL", (f"Concall on {when}: " if when else "Concall announced: ")
+                        + "the numbers need explaining (" + "; ".join(red_flags) + "), so wait for the call.")
+    plan["stage"] = "STARTER" if pending else "FULL"
+    plan["sizeFraction"] = STARTER_FRACTION if pending else 1.0
 
     sl = _r2(_num(result_low) * (1 - SL_BUFFER_PCT / 100))
     ema10, ema21, ema63 = _num(x.get("ema10")), _num(x.get("ema21")), _num(x.get("ema63"))
@@ -370,6 +402,11 @@ def trade_plan(*, released: bool, reaction_traded: bool, quality_ok: bool | None
         else:
             plan["tslSwing"] = plan["tslPosition"] = sl
     plan["distancePct"] = _r2(_pct(entry, last))
+    if pending:
+        why = (f"Starter position (1/3 size) before the concall{' on ' + when if when else ''}; add the rest only if the call confirms. "
+               + why)
+    elif concall and concall.get("status") == "DONE":
+        why = "Concall done: full position allowed. " + why
     return done(signal, why)
 
 
@@ -477,3 +514,154 @@ def scorecard(items: list[dict[str, Any]]) -> dict[str, Any]:
         rows.append({"group": k, "n": len(vals), "avg": _r2(sum(vals) / len(vals)), "median": _r2(median(vals)),
                      "winRate": _r2(sum(v > 0 for v in vals) / len(vals) * 100)})
     return {"metric": "Return from the day before the Q1 result to the Q2 result (or today)", "rows": rows}
+
+
+# ---------------------------------------------------------------------------
+# Concalls (engine 2.5): "enter after the results AND the call"
+# ---------------------------------------------------------------------------
+
+import re as _re
+from datetime import datetime as _dt, timedelta as _td
+
+_CALL_WORDS = _re.compile(r"(con(ference)?[\s.\-]*call|earnings?\s+call|analysts?\s*/?\s*(institutional\s+)?investors?\s+meet|investor\s+call|analyst\s+meet|investors?\s+meet)", _re.I)
+_TRANSCRIPT = _re.compile(r"transcript", _re.I)
+_AUDIO = _re.compile(r"audio|recording|webcast\s+link|video\s+recording", _re.I)
+_MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+
+
+def classify_call_filing(text: str) -> str | None:
+    """NOTICE (call scheduled), TRANSCRIPT, AUDIO, or None for other filings."""
+    t = text or ""
+    if not _CALL_WORDS.search(t) and not _TRANSCRIPT.search(t):
+        return None
+    if _TRANSCRIPT.search(t):
+        return "TRANSCRIPT"
+    if _AUDIO.search(t):
+        return "AUDIO"
+    return "NOTICE"
+
+
+def call_date_from_text(text: str, filed_on: date) -> date | None:
+    """First date in the filing text that falls 0-21 days after it was filed
+    (the scheduled call date). Returns None rather than guessing."""
+    t = _re.sub(r"\s+", " ", text or "")
+    found = []
+
+    def add(y, m, d):
+        try:
+            y, m, d = int(y), int(m), int(d)
+            y = y + 2000 if y < 100 else y
+            c = date(y, m, d)
+        except (TypeError, ValueError):
+            return
+        if filed_on <= c <= filed_on + _td(days=21):
+            found.append(c)
+
+    for d, m, y in _re.findall(r"(?<!\d)(\d{1,2})[./\-](\d{1,2})[./\-](\d{2,4})(?!\d)", t):
+        add(y, m, d)
+    for d, mon, y in _re.findall(r"(?<!\d)(\d{1,2})(?:st|nd|rd|th)?[\s\-,]*(?:of\s+)?([A-Za-z]{3,9})[\s,.\-']*(\d{4})", t):
+        if mon[:3].lower() in _MONTHS:
+            add(y, _MONTHS[mon[:3].lower()], d)
+    for mon, d, y in _re.findall(r"([A-Za-z]{3,9})[\s.\-]*(\d{1,2})(?:st|nd|rd|th)?,?\s*(\d{4})", t):
+        if mon[:3].lower() in _MONTHS:
+            add(y, _MONTHS[mon[:3].lower()], d)
+    return min(found) if found else None
+
+
+def concall_status(filings: list[dict[str, Any]], result_date: date | None, today: date) -> dict[str, Any]:
+    """filings: [{"filedAt": datetime|date, "text": str, "url": str|None}] from
+    NSE/BSE announcements around the result. Only filings from 20 days before
+    the result onwards count."""
+    notices, transcripts, audios = [], [], []
+    start = (result_date - _td(days=20)) if result_date else None
+    for f in filings or []:
+        filed = f.get("filedAt")
+        filed_d = filed.date() if isinstance(filed, _dt) else filed
+        if not isinstance(filed_d, date) or (start and filed_d < start):
+            continue
+        kind = classify_call_filing(f.get("text") or "")
+        rec = {"filedOn": filed_d.isoformat(), "url": f.get("url"), "callDate": None}
+        if kind == "NOTICE":
+            d = call_date_from_text(f.get("text") or "", filed_d)
+            rec["callDate"] = d.isoformat() if d else None
+            notices.append(rec)
+        elif kind == "TRANSCRIPT":
+            transcripts.append(rec)
+        elif kind == "AUDIO":
+            audios.append(rec)
+    out: dict[str, Any] = {"status": "NONE_FOUND", "callDate": None, "noticeUrl": None,
+                           "transcriptUrl": transcripts[-1]["url"] if transcripts else None,
+                           "audioUrl": audios[-1]["url"] if audios else None, "checkedOn": today.isoformat()}
+    if transcripts or audios:
+        out["status"] = "DONE"
+    dated = [n for n in notices if n["callDate"]]
+    if dated:
+        n = max(dated, key=lambda r: r["callDate"])
+        out.update({"callDate": n["callDate"], "noticeUrl": n["url"]})
+        if out["status"] != "DONE":
+            out["status"] = "SCHEDULED" if date.fromisoformat(n["callDate"]) >= today else "DONE"
+    elif notices and out["status"] != "DONE":
+        n = notices[-1]
+        out["noticeUrl"] = n["url"]
+        # Date not readable from the text: treat as pending for 5 days after the notice.
+        out["status"] = "SCHEDULED" if date.fromisoformat(n["filedOn"]) + _td(days=5) >= today else "DONE"
+    return out
+
+
+def call_pending(concall: dict[str, Any] | None) -> bool:
+    return bool(concall and concall.get("status") == "SCHEDULED")
+
+
+def result_red_flags(*, rev_yoy: Any, pat_yoy: Any, pat_trend: Any, margin_change_bps: Any,
+                     financial_status: str | None = None) -> list[str]:
+    """Signs that profit may not be repeatable; any one sends the plan to
+    WAIT_CONCALL when a call is pending."""
+    rev, pat, mb = _num(rev_yoy), _num(pat_yoy), _num(margin_change_bps)
+    flags = []
+    if str(pat_trend or "").upper() == "TURNAROUND":
+        flags.append("turnaround from a loss")
+    if pat is not None and pat >= 50 and (rev is None or rev < 10):
+        flags.append("profit growth without revenue growth")
+    if mb is not None and mb >= 500 and (rev is None or rev < 10):
+        flags.append("margin jump without revenue growth")
+    if financial_status == "FLAGGED":
+        flags.append("figures flagged for review")
+    return flags
+
+
+def update_trade_log(log: dict[str, Any] | None, plan: dict[str, Any], last_price: Any, today: date) -> dict[str, Any]:
+    """Record the first triggered STARTER and FULL entries of an event and
+    follow them (lowest price seen, stop hits, current return) so the
+    scorecard can compare entering on the result with entering after the call."""
+    log = dict(log or {})
+    last = _num(last_price)
+    sig = str(plan.get("signal") or "")
+    stage = plan.get("stage")
+    if sig.startswith("ENTRY_") and stage in {"STARTER", "FULL"} and plan.get("entry") is not None:
+        key = stage.lower()
+        if key not in log:
+            log[key] = {"date": today.isoformat(), "entry": plan["entry"], "sl": plan["sl"], "signal": sig, "minSeen": last}
+    for key in ("starter", "full"):
+        t = log.get(key)
+        if not t or last is None:
+            continue
+        t["minSeen"] = min(x for x in (t.get("minSeen"), last) if x is not None)
+        t["last"] = last
+        if not t.get("stopped") and t.get("sl") is not None and t["minSeen"] <= t["sl"]:
+            t["stopped"], t["stoppedOn"] = True, today.isoformat()
+        exit_px = t["sl"] if t.get("stopped") else last
+        t["returnPct"] = _r2(_pct(exit_px, t["entry"]))
+    return log
+
+
+def entry_timing_scorecard(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = []
+    for key, label in (("starter", "Entered on the result (before concall)"), ("full", "Entered after the concall / no call")):
+        trades = [lg[key] for lg in logs if lg and lg.get(key) and _num(lg[key].get("returnPct")) is not None]
+        rets = [float(t["returnPct"]) for t in trades]
+        rows.append({"group": label, "n": len(rets),
+                     "avg": _r2(sum(rets) / len(rets)) if rets else None,
+                     "median": _r2(median(rets)) if rets else None,
+                     "winRate": _r2(sum(r > 0 for r in rets) / len(rets) * 100) if rets else None,
+                     "stopped": sum(bool(t.get("stopped")) for t in trades)})
+    return rows
