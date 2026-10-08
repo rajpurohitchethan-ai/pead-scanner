@@ -67,3 +67,9 @@ Data sources added: NSE quote (P/E, sector P/E, market cap, delivery %, sector i
 NSE history now uses camelCase fields (chClosingPrice, mtimestamp); both spellings are parsed. NSE results_comparison returns empty/stale data (Dec 2024); YoY must come from XBRL in the filing (validate with --validate-financials).
 Entry levels are published only when earnings strength is verified (STRONG / AVERAGE+) and the plan signal is actionable.
 Tests: python -m unittest discover -s tests -v (test_integrity.py + test_plus.py).
+
+Engine 2.5 (concalls)
+enrich_concall() reads NSE (per symbol) or BSE (per scrip) announcements from 20 days before the result, classifies concall notice / transcript / audio (pead_plus.classify_call_filing) and stores event["concall"] = {status SCHEDULED|DONE|NONE_FOUND, callDate, noticeUrl, transcriptUrl, audioUrl}. Hybrid entry (2.5.1): while a call is SCHEDULED, clean numbers allow a STARTER entry (plan.stage="STARTER", sizeFraction 1/3) on a valid pattern; numbers with red flags (pead_plus.result_red_flags: turnaround, profit growth without revenue growth, margin jump without revenue growth, flagged figures) return WAIT_CONCALL with no levels. After the call, or when no call is filed, the plan is FULL size. A notice whose date cannot be read counts as pending for 5 days. event["tradeLog"] records the first triggered starter and full entries and tracks them (stop hits, return) for the "entry timing" scorecard.
+
+Engine 2.5.2 (intraday filings)
+A result filed during market hours (09:00-15:30 IST) has a two-session reaction window: the filing day plus the next session. reaction_session = next session; field reaction_window_start = filing day. Reaction return is measured from the close before the filing day; result-day high/low and RVOL span both sessions; the plan waits for the second session's close.
