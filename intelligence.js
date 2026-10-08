@@ -1,247 +1,302 @@
 (() => {
   'use strict';
-
-  let DATA = null;
-  let currentFilter = 'DECLARED';
-  let sortKey = 'conviction';
-  let sortDir = 'desc';
   const $ = id => document.getElementById(id);
+  const S = { data: null, tab: 'setups', q: '', liquid: true, sort: 'conviction', bucket: 'ALL', open: new Set() };
 
-  function esc(v) {
-    return String(v ?? '').replace(/[&<>"']/g, ch => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[ch]));
-  }
-  function n(v) { if (v === null || v === undefined || v === '' || v === '—') return null; const x = Number(v); return Number.isFinite(x) ? x : null; }
-  function pct(v) { const x=n(v); return x==null?'—':`${x>0?'+':''}${x.toFixed(1)}%`; }
-  function xfmt(v) { const x=n(v); return x==null?'—':`${x.toFixed(2)}x`; }
-  function money(v) { const x=n(v); return x==null?'—':`₹${x.toFixed(2)}`; }
-  function dateFmt(v) {
-    if (!v) return '—';
-    const d=new Date(v);
-    return Number.isNaN(d.getTime())?esc(v):d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
-  }
-  function tone(label) {
-    const s=String(label||'').toUpperCase();
-    if (s.includes('GENUINE')||s.includes('LOW EXPECTATIONS')||s==='ATTRACTIVE'||s==='CONFIRMED'||s.includes('HIGH-CONVICTION')||s==='ENTRY_WATCH') return 'good';
-    if (s.includes('LOW QUALITY')||s.includes('PRICED IN')||s==='EXCESSIVE'||s==='NEGATIVE'||s.includes('WEAK')) return 'bad';
-    return 'warn';
-  }
-  function badge(label) { return `<span class="badge ${tone(label)}">${esc(label||'UNVERIFIED')}</span>`; }
+  // ---------- storage (per-viewer conveniences only) ----------
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('pead.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem('pead.' + k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
+  };
 
-  function setHealth() {
-    const h=DATA?.health||{};
-    const values={
-      'health-events':h.activeDashboardEvents==null?h.eventsTracked:`${h.activeDashboardEvents}/${h.eventsTracked}`,
-      'health-financials':`${h.financialsParsed??0}/${h.resultsFiled??0}`,
-      'health-reaction':`${h.reactionReady??0}/${h.resultsFiled??0}`,
-      'health-completeness':h.declaredCompletenessPct==null?'—':`${Number(h.declaredCompletenessPct).toFixed(0)}%`,
-      'health-failures':h.fetchesFailed??0,
-      'health-fin-verified':h.financialsVerified==null?'—':`${h.financialsVerified}/${h.financialsFlagged??0}`,
-      'health-revoked':h.integrity?.revoked==null?'—':h.integrity.revoked
-    };
-    Object.entries(values).forEach(([id,val])=>{ if ($(id)) $(id).textContent=val??'—'; });
-    const failureBox=$('health-failures')?.closest('.health-box');
-    if (failureBox) failureBox.classList.add((h.fetchesFailed??0)>10?'bad':(h.fetchesFailed??0)>0?'warn':'good');
-    const flagBox=$('health-fin-verified')?.closest('.health-box');
-    if (flagBox && h.financialsVerified!=null) flagBox.classList.add((h.financialsFlagged??0)>0?'warn':'good');
-    const compBox=$('health-completeness')?.closest('.health-box');
-    if (compBox) {
-      const c=Number(h.declaredCompletenessPct??0);
-      compBox.classList.add(c>=75?'good':c>=50?'warn':'bad');
+  // ---------- formatting ----------
+  const num = v => (v === null || v === undefined || v === '' || Number.isNaN(Number(v))) ? null : Number(v);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pct = (v, d = 1) => { const n = num(v); return n === null ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(d)}%`; };
+  const cls = v => { const n = num(v); return n === null ? '' : n > 0 ? 'up' : n < 0 ? 'down' : ''; };
+  const inr = (v, d = 2) => { const n = num(v); return n === null ? '—' : '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }); };
+  const cr = v => { const n = num(v); if (n === null) return '—'; return n >= 1000 ? `₹${Math.round(n).toLocaleString('en-IN')} Cr` : `₹${n.toFixed(n >= 10 ? 0 : 1)} Cr`; };
+  const x = v => { const n = num(v); return n === null ? '—' : `${n.toFixed(2)}x`; };
+  const dt = v => { if (!v) return '—'; const d = new Date(String(v).slice(0, 10) + 'T00:00:00'); return Number.isNaN(+d) ? '—' : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }); };
+  const daysTo = v => { if (!v) return null; const d = new Date(String(v).slice(0, 10) + 'T00:00:00'); const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((d - t) / 864e5); };
+
+  // ---------- vocabulary ----------
+  const SIGNAL = {
+    ENTRY_EARLY: ['Early entry triggered', 'go'], ENTRY_PULLBACK: ['Pullback entry triggered', 'go'],
+    ENTRY_BREAKOUT: ['Breakout entry triggered', 'go'], NEAR_ENTRY: ['Near entry', 'go'],
+    PULLBACK_ZONE: ['In pullback zone', 'go'], WATCH: ['Watching the base', 'watch'],
+    EXTENDED: ['Extended, wait for pullback', 'watch'], RISK_TOO_WIDE: ['Stop too wide', 'watch'],
+    NO_ENTRY: ['No entry', 'no'], DATA_PENDING: ['Data pending', 'pending'],
+    WAIT_REACTION: ['Awaiting reaction session', 'pending'], WAIT_RESULT: ['Awaiting result', 'pending'],
+  };
+  const sig = it => SIGNAL[it.plus?.plan?.signal || it.entrySignal] || [String(it.entrySignal || '—').replace(/_/g, ' ').toLowerCase(), 'pending'];
+  const BUCKET_TONE = { CONFIRMATION: 'go', RE_PEAD: 'go', FRESH_PEAD: 'go', NO_CONFIRMATION: 'bad', WATCH_CONFIRM: 'good', WATCH_REPEAD: 'warn', WATCH_FRESH: '', PENDING: '' };
+  const TAIL_TONE = { STRONG: 'good', POSITIVE: 'good', NEUTRAL: '', WEAK: 'bad' };
+  const STRENGTH = { STRONG: ['Strong earnings', 'good'], 'AVERAGE+': ['Decent earnings', 'good'], AVERAGE: ['Average earnings', 'warn'], WEAK: ['Weak earnings', 'bad'] };
+
+  // ---------- data access ----------
+  const P = it => it.plus || {};
+  const px = it => P(it).price || {};
+  const liquidOk = it => P(it).liquidity?.pass !== false;
+  const declared = () => (S.data?.items || []).filter(it => it.resultsReleased);
+  const upcoming = () => (S.data?.items || []).filter(it => !it.resultsReleased);
+  const matches = it => {
+    if (!S.q) return true;
+    const h = [it.symbol, it.name, it.sector, it.industry, P(it).sectorKey].join(' ').toLowerCase();
+    return h.includes(S.q.toLowerCase());
+  };
+
+  // ---------- chart: price + 21 EMA + reaction marker + plan levels ----------
+  function chart(it, h = 120) {
+    const c = P(it).chart;
+    const closes = (c?.close || []).map(num);
+    if (closes.filter(v => v !== null).length < 5) return '<p class="meta">Price chart pending.</p>';
+    const plan = P(it).plan || {};
+    const W = 340, H = h, pad = 6;
+    const ema = (c.ema21 || []).map(num);
+    const levels = [num(plan.entry), num(plan.sl)].filter(v => v !== null);
+    const all = closes.concat(ema).concat(levels).filter(v => v !== null);
+    let lo = Math.min(...all), hi = Math.max(...all);
+    if (hi === lo) { hi += 1; lo -= 1; }
+    const span = hi - lo; lo -= span * 0.06; hi += span * 0.06;
+    const xs = i => pad + i * (W - 2 * pad) / Math.max(1, closes.length - 1);
+    const ys = v => H - pad - (v - lo) / (hi - lo) * (H - 2 * pad);
+    const path = arr => arr.map((v, i) => v === null ? null : `${xs(i).toFixed(1)},${ys(v).toFixed(1)}`).filter(Boolean).join(' ');
+    let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(it.symbol)} price chart">`;
+    for (let k = 1; k < 4; k++) svg += `<line x1="0" x2="${W}" y1="${(H * k / 4).toFixed(1)}" y2="${(H * k / 4).toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`;
+    if (num(plan.sl) !== null && num(plan.entry) !== null) {
+      const y1 = ys(plan.entry), y2 = ys(plan.sl);
+      svg += `<rect x="0" y="${Math.min(y1, y2).toFixed(1)}" width="${W}" height="${Math.abs(y2 - y1).toFixed(1)}" fill="var(--loss)" opacity=".07"/>`;
     }
+    const ri = num(c.reactionIndex);
+    if (ri !== null && ri >= 0 && ri < closes.length) svg += `<line x1="${xs(ri)}" x2="${xs(ri)}" y1="0" y2="${H}" stroke="var(--watch)" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+    svg += `<polyline points="${path(ema)}" fill="none" stroke="var(--ema)" stroke-width="1.4" stroke-dasharray="4 3"/>`;
+    svg += `<polyline points="${path(closes)}" fill="none" stroke="var(--price)" stroke-width="1.8" stroke-linejoin="round"/>`;
+    if (num(plan.entry) !== null) svg += `<line x1="0" x2="${W}" y1="${ys(plan.entry).toFixed(1)}" y2="${ys(plan.entry).toFixed(1)}" stroke="var(--act)" stroke-width="1.6"/>`;
+    if (num(plan.sl) !== null) svg += `<line x1="0" x2="${W}" y1="${ys(plan.sl).toFixed(1)}" y2="${ys(plan.sl).toFixed(1)}" stroke="var(--loss)" stroke-width="1.6"/>`;
+    const li = closes.length - 1;
+    if (closes[li] !== null) svg += `<circle cx="${xs(li)}" cy="${ys(closes[li])}" r="3.2" fill="var(--price)"/>`;
+    svg += '</svg>';
+    const legend = `<div class="legend"><span><i></i>Close</span><span><i class="lm"></i>21 EMA</span>${ri !== null ? '<span><i style="background:var(--watch)"></i>Result day</span>' : ''}${num(plan.entry) !== null ? '<span><i class="le"></i>Entry</span>' : ''}${num(plan.sl) !== null ? '<span><i class="ls"></i>Stop</span>' : ''}</div>`;
+    return svg + legend;
   }
 
-  function patDisplay(item, fs) {
-    if (item.patYoYTurnaround || fs.patYoYTurnaround || String(item.patYoYStatus||fs.patYoYStatus||'').toUpperCase()==='TURNAROUND') return 'TURNAROUND';
-    return pct(item.patYoY ?? fs.patYoYCalc);
+  // ---------- position size ----------
+  function sizing(plan) {
+    const e = num(plan.entry), s = num(plan.sl);
+    const cap = num(store.get('cap', 1000000)), risk = num(store.get('risk', 1));
+    if (e === null || s === null || e <= s || !cap || !risk) return '';
+    const atRisk = cap * risk / 100;
+    const qty = Math.floor(atRisk / (e - s));
+    if (qty < 1) return '<p class="qty">Risk budget is smaller than one share’s stop distance.</p>';
+    const used = qty * e;
+    return `<p class="qty">${qty.toLocaleString('en-IN')} shares risks ${inr(atRisk, 0)} and uses ${inr(used, 0)} (${(used / cap * 100).toFixed(0)}% of capital).</p>`;
   }
 
-  function entryTone(signal) {
-    const s=String(signal||'').toUpperCase();
-    if (s==='ENTRY_TRIGGERED') return 'good';
-    if (s==='NEAR_ENTRY'||s==='WATCH_BREAKOUT') return 'warn';
-    if (s==='NO_ENTRY'||s==='WAIT_RECLAIM') return 'bad';
-    return 'warn';
+  // ---------- setup card ----------
+  function card(it) {
+    const p = P(it), x1 = px(it), plan = p.plan || {};
+    const [sLabel, sTone] = sig(it);
+    const rail = { go: 's-go', watch: 's-watch', no: 's-no', pending: 's-pending' }[sTone] || 's-pending';
+    const b = p.bucket, st = STRENGTH[p.strength], tail = p.sector?.tailwind, liq = p.liquidity || {};
+    const tags = [];
+    if (p.sectorKey) tags.push(`<span class="tag">${esc(p.sectorKey)}</span>`);
+    if (b) tags.push(`<span class="tag ${BUCKET_TONE[b.code] || ''}" title="${esc(b.why)}">${esc(b.label)}</span>`);
+    if (st) tags.push(`<span class="tag ${st[1]}">${st[0]}</span>`);
+    if (tail) tags.push(`<span class="tag ${TAIL_TONE[tail] || ''}">Sector ${tail.toLowerCase()}</span>`);
+    if (x1.hv_label) tags.push(`<span class="tag good" title="Highest volume on the result session">${esc(x1.hv_label)}</span>`);
+    if (liq.pass === false) tags.push(`<span class="tag bad">${esc(liq.label)}</span>`);
+    const m = p.margins || {}, v = p.valuation || {};
+    const pc = it.priceContext || {};
+    const facts = `
+      <div class="facts">
+        <div class="fact"><h3>Result vs last year</h3><p><span class="big ${cls(it.revenueYoY)}">${pct(it.revenueYoY)}</span>revenue</p>
+          <p><span class="big ${cls(it.patYoY)}">${it.patYoYStatus === 'TURNAROUND' ? 'Turnaround' : pct(it.patYoY)}</span>profit${num(m.changeBps) !== null ? `, margin ${num(m.changeBps) > 0 ? '+' : ''}${m.changeBps} bps` : ''}</p></div>
+        <div class="fact"><h3>Market reaction</h3><p><span class="big ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}</span>${num(pc.relativeVolume) !== null ? `on ${x(pc.relativeVolume)} usual volume` : 'result session'}</p>
+          <p><span class="big ${cls(x1.return_since_result_pct)}">${pct(x1.return_since_result_pct)}</span>since result${x1.sessions_since_reaction != null ? `, ${x1.sessions_since_reaction} sessions` : ''}</p></div>
+        <div class="fact"><h3>Expectations before</h3><p><span class="big ${cls(pc.pre20dPct)}">${pct(pc.pre20dPct)}</span>20-day run-up</p>
+          <p><span class="big">${pct(pc.distanceFrom52wHighPct)}</span>from 52-week high</p></div>
+        <div class="fact"><h3>Valuation</h3><p><span class="big">${num(v.pe) !== null ? num(v.pe).toFixed(1) + 'x' : '—'}</span>P/E${num(v.sectorPe) !== null ? ` vs sector ${num(v.sectorPe).toFixed(1)}x` : ''}</p>
+          <p><span class="big">${num(v.roe) !== null ? num(v.roe).toFixed(1) + '%' : '—'}</span>ROE${num(it.marketCapCr) !== null ? `, market cap ${cr(it.marketCapCr)}` : ''}</p></div>
+      </div>`;
+    const lv = (label, val, k = '') => `<div class="lv ${k}"><span>${label}</span><b>${val}</b></div>`;
+    const levels = num(plan.entry) !== null ? `<div class="levels">
+        ${lv('Entry above', inr(plan.entry), 'e')}${lv('Stop loss', inr(plan.sl), 's')}
+        ${lv('Risk', pct(plan.riskPct).replace('+', ''))}${lv('Trail swing / position', `${inr(plan.tslSwing, 0)} / ${inr(plan.tslPosition, 0)}`)}
+      </div><p class="qty">Trail stays at the stop until the trade is up 1R, then moves to cost and follows the 21 EMA (swing) or 63 EMA (position).</p>${sizing(plan)}` : '';
+    const reasons = (it.reasons || []).slice(0, 6), risks = (it.risks || []).slice(0, 6);
+    const links = p.links || {};
+    const linkHtml = [['screener', 'Screener'], ['tradingview', 'TradingView'], ['nse', 'NSE'], ['bse', 'BSE']]
+      .filter(([k]) => links[k]).map(([k, l]) => `<a href="${esc(links[k])}" target="_blank" rel="noopener">${l}</a>`).join('');
+    return `<article class="card ${rail} ${liq.pass === false ? 'dim' : ''}">
+      <div class="head"><div><h2 class="sym">${esc(it.symbol)}</h2><div class="co">${esc(it.name)}</div></div>
+        <div class="score"><div class="v">${num(it.convictionScore) ?? '—'}</div><div class="l">conviction</div></div></div>
+      <div class="tags">${tags.join('')}</div>
+      <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${dt(it.reactionSession)}` : ''}${num(pc.lastClose) !== null ? `, last ${inr(pc.lastClose)}` : ''}</div>
+      ${chart(it)}
+      ${facts}
+      <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
+        <p class="plan-why">${esc(plan.why || 'Plan not computed yet.')}</p>${levels}</div>
+      ${(reasons.length || risks.length) ? `<details class="why"><summary>Why it scores ${num(it.convictionScore) ?? '—'}</summary><div class="why-cols">
+        <div class="pos"><h4>Supporting</h4><ul>${reasons.map(r => `<li>${esc(r)}</li>`).join('') || '<li>Nothing verified yet.</li>'}</ul></div>
+        <div class="neg"><h4>Risks and gaps</h4><ul>${risks.map(r => `<li>${esc(r)}</li>`).join('') || '<li>None flagged.</li>'}</ul></div></div></details>` : ''}
+      <div class="links">${linkHtml}</div>
+    </article>`;
   }
 
-  function entryLabel(signal) {
-    return String(signal||'DATA_PENDING').replaceAll('_',' ');
+  // ---------- views ----------
+  function sorted(list) {
+    const key = {
+      conviction: it => num(it.convictionScore) ?? -1,
+      date: it => -(daysTo(it.resultDate) ?? 999),
+      reaction: it => num(it.priceContext?.resultDayPct) ?? -999,
+      since: it => num(px(it).return_since_result_pct) ?? -999,
+      runup: it => -(num(it.priceContext?.pre20dPct) ?? 999),
+      distance: it => -Math.abs(num(P(it).plan?.distancePct) ?? 999),
+    }[S.sort];
+    return list.slice().sort((a, b) => key(b) - key(a));
   }
 
-  function priceTracker(item) {
-    const pc=item.priceContext||{};
-    const current=n(pc.lastClose);
-    const trigger=n(item.entryTriggerPrice ?? item.entry);
-    const distance=n(item.entryDistancePct);
-    const tracked=n(pc.trackedChangePct);
-    const updated=pc.updatedAt
-      ? new Date(pc.updatedAt).toLocaleString('en-IN')
-      : '—';
-    return `
-      <div class="price-tracker">
-        <div class="price-track-cell"><span>Current price</span><b>${money(current)}</b></div>
-        <div class="price-track-cell"><span>Entry trigger</span><b>${money(trigger)}</b></div>
-        <div class="price-track-cell"><span>Distance to trigger</span><b>${pct(distance)}</b></div>
-        <div class="price-track-cell" title="Change since this event's first tracked price"><span>Move since tracked</span><b>${pct(tracked)}</b></div>
-        <div class="price-track-cell"><span>Price updated</span><b>${esc(updated)}</b></div>
-      </div>
-      <div class="entry-signal">
-        <span class="badge ${entryTone(item.entrySignal)}">${esc(entryLabel(item.entrySignal))}</span>
-      </div>
-    `;
+  function emptyHidden(total, shown, what) {
+    const hidden = total - shown;
+    if (hidden > 0 && S.liquid) return `<div class="empty">${hidden} ${what} hidden because they trade under ₹${S.data.thresholds?.liquidityTurnoverCr ?? 1} Cr a day or below ₹${S.data.thresholds?.liquidityMinPrice ?? 20}.<br><button type="button" data-act="show-illiquid">Show them</button></div>`;
+    return `<div class="empty">No ${what} match this view yet.</div>`;
   }
 
-  function metricRows(item) {
-    const pc=item.priceContext||{};
-    const vm=item.valuationReality?.metrics||{};
-    const fs=item.fundamentalSnapshot||{};
-    return `
-      <div class="metric"><span>Data complete</span><b>${n(item.dataCompletenessPct)==null?'—':n(item.dataCompletenessPct).toFixed(0)+'%'}</b></div>
-      <div class="metric"><span>Revenue YoY</span><b>${pct(item.revenueYoY ?? fs.revenueYoYCalc)}</b></div>
-      <div class="metric"><span>PAT YoY</span><b>${patDisplay(item,fs)}</b></div>
-      <div class="metric" title="${esc((item.financialIssues||[]).join(', '))}"><span>Financials</span><b>${item.financialSource?esc(String(item.financialSource).replace(/_/g,' '))+' · '+esc(item.financialBasis||'UNKNOWN')+(item.financialStatus==='FLAGGED'?' ⚠':''):((item.financialIssues||[]).includes('UNIT_SUSPECT')?'Rejected: exchange figures in wrong unit':'—')}</b></div>
-      <div class="metric"><span>Pre-result 5D</span><b>${pct(pc.pre5dPct)}</b></div>
-      <div class="metric"><span>Pre-result 10D</span><b>${pct(pc.pre10dPct)}</b></div>
-      <div class="metric"><span>Pre-result 20D</span><b>${pct(pc.pre20dPct)}</b></div>
-      <div class="metric"><span>Reaction day</span><b>${pct(pc.resultDayPct)}</b></div>
-      <div class="metric"><span>RVOL</span><b>${xfmt(pc.relativeVolume)}</b></div>
-      <div class="metric"><span>52W high distance</span><b>${pct(pc.distanceFrom52wHighPct)}</b></div>
-      <div class="metric"><span>Darvas box high</span><b>${money(item.darvasBoxHigh)}</b></div>
-      <div class="metric"><span>5D hold</span><b>${item.holdAboveResultLow5d==null?'—':item.holdAboveResultLow5d?'YES':'NO'}</b></div>
-      <div class="metric"><span>P/E</span><b>${n(vm.trailingPE)==null?'—':n(vm.trailingPE).toFixed(1)+'x'}</b></div>
-      <div class="metric"><span>Forward P/E</span><b>${n(vm.forwardPE)==null?'—':n(vm.forwardPE).toFixed(1)+'x'}</b></div>
-      <div class="metric"><span>PEG</span><b>${n(vm.peg)==null?'—':n(vm.peg).toFixed(2)}</b></div>
-      <div class="metric"><span>ROE</span><b>${pct(vm.roePct)}</b></div>
-      <div class="metric"><span>FCF Yield</span><b>${pct(vm.fcfYieldPct)}</b></div>
-      <div class="metric"><span>Entry</span><b>${money(item.entry)}</b></div>
-      <div class="metric"><span>SL</span><b>${money(item.sl)}</b></div>
-      <div class="metric"><span>TSL</span><b>${money(item.tsl)}</b></div>
-    `;
+  function viewSetups() {
+    let list = declared().filter(matches);
+    if (S.bucket !== 'ALL') list = list.filter(it => (P(it).bucket?.code || 'NONE') === S.bucket);
+    const all = list.length;
+    if (S.liquid) list = list.filter(liquidOk);
+    if (!list.length) return emptyHidden(all, 0, 'declared results');
+    return `<div class="grid">${sorted(list).map(card).join('')}</div>${all > list.length ? `<p class="foot">${all - list.length} illiquid results hidden.</p>` : ''}`;
   }
 
-  function evidenceList(title,arr,cls) {
-    if (!Array.isArray(arr)||!arr.length) return '';
-    return `<div class="evidence ${cls}"><h4>${esc(title)}</h4><ul>${arr.slice(0,8).map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
+  function ledgerRow(it) {
+    const x1 = px(it), b = P(it).bucket, open = S.open.has(it.eventId), d = daysTo(it.resultDate);
+    const row = `<div class="row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">
+      <div><div class="s">${esc(it.symbol)}</div><div class="nm">${esc(P(it).sectorKey || it.name)}</div></div>
+      <div class="opt">${b ? `<span class="tag ${BUCKET_TONE[b.code] || ''}" title="${esc(b.why)}">${esc(b.label)}</span>` : '<span class="nm">No Q1 data</span>'}</div>
+      <div><div class="k">20-day run-up</div><div class="v ${cls(it.priceContext?.pre20dPct)}">${pct(it.priceContext?.pre20dPct)}</div></div>
+      <div class="opt"><div class="k">Q1 reaction</div><div class="v ${cls(x1.q1_reaction_return_pct)}">${pct(x1.q1_reaction_return_pct)}</div></div>
+      <div><div class="k">${d !== null && d >= 0 ? 'Result' : '52W high'}</div><div class="v">${d === 0 ? 'Today' : d !== null && d > 0 ? `in ${d}d` : pct(it.priceContext?.distanceFrom52wHighPct)}</div></div>
+      <div class="chev" aria-hidden="true">›</div></div>`;
+    if (!open) return row;
+    const v = P(it).valuation || {}, liq = P(it).liquidity || {};
+    return row + `<div class="row-detail">${chart(it, 100)}
+      <p class="note">${b ? esc(b.why) + ' ' : ''}${num(x1.q1_reaction_return_pct) !== null ? `Q1 result day ${pct(x1.q1_reaction_return_pct)}${num(x1.q1_reaction_rvol) !== null ? ` on ${x(x1.q1_reaction_rvol)} usual volume` : ''}; ${pct(x1.q1_return_to_q2_pct)} from before the Q1 result to now. ` : 'Q1 result date not found yet. '}${num(v.pe) !== null ? `P/E ${num(v.pe).toFixed(1)}x${num(v.sectorPe) !== null ? ` against sector ${num(v.sectorPe).toFixed(1)}x` : ''}. ` : ''}Liquidity ${esc(liq.label || '—')}${num(it.marketCapCr) !== null ? `, market cap ${cr(it.marketCapCr)}` : ''}.</p>
+      <div class="links">${[['screener', 'Screener'], ['tradingview', 'TradingView'], ['nse', 'NSE'], ['bse', 'BSE']].filter(([k]) => P(it).links?.[k]).map(([k, l]) => `<a href="${esc(P(it).links[k])}" target="_blank" rel="noopener">${l}</a>`).join('')}</div></div>`;
   }
 
-  function card(item) {
-    const state=item.eventState||'—';
-    const commentary=item.managementCommentary
-      ? `<div class="commentary"><b>Management/source commentary:</b> ${esc(item.managementCommentary)}</div>`
-      : `<div class="commentary muted"><b>Management commentary:</b> not verified in source data.</div>`;
-    return `
-      <article class="stock-card">
-        <div class="stock-head">
-          <div>
-            <div class="symbol">${esc(item.symbol)}</div>
-            <div class="name">${esc(item.name)} · ${esc(item.sector)}</div>
-            <div class="sub">${esc(item.quarter)} · Result ${dateFmt(item.resultDate)} · Base ${esc(item.baseScoreText)}</div>
-            <div class="state-line">STATE: ${esc(state)} · REACTION: ${dateFmt(item.reactionSession)} · FILING: ${esc(item.filingSession||'—')}</div>
-          </div>
-          <div class="conviction"><div>${esc(item.convictionScore)}<span>/100</span></div><small>CONVICTION</small></div>
-        </div>
-        <div class="reality-grid">
-          <div><small>RESULT REALITY</small>${badge(item.resultReality?.label)}</div>
-          <div><small>EXPECTATION REALITY</small>${badge(item.expectationReality?.label)}</div>
-          <div><small>VALUATION REALITY</small>${badge(item.valuationReality?.label)}</div>
-          <div><small>PRICE RESPONSE</small>${badge(item.priceResponse?.label)}</div>
-        </div>
-        <div class="verdict ${tone(item.verdict)}">${esc(item.verdict)}</div>
-        ${priceTracker(item)}
-        <div class="metrics">${metricRows(item)}</div>
-        <div class="evidence-grid">
-          ${evidenceList('WHY IT WORKS',item.reasons,'positive')}
-          ${evidenceList('RISKS / WHAT TO VERIFY',item.risks,'risk')}
-        </div>
-        ${commentary}
-      </article>`;
+  function viewWatch() {
+    let list = upcoming().filter(matches);
+    if (S.bucket !== 'ALL') list = list.filter(it => (P(it).bucket?.code || 'NONE') === S.bucket);
+    const all = list.length;
+    if (S.liquid) list = list.filter(liquidOk);
+    if (!list.length) return emptyHidden(all, 0, 'upcoming results');
+    const groups = new Map();
+    list.sort((a, b) => String(a.resultDate || '9').localeCompare(String(b.resultDate || '9')) || (num(b.convictionScore) ?? 0) - (num(a.convictionScore) ?? 0));
+    for (const it of list) { const k = it.resultDate || 'Date not announced'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+    const hdr = '<div class="hdr" aria-hidden="true"><span>Company</span><span class="opt">Q1 → Q2 bucket</span><span>Run-up</span><span class="opt">Q1 move</span><span>When</span><span></span></div>';
+    let html = '';
+    for (const [k, rows] of groups) {
+      const d = daysTo(k);
+      html += `<h2 class="day">${k === 'Date not announced' ? k : new Date(k + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}<small>${rows.length} ${rows.length === 1 ? 'company' : 'companies'}${d === 0 ? ', today' : d === 1 ? ', tomorrow' : d !== null && d > 1 ? `, in ${d} days` : ''}</small></h2>${hdr}<div class="ledger">${rows.map(ledgerRow).join('')}</div>`;
+    }
+    return html + (all > list.length ? `<p class="foot">${all - list.length} illiquid companies hidden.</p>` : '');
   }
 
-  function filteredItems() {
-    const items=DATA?.items||[];
-    const q=($('search')?.value||'').trim().toLowerCase();
-    return items.filter(item=>{
-      let ok=true;
-      if (currentFilter==='DECLARED') ok=item.resultsReleased===true;
-      if (currentFilter==='HIGH') ok=item.verdict==='HIGH-CONVICTION PEAD CANDIDATE';
-      if (currentFilter==='PRICED') ok=item.expectationReality?.label==='PRICED IN';
-      if (currentFilter==='PENDING') ok=String(item.verdict||'').includes('DATA PENDING')||item.resultReality?.label==='UNVERIFIED';
-      if (currentFilter==='ENTRY') ok=['WATCH_BREAKOUT','NEAR_ENTRY','ENTRY_TRIGGERED'].includes(String(item.entrySignal||''));
-      if (currentFilter==='UPCOMING') ok=item.resultsReleased!==true;
-      if (currentFilter==='ALL') ok=true;
-      const searchable=[item.symbol,item.name,item.sector,item.verdict,item.eventState,item.resultReality?.label,item.expectationReality?.label,item.valuationReality?.label].join(' ').toLowerCase();
-      return ok&&(!q||searchable.includes(q));
-    }).sort((a,b)=>{
-      const value=(item)=>{
-        const pc=item.priceContext||{};
-        const fs=item.fundamentalSnapshot||{};
-        switch(sortKey) {
-          case 'completeness': return n(item.dataCompletenessPct);
-          case 'resultDate': return item.resultDate ? new Date(item.resultDate).getTime() : null;
-          case 'revenue': return n(item.revenueYoY ?? fs.revenueYoYCalc);
-          case 'pat': return n(item.patYoY ?? fs.patYoYCalc);
-          case 'reaction': return n(pc.resultDayPct);
-          case 'rvol': return n(pc.relativeVolume);
-          case 'price': return n(pc.lastClose);
-          case 'entryDistance': return n(item.entryDistancePct);
-          case 'conviction':
-          default: return n(item.convictionScore);
-        }
-      };
-      const av=value(a), bv=value(b);
-      if (av==null && bv==null) return String(a.symbol||'').localeCompare(String(b.symbol||''));
-      if (av==null) return 1;
-      if (bv==null) return -1;
-      const cmp=av===bv?String(a.symbol||'').localeCompare(String(b.symbol||'')):av-bv;
-      return sortDir==='asc'?cmp:-cmp;
-    });
+  function viewSectors() {
+    const rows = (S.data.sectors || []).filter(r => !S.q || r.sector.toLowerCase().includes(S.q.toLowerCase()));
+    if (!rows.length) return '<div class="empty">Sector data appears once prices are tracked.</div>';
+    const max = Math.max(10, ...rows.map(r => Math.abs(num(r.relativeToMarket) ?? 0)));
+    const bar = v => { const n = num(v); if (n === null) return '—'; const w = Math.abs(n) / max * 50; return `<div class="bar" title="${pct(n)} vs market"><i style="left:${n >= 0 ? 50 : 50 - w}%;width:${w}%;background:${n >= 0 ? 'var(--gain)' : 'var(--loss)'}"></i><i style="left:50%;width:1px;background:var(--ink-3)"></i></div>`; };
+    return `<p class="note">Tailwind combines how tracked peers moved over 3 months versus the whole universe, and how many peers that already reported had strong earnings.</p>
+      <table><thead><tr><th>Sector</th><th class="hide-sm">3-month vs market</th><th class="r">Relative</th><th class="r hide-sm">Reported</th><th class="r">Strong</th><th>Tailwind</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${esc(r.sector)} <span class="meta">(${r.stocks})</span></td><td class="hide-sm">${bar(r.relativeToMarket)}</td><td class="r n ${cls(r.relativeToMarket)}">${pct(r.relativeToMarket)}</td><td class="r n hide-sm">${r.declared}</td><td class="r n">${r.strongResults}</td><td>${r.tailwind ? `<span class="tag ${TAIL_TONE[r.tailwind] || ''}">${r.tailwind.toLowerCase()}</span>` : '—'}</td></tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  function viewScore() {
+    const sc = S.data.scorecard || { rows: [] };
+    return `<p class="note">${esc(sc.metric)}. This checks the core idea behind the buckets: did stocks with a strong Q1 reaction keep drifting? It fills in as more results are tracked; treat small samples as anecdotes.</p>
+      <table><thead><tr><th>Group</th><th class="r">Stocks</th><th class="r">Average</th><th class="r">Median</th><th class="r">Positive</th></tr></thead><tbody>
+      ${sc.rows.map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n ${cls(r.avg)}">${pct(r.avg)}</td><td class="r n ${cls(r.median)}">${pct(r.median)}</td><td class="r n">${num(r.winRate) === null ? '—' : num(r.winRate).toFixed(0) + '%'}</td></tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  function viewHealth() {
+    const h = S.data.health || {}, c = S.data.counts || {};
+    const box = (l, v) => `<div class="hbox"><span>${l}</span><b>${v ?? '—'}</b></div>`;
+    return `<div class="health">
+      ${box('Companies tracked', `${h.activeDashboardEvents ?? '—'} / ${h.eventsTracked ?? '—'}`)}
+      ${box('Results declared', h.resultsFiled)}${box('Financials verified', h.financialsVerified)}
+      ${box('Financials flagged', h.financialsFlagged)}${box('Reaction measured', h.reactionReady)}
+      ${box('Tradeable (liquid)', c.liquid)}${box('Completeness of declared', h.declaredCompletenessPct != null ? Math.round(h.declaredCompletenessPct) + '%' : '—')}
+      ${box('Fetch failures', h.fetchesFailed)}${box('Integrity revocations', h.integrity?.revoked)}
+    </div><p class="foot">Engine ${esc(S.data.version || '')}. Generated ${S.data.generatedAt ? new Date(S.data.generatedAt).toLocaleString('en-IN') : '—'}.</p>`;
+  }
+
+  // ---------- header / chips ----------
+  function header() {
+    const d = S.data, r = d.regime || {}, c = d.counts || {};
+    $('sub').textContent = `${d.liveQuarter || 'Live quarter'} results season, updated ${d.generatedAt ? new Date(d.generatedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}`;
+    const tone = { 'RISK-ON': 'on', MIXED: 'mixed', 'RISK-OFF': 'off' }[r.label] || '';
+    $('regime').innerHTML = r.label ? `<span class="dot ${tone}"></span><b>Market ${esc(r.label.toLowerCase())}</b>. ${esc(r.note)}${num(r.ret20dPct) !== null ? ` ${esc(r.index || 'Index')} ${pct(r.ret20dPct)} over 20 days.` : ''}` : '<span class="dot"></span>Market regime appears after the next data refresh.';
+    const decl = declared(), act = decl.filter(it => sig(it)[1] === 'go').length;
+    const soon = upcoming().filter(it => { const n = daysTo(it.resultDate); return n !== null && n >= 0 && n <= 7; }).length;
+    $('season').innerHTML = `<strong>${decl.length}</strong> results declared, <strong>${act}</strong> with an actionable setup, <strong>${soon}</strong> companies reporting in the next 7 days.`;
+    $('c-setups').textContent = decl.length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
+  }
+
+  function chips() {
+    const box = $('chips');
+    if (!['setups', 'watch'].includes(S.tab)) { box.innerHTML = ''; return; }
+    const list = S.tab === 'setups' ? declared() : upcoming();
+    const counts = {};
+    list.forEach(it => { const k = P(it).bucket?.code || 'NONE'; counts[k] = (counts[k] || 0) + 1; });
+    const labels = { ALL: 'All', CONFIRMATION: 'Confirmation', RE_PEAD: 'Re-PEAD', FRESH_PEAD: 'Fresh PEAD', NO_CONFIRMATION: 'Not confirmed', PENDING: 'Q2 pending',
+      WATCH_CONFIRM: 'Q1 held', WATCH_REPEAD: 'Q1 faded', WATCH_FRESH: 'No Q1 setup', NONE: 'No Q1 data' };
+    const keys = ['ALL', ...Object.keys(counts).sort((a, b) => counts[b] - counts[a])];
+    if (!keys.includes(S.bucket)) S.bucket = 'ALL';
+    box.innerHTML = keys.map(k => `<button type="button" class="chip" data-bucket="${k}" aria-pressed="${S.bucket === k}">${labels[k] || k}${k !== 'ALL' ? ` <span class="n">${counts[k]}</span>` : ''}</button>`).join('');
   }
 
   function render() {
-    if (!DATA) return;
-    const c=DATA.counts||{};
-    $('total').textContent=c.total??0;
-    $('declared').textContent=c.resultsDeclared??0;
-    $('genuine').textContent=c.genuineResults??0;
-    $('priced').textContent=c.pricedIn??0;
-    $('high').textContent=c.highConviction??0;
-    $('generated').textContent=DATA.generatedAt?new Date(DATA.generatedAt).toLocaleString('en-IN'):'—';
-    setHealth();
-    const items=filteredItems();
-    $('count').textContent=`${items.length} records`;
-    $('cards').innerHTML=items.length?items.map(card).join(''):`<div class="empty">No records in this view.</div>`;
-    document.querySelectorAll('[data-filter]').forEach(btn=>btn.classList.toggle('active',btn.dataset.filter===currentFilter));
+    if (!S.data) return;
+    header(); chips();
+    $('controls').style.display = ['setups', 'watch', 'sectors'].includes(S.tab) ? '' : 'none';
+    $('sizing').style.display = S.tab === 'setups' ? '' : 'none';
+    $('liquid').parentElement.style.display = S.tab === 'sectors' ? 'none' : '';
+    $('sort').style.display = S.tab === 'setups' ? '' : 'none';
+    document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
+    const active = document.querySelector('.tab[aria-selected="true"]');
+    if (active && active.scrollIntoView) active.scrollIntoView({ inline: 'center', block: 'nearest' });
+    $('view').innerHTML = { setups: viewSetups, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
   }
 
-  async function load() {
-    try {
-      const r=await fetch(`./intelligence.json?t=${Date.now()}`,{cache:'no-store'});
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      DATA=await r.json();
-      if (!Array.isArray(DATA.items)||!DATA.items.length) throw new Error('intelligence.json contains 0 rows');
-      render();
-    } catch(err) {
-      $('cards').innerHTML=`<div class="empty">Intelligence layer unavailable: ${esc(err.message)}.</div>`;
-    }
-  }
+  // ---------- events ----------
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { S.tab = t.dataset.tab; S.bucket = 'ALL'; store.set('tab', S.tab); render(); }));
+  $('q').addEventListener('input', e => { S.q = e.target.value.trim(); render(); });
+  $('liquid').addEventListener('change', e => { S.liquid = e.target.checked; store.set('liquid', S.liquid); render(); });
+  $('sort').addEventListener('change', e => { S.sort = e.target.value; store.set('sort', S.sort); render(); });
+  $('chips').addEventListener('click', e => { const b = e.target.closest('[data-bucket]'); if (b) { S.bucket = b.dataset.bucket; render(); } });
+  ['cap', 'risk'].forEach(id => $(id).addEventListener('change', e => { store.set(id, num(e.target.value)); render(); }));
+  $('view').addEventListener('click', e => {
+    if (e.target.closest('[data-act="show-illiquid"]')) { S.liquid = false; $('liquid').checked = false; render(); return; }
+    const row = e.target.closest('.row'); if (row && !e.target.closest('a')) { const id = row.dataset.id; S.open.has(id) ? S.open.delete(id) : S.open.add(id); render(); }
+  });
+  $('view').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('row')) { e.preventDefault(); e.target.click(); } });
+  const applyTheme = t => { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; $('theme').textContent = (t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark' ? 'Light mode' : 'Dark mode'; };
+  $('theme').addEventListener('click', () => { const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); const next = cur === 'dark' ? 'light' : 'dark'; store.set('theme', next); applyTheme(next); });
 
-  document.addEventListener('click',e=>{
-    const btn=e.target.closest('[data-filter]');
-    if (!btn) return;
-    currentFilter=btn.dataset.filter;
-    render();
-  });
-  $('search')?.addEventListener('input',render);
-  $('sort-key')?.addEventListener('change',e=>{
-    sortKey=e.target.value;
-    render();
-  });
-  $('sort-dir')?.addEventListener('click',()=>{
-    sortDir=sortDir==='desc'?'asc':'desc';
-    $('sort-dir').textContent=sortDir==='desc'?'Descending ↓':'Ascending ↑';
-    render();
-  });
-  $('reload')?.addEventListener('click',load);
-  load();
+  // ---------- boot ----------
+  S.tab = store.get('tab', 'setups'); S.liquid = store.get('liquid', true); S.sort = store.get('sort', 'conviction');
+  $('liquid').checked = S.liquid; $('sort').value = S.sort;
+  $('cap').value = store.get('cap', 1000000); $('risk').value = store.get('risk', 1);
+  applyTheme(store.get('theme', null));
+  fetch('intelligence.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(d => { S.data = d; render(); })
+    .catch(err => { $('view').innerHTML = `<div class="empty">Could not load intelligence.json (${esc(err.message)}). The page shows data once the engine has published at least once.</div>`; });
 })();
