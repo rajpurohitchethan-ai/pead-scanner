@@ -37,6 +37,8 @@ from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 import xml.etree.ElementTree as ET
 
+import pead_plus
+
 # Optional third-party dependencies. Self-test and bootstrap remain usable even
 # before the GitHub workflow installs the network packages.
 try:
@@ -83,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.2.0"
+ENGINE_VERSION = "2.4.0"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -98,7 +100,7 @@ PRICE_TRAIL_MAX_POINTS = int(os.getenv("PRICE_TRAIL_MAX_POINTS", "72"))
 RECENT_RESULT_PRICE_REFRESH_HOURS = float(os.getenv("RECENT_RESULT_PRICE_REFRESH_HOURS", "1"))
 SOURCE_RETRY_ATTEMPTS = int(os.getenv("SOURCE_RETRY_ATTEMPTS", "3"))
 SOURCE_DELAY_SEC = float(os.getenv("SOURCE_DELAY_SEC", "1.25"))
-HEAVY_UPCOMING_DAYS = int(os.getenv("HEAVY_UPCOMING_DAYS", "14"))
+HEAVY_UPCOMING_DAYS = int(os.getenv("HEAVY_UPCOMING_DAYS", "30"))
 VALUATION_UPCOMING_DAYS = int(os.getenv("VALUATION_UPCOMING_DAYS", "3"))
 YAHOO_TIMEOUT_SEC = int(os.getenv("YAHOO_TIMEOUT_SEC", "8"))
 YAHOO_NEGATIVE_TTL_HOURS = int(os.getenv("YAHOO_NEGATIVE_TTL_HOURS", "72"))
@@ -107,6 +109,19 @@ YAHOO_FUNDAMENTALS_BUDGET = int(os.getenv("YAHOO_FUNDAMENTALS_BUDGET", "25"))
 YAHOO_QUARTERLY_BUDGET = int(os.getenv("YAHOO_QUARTERLY_BUDGET", "25"))
 YAHOO_NEGATIVE_CACHE_PATH = MASTER_DIR / "yahoo_negative_cache.json"
 PENDING_INTEGRITY_PATH = MASTER_DIR / "pending_integrity.json"
+INDEX_CACHE_PATH = MASTER_DIR / "index_nifty500.json"
+EXCHANGE_META_REFRESH_HOURS = float(os.getenv("EXCHANGE_META_REFRESH_HOURS", "20"))
+# New (engine 2.4) per-event calls are budgeted per run so hourly runs stay
+# short; the backlog fills over the first few runs.
+EXTRA_CALL_BUDGET = int(os.getenv("EXTRA_CALL_BUDGET", "120"))
+_EXTRA_CALLS_USED = {"n": 0}
+
+
+def _extra_budget_ok(cost: int = 1) -> bool:
+    if _EXTRA_CALLS_USED["n"] + cost > EXTRA_CALL_BUDGET:
+        return False
+    _EXTRA_CALLS_USED["n"] += cost
+    return True
 
 # Per-run caches/budgets prevent repeated calls for the same security across
 # several quarterly events. The persistent negative cache prevents known Yahoo
@@ -149,6 +164,8 @@ BASE_SOURCE_RANK = {
     "NSE_PRICE": 95,
     "BSE_PRICE": 95,
     "EXCHANGE_IDENTITY": 95,
+    "NSE_QUOTE": 90,
+    "BSE_META": 88,
     "SCREENER_FALLBACK": 60,
     "YAHOO_QUARTERLY": 55,
     "YAHOO_PRICE": 55,
@@ -161,6 +178,11 @@ FINANCIAL_FIELDS = {
     "revenue_cr", "pat_cr", "eps", "revenue_yoy_pct", "pat_yoy_pct",
     "revenue_qoq_pct", "pat_qoq_pct", "pat_trend", "basis",
     "prior_year_revenue_cr", "prior_year_pat_cr",
+    "opm_pct", "opm_prev_q_pct", "opm_prior_year_pct", "margin_change_bps",
+}
+EXCHANGE_META_FIELDS = {
+    "exchange_pe", "sector_pe", "pb", "roe_pct", "market_cap_cr", "ffmc_cr",
+    "delivery_pct", "exchange_opm_ttm_pct",
 }
 PRICE_FIELDS = {
     "pre_result_5d_pct", "pre_result_10d_pct", "pre_result_20d_pct",
@@ -522,10 +544,12 @@ def security_key_from_values(isin: Any = None, nse_symbol: Any = None, bse_code:
     return f"SYM:{normalize_symbol(symbol) or 'UNKNOWN'}"
 
 
-def json_dump_atomic(path: Path, payload: Any) -> None:
+def json_dump_atomic(path: Path, payload: Any, compact: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    text = (json.dumps(payload, ensure_ascii=False, separators=(",", ":"), default=str) if compact
+            else json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+    tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
 
 
@@ -1020,6 +1044,18 @@ class NSEAdapter:
             event_id=event_id, symbol=symbol,
         )
 
+    def quote(self, symbol: str, event_id: str):
+        fn = getattr(self.client, "quote", None)
+        if fn is None:
+            raise RuntimeError("NSE quote method unavailable")
+        return self._call("quote", lambda: fn(symbol), event_id=event_id, symbol=symbol)
+
+    def index_history(self, index: str, start: date, end: date):
+        fn = getattr(self.client, "fetch_historical_index_data", None)
+        if fn is None:
+            raise RuntimeError("NSE index-history method unavailable")
+        return self._call("index_history", lambda: fn(index, from_date=start, to_date=end), symbol=index, raw_source="NSE_INDEX")
+
     def history(self, symbol: str, start: date, end: date, event_id: str):
         fn = getattr(self.client, "fetch_equity_historical_data", None)
         if fn is None:
@@ -1120,6 +1156,18 @@ class BSEAdapter:
             "results_snapshot", lambda: self.client.resultsSnapshot(str(code)),
             event_id=event_id, symbol=symbol,
         )
+
+    def scrip_results(self, code: str, start: datetime, end: datetime, event_id: str):
+        def fn():
+            res = self.client.announcements(page_no=1, from_date=start, to_date=end, scripcode=str(code), category="Result") or {}
+            return res.get("Table") or []
+        return self._call("scrip_results", fn, event_id=event_id, symbol=str(code))
+
+    def meta(self, code: str, event_id: str, symbol: str | None = None):
+        fn = getattr(self.client, "equityMetaInfo", None)
+        if fn is None:
+            raise RuntimeError("BSE equityMetaInfo unavailable")
+        return self._call("equity_meta", lambda: fn(str(code)), event_id=event_id, symbol=symbol)
 
     def price_history(self, code: str, event_id: str, symbol: str | None = None):
         return self._call(
@@ -2111,6 +2159,13 @@ def metric(record: dict[str, Any], *aliases: str) -> float | None:
     return None
 
 
+def margin_bps(now: Any, before: Any) -> float | None:
+    a, b = safe_num(now), safe_num(before)
+    if a is None or b is None or abs(a) > 150 or abs(b) > 150:
+        return None
+    return round((a - b) * 100)
+
+
 def _exact_metric(record: dict[str, Any] | None, *keys: str) -> tuple[float | None, str | None]:
     """Exact-key lookup only (no substring fallback that could pick PBT/OCI)."""
     if not isinstance(record, dict):
@@ -2185,6 +2240,22 @@ def parse_nse_comparison(payload: dict[str, Any], period_end: date) -> dict[str,
     def cr(lakh: float | None) -> float | None:
         return lakh / 100 if lakh is not None else None
 
+    def opm(row: dict[str, Any] | None, sales: float | None) -> float | None:
+        """Operating margin = (PBT + interest + depreciation - other income) / revenue."""
+        if row is None or not sales or bank:
+            return None
+        pbt, _ = _exact_metric(row, "re_pro_loss_bef_tax", "re_pro_loss_bef_tax_sum")
+        if pbt is None:
+            return None
+        interest, _ = _exact_metric(row, "re_int_new")
+        dep, _ = _exact_metric(row, "re_depr_und_exp")
+        oth, _ = _exact_metric(row, "re_oth_inc_new", "re_oth_inc")
+        ebitda = pbt + (interest or 0) + (dep or 0) - (oth or 0)
+        return ebitda / sales * 100
+
+    opm_now = opm(current, revenue)
+    opm_prev = opm(prev, prev_rev)
+    opm_prior = opm(prior, prior_rev)
     trend, pat_yoy = pat_trend(cr(pat), cr(prior_pat))
     return {
         "revenue_cr": round2(cr(revenue)),
@@ -2197,6 +2268,10 @@ def parse_nse_comparison(payload: dict[str, Any], period_end: date) -> dict[str,
         "pat_trend": trend,
         "revenue_qoq_pct": round2(pct_change(revenue, prev_rev)),
         "pat_qoq_pct": round2(pct_change(pat, prev_pat)) if prev_pat is not None and prev_pat > 0 else None,
+        "opm_pct": round2(opm_now),
+        "opm_prev_q_pct": round2(opm_prev),
+        "opm_prior_year_pct": round2(opm_prior),
+        "margin_change_bps": margin_bps(opm_now, opm_prior if opm_prior is not None else opm_prev),
         "basis": "STANDALONE",
         "_meta": {
             "periodEnd": period_end.isoformat(),
@@ -2261,6 +2336,7 @@ def parse_bse_snapshot(snapshot: dict[str, Any], period_end: date) -> dict[str, 
         return safe_num(values[idx])
 
     revenue, pat, eps = val("revenue", current_idx), val("net profit", current_idx), val("eps", current_idx)
+    opm_now, opm_prev, opm_prior = val("opm", current_idx), val("opm", prev_idx), val("opm", prior_idx)
     prev_rev, prev_pat = val("revenue", prev_idx), val("net profit", prev_idx)
     prior_rev, prior_pat = val("revenue", prior_idx), val("net profit", prior_idx)
     trend, pat_yoy = pat_trend(pat, prior_pat)
@@ -2275,6 +2351,10 @@ def parse_bse_snapshot(snapshot: dict[str, Any], period_end: date) -> dict[str, 
         "pat_trend": trend,
         "revenue_qoq_pct": round2(pct_change(revenue, prev_rev)),
         "pat_qoq_pct": round2(pct_change(pat, prev_pat)) if prev_pat is not None and prev_pat > 0 else None,
+        "opm_pct": round2(opm_now),
+        "opm_prev_q_pct": round2(opm_prev),
+        "opm_prior_year_pct": round2(opm_prior),
+        "margin_change_bps": margin_bps(opm_now, opm_prior if opm_prior is not None else opm_prev),
         "basis": "UNKNOWN",
         "_meta": {
             "periodEnd": period_end.isoformat(),
@@ -2299,16 +2379,22 @@ def nse_history_to_frame(records: Any):
     for r in records:
         if not isinstance(r, dict):
             continue
-        d = parse_date(first(r, "mTIMESTAMP", "CH_TIMESTAMP", "date", "Date"))
+        # NSE renamed its history fields (2025: CH_CLOSING_PRICE -> chClosingPrice,
+        # mTIMESTAMP -> mtimestamp). Both spellings are accepted; before this fix
+        # every NSE history was silently discarded and BSE close-only data used.
+        d = parse_date(first(r, "mTIMESTAMP", "mtimestamp", "CH_TIMESTAMP", "chTimestamp", "date", "Date"))
         if d is None:
+            continue
+        series = str(first(r, "CH_SERIES", "chSeries", default="EQ") or "EQ").upper()
+        if series not in {"EQ", "BE", "BZ", "SM", "ST"}:
             continue
         rows.append({
             "Date": pd.Timestamp(d),
-            "Open": safe_num(first(r, "CH_OPENING_PRICE", "open", "Open")),
-            "High": safe_num(first(r, "CH_TRADE_HIGH_PRICE", "high", "High")),
-            "Low": safe_num(first(r, "CH_TRADE_LOW_PRICE", "low", "Low")),
-            "Close": safe_num(first(r, "CH_CLOSING_PRICE", "close", "Close")),
-            "Volume": safe_num(first(r, "CH_TOT_TRADED_QTY", "volume", "Volume")),
+            "Open": safe_num(first(r, "CH_OPENING_PRICE", "chOpeningPrice", "open", "Open")),
+            "High": safe_num(first(r, "CH_TRADE_HIGH_PRICE", "chTradeHighPrice", "high", "High")),
+            "Low": safe_num(first(r, "CH_TRADE_LOW_PRICE", "chTradeLowPrice", "low", "Low")),
+            "Close": safe_num(first(r, "CH_CLOSING_PRICE", "chClosingPrice", "close", "Close")),
+            "Volume": safe_num(first(r, "CH_TOT_TRADED_QTY", "chTotTradedQty", "volume", "Volume")),
         })
     if not rows:
         return None
@@ -3379,7 +3465,7 @@ def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceConte
                 store.record_fetch(event, source, ok=False, error=f"{type(exc).__name__}: {exc}")
 
     # 2) NSE results comparison: also used as an independent cross-check.
-    if symbol and not _has_snapshot(event, "NSE_RESULTS_COMPARISON"):
+    if symbol and not _has_snapshot(event, "NSE_RESULTS_COMPARISON") and not fetch_cooling_down(event, "NSE_RESULTS_COMPARISON", 24):
         try:
             with NSEAdapter(ctx) as nse:
                 payload, raw_ref = nse.results_comparison(symbol, event["eventId"])
@@ -3422,6 +3508,155 @@ def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceConte
     apply_financial_snapshots(store, event)
 
 
+# ---------------------------------------------------------------------------
+# Exchange meta: sector, valuation, market cap, delivery (engine 2.4)
+# ---------------------------------------------------------------------------
+
+def parse_nse_quote(payload: Any) -> dict[str, Any]:
+    """Accept both the new getSymbolData shape (metaData/tradeInfo/secInfo/
+    priceInfo) and the older quote-equity shape (info/metadata/industryInfo)."""
+    if not isinstance(payload, dict):
+        return {}
+    out: dict[str, Any] = {}
+    sec = payload.get("secInfo") or {}
+    trade = payload.get("tradeInfo") or {}
+    price = payload.get("priceInfo") or {}
+    meta = payload.get("metadata") or {}
+    ind = payload.get("industryInfo") or {}
+    out["exchange_pe"] = safe_num(first(sec, "pdSymbolPe") or first(meta, "pdSymbolPe"))
+    out["sector_pe"] = safe_num(first(sec, "pdSectorPe") or first(meta, "pdSectorPe"))
+    mcap = safe_num(first(trade, "totalMarketCap"))
+    out["market_cap_cr"] = round2(mcap / 1e7) if mcap else None          # rupees -> crore
+    ffmc = safe_num(first(trade, "ffmc"))
+    out["ffmc_cr"] = round2(ffmc / 1e7) if ffmc else None
+    out["delivery_pct"] = safe_num(first(trade, "deliveryToTradedQuantity") or first(sec, "deliveryTotradedQuantity"))
+    wk = price.get("weekHighLow") if isinstance(price.get("weekHighLow"), dict) else {}
+    out["week52_high"] = safe_num(first(price, "yearHigh") or first(wk, "max"))
+    out["week52_low"] = safe_num(first(price, "yearLow") or first(wk, "min"))
+    sector_index = str(first(sec, "pdSectorInd") or first(meta, "pdSectorInd") or "").strip()
+    out["identity"] = {
+        "basicIndustry": first(sec, "basicIndustry") or first(ind, "basicIndustry"),
+        "industry": first(ind, "industry"),
+        "exchangeSector": first(ind, "sector"),
+        "macroSector": first(ind, "macro"),
+        "sectorIndex": sector_index if sector_index and sector_index.upper() not in {"NA", "N/A", "-"} else None,
+    }
+    return out
+
+
+def parse_bse_meta(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+
+    def n(key: str) -> float | None:
+        v = safe_num(payload.get(key))
+        return v if v not in (0,) else None
+
+    return {
+        "exchange_pe": n("PE"),
+        "pb": n("PB"),
+        "roe_pct": safe_num(payload.get("ROE")),
+        "exchange_opm_ttm_pct": safe_num(payload.get("OPM")),
+        "identity": {
+            "macroSector": payload.get("Sector") or None,
+            "exchangeSector": payload.get("IndustryNew") or None,
+            "industry": payload.get("IGroup") or None,
+            "basicIndustry": payload.get("ISubGroup") or payload.get("Industry") or None,
+            "bseGroup": payload.get("Group") or None,
+        },
+    }
+
+
+def sector_key(sec: dict[str, Any]) -> str | None:
+    """One sector name per company for peer comparison: the exchange 'Sector'
+    level (≈22 groups) when known, else basic industry, else Yahoo sector."""
+    for k in ("exchangeSector", "basicIndustry", "industry", "sector"):
+        v = str(sec.get(k) or "").strip()
+        if v and v not in {"—", "-", "NA"}:
+            return v
+    return None
+
+
+def enrich_exchange_meta(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
+    fetch = (event.get("fetch") or {}).get("EXCHANGE_META") or {}
+    last = parse_datetime(fetch.get("lastSuccess"))
+    if last and (now_ist() - last).total_seconds() < EXCHANGE_META_REFRESH_HOURS * 3600:
+        return
+    sec = event.setdefault("security", {})
+    symbol = normalize_symbol(sec.get("nseSymbol"))
+    bse_code = str(sec.get("bseCode") or "").strip()
+    if not _extra_budget_ok(int(bool(symbol)) + int(bool(bse_code))):
+        return
+    got, errors = False, []
+    if symbol:
+        try:
+            with NSEAdapter(ctx) as nse:
+                payload, raw_ref = nse.quote(symbol, event["eventId"])
+            parsed = parse_nse_quote(payload)
+            for field, value in parsed.items():
+                if field != "identity" and value is not None:
+                    store.merge_field(event, field, value, source="NSE_QUOTE", raw_ref=raw_ref)
+            for k, v in (parsed.get("identity") or {}).items():
+                if v:
+                    sec[k] = v
+            got = got or bool(parsed)
+        except Exception as exc:
+            errors.append(f"NSE quote: {type(exc).__name__}: {exc}")
+    if bse_code:
+        try:
+            with BSEAdapter(ctx) as bse:
+                payload, raw_ref = bse.meta(bse_code, event["eventId"], symbol)
+            parsed = parse_bse_meta(payload)
+            for field, value in parsed.items():
+                if field != "identity" and value is not None:
+                    store.merge_field(event, field, value, source="BSE_META", raw_ref=raw_ref)
+            for k, v in (parsed.get("identity") or {}).items():
+                if v and not sec.get(k):
+                    sec[k] = v
+            got = got or bool(parsed)
+        except Exception as exc:
+            errors.append(f"BSE meta: {type(exc).__name__}: {exc}")
+    # The exchange PE is the trailing P/E; keep the legacy field in sync so the
+    # existing valuation logic and sorting use exchange data before Yahoo.
+    pe = store.value(event, "exchange_pe")
+    if pe is not None:
+        store.merge_field(event, "trailing_pe", pe, source="NSE_QUOTE" if symbol else "BSE_META")
+    store.record_fetch(event, "EXCHANGE_META", ok=got, error="; ".join(errors) or None)
+
+
+def load_index_cache() -> dict[str, Any]:
+    try:
+        return json.loads(INDEX_CACHE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def refresh_index_cache(ctx: SourceContext) -> dict[str, Any]:
+    """Nifty 500 daily closes for market regime and relative strength.
+    Fetched at most once per day; a failed fetch keeps the old cache."""
+    cache = load_index_cache()
+    if cache.get("fetchedOn") == now_ist().date().isoformat() and cache.get("closes"):
+        return cache
+    try:
+        end = now_ist().date()
+        with NSEAdapter(ctx) as nse:
+            rows, _ = nse.index_history("NIFTY 500", end - timedelta(days=330), end)
+        points = []
+        for r in rows or []:
+            d = parse_date(first(r, "EOD_TIMESTAMP", "HistoricalDate", "date"))
+            c = safe_num(first(r, "EOD_CLOSE_INDEX_VAL", "CLOSE", "close"))
+            if d and c:
+                points.append((d.isoformat(), c))
+        points.sort()
+        if len(points) >= 55:
+            cache = {"index": "NIFTY 500", "fetchedOn": end.isoformat(),
+                     "dates": [p[0] for p in points], "closes": [p[1] for p in points]}
+            json_dump_atomic(INDEX_CACHE_PATH, cache)
+    except Exception as exc:
+        print(f"Index history fetch failed (cache kept): {type(exc).__name__}: {exc}")
+    return cache
+
+
 def enrich_valuation(event: dict[str, Any], store: EventStore, master: SymbolMaster, ctx: SourceContext) -> None:
     # Avoid hammering Yahoo every hour if a recent success exists.
     fetch = (event.get("fetch") or {}).get("YAHOO_FUNDAMENTALS") or {}
@@ -3444,6 +3679,98 @@ def enrich_valuation(event: dict[str, Any], store: EventStore, master: SymbolMas
             sec[field] = data[field]
     master.merge(sec)
     store.record_fetch(event, "YAHOO_FUNDAMENTALS", ok=True)
+
+
+def fetch_cooling_down(event: dict[str, Any], source: str, hours: float) -> bool:
+    """True when the last attempt for `source` failed less than `hours` ago."""
+    meta = (event.get("fetch") or {}).get(source) or {}
+    last = parse_datetime(meta.get("lastAttempt"))
+    return bool(meta.get("status") == "FAILED" and last and (now_ist() - last).total_seconds() < hours * 3600)
+
+
+def enrich_previous_quarter(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
+    """Exact filing time of the previous quarter's result (for Q1->Q2 buckets),
+    from NSE's per-symbol filing list or BSE's per-scrip announcements."""
+    if store.value(event, "prev_quarter_result_ts") or fetch_cooling_down(event, "PREV_QUARTER", 24):
+        return
+    meta = (event.get("fetch") or {}).get("PREV_QUARTER") or {}
+    last_ok = parse_datetime(meta.get("lastSuccess"))
+    if last_ok and (now_ist() - last_ok).total_seconds() < 24 * 3600:
+        return
+    period_end = parse_date((event.get("period") or {}).get("end"))
+    if period_end is None:
+        return
+    prev_end = _shift_quarters(period_end, -1)
+    if not _extra_budget_ok(1):
+        return
+    start = datetime.combine(prev_end + timedelta(days=1), dtime(0, 0))
+    end = datetime.combine(min(now_ist().date(), prev_end + timedelta(days=80)), dtime(23, 59))
+    sec = event.get("security") or {}
+    symbol = normalize_symbol(sec.get("nseSymbol"))
+    bse_code = str(sec.get("bseCode") or "").strip()
+    found: list[tuple[datetime, str, str | None]] = []
+    errors = []
+    if symbol:
+        try:
+            with NSEAdapter(ctx) as nse:
+                payload, raw_ref = nse.financial_results(start, end, symbol=symbol, event_id=event["eventId"])
+            for item in payload or []:
+                c = normalize_nse_filing(item) if isinstance(item, dict) else None
+                if c and c.get("periodEnd") == prev_end and c.get("filingTimestamp"):
+                    found.append((c["filingTimestamp"], "NSE_FINANCIAL_RESULTS", raw_ref))
+        except Exception as exc:
+            errors.append(f"NSE: {type(exc).__name__}: {exc}")
+    if not found and bse_code:
+        try:
+            with BSEAdapter(ctx) as bse:
+                rows, raw_ref = bse.scrip_results(bse_code, start, end, event["eventId"])
+            for item in rows or []:
+                c = normalize_bse_announcement(item) if isinstance(item, dict) else None
+                if c and c.get("periodEnd") == prev_end and c.get("periodSource") == "FILING_TEXT" and c.get("filingTimestamp"):
+                    found.append((c["filingTimestamp"], "BSE_RESULT_ANNOUNCEMENT", raw_ref))
+        except Exception as exc:
+            errors.append(f"BSE: {type(exc).__name__}: {exc}")
+    if found:
+        ts, source, raw_ref = min(found, key=lambda f: f[0])
+        store.merge_field(event, "prev_quarter_result_ts", ts.isoformat(), source=source, raw_ref=raw_ref,
+                          note=f"previous quarter {prev_end.isoformat()}")
+    store.record_fetch(event, "PREV_QUARTER", ok=bool(found) or not errors,
+                       error="; ".join(errors) or (None if found else "no previous-quarter filing found"))
+
+
+def previous_quarter_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any] | None:
+    period_end = parse_date((event.get("period") or {}).get("end"))
+    if period_end is None:
+        return None
+    prev_end = _shift_quarters(period_end, -1)
+    sec = event.get("security") or {}
+    keys = []
+    if sec.get("isin"):
+        keys.append(security_key_from_values(sec.get("isin"), None, None, None))
+    if sec.get("nseSymbol"):
+        keys.append(security_key_from_values(None, sec.get("nseSymbol"), None, None))
+    if sec.get("bseCode"):
+        keys.append(security_key_from_values(None, None, sec.get("bseCode"), None))
+    if sec.get("symbol"):
+        keys.append(security_key_from_values(None, None, None, sec.get("symbol")))
+    for key in keys:
+        prev = store.load(event_id_for(key, prev_end))
+        if prev:
+            return prev
+    return None
+
+
+def previous_quarter_reaction(store: EventStore, event: dict[str, Any]) -> date | None:
+    prev = previous_quarter_event(store, event)
+    if prev and boolish(store.value(prev, "results_released")) is True:
+        d = parse_date(store.value(prev, "reaction_session")) or parse_date(store.value(prev, "result_date"))
+        if d:
+            return d
+    ts = parse_datetime(store.value(event, "prev_quarter_result_ts"))
+    if ts:
+        session, _ = reaction_session(ts, None)
+        return session
+    return None
 
 
 def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
@@ -3527,6 +3854,20 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
             continue
         store.merge_field(event, field, value, source=price_source or "YAHOO_PRICE", raw_ref=raw_ref)
     append_price_snapshot(event, metrics.get("last_price"), price_source)
+    try:
+        x = pead_plus.extended_features(
+            frame, reaction_date, released=reaction_traded,
+            q1_reaction_date=previous_quarter_reaction(store, event), q2_boundary=price_boundary,
+        )
+        if x:
+            event["plus"] = {
+                "price": {k: v for k, v in x.items() if k != "chart"},
+                "chart": x.get("chart"),
+                "priceSource": price_source,
+                "computedAt": iso_now(),
+            }
+    except Exception as exc:
+        store.record_fetch(event, "PLUS_FEATURES", ok=False, error=f"{type(exc).__name__}: {exc}")
     store.record_fetch(event, "PRICE_HISTORY", ok=True, raw_ref=raw_ref)
 
     if boolish(store.value(event, "results_released")) is True:
@@ -3687,6 +4028,18 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
                     stats["financials"] += 1
 
             enrich_price(event, store, ctx)
+            try:
+                enrich_exchange_meta(event, store, ctx)
+            except Exception as exc:
+                store.record_fetch(event, "EXCHANGE_META", ok=False, error=f"{type(exc).__name__}: {exc}")
+            try:
+                had_prev = store.value(event, "prev_quarter_result_ts")
+                enrich_previous_quarter(event, store, ctx)
+                if not had_prev and store.value(event, "prev_quarter_result_ts"):
+                    # New Q1 date: rebuild the Q1 replay on the next price pass.
+                    (event.get("fetch") or {}).get("PRICE_HISTORY", {}).pop("lastSuccess", None)
+            except Exception as exc:
+                store.record_fetch(event, "PREV_QUARTER", ok=False, error=f"{type(exc).__name__}: {exc}")
 
             if _valuation_due(event, store):
                 enrich_valuation(event, store, master, ctx)
@@ -3721,6 +4074,7 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
     _save_yahoo_negative_cache()
     stats["yahooNegativeCached"] = len(_load_yahoo_negative_cache())
     stats["yahooBudget"] = dict(_YAHOO_BUDGET_USED)
+    stats["extraCallsUsed"] = _EXTRA_CALLS_USED["n"]
     return stats
 
 
@@ -3752,7 +4106,74 @@ def core_completeness(store: EventStore, event: dict[str, Any]) -> tuple[int, in
     return have, len(required), round(have / len(required) * 100, 1) if required else 100.0
 
 
-def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
+def screener_links(sec: dict[str, Any]) -> dict[str, str | None]:
+    nse = normalize_symbol(sec.get("nseSymbol"))
+    bse = str(sec.get("bseCode") or "").strip()
+    bse_sym = normalize_symbol(sec.get("bseSymbol") or sec.get("symbol"))
+    return {
+        "screener": f"https://www.screener.in/company/{nse or bse}/" if (nse or bse) else None,
+        "tradingview": (f"https://www.tradingview.com/chart/?symbol=NSE%3A{nse}" if nse
+                        else f"https://www.tradingview.com/chart/?symbol=BSE%3A{bse_sym}" if bse_sym else None),
+        "nse": f"https://www.nseindia.com/get-quotes/equity?symbol={nse}" if nse else None,
+        "bse": f"https://www.bseindia.com/stock-share-price/x/{bse_sym or 'x'}/{bse}/" if bse else None,
+    }
+
+
+def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, result_label: str, price_label: str,
+               sector_info: dict[str, Any] | None, box_high: Any, last_price: Any, result_ret: Any, rvol: Any,
+               result_low: Any, result_high: Any) -> dict[str, Any]:
+    """Engine 2.4 analytics for one event (buckets, plan, margins, sector, valuation)."""
+    px = (event.get("plus") or {}).get("price") or {}
+    sec = event.get("security") or {}
+    rev_yoy = store.value(event, "revenue_yoy_pct")
+    pat_yoy = store.value(event, "pat_yoy_pct")
+    margin = store.value(event, "margin_change_bps")
+    strength = pead_plus.earnings_strength(rev_yoy, pat_yoy, store.value(event, "pat_trend"), margin) if released else None
+
+    prev = previous_quarter_event(store, event)
+    q1_strength = None
+    if prev is not None and boolish(store.value(prev, "results_released")) is True:
+        q1_strength = pead_plus.earnings_strength(store.value(prev, "revenue_yoy_pct"), store.value(prev, "pat_yoy_pct"),
+                                                  store.value(prev, "pat_trend"), store.value(prev, "margin_change_bps"))
+    setup = pead_plus.q1_setup(px.get("q1_reaction_return_pct"), px.get("q1_reaction_rvol"), q1_strength)
+    bucket = pead_plus.classify_bucket(released=released, q2_strength=strength, setup=setup, sustained=px.get("q1_sustained"))
+
+    reaction = parse_date(store.value(event, "reaction_session"))
+    reaction_traded = released and reaction is not None and reaction <= now_ist().date()
+    if price_label == "NEGATIVE" or result_label == "LOW QUALITY" or strength in {"WEAK", "AVERAGE"}:
+        quality_ok: bool | None = False
+    elif strength in {"STRONG", "AVERAGE+"}:
+        quality_ok = True
+    else:
+        quality_ok = None
+    plan = pead_plus.trade_plan(released=released, reaction_traded=reaction_traded, quality_ok=quality_ok, x=px,
+                                last_price=last_price, result_return=result_ret, rvol=rvol,
+                                result_low=result_low, result_high=result_high, box_high=box_high)
+    key = sector_key(sec)
+    return {
+        "strength": strength,
+        "q1Strength": q1_strength,
+        "q1Setup": setup,
+        "bucket": bucket,
+        "plan": plan,
+        "liquidity": pead_plus.liquidity(store.value(event, "avg_turnover_20d_cr"), last_price),
+        "valuation": pead_plus.valuation_view(store.value(event, "trailing_pe"), store.value(event, "sector_pe"),
+                                              store.value(event, "roe_pct"), pat_yoy, store.value(event, "pb")),
+        "margins": {
+            "opm": store.value(event, "opm_pct"), "opmPrevQ": store.value(event, "opm_prev_q_pct"),
+            "opmPriorYear": store.value(event, "opm_prior_year_pct"), "changeBps": margin,
+            "opmTtm": store.value(event, "exchange_opm_ttm_pct"),
+        },
+        "sectorKey": key,
+        "sector": (sector_info or {}).get(key) if key else None,
+        "identity": {k: sec.get(k) for k in ("macroSector", "exchangeSector", "industry", "basicIndustry", "sectorIndex", "bseGroup")},
+        "price": px,
+        "deliveryPct": store.value(event, "delivery_pct"),
+        "links": screener_links(sec),
+    }
+
+
+def score_event(store: EventStore, event: dict[str, Any], sector_info: dict[str, Any] | None = None) -> dict[str, Any]:
     released = boolish(store.value(event, "results_released")) is True
     rev_yoy = safe_num(store.value(event, "revenue_yoy_pct"))
     pat_yoy = safe_num(store.value(event, "pat_yoy_pct"))
@@ -3924,7 +4345,10 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
 
     valuation_inputs = [trailing_pe, forward_pe, peg, roe, fcf_yield]
     valuation_input_count = sum(v is not None for v in valuation_inputs)
-    if valuation_input_count < 3:
+    exchange_view = pead_plus.valuation_view(trailing_pe, store.value(event, "sector_pe"), roe, pat_yoy, store.value(event, "pb"))
+    if valuation_input_count < 3 and exchange_view["label"] not in {"UNVERIFIED"}:
+        valuation_label = exchange_view["label"]
+    elif valuation_input_count < 3:
         valuation_label = "UNVERIFIED"
     elif trailing_pe is not None and trailing_pe > 80:
         valuation_label = "EXCESSIVE"
@@ -3998,7 +4422,55 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
     else:
         entry_signal = "WAIT_ACCEPTANCE"
 
-    entry_watch = entry_signal in {"WATCH_BREAKOUT", "NEAR_ENTRY", "ENTRY_TRIGGERED"}
+    # Engine 2.4 plan replaces the box-only entry model: early entry on a
+    # strong reaction, pullback to the 10/21 EMA, or post-result box breakout,
+    # with the SL under the result-day low and TSL on the 21/63 EMA.
+    plus = build_plus(store, event, released=released, result_label=result_label, price_label=price_label,
+                      sector_info=sector_info, box_high=box_high, last_price=last_price, result_ret=result_ret,
+                      rvol=rvol, result_low=result_low, result_high=store.value(event, "result_day_high"))
+    plan = plus["plan"]
+    entry_signal = plan.get("signal") or entry_signal
+    entry_trigger_price = plan.get("entry")
+    entry_distance_pct = plan.get("distancePct")
+    px = plus["price"]
+    bonus = 0
+    if px.get("hv_label") in {"HVY", "HVE"}:
+        bonus += 5
+        reasons.append(f"Highest volume of the {'year' if px['hv_label'] == 'HVY' else 'listed history'} on the result session ({px['hv_label']}).")
+    elif px.get("hv_label") == "HVQ":
+        bonus += 3
+        reasons.append("Highest volume of the quarter on the result session (HVQ).")
+    mbps = safe_num(plus["margins"].get("changeBps"))
+    if mbps is not None:
+        if mbps >= 100:
+            bonus += 4
+            reasons.append(f"Operating margin expanded {mbps:+.0f} bps.")
+        elif mbps <= -200:
+            bonus -= 3
+            risks.append(f"Operating margin contracted {mbps:+.0f} bps.")
+    bcode = (plus.get("bucket") or {}).get("code")
+    if bcode in {"CONFIRMATION", "RE_PEAD"}:
+        bonus += 6
+        reasons.append(f"{plus['bucket']['label']}: {plus['bucket']['why']}")
+    elif bcode == "FRESH_PEAD":
+        bonus += 4
+        reasons.append(f"{plus['bucket']['label']}: {plus['bucket']['why']}")
+    tail = ((plus.get("sector") or {}).get("tailwind"))
+    if tail == "STRONG":
+        bonus += 5
+        reasons.append(f"Sector tailwind: {plus['sectorKey']} peers are outperforming.")
+    elif tail == "POSITIVE":
+        bonus += 2
+    elif tail == "WEAK":
+        bonus -= 3
+        risks.append(f"Sector headwind: {plus['sectorKey']} peers are lagging.")
+    if px.get("base_broken"):
+        risks.append("Closed below the result-day low: post-result base broken.")
+    if plus["liquidity"].get("pass") is False:
+        risks.append(plus["liquidity"]["label"] + ".")
+    score = max(0, min(100, score + bonus))
+
+    entry_watch = entry_signal in pead_plus.ACTIONABLE
     if entry_watch:
         store.set_state(event, "ENTRY_WATCH", f"PEAD entry state: {entry_signal}")
 
@@ -4031,6 +4503,7 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
         "entrySignal": entry_signal,
         "entryTriggerPrice": entry_trigger_price,
         "entryDistancePct": entry_distance_pct,
+        "plus": plus,
         "valuationInputCount": valuation_input_count,
         "expectationFullWindow": expectation_has_full_window,
         "reasons": reasons[:8],
@@ -4040,11 +4513,97 @@ def score_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any]:
     return derived
 
 
+def _raw_folders_for(event: dict[str, Any], base: Path) -> list[Path]:
+    sec = event.get("security") or {}
+    prefixes = {safe_filename(event["eventId"]).rsplit("_", 1)[0]}
+    if sec.get("isin"):
+        prefixes.add(safe_filename(str(sec["isin"]).upper()))
+    if sec.get("nseSymbol") or sec.get("symbol"):
+        prefixes.add(safe_filename("NSE:" + normalize_symbol(sec.get("nseSymbol") or sec.get("symbol"))))
+    if not base.exists():
+        return []
+    return [f for pre in prefixes for f in base.glob(f"{pre}_*") if f.is_dir()]
+
+
+def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Path = RAW_DIR) -> bool:
+    """Recompute price analytics from the newest saved price payload (NSE OHLC
+    preferred, BSE close-only fallback). Used when no fresh fetch happened, so
+    stored events get engine-2.4 features without extra network calls."""
+    candidates = []
+    for base, kind in ((raw_root / "nse_price", "NSE"), (raw_root / "bse_price", "BSE")):
+        for folder in _raw_folders_for(event, base):
+            for f in folder.glob("*.json"):
+                candidates.append((kind == "NSE", f.stat().st_mtime, f, kind))
+    frame, source = None, None
+    for _, _, f, kind in sorted(candidates, reverse=True):
+        try:
+            payload = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        frame = nse_history_to_frame(payload) if kind == "NSE" else bse_history_to_frame(payload)
+        if frame is not None and not frame.empty:
+            source = f"{kind}_PRICE"
+            break
+    if frame is None or getattr(frame, "empty", True):
+        return False
+    released = boolish(store.value(event, "results_released")) is True
+    reaction = parse_date(store.value(event, "reaction_session"))
+    result_date = parse_date(store.value(event, "result_date"))
+    traded = released and reaction is not None and reaction <= now_ist().date()
+    x = pead_plus.extended_features(frame, reaction, released=traded,
+                                    q1_reaction_date=previous_quarter_reaction(store, event),
+                                    q2_boundary=reaction or result_date)
+    if not x:
+        return False
+    event["plus"] = {"price": {k: v for k, v in x.items() if k != "chart"}, "chart": x.get("chart"),
+                     "priceSource": source, "computedAt": iso_now(), "replayedFromRaw": True}
+    # OHLC from NSE fixes result-day high/low that were close-only before.
+    if traded and source == "NSE_PRICE":
+        m = price_metrics(frame, reaction)
+        for field in ("result_day_low", "result_day_high", "result_day_return_pct", "result_day_rvol",
+                      "post_result_hold_5d", "post_result_hold_10d", "box_high", "box_breakout"):
+            if m.get(field) is not None:
+                store.merge_field(event, field, m[field], source="NSE_PRICE", note="replayed from saved NSE OHLC")
+    return True
+
+
+def replay_plus(store: EventStore) -> int:
+    n = 0
+    for event in store.all():
+        if not dashboard_activity(event) or (event.get("plus") or {}).get("price"):
+            continue
+        if rebuild_plus_from_raw(store, event):
+            store.save(event)
+            n += 1
+    return n
+
+
+def sector_universe(store: EventStore, events: list[dict[str, Any]]) -> dict[str, Any]:
+    rows = []
+    for e in events:
+        if not dashboard_activity(e):
+            continue
+        px = (e.get("plus") or {}).get("price") or {}
+        released = boolish(store.value(e, "results_released")) is True
+        rows.append({
+            "sectorKey": sector_key(e.get("security") or {}),
+            "ret63": px.get("ret_63d_pct"),
+            "released": released,
+            "strength": pead_plus.earnings_strength(store.value(e, "revenue_yoy_pct"), store.value(e, "pat_yoy_pct"),
+                                                    store.value(e, "pat_trend"), store.value(e, "margin_change_bps")) if released else None,
+            "reaction": store.value(e, "result_day_return_pct"),
+        })
+    return pead_plus.sector_stats(rows)
+
+
 def score_all(store: EventStore) -> dict[str, Any]:
     stats = {"scored": 0, "highConviction": 0}
-    for event in store.all():
+    events = store.all()
+    sectors = sector_universe(store, events)
+    stats["sectors"] = len(sectors)
+    for event in events:
         try:
-            d = score_event(store, event)
+            d = score_event(store, event, sectors)
             stats["scored"] += 1
             stats["highConviction"] += int(d.get("highConviction") is True)
             store.save(event)
@@ -4102,10 +4661,12 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
     entry_signal = str(d.get("entrySignal") or ("WAIT_RESULT" if not released else "REVIEW_ONLY"))
     entry_trigger = entry_signal == "ENTRY_TRIGGERED" if released else None
     box_high = safe_num(meta_value(event, "box_high"))
-    mechanical_entry = safe_num(d.get("entryTriggerPrice"))
-    actionable_entry = entry_signal in {"WATCH_BREAKOUT", "NEAR_ENTRY", "ENTRY_TRIGGERED"}
-    mechanical_sl = round2(meta_value(event, "result_day_low")) if actionable_entry else None
-    mechanical_tsl = mechanical_sl if entry_signal == "ENTRY_TRIGGERED" else None
+    plus = d.get("plus") or {}
+    plan = plus.get("plan") or {}
+    mechanical_entry = safe_num(plan.get("entry"))
+    actionable_entry = entry_signal in pead_plus.ACTIONABLE
+    mechanical_sl = round2(plan.get("sl")) if actionable_entry else None
+    mechanical_tsl = round2(plan.get("tslSwing")) if actionable_entry else None
     tracked_change = price_trail_change(event)
     price_trail = event.get("priceTrail") if isinstance(event.get("priceTrail"), list) else []
 
@@ -4131,8 +4692,8 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
         "symbol": sec.get("symbol") or sec.get("nseSymbol") or sec.get("bseSymbol") or sec.get("bseCode") or "UNKNOWN",
         "sym": sec.get("symbol") or sec.get("nseSymbol"),
         "name": sec.get("name") or sec.get("symbol") or "Unknown",
-        "sector": sec.get("sector") or sec.get("industry") or "—",
-        "industry": sec.get("industry"),
+        "sector": plus.get("sectorKey") or sec.get("sector") or sec.get("industry") or "—",
+        "industry": sec.get("basicIndustry") or sec.get("industry"),
         "isin": sec.get("isin"),
         "bseCode": sec.get("bseCode"),
         "ticker": sec.get("yahooTicker"),
@@ -4206,7 +4767,7 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
         "priceVolumeEvidence": checks[6]["note"],
         "liquidityPass": liquidity_pass,
         "liquidityEvidence": checks[7]["note"],
-        "sectorTailwind": None,
+        "sectorTailwind": ((plus.get("sector") or {}).get("tailwind")),
         "pricedIn": priced_in,
         "candidateStatus": event.get("state"),
         "allocationPct": allocation,
@@ -4323,6 +4884,14 @@ def event_to_intelligence(event: dict[str, Any]) -> dict[str, Any]:
         "risks": d.get("risks") or [],
         "managementCommentary": None,
         "commentaryVerified": False,
+        "industry": row.get("industry"),
+        "marketCapCr": row.get("marketCapCr"),
+        "avgTurnover20dCr": row.get("avgTurnover20dCr"),
+        "plus": {k: v for k, v in (d.get("plus") or {}).items() if k != "price"} | {
+            "price": {k: v for k, v in ((d.get("plus") or {}).get("price") or {}).items()},
+            "chart": (event.get("plus") or {}).get("chart"),
+            "priceSource": (event.get("plus") or {}).get("priceSource"),
+        },
     }
 
 
@@ -4494,6 +5063,17 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
     )
     rows = [event_to_data_row(e) for e in events]
     items = [event_to_intelligence(e) for e in events]
+    sectors = sector_universe(store, stored_events)
+    index_cache = load_index_cache()
+    regime = pead_plus.market_regime(index_cache.get("closes"))
+    regime["index"] = index_cache.get("index")
+    regime["asOf"] = (index_cache.get("dates") or [None])[-1]
+    card = pead_plus.scorecard([
+        {"q1Return": (it["plus"].get("price") or {}).get("q1_reaction_return_pct"),
+         "q1ToQ2": (it["plus"].get("price") or {}).get("q1_return_to_q2_pct"),
+         "q1Setup": it["plus"].get("q1Setup")}
+        for it in items
+    ])
     health["activeDashboardEvents"] = len(events)
     health["archiveEvents"] = max(0, len(stored_events) - len(events))
 
@@ -4515,8 +5095,10 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "pricedIn": sum(x.get("expectationReality", {}).get("label") == "PRICED IN" for x in items),
         "highConviction": sum(x.get("verdict") == "HIGH-CONVICTION PEAD CANDIDATE" for x in items),
         "dataPending": sum(x.get("verdict") == "DATA PENDING — RESULT VERIFIED" for x in items),
-        "entryWatch": sum(x.get("entrySignal") in {"WATCH_BREAKOUT", "NEAR_ENTRY", "ENTRY_TRIGGERED"} for x in items),
-        "entryTriggered": sum(x.get("entrySignal") == "ENTRY_TRIGGERED" for x in items),
+        "entryWatch": sum(x.get("entrySignal") in pead_plus.ACTIONABLE for x in items),
+        "entryTriggered": sum(str(x.get("entrySignal") or "").startswith("ENTRY_") for x in items),
+        "liquid": sum((x["plus"].get("liquidity") or {}).get("pass") is True for x in items),
+        "buckets": {code: sum(((x["plus"].get("bucket") or {}).get("code") == code) for x in items) for code in pead_plus.BUCKETS},
         "nearEntry": sum(x.get("entrySignal") == "NEAR_ENTRY" for x in items),
     }
     intel_payload = {
@@ -4527,10 +5109,18 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "livePeriodEnd": health.get("livePeriodEnd"),
         "liveQuarter": health.get("liveQuarter"),
         "counts": counts,
+        "regime": regime,
+        "sectors": sorted(sectors.values(), key=lambda r: (-(r.get("relativeToMarket") or -999), r["sector"])),
+        "scorecard": card,
+        "thresholds": {
+            "liquidityTurnoverCr": pead_plus.LIQ_TURNOVER_CR, "liquidityMinPrice": pead_plus.LIQ_MIN_PRICE,
+            "maxRiskPct": pead_plus.MAX_RISK_PCT, "strongRevYoY": pead_plus.STRONG_REV_YOY, "strongPatYoY": pead_plus.STRONG_PAT_YOY,
+        },
         "items": items,
     }
     json_dump_atomic(DATA_PATH, data_payload)
-    json_dump_atomic(INTELLIGENCE_PATH, intel_payload)
+    # The dashboard feed is compact (no indentation) to keep it light on mobile.
+    json_dump_atomic(INTELLIGENCE_PATH, intel_payload, compact=True)
     return True, []
 
 
@@ -4694,6 +5284,9 @@ def self_test() -> int:
             ("pre_result_20d_pct", 4, "NSE_PRICE"),
             ("result_day_return_pct", 5, "NSE_PRICE"),
             ("result_day_rvol", 2, "NSE_PRICE"),
+            ("reaction_session", (now_ist().date() - timedelta(days=7)).isoformat(), "DERIVED"),
+            ("result_day_low", 95, "NSE_PRICE"),
+            ("result_day_high", 98, "NSE_PRICE"),
             ("post_result_hold_5d", True, "NSE_PRICE"),
             ("box_high", 100, "NSE_PRICE"),
             ("box_breakout", False, "NSE_PRICE"),
@@ -4705,8 +5298,11 @@ def self_test() -> int:
         ):
             store.merge_field(e, field, value, source=source)
         d = score_event(store, e)
-        if d.get("entrySignal") not in {"NEAR_ENTRY", "WATCH_BREAKOUT"}:
+        if d.get("entrySignal") != "NEAR_ENTRY":
             failures.append(f"entry watch signal missing: {d.get('entrySignal')}")
+        plan = (d.get("plus") or {}).get("plan") or {}
+        if plan.get("sl") != 94.05 or plan.get("entry") != 100:
+            failures.append(f"plan levels wrong: {plan}")
         if safe_num(d.get("entryTriggerPrice")) is None:
             failures.append("entry trigger price missing")
 
@@ -4904,10 +5500,13 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         print("Discovery:", json.dumps(discovery_stats, default=str))
         enrichment_stats = enrich_events(store, master, ctx)
         print("Enrichment:", json.dumps(enrichment_stats, default=str))
+        refresh_index_cache(ctx)
         post = integrity_pass(store)
         if post["revoked"] or post["postResultPurged"]:
             print_integrity_summary(post, integrity_signature(post["revocations"]))
 
+    replayed = replay_plus(store)
+    print(f"Analytics replayed from saved price files for {replayed} events")
     score_stats = score_all(store)
     print("Scoring:", score_stats)
 
