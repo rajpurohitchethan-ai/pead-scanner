@@ -2,14 +2,19 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE2L3M01012|2026-09-30",
   "createdAt": "2026-10-08T04:33:49Z",
-  "updatedAt": "2026-10-08T10:11:28Z",
+  "updatedAt": "2026-10-08T10:42:42Z",
   "security": {
     "symbol": "TYPHOON",
     "bseSymbol": "TYPHOON",
     "bseCode": "512307",
     "name": "Typhoon Holdings Ltd",
     "isin": "INE2L3M01012",
-    "yahooTicker": "512307.BO"
+    "yahooTicker": "512307.BO",
+    "macroSector": "Consumer Discretionary",
+    "exchangeSector": "Textiles",
+    "industry": "Textiles & Apparels",
+    "basicIndustry": "Other Textile Products",
+    "bseGroup": "XT"
   },
   "period": {
     "end": "2026-09-30",
@@ -96,22 +101,32 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T09:59:50Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "DISCOVERED",
+      "at": "2026-10-08T10:31:35Z",
+      "reason": "event created"
+    },
+    {
+      "state": "SCHEDULED",
+      "at": "2026-10-08T10:31:35Z",
+      "reason": "board meeting/result calendar discovered"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-08T09:59:50Z",
+      "fetchedAt": "2026-10-08T10:31:35Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-e4db489b9c4aad41.json",
+      "rawRef": "raw/bse/DISCOVERY/result_calendar-60ae4f2d1289c978.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-13",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-08T10:10:34Z",
+      "fetchedAt": "2026-10-08T10:42:10Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -120,31 +135,72 @@
     "filing_session": {
       "value": "UNKNOWN_TIME_NEXT_SESSION",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-08T10:10:34Z",
+      "fetchedAt": "2026-10-08T10:42:10Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
       "note": null
+    },
+    "roe_pct": {
+      "value": 55.67,
+      "source": "BSE_META",
+      "fetchedAt": "2026-10-08T10:39:06Z",
+      "status": "OK",
+      "rank": 88,
+      "rawRef": "raw/bse/INE2L3M01012_2026-09-30/equity_meta-62ac840b505c08da.json",
+      "note": null
+    },
+    "exchange_opm_ttm_pct": {
+      "value": 1.51,
+      "source": "BSE_META",
+      "fetchedAt": "2026-10-08T10:39:06Z",
+      "status": "OK",
+      "rank": 88,
+      "rawRef": "raw/bse/INE2L3M01012_2026-09-30/equity_meta-62ac840b505c08da.json",
+      "note": null
+    },
+    "prev_quarter_result_ts": {
+      "value": "2026-07-23T16:04:12.477000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-08T10:39:08Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/INE2L3M01012_2026-09-30/scrip_results-19eb36166b4fe9b3.json",
+      "note": "previous quarter 2026-06-30"
     }
   },
   "fetch": {
     "BSE_LOOKUP": {
-      "lastAttempt": "2026-10-08T10:10:34Z",
-      "lastSuccess": "2026-10-08T10:10:34Z",
+      "lastAttempt": "2026-10-08T10:42:10Z",
+      "lastSuccess": "2026-10-08T10:42:10Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse/NSE_TYPHOON_2026-09-30/lookup-6e38f95cc87dbdcb.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-08T10:10:39Z",
+      "lastAttempt": "2026-10-08T10:42:15Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
       "rawRef": null
+    },
+    "EXCHANGE_META": {
+      "lastAttempt": "2026-10-08T10:39:06Z",
+      "lastSuccess": "2026-10-08T10:39:06Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": null
+    },
+    "PREV_QUARTER": {
+      "lastAttempt": "2026-10-08T10:39:08Z",
+      "lastSuccess": "2026-10-08T10:39:08Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": null
     }
   },
   "derived": {
-    "score": 0,
+    "score": 3,
     "completenessPct": 33.3,
     "completeness": {
       "present": 1,
@@ -186,7 +242,7 @@
         "sectorPe": null,
         "peVsSector": null,
         "peg": null,
-        "roe": null,
+        "roe": 55.67,
         "pb": null
       },
       "margins": {
@@ -194,17 +250,26 @@
         "opmPrevQ": null,
         "opmPriorYear": null,
         "changeBps": null,
-        "opmTtm": null
+        "opmTtm": 1.51
       },
-      "sectorKey": null,
-      "sector": null,
+      "sectorKey": "Textiles",
+      "sector": {
+        "sector": "Textiles",
+        "stocks": 4,
+        "momentum63dMedian": null,
+        "relativeToMarket": null,
+        "declared": 0,
+        "strongResults": 0,
+        "avgReaction": null,
+        "tailwind": null
+      },
       "identity": {
-        "macroSector": null,
-        "exchangeSector": null,
-        "industry": null,
-        "basicIndustry": null,
+        "macroSector": "Consumer Discretionary",
+        "exchangeSector": "Textiles",
+        "industry": "Textiles & Apparels",
+        "basicIndustry": "Other Textile Products",
         "sectorIndex": null,
-        "bseGroup": null
+        "bseGroup": "XT"
       },
       "price": {},
       "deliveryPct": null,
@@ -215,7 +280,7 @@
         "bse": "https://www.bseindia.com/stock-share-price/x/TYPHOON/512307/"
       }
     },
-    "valuationInputCount": 0,
+    "valuationInputCount": 1,
     "expectationFullWindow": false,
     "reasons": [],
     "risks": []
