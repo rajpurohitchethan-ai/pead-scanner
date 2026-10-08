@@ -1,439 +1,364 @@
-"""Tests for the engine 2.4 analytics layer (pead_plus) and its wiring."""
+"""Regression tests for the v2.2 data-integrity fixes.
+
+Run:  python -m unittest discover -s tests -v
+Every test reproduces a bug that was present in engine 2.1.7.
+"""
 import json
 import sys
 import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import pandas as pd  # noqa: E402
-import pead_plus as pp  # noqa: E402
 import pead_v2 as p  # noqa: E402
 
 
-def frame(closes, start=date(2026, 1, 1), vols=None, hl=True):
-    rows = []
-    d = start
-    for i, c in enumerate(closes):
-        while d.weekday() >= 5:
-            d += timedelta(days=1)
-        rows.append({"Date": pd.Timestamp(d), "Open": c * 0.99 if hl else None, "High": c * 1.01 if hl else None,
-                     "Low": c * 0.98 if hl else None, "Close": c, "Volume": (vols[i] if vols else 1000)})
-        d += timedelta(days=1)
-    return pd.DataFrame(rows)
+def bse_row(code, dt, headline, name="Test Co"):
+    return {"SCRIP_CD": code, "DT_TM": dt, "NEWS_DT": dt, "HEADLINE": headline, "NEWSSUB": f"{name} - {code} - Result",
+            "MORE": "", "SLONGNAME": name, "CATEGORYNAME": "Result"}
 
 
-class NseHistoryFormat(unittest.TestCase):
-    def test_new_camelcase_fields_parse(self):
-        rec = [{"chClosingPrice": 2287.4, "chOpeningPrice": 2285.7, "chTradeHighPrice": 2340, "chTradeLowPrice": 2252.5,
-                "chTotTradedQty": 6878, "chSeries": "EQ", "mtimestamp": "20-Aug-2025"}]
-        f = p.nse_history_to_frame(rec)   # returned None before engine 2.4
-        self.assertIsNotNone(f)
-        self.assertEqual(float(f["High"].iloc[0]), 2340)
+class DateParsing(unittest.TestCase):
+    def test_bse_iso_timestamp_is_not_day_first(self):
+        # Was 2026-11-09 -> pushed a September Q1 filing into the future / Q2.
+        self.assertEqual(p.parse_date("2026-09-11T16:08:22.73"), date(2026, 9, 11))
+        self.assertEqual(p.parse_date("2026-10-06T21:36:47.333"), date(2026, 10, 6))
+        self.assertEqual(p.parse_datetime("2026-09-11").date(), date(2026, 9, 11))
+        self.assertEqual(p.parse_datetime("2026-09-11T16:08:22.73").hour, 16)
+
+    def test_indian_formats_still_day_first(self):
+        self.assertEqual(p.parse_date("11-09-2026"), date(2026, 9, 11))
+        self.assertEqual(p.parse_date("24-Aug-2026 17:39:15"), date(2026, 8, 24))
+        self.assertEqual(p.parse_date("31-OCT-2025"), date(2025, 10, 31))
 
 
-class Features(unittest.TestCase):
-    def setUp(self):
-        closes = [100 + i * 0.1 for i in range(200)]
-        vols = [1000] * 200
-        closes[150] = closes[149] * 1.08      # result-day jump
-        vols[150] = 9000                      # highest volume of the year
-        for i in range(151, 200):
-            closes[i] = closes[150] * (1 + (i - 150) * 0.002)
-        self.f = frame(closes, vols=vols)
-        self.rdate = self.f["Date"].iloc[150].date()
-
-    def test_reaction_and_hv_flags(self):
-        x = pp.extended_features(self.f, self.rdate, released=True)
-        self.assertEqual(x["hv_label"], "HVY")
-        self.assertFalse(x["base_broken"])
-        self.assertEqual(x["sessions_since_reaction"], 49)
-        self.assertAlmostEqual(x["return_since_result_pct"], 18.58, places=1)
-        self.assertIsNotNone(x["fwd_20d_pct"])
-        self.assertEqual(len(x["chart"]["close"]), 75)
-
-    def test_unreleased_has_no_reaction_fields(self):
-        x = pp.extended_features(self.f, self.rdate, released=False)
-        self.assertNotIn("reaction_close", x)
-        self.assertNotIn("hv_label", x)
-
-    def test_q1_replay(self):
-        q1 = self.f["Date"].iloc[150].date()
-        x = pp.extended_features(self.f, None, released=False, q1_reaction_date=q1)
-        self.assertAlmostEqual(x["q1_reaction_return_pct"], 8.0, places=1)
-        self.assertTrue(x["q1_sustained"])
-        self.assertTrue(pp.q1_setup(x["q1_reaction_return_pct"], x["q1_reaction_rvol"]))
-
-    def test_base_broken(self):
-        f = self.f.copy()
-        f.loc[180, "Close"] = f.loc[150, "Low"] * 0.95
-        x = pp.extended_features(f, self.rdate, released=True)
-        self.assertTrue(x["base_broken"])
-
-
-class Buckets(unittest.TestCase):
-    def test_suresh_buckets(self):
-        c = lambda **k: pp.classify_bucket(**k)["code"]
-        self.assertEqual(c(released=True, q2_strength="STRONG", setup=True, sustained=True), "CONFIRMATION")
-        self.assertEqual(c(released=True, q2_strength="STRONG", setup=True, sustained=False), "RE_PEAD")
-        self.assertEqual(c(released=True, q2_strength="STRONG", setup=False, sustained=None), "FRESH_PEAD")
-        self.assertEqual(c(released=True, q2_strength="WEAK", setup=True, sustained=True), "NO_CONFIRMATION")
-        self.assertEqual(c(released=False, q2_strength=None, setup=True, sustained=False), "WATCH_REPEAD")
-        self.assertIsNone(pp.classify_bucket(released=False, q2_strength=None, setup=None, sustained=None))
-
-    def test_strength(self):
-        self.assertEqual(pp.earnings_strength(25, 40, "PROFIT_GROWTH"), "STRONG")
-        self.assertEqual(pp.earnings_strength(5, None, "TURNAROUND", 150), "STRONG")
-        self.assertEqual(pp.earnings_strength(-5, -10, "PROFIT_DECLINE"), "WEAK")
-        self.assertIsNone(pp.earnings_strength(None, None, None))
-
-
-class Plan(unittest.TestCase):
-    base = dict(released=True, reaction_traded=True, quality_ok=True, result_return=6, rvol=3,
-                result_low=97, result_high=104)
-
-    def test_levels_hidden_without_verified_earnings(self):
-        r = pp.trade_plan(**(self.base | {"quality_ok": None}), x={"ema21": 100}, last_price=101)
-        self.assertEqual(r["signal"], "DATA_PENDING")
-        self.assertIsNone(r["entry"])
-
-    def test_early_entry(self):
-        x = {"sessions_since_reaction": 1, "reaction_close": 103, "ema10": 99, "ema21": 97, "ema63": 92}
-        r = pp.trade_plan(**self.base, x=x, last_price=105)
-        self.assertEqual(r["signal"], "ENTRY_EARLY")
-        self.assertEqual(r["entry"], 104)
-        self.assertEqual(r["sl"], 96.03)
-        self.assertEqual(r["tslSwing"], 96.03)       # trail = SL until +1R
-
-    def test_base_broken_is_no_entry(self):
-        r = pp.trade_plan(**self.base, x={"base_broken": True}, last_price=90)
-        self.assertEqual(r["signal"], "NO_ENTRY")
-
-    def test_risk_too_wide(self):
-        x = {"sessions_since_reaction": 1, "reaction_close": 130, "ema21": 120}
-        r = pp.trade_plan(**(self.base | {"result_high": 131}), x=x, last_price=131)
-        self.assertEqual(r["signal"], "RISK_TOO_WIDE")
-        self.assertIsNone(r["entry"])
-
-    def test_after_1r_trail_moves_to_cost_or_ema(self):
-        x = {"sessions_since_reaction": 2, "reaction_close": 103, "ema10": 108, "ema21": 106, "ema63": 98}
-        r = pp.trade_plan(**self.base, x=x, last_price=115)
-        self.assertEqual(r["tslSwing"], 106)
-        self.assertEqual(r["tslPosition"], 104)
-
-
-class CrossSection(unittest.TestCase):
-    def test_sector_tailwind(self):
-        items = [{"sectorKey": "Cables", "ret63": 25, "released": True, "strength": "STRONG", "reaction": 6} for _ in range(3)]
-        items += [{"sectorKey": "Cement", "ret63": -8, "released": False} for _ in range(3)]
-        items += [{"sectorKey": "Other", "ret63": 5} for _ in range(5)]
-        st = pp.sector_stats(items)
-        self.assertEqual(st["Cables"]["tailwind"], "STRONG")
-        self.assertEqual(st["Cement"]["tailwind"], "WEAK")
-
-    def test_regime(self):
-        up = [100 + i for i in range(220)]
-        self.assertEqual(pp.market_regime(up)["label"], "RISK-ON")
-        self.assertIsNone(pp.market_regime(up[:20])["label"])
-
-    def test_liquidity_and_valuation(self):
-        self.assertFalse(pp.liquidity(0.004, 80)["pass"])
-        self.assertTrue(pp.liquidity(12, 450)["pass"])
-        self.assertEqual(pp.valuation_view(15, 30, 18, 25)["label"], "ATTRACTIVE")
-        self.assertEqual(pp.valuation_view(120, 30, 10, 5)["label"], "EXPENSIVE")
-
-
-class ExchangeParsers(unittest.TestCase):
-    def test_nse_quote_and_bse_meta(self):
-        q = {"tradeInfo": {"totalMarketCap": 11776654496720.4, "deliveryToTradedQuantity": 58.82},
-             "secInfo": {"pdSymbolPe": "15.43", "pdSectorPe": "15.21", "basicIndustry": "Private Sector Bank", "pdSectorInd": "NIFTY BANK"},
-             "priceInfo": {"yearHigh": 1020.5}}
-        r = p.parse_nse_quote(q)
-        self.assertEqual(r["market_cap_cr"], 1177665.45)
-        self.assertEqual(r["identity"]["sectorIndex"], "NIFTY BANK")
-        b = p.parse_bse_meta({"PE": "102.65", "PB": "10.75", "ROE": "10.46", "OPM": "27.89", "IndustryNew": "Consumer Services", "ISubGroup": "E-Retail/ E-Commerce"})
-        self.assertEqual(b["exchange_pe"], 102.65)
-        self.assertEqual(b["identity"]["exchangeSector"], "Consumer Services")
-
-    def test_bse_snapshot_margins(self):
-        snap = {"currency_unit": "in Cr.", "results_in_crores": {"fields": ["title", "Sep-26", "Jun-26", "FY25-26"],
-                "data": [["Revenue", "20.93", "23.74", "114.04"], ["Net Profit", "0.57", "0.65", "2.65"], ["EPS", "1.62", "1.84", "7.51"], ["OPM %", "7.98", "8.10", "6.43"]]}}
-        r = p.parse_bse_snapshot(snap, date(2026, 9, 30))
-        self.assertEqual(r["opm_pct"], 7.98)
-        self.assertEqual(r["margin_change_bps"], -12)
-
-
-class PreviousQuarterLookup(unittest.TestCase):
-    def test_q1_date_from_filing_ts(self):
-        with tempfile.TemporaryDirectory() as td:
-            store = p.EventStore(Path(td) / "events")
-            e = store.ensure_event(security={"symbol": "ABC", "nseSymbol": "ABC"}, period_end=date(2026, 9, 30))
-            store.merge_field(e, "prev_quarter_result_ts", "2026-08-12T17:30:00+05:30", source="NSE_FINANCIAL_RESULTS")
-            self.assertEqual(p.previous_quarter_reaction(store, e), date(2026, 8, 13))   # after close -> next session
-
-
-class Concall(unittest.TestCase):
-    def test_detection_and_dates(self):
-        d = date(2026, 10, 8)
-        self.assertEqual(pp.classify_call_filing("Intimation of Earnings Conference Call scheduled on 13th October, 2026"), "NOTICE")
-        self.assertEqual(pp.call_date_from_text("con-call on 14-10-2026", d), date(2026, 10, 14))
-        self.assertEqual(pp.classify_call_filing("Transcript of Earnings Call held on October 3, 2026"), "TRANSCRIPT")
-        self.assertIsNone(pp.classify_call_filing("Outcome of Board Meeting - Financial results"))
-        self.assertIsNone(pp.call_date_from_text("call on 01-01-2026", d))   # not 0-21 days after filing
-
-    def test_status_transitions(self):
-        from datetime import datetime
-        notice = {"filedAt": datetime(2026, 10, 8, 18), "text": "Earnings call scheduled on October 13, 2026", "url": "n"}
-        s1 = pp.concall_status([notice], date(2026, 10, 8), date(2026, 10, 10))
-        self.assertEqual((s1["status"], s1["callDate"]), ("SCHEDULED", "2026-10-13"))
-        s2 = pp.concall_status([notice], date(2026, 10, 8), date(2026, 10, 14))
-        self.assertEqual(s2["status"], "DONE")
-        s3 = pp.concall_status([notice, {"filedAt": datetime(2026, 10, 14), "text": "Transcript of earnings call", "url": "t"}],
-                               date(2026, 10, 8), date(2026, 10, 14))
-        self.assertEqual(s3["transcriptUrl"], "t")
-        self.assertEqual(pp.concall_status([], date(2026, 10, 8), date(2026, 10, 9))["status"], "NONE_FOUND")
-
-    def test_recheck_stored_held_verdict(self):
-        old = {"status": "DONE", "callDate": None, "noticeUrl": "n", "transcriptUrl": None, "audioUrl": None}
-        self.assertEqual(pp.recheck_concall(old, date(2026, 10, 8), date(2026, 10, 8))["status"], "SCHEDULED")
-        self.assertEqual(pp.recheck_concall(old, date(2026, 10, 8), date(2026, 10, 11))["status"], "DONE")
-        proven = old | {"transcriptUrl": "t"}
-        self.assertEqual(pp.recheck_concall(proven, date(2026, 10, 8), date(2026, 10, 8))["status"], "DONE")
-
-    def test_early_notice_stays_pending_until_after_result(self):
-        # TCS-style: notice filed a week before the result, letter dated on the
-        # filing day, call date not readable -> pending until result + 2 days.
-        from datetime import datetime
-        early = {"filedAt": datetime(2026, 10, 1, 20), "text": "October 1, 2026. Intimation of earnings call", "url": "n"}
-        self.assertEqual(pp.call_date_from_text(early["text"], date(2026, 10, 1)), date(2026, 10, 1))
-        s = pp.concall_status([early], date(2026, 10, 8), date(2026, 10, 8))
-        self.assertEqual((s["status"], s["callDate"], s["pendingUntil"]), ("SCHEDULED", None, "2026-10-10"))
-        self.assertEqual(pp.concall_status([early], date(2026, 10, 8), date(2026, 10, 11))["status"], "DONE")
-        # Letter date plus the real call date: the later one wins.
-        both = "Date: 01-10-2026. Earnings call on October 8, 2026 at 7 pm"
-        self.assertEqual(pp.call_date_from_text(both, date(2026, 10, 1)), date(2026, 10, 8))
-
-    def test_plan_waits_for_concall(self):
-        x = {"sessions_since_reaction": 1, "reaction_close": 103, "ema10": 99, "ema21": 97, "ema63": 92}
-        base = dict(released=True, reaction_traded=True, quality_ok=True, result_return=6, rvol=3, result_low=97, result_high=104)
-        pending = {"status": "SCHEDULED", "callDate": "2026-10-13"}
-        starter = pp.trade_plan(**base, x=x, last_price=105, concall=pending)
-        self.assertEqual((starter["signal"], starter["stage"]), ("ENTRY_EARLY", "STARTER"))
-        self.assertAlmostEqual(starter["sizeFraction"], 1 / 3)
-        self.assertIn("1/3", starter["why"])
-        wait = pp.trade_plan(**base, x=x, last_price=105, concall=pending, red_flags=["turnaround from a loss"])
-        self.assertEqual(wait["signal"], "WAIT_CONCALL")
-        self.assertIsNone(wait["entry"])
-        full = pp.trade_plan(**base, x=x, last_price=105, concall={"status": "DONE"})
-        self.assertEqual((full["signal"], full["stage"], full["sizeFraction"]), ("ENTRY_EARLY", "FULL", 1.0))
-        nocall = pp.trade_plan(**base, x=x, last_price=105, concall={"status": "NONE_FOUND"})
-        self.assertEqual(nocall["stage"], "FULL")
-
-    def test_red_flags(self):
-        self.assertEqual(pp.result_red_flags(rev_yoy=25, pat_yoy=40, pat_trend="PROFIT_GROWTH", margin_change_bps=120), [])
-        self.assertIn("profit growth without revenue growth",
-                      pp.result_red_flags(rev_yoy=3, pat_yoy=80, pat_trend="PROFIT_GROWTH", margin_change_bps=600))
-
-    def test_trade_log_tracks_both_entries(self):
-        d = date(2026, 10, 9)
-        log = pp.update_trade_log(None, {"signal": "ENTRY_EARLY", "stage": "STARTER", "entry": 104, "sl": 96}, 105, d)
-        log = pp.update_trade_log(log, {"signal": "ENTRY_PULLBACK", "stage": "FULL", "entry": 108, "sl": 100}, 110, date(2026, 10, 14))
-        log = pp.update_trade_log(log, {"signal": "WATCH"}, 120, date(2026, 10, 20))
-        self.assertEqual(log["starter"]["returnPct"], 15.38)
-        self.assertEqual(log["full"]["returnPct"], 11.11)
-        log = pp.update_trade_log(log, {"signal": "WATCH"}, 95, date(2026, 10, 25))
-        self.assertTrue(log["starter"]["stopped"])
-        self.assertEqual(log["starter"]["returnPct"], -7.69)     # exit at the stop, not the low
-        rows = pp.entry_timing_scorecard([log])
-        self.assertEqual(rows[0]["n"], 1)
-        self.assertEqual(rows[0]["stopped"], 1)
-
-
-class IntradayReaction(unittest.TestCase):
-    """GM Breweries filed at 12:30 pm: reaction = filing day + next session."""
-
-    def test_session_rule(self):
-        from datetime import datetime
-        ts = datetime(2026, 10, 8, 12, 30, tzinfo=p.IST)
-        session, timing = p.reaction_session(ts, None)
-        self.assertEqual((session, timing), (date(2026, 10, 9), "INTRADAY"))
-        self.assertEqual(p.reaction_window_start(ts, timing, session), date(2026, 10, 8))
-        after = datetime(2026, 10, 8, 16, 0, tzinfo=p.IST)
-        self.assertEqual(p.reaction_window_start(after, "AFTER_CLOSE", date(2026, 10, 9)), date(2026, 10, 9))
-
-    def test_two_session_metrics(self):
-        closes = [100.0] * 40 + [103.0, 108.0, 109.0]     # filing day +3%, next day +5% more
-        vols = [1000] * 40 + [5000, 9000, 2000]
-        f = frame(closes, vols=vols)
-        fd, rd = f["Date"].iloc[40].date(), f["Date"].iloc[41].date()
-        m = p.price_metrics(f, rd, fd)
-        self.assertEqual(m["result_day_return_pct"], 8.0)          # vs close before the filing day
-        self.assertEqual(m["result_day_low"], round(103 * 0.98, 2))  # lowest low of both sessions
-        self.assertEqual(m["result_day_high"], round(108 * 1.01, 2))
-        self.assertEqual(m["result_day_rvol"], 9.0)
-        x = pp.extended_features(f, rd, released=True, window_start=fd)
-        self.assertEqual(x["reaction_window_sessions"], 2)
-        self.assertEqual(x["sessions_since_reaction"], 1)
-        self.assertEqual(x["chart"]["reactionIndex"], 40 - (len(f) - 75) if len(f) > 75 else 40)
-
-
-class DuplicateMergeTests(unittest.TestCase):
-    """2.5.2 showed 82 companies twice (NSE copy + BSE copy)."""
-
-    def _store(self):
-        d = tempfile.mkdtemp()
-        return p.EventStore(Path(d) / "events")
-
-    def _ev(self, st, sec, fields=None):
-        e = st.ensure_event(security=sec, period_end=date(2026, 9, 30))
-        for k, v in (fields or {}).items():
-            st.merge_field(e, k, v, source="TEST")
-        st.save(e)
-        return e
-
-    def test_symbol_vs_bse_code_copies_fold(self):
-        st = self._store()
-        self._ev(st, {"isin": "INE179A01014", "nseSymbol": "PGHH", "symbol": "PGHH", "name": "Procter & Gamble Hygiene and Health Care Limited", "sector": "Personal Care"})
-        self._ev(st, {"symbol": "PGHH", "bseSymbol": "PGHH", "bseCode": "500459", "name": "Procter & Gamble Hygiene and Health Care Ltd", "sector": "—"},
-                 {"last_price": 15000})
-        merges = p.merge_duplicate_events(st)
-        evs = st.all()
-        self.assertEqual((len(merges), len(evs)), (1, 1))
-        e = evs[0]
-        self.assertEqual(e["security"]["sector"], "Personal Care")      # placeholder did not overwrite
-        self.assertEqual(e["security"]["bseCode"], "500459")
-        self.assertEqual(st.value(e, "last_price"), 15000)
-        # Discovery under the old key reuses the survivor instead of re-creating it.
-        again = st.ensure_event(security={"bseCode": "500459", "symbol": "PGHH"}, period_end=date(2026, 9, 30))
-        self.assertEqual(again["eventId"], e["eventId"])
-        self.assertEqual(p.merge_duplicate_events(st), [])
-
-    def test_post_split_isin_folds_and_is_kept_as_alias(self):
-        st = self._store()
-        self._ev(st, {"isin": "INE690A01010", "nseSymbol": "TTKPRESTIG", "name": "TTK Prestige Limited"})
-        self._ev(st, {"isin": "INE690A01028", "bseSymbol": "TTKPRESTIG", "bseCode": "517506", "name": "TTK Prestige Ltd"})
-        p.merge_duplicate_events(st)
-        evs = st.all()
-        self.assertEqual(len(evs), 1)
-        self.assertEqual(evs[0]["security"]["altIsins"], ["INE690A01028"])
-        self.assertIn("INE690A01028|2026-09-30", evs[0]["mergedFrom"])
-
-    def test_different_companies_are_not_merged(self):
-        st = self._store()
-        self._ev(st, {"isin": "INE457A01014", "nseSymbol": "MAHABANK", "symbol": "ABAN", "name": "Bank of Maharashtra"})
-        self._ev(st, {"isin": "INE421A01028", "bseSymbol": "ABAN", "bseCode": "523204", "name": "Aban Offshore Ltd"})
-        self.assertEqual(p.merge_duplicate_events(st), [])
-        self.assertTrue(p.same_company({"name": "Kabra Extrusiontechnik Ltd"}, {"name": "Kabra Extrusion Technik Limited"}))
-        self.assertTrue(p.same_company({"name": "Dr Reddys Laboratories Ltd"}, {"name": "Dr. Reddy's Laboratories Limited"}))
-
-    def test_gate_discounts_duplicate_folds(self):
-        old = {"activeDashboardEvents": 379, "resultsFiled": 7, "liveQuarter": "Q2 FY27", "declaredCompletenessPct": 27}
-        new = {"activeDashboardEvents": 297, "resultsFiled": 7, "liveQuarter": "Q2 FY27", "declaredCompletenessPct": 27,
-               "integrity": {"signature": "abc", "duplicatesMerged": 82, "declaredMerged": 0}}
-        ok, reasons = p.quality_gate(new, old)
-        self.assertTrue(ok, reasons)
-        new["integrity"]["duplicatesMerged"] = 0
-        self.assertFalse(p.quality_gate(new, old)[0])     # a real drop still blocks
-
-
-class LookupIdentityTests(unittest.TestCase):
-    ROWS = [{"symbol": "GUJALKALI", "companyName": "Gujarat Alkalies and Chemicals Limited"},
-            {"symbol": "TUTIALKA", "companyName": "Tuticorin Alkali Chemicals"}]
-
-    def test_fuzzy_first_row_is_rejected(self):
-        self.assertIsNone(p.pick_lookup_row(self.ROWS, "ALKALI", "Alkali Metals Ltd"))
-        rows = [{"symbol": "SWARAJENG", "companyName": "Swaraj Engines Limited"},
-                {"symbol": "SWARAJ", "companyName": "Swaraj Suiting Limited"}]
-        self.assertEqual(p.pick_lookup_row(rows, "SWARAJ")["symbol"], "SWARAJ")
-        self.assertEqual(p.pick_lookup_row(rows, "SWRJ", "Swaraj Engines Ltd")["symbol"], "SWARAJENG")
-
-    def test_repair_strips_wrong_company_data(self):
-        root = Path(tempfile.mkdtemp())
-        st = p.EventStore(root / "events")
-        raw = root / "raw"
-        (raw / "nse" / "NSE_ALKALI_2026-09-30").mkdir(parents=True)
-        (raw / "nse" / "NSE_ALKALI_2026-09-30" / "lookup-1.json").write_text(json.dumps({"data": self.ROWS}))
-        master = p.SymbolMaster(root / "master" / "symbols.json")
-        master.data["securities"]["NSE:ALKALI"] = {"symbol": "ALKALI", "bseCode": "533029", "name": "Alkali Metals Ltd"}
-        e = st.ensure_event(security={"symbol": "ALKALI", "bseSymbol": "ALKALI", "bseCode": "533029",
-                                      "nseSymbol": "GUJALKALI", "name": "Gujarat Alkalies and Chemicals Limited"},
-                            period_end=date(2026, 9, 30))
-        st.merge_field(e, "last_price", 596.65, source="NSE_PRICE")
-        st.merge_field(e, "result_date", "2026-10-12", source="BSE_RESULT_ANNOUNCEMENT")
-        st.save(e)
-        fixed = p.repair_lookup_mismatches(st, master, raw)
-        self.assertEqual(len(fixed), 1)
-        ev = st.all()[0]
-        self.assertNotIn("nseSymbol", ev["security"])
-        self.assertEqual(ev["security"]["name"], "Alkali Metals Ltd")
-        self.assertIsNone(st.value(ev, "last_price"))                 # wrong company's price gone
-        self.assertEqual(st.value(ev, "result_date"), "2026-10-12")   # BSE facts kept
-        self.assertEqual(p.repair_lookup_mismatches(st, master, raw), [])
-
-
-class AuditFixTests(unittest.TestCase):
-    """Engine 2.5.4 full-audit fixes."""
-
-    def test_split_adjustment(self):
-        days = pd.date_range("2026-08-01", periods=10, freq="B")
-        close = [1000, 1010, 1020, 1015, 102, 103, 104, 105, 104, 106]   # 1:10 split on day 5
-        f = pd.DataFrame({"Date": days, "Open": close, "High": [c * 1.01 for c in close], "Low": [c * 0.99 for c in close],
-                          "Close": close, "Volume": [100] * 4 + [1000] * 6})
-        out = pp.adjust_corporate_actions(f)
-        self.assertAlmostEqual(out["Close"].iloc[0], 100.0)
-        self.assertAlmostEqual(out["Volume"].iloc[0], 1000.0)
-        self.assertEqual(out.attrs["corporateActions"][0]["factor"], 0.1)
-        crash = f.copy()
-        crash["Close"] = [100, 101, 102, 100, 52, 50, 49, 48, 47, 46]       # -48% intraday collapse, not a ratio gap
-        crash["High"] = [101, 102, 103, 101, 99, 51, 50, 49, 48, 47]
-        self.assertEqual(pp.adjust_corporate_actions(crash)["Close"].iloc[0], 100)
-
-    def test_one_sector_taxonomy(self):
-        self.assertEqual(pp.canonical_sector("Finance"), "Financial Services")
-        self.assertEqual(pp.canonical_sector(None, "—", "Computers - Software"), "Information Technology")
-        self.assertEqual(pp.canonical_sector("Industrial Gases"), "Chemicals")
-        self.assertIsNone(pp.canonical_sector("Miscellaneous", "-"))
-        self.assertEqual(p.sector_key({"sector": "Cement And Cement Products"}), "Construction Materials")
-
-    def test_regime_needs_200_sessions(self):
-        r = pp.market_regime([100 + i * 0.1 for i in range(70)])
-        self.assertIsNone(r["dma200"])
-        self.assertEqual(r["label"], "RISK-ON")
-
-    def test_negative_book_is_not_meaningful(self):
-        v = pp.valuation_view(10, None, -3827, None, -20)
-        self.assertTrue(v["tinyBook"])
-        self.assertEqual(v["bookNote"], "negative book value")
-        self.assertFalse(pp.valuation_view(30, None, 79, None, 60)["tinyBook"])   # high P/B alone is fine
-
-    def test_yoy_from_year_ago_filing(self):
-        listing = [
-            {"periodEnd": "2026-09-30", "fromDate": "2026-07-01", "basis": "CONSOLIDATED", "cumulative": False, "xbrlUrl": "cur"},
-            {"periodEnd": "2025-09-30", "fromDate": "2025-07-01", "basis": "STANDALONE", "cumulative": False, "xbrlUrl": "ya_s"},
-            {"periodEnd": "2025-09-30", "fromDate": "2025-07-01", "basis": "CONSOLIDATED", "cumulative": False, "xbrlUrl": "ya_c"},
-            {"periodEnd": "2026-06-30", "fromDate": "2026-04-01", "basis": "CONSOLIDATED", "cumulative": False, "xbrlUrl": "pq_c"},
+class PeriodFromFilingText(unittest.TestCase):
+    def test_cases_from_real_bse_headlines(self):
+        cases = [
+            ("Financial Results for the quarter ended June 2026", date(2026, 10, 5), date(2026, 6, 30)),  # Rentomojo
+            ("Results for the quarter/half year ended on 30th September", date(2026, 10, 3), date(2026, 9, 30)),  # Hawa
+            ("unaudited financial result for the quarter ended 31.12.2025", date(2026, 9, 15), date(2025, 12, 31)),  # CMI
+            ("Financial Results of the Quarter & Financial Year ended on 31.03.2025", date(2026, 10, 7), date(2025, 3, 31)),
+            ("Audited Results for quarter ended June 30, 2026", date(2026, 10, 6), date(2026, 6, 30)),
+            ("Financial Results for Q2 FY 2026-27", date(2026, 10, 9), date(2026, 9, 30)),
         ]
-        concepts = {"revenue": "revenuefromoperations", "pat": "profitlossforperiodattributabletoownersofparent"}
-        docs = {"ya_c": {"revenue_cr": 1000.0, "pat_cr": 100.0, "_meta": {"concepts": concepts}},
-                "pq_c": {"revenue_cr": 1100.0, "pat_cr": 110.0, "_meta": {"concepts": concepts}}}
-        calls = []
-        def fetch(url, pe):
-            calls.append(url)
-            return docs[url]
-        parsed = {"revenue_cr": 1200.0, "pat_cr": 130.0, "prior_year_revenue_cr": None, "prior_year_pat_cr": None,
-                  "revenue_qoq_pct": None, "_meta": {"concepts": concepts}}
-        p.fill_comparatives_from_listing(parsed, listing, date(2026, 9, 30), "CONSOLIDATED", fetch)
-        self.assertEqual(calls, ["ya_c", "pq_c"])                     # same basis only
-        self.assertEqual((parsed["revenue_yoy_pct"], parsed["pat_yoy_pct"]), (20.0, 30.0))
-        self.assertAlmostEqual(parsed["revenue_qoq_pct"], 9.09, places=2)
-        self.assertFalse(parsed["_meta"]["comparativesFromSameDocument"])
-        # A different PAT concept in the old filing is not mixed in.
-        other = {"ya_c": {"revenue_cr": 1000.0, "pat_cr": 90.0, "_meta": {"concepts": {**concepts, "pat": "profitloss"}}}}
-        parsed2 = {"revenue_cr": 1200.0, "pat_cr": 130.0, "revenue_qoq_pct": 1.0, "_meta": {"concepts": concepts}}
-        p.fill_comparatives_from_listing(parsed2, listing, date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: other[u])
-        self.assertEqual(parsed2["revenue_yoy_pct"], 20.0)
-        self.assertIsNone(parsed2.get("pat_yoy_pct"))
+        for text, filed, expected in cases:
+            with self.subTest(text=text):
+                self.assertEqual(p.extract_period_from_text(text, filed), expected)
+
+    def test_period_after_filing_date_is_impossible(self):
+        self.assertIsNone(p.extract_period_from_text("quarter ended 30-Sep-2026", date(2026, 9, 20)))
+        self.assertIsNone(p.extract_period_from_text("Outcome of board meeting", date(2026, 10, 7)))
+
+    def test_late_filer_not_labelled_live_quarter(self):
+        c = p.normalize_bse_announcement(bse_row(539833, "2026-10-07T12:21:05.41",
+                                                 "Financial Results of the Quarter & Financial Year ended on 31.03.2025"))
+        self.assertEqual(c["periodEnd"], date(2025, 3, 31))
+        self.assertEqual(c["periodSource"], "FILING_TEXT")
+
+
+def xbrl_doc(include_quarter=True, include_owner=True):
+    ctx = []
+
+    def c(cid, start, end, member=None):
+        seg = f"<xbrli:segment><xbrldi:explicitMember dimension='x:Seg'>{member}</xbrldi:explicitMember></xbrli:segment>" if member else ""
+        ctx.append(f"<xbrli:context id='{cid}'><xbrli:entity><xbrli:identifier scheme='s'>X</xbrli:identifier>{seg}</xbrli:entity>"
+                   f"<xbrli:period><xbrli:startDate>{start}</xbrli:startDate><xbrli:endDate>{end}</xbrli:endDate></xbrli:period></xbrli:context>")
+    if include_quarter:
+        c("Q", "2026-07-01", "2026-09-30")
+    c("H1", "2026-04-01", "2026-09-30")
+    c("PQ", "2025-07-01", "2025-09-30")
+    c("LQ", "2026-04-01", "2026-06-30")
+    c("SEG", "2026-07-01", "2026-09-30", "x:Chemicals")
+    facts = [
+        ("in-capmkt:NatureOfReportStandaloneConsolidated", "Q", None, "Consolidated"),
+        ("in-capmkt:RevenueFromOperations", "H1", "INR", "20000000000"),
+        ("in-capmkt:RevenueFromOperations", "PQ", "INR", "8000000000"),
+        ("in-capmkt:RevenueFromOperations", "LQ", "INR", "9500000000"),
+        ("in-capmkt:RevenueFromOperations", "SEG", "INR", "3000000000"),
+        ("in-capmkt:ProfitBeforeTax", "Q", "INR", "1500000000"),
+        ("in-capmkt:ProfitLossForPeriod", "Q", "INR", "1200000000"),
+        ("in-capmkt:ProfitLossForPeriod", "PQ", "INR", "1000000000"),
+        ("in-capmkt:ProfitLossForPeriod", "LQ", "INR", "1100000000"),
+        ("in-capmkt:BasicEarningsLossPerShareFromContinuingAndDiscontinuedOperations", "Q", "INRPerShare", "12.5"),
+    ]
+    if include_quarter:
+        facts.append(("in-capmkt:RevenueFromOperations", "Q", "INR", "10000000000"))
+    if include_owner:
+        facts += [("in-capmkt:ProfitLossForPeriodAttributableToOwnersOfParent", "Q", "INR", "1100000000"),
+                  ("in-capmkt:ProfitLossForPeriodAttributableToOwnersOfParent", "PQ", "INR", "900000000"),
+                  ("in-capmkt:ProfitLossForPeriodAttributableToOwnersOfParent", "LQ", "INR", "1000000000")]
+    body = "".join(
+        f"<{n} contextRef='{cx}'" + (f" unitRef='{u}' decimals='-5'" if u else "") + f">{v}</{n}>" for n, cx, u, v in facts
+    )
+    units = ("<xbrli:unit id='INR'><xbrli:measure>iso4217:INR</xbrli:measure></xbrli:unit>"
+             "<xbrli:unit id='INRPerShare'><xbrli:divide><xbrli:unitNumerator><xbrli:measure>iso4217:INR</xbrli:measure>"
+             "</xbrli:unitNumerator><xbrli:unitDenominator><xbrli:measure>xbrli:shares</xbrli:measure></xbrli:unitDenominator></xbrli:divide></xbrli:unit>")
+    return (
+        "<xbrli:xbrl xmlns:xbrli='http://www.xbrl.org/2003/instance' xmlns:xbrldi='http://xbrl.org/2006/xbrldi' "
+        "xmlns:in-capmkt='http://example/in-capmkt' xmlns:iso4217='http://www.xbrl.org/2003/iso4217'>"
+        + "".join(ctx) + units + body + "</xbrli:xbrl>"
+    ).encode()
+
+
+class XbrlParser(unittest.TestCase):
+    def test_quarter_owner_pat_same_document_comparatives(self):
+        r = p.parse_xbrl_financials([xbrl_doc()], date(2026, 9, 30))
+        self.assertEqual(r["revenue_cr"], 1000.0)          # not H1 (2000) and not segment (300)
+        self.assertEqual(r["pat_cr"], 110.0)               # owners of parent, not PBT 150 / total 120
+        self.assertEqual(r["prior_year_pat_cr"], 90.0)     # same concept as current
+        self.assertEqual(r["revenue_yoy_pct"], 25.0)
+        self.assertEqual(r["revenue_qoq_pct"], 5.26)
+        self.assertEqual(r["eps"], 12.5)
+        self.assertEqual(r["basis"], "CONSOLIDATED")
+
+    def test_half_year_value_never_used_as_quarter(self):
+        r = p.parse_xbrl_financials([xbrl_doc(include_quarter=False)], date(2026, 9, 30))
+        self.assertIsNone(r["revenue_cr"])
+
+
+class ExchangeTables(unittest.TestCase):
+    def nse_payload(self):
+        def row(fr, to, sale, total, np_, seq):
+            return {"re_from_dt": fr, "re_to_dt": to, "re_net_sale": sale, "re_total_inc": total,
+                    "re_net_profit": np_, "re_seq_num": seq, "re_basic_eps_for_cont_dic_opr": "1"}
+        return {"bankNonBnking": "N", "resCmpData": [
+            row("01-JUL-2026", "30-SEP-2026", "60000", "70000", "6000", "5"),
+            row("01-APR-2026", "30-SEP-2026", "999999", "999999", "99999", "4"),   # half-year row
+            row("01-APR-2026", "30-JUN-2026", "55000", "56000", "5000", "3"),
+            row("01-JUL-2025", "30-SEP-2025", "50000", "52000", "4000", "1"),
+        ]}
+
+    def test_nse_revenue_is_net_sales_not_total_income(self):
+        r = p.parse_nse_comparison(self.nse_payload(), date(2026, 9, 30))
+        self.assertEqual(r["revenue_cr"], 600.0)
+        self.assertEqual(r["revenue_yoy_pct"], 20.0)
+        self.assertEqual(r["revenue_qoq_pct"], 9.09)
+
+    def test_nse_stale_payload_rejected(self):
+        self.assertEqual(p.parse_nse_comparison(self.nse_payload(), date(2026, 12, 31)), {})
+
+    def test_bse_no_first_column_fallback_and_no_fy_qoq(self):
+        snap = {"currency_unit": "in Cr.", "results_in_crores": {
+            "fields": ["title", "Sep-26", "FY25-26", "Period3"],
+            "data": [["Revenue", "20", "100", "--"], ["Net Profit", "1", "5", "--"], ["EPS", "1", "5", "--"]]}}
+        r = p.parse_bse_snapshot(snap, date(2026, 9, 30))
+        self.assertEqual(r["revenue_cr"], 20.0)
+        self.assertIsNone(r["revenue_qoq_pct"])
+        self.assertEqual(p.parse_bse_snapshot(snap, date(2026, 6, 30)), {})
+
+
+class SnapshotSelection(unittest.TestCase):
+    def setUp(self):
+        self.td = tempfile.TemporaryDirectory()
+        self.store = p.EventStore(Path(self.td.name) / "events")
+        self.e = self.store.ensure_event(security={"symbol": "T", "nseSymbol": "T"}, period_end=date(2026, 9, 30))
+
+    def tearDown(self):
+        self.td.cleanup()
+
+    def test_one_snapshot_no_cross_source_borrowing(self):
+        xbrl = p.parse_xbrl_financials([xbrl_doc()], date(2026, 9, 30))
+        for k in ("prior_year_revenue_cr", "revenue_yoy_pct"):
+            xbrl[k] = None   # winner lacks prior-year revenue
+        nse = p.parse_nse_comparison(ExchangeTables().nse_payload(), date(2026, 9, 30))
+        p.store_financial_snapshot(self.e, "NSE_RESULTS_COMPARISON", nse)
+        p.store_financial_snapshot(self.e, "NSE_XBRL", xbrl)
+        integ = p.apply_financial_snapshots(self.store, self.e)
+        self.assertEqual(integ["selectedSource"], "NSE_XBRL")
+        self.assertEqual(self.store.value(self.e, "revenue_cr"), 1000.0)
+        self.assertIsNone(self.store.value(self.e, "revenue_yoy_pct"))   # not borrowed from standalone NSE
+        self.assertEqual(self.store.value(self.e, "basis"), "CONSOLIDATED")
+
+    def test_same_basis_mismatch_is_flagged(self):
+        a = p.parse_nse_comparison(ExchangeTables().nse_payload(), date(2026, 9, 30))
+        b = json.loads(json.dumps(a))
+        b["revenue_cr"] = 700.0
+        b["_meta"]["issues"] = []
+        p.store_financial_snapshot(self.e, "NSE_RESULTS_COMPARISON", a)
+        p.store_financial_snapshot(self.e, "NSE_XBRL", b | {"basis": "STANDALONE"})
+        integ = p.apply_financial_snapshots(self.store, self.e)
+        self.assertEqual(integ["status"], "FLAGGED")
+        self.assertIn("CROSS_SOURCE_MISMATCH", integ["issues"])
+
+    def test_rejected_parse_never_erases_good_snapshot(self):
+        good = p.parse_nse_comparison(ExchangeTables().nse_payload(), date(2026, 9, 30))
+        p.store_financial_snapshot(self.e, "NSE_RESULTS_COMPARISON", good)
+        p.store_financial_snapshot(self.e, "NSE_RESULTS_COMPARISON", {"_meta": {"periodEnd": "2026-09-30"}})
+        snap = self.e["financialSnapshots"]["NSE_RESULTS_COMPARISON"]
+        self.assertEqual(snap["validation"]["status"], "VERIFIED")
+        self.assertIn("lastRejected", snap)
+
+    def test_wrong_period_snapshot_rejected(self):
+        bad = p.parse_nse_comparison(ExchangeTables().nse_payload(), date(2026, 9, 30))
+        bad["_meta"]["periodEnd"] = "2026-06-30"
+        snap = p.store_financial_snapshot(self.e, "NSE_RESULTS_COMPARISON", bad)
+        self.assertEqual(snap["validation"]["status"], "REJECTED")
+
+
+class IntegrityPass(unittest.TestCase):
+    def setUp(self):
+        self.td = tempfile.TemporaryDirectory()
+        root = Path(self.td.name)
+        self.raw = root / "raw"
+        (self.raw / "bse" / "DISCOVERY").mkdir(parents=True)
+        rows = [
+            bse_row(111111, "2026-10-03T15:46:22.89", "Results for the quarter/half year ended on 30th September"),
+            bse_row(222222, "2026-09-11T16:08:22.73", "results for the quarter ended 31.12.2025"),
+            bse_row(333333, "2026-10-07T16:33:17.86", "Un-Audited results for the Quarter ended on 30th September,2026"),
+        ]
+        (self.raw / "bse" / "DISCOVERY" / "result_announcements-x.json").write_text(json.dumps(rows))
+        self.store = p.EventStore(root / "events")
+
+    def tearDown(self):
+        self.td.cleanup()
+
+    def make(self, code, fields, state="RESULT_FILED"):
+        e = self.store.ensure_event(security={"symbol": f"S{code}", "bseCode": str(code)}, period_end=date(2026, 9, 30))
+        for f, v, src, note in fields:
+            self.store.merge_field(e, f, v, source=src, note=note)
+        e["state"] = state
+        self.store.save(e)
+        return e["eventId"]
+
+    def test_false_future_declaration_revoked_and_reaction_purged(self):
+        eid = self.make(222222, [
+            ("results_released", True, "BSE_RESULT_ANNOUNCEMENT", "migrated last-known-good v1 release proof"),
+            ("filing_timestamp", "2026-11-09T16:08:22+05:30", "BSE_RESULT_ANNOUNCEMENT", None),
+            ("result_day_return_pct", -4.9, "BSE_PRICE", None),
+            ("revenue_cr", 10, "V1_MIGRATION", "migrated from v1 data.json"),
+        ])
+        stats = p.integrity_pass(self.store, today=date(2026, 10, 7), raw_root=self.raw)
+        e = self.store.load(eid)
+        self.assertEqual(stats["revoked"], 1)
+        self.assertIsNot(p.boolish(self.store.value(e, "results_released")), True)
+        self.assertIsNone(self.store.value(e, "result_day_return_pct"))
+        self.assertIsNone(self.store.value(e, "revenue_cr"))
+        self.assertIn(e["state"], {"SCHEDULED", "DISCOVERED"})
+        self.assertEqual(e["fields"]["results_released"]["status"], "REVOKED")   # kept for audit
+
+    def test_swapped_date_reverified_from_evidence(self):
+        eid = self.make(111111, [
+            ("results_released", True, "BSE_RESULT_ANNOUNCEMENT", None),
+            ("filing_timestamp", "2026-03-10T15:46:22+05:30", "BSE_RESULT_ANNOUNCEMENT", None),
+        ])
+        p.integrity_pass(self.store, today=date(2026, 10, 7), raw_root=self.raw)
+        e = self.store.load(eid)
+        self.assertTrue(self.store.value(e, "results_released"))
+        self.assertEqual(self.store.value(e, "result_date"), "2026-10-03")
+
+    def test_explicit_period_filing_promotes_scheduled_event(self):
+        eid = self.make(333333, [("result_date", "2026-10-07", "BSE_RESULT_ANNOUNCEMENT", None)], state="SCHEDULED")
+        p.integrity_pass(self.store, today=date(2026, 10, 7), raw_root=self.raw)
+        e = self.store.load(eid)
+        self.assertTrue(self.store.value(e, "results_released"))
+        self.assertEqual(e["state"], "RESULT_FILED")
+
+    def test_unreleased_event_cannot_hold_reaction_data(self):
+        eid = self.make(444444, [("result_date", "2026-10-20", "NSE_FINANCIAL_RESULTS", None),
+                           ("result_day_rvol", 3.1, "NSE_PRICE", None)], state="SCHEDULED")
+        p.integrity_pass(self.store, today=date(2026, 10, 7), raw_root=self.raw)
+        e = self.store.load(eid)
+        self.assertIsNone(self.store.value(e, "result_day_rvol"))
+        self.assertEqual(self.store.value(e, "result_date"), "2026-10-20")   # calendar date kept
+
+
+class PublishGate(unittest.TestCase):
+    base = {"liveQuarter": "Q2 FY27", "activeDashboardEvents": 480, "resultsFiled": 24, "declaredCompletenessPct": 30}
+
+    def test_drop_blocked_without_matching_approval(self):
+        new = dict(self.base, resultsFiled=2, integrity={"signature": "abc123", "revoked": 22})
+        self.assertFalse(p.quality_gate(new, self.base)[0])
+        self.assertFalse(p.quality_gate(new, self.base, "zzz999")[0])
+        self.assertTrue(p.quality_gate(new, self.base, "abc123")[0])
+
+    def test_approval_does_not_bypass_zero_rows(self):
+        new = dict(self.base, activeDashboardEvents=0, resultsFiled=0, integrity={"signature": "abc123"})
+        self.assertFalse(p.quality_gate(new, self.base, "abc123")[0])
+
+    def test_baseline_is_last_published_feed_not_blocked_run(self):
+        with tempfile.TemporaryDirectory() as td:
+            old = (p.DATA_PATH, p.INTELLIGENCE_PATH, p.HEALTH_PATH)
+            try:
+                p.DATA_PATH, p.INTELLIGENCE_PATH, p.HEALTH_PATH = (Path(td) / "d.json", Path(td) / "i.json", Path(td) / "h.json")
+                p.DATA_PATH.write_text(json.dumps({"health": {"resultsFiled": 24}}))
+                p.HEALTH_PATH.write_text(json.dumps({"resultsFiled": 2}))   # blocked run
+                self.assertEqual(p.previous_health()["resultsFiled"], 24)
+            finally:
+                p.DATA_PATH, p.INTELLIGENCE_PATH, p.HEALTH_PATH = old
+
+    def test_signature_is_order_independent(self):
+        a = [{"eventId": "A", "reasons": ["FUTURE_FILING_DATE"]}, {"eventId": "B", "reasons": ["X:1"]}]
+        self.assertEqual(p.integrity_signature(a), p.integrity_signature(list(reversed(a))))
+
+
+class RealDataRegressions(unittest.TestCase):
+    """Bugs seen on the live dashboard on 08-Oct-2026."""
+
+    def setUp(self):
+        self.td = tempfile.TemporaryDirectory()
+        self.store = p.EventStore(Path(self.td.name) / "events")
+
+    def tearDown(self):
+        self.td.cleanup()
+
+    def test_golkonda_wrong_unit_rejected_and_hidden(self):
+        snap = {"currency_unit": "in Cr.", "results_in_crores": {
+            "fields": ["title", "Sep-26", "Jun-26", "FY25-26"],
+            "data": [["Revenue", "1,399.00", "0.15", "0.44"], ["Net Profit", "-0.03", "0.10", "-0.03"],
+                     ["EPS", "-0.06", "0.18", "-0.06"]]}}
+        parsed = p.parse_bse_snapshot(snap, date(2026, 9, 30))
+        e = self.store.ensure_event(security={"symbol": "GOLKONDA", "bseCode": "513309", "isin": "INE327C01031"},
+                                    period_end=date(2026, 9, 30))
+        self.store.merge_field(e, "revenue_cr", 1399.0, source="BSE_RESULTS_SNAPSHOT")   # stale verified value
+        snap_rec = p.store_financial_snapshot(e, "BSE_RESULTS_SNAPSHOT", parsed)
+        self.assertEqual(snap_rec["validation"]["status"], "REJECTED")
+        self.assertIn("UNIT_SUSPECT", snap_rec["validation"]["issues"])
+        p.apply_financial_snapshots(self.store, e)
+        self.assertIsNone(self.store.value(e, "revenue_cr"))
+
+    def test_alstone_profit_unit_error_rejected(self):
+        snap = {"currency_unit": "in Cr.", "results_in_crores": {
+            "fields": ["title", "Sep-26", "Jun-26", "FY25-26"],
+            "data": [["Revenue", "784.88", "--", "--"], ["Net Profit", "-106.72", "0.07", "2.88"], ["EPS", "-0.17", "--", "--"]]}}
+        parsed = p.parse_bse_snapshot(snap, date(2026, 9, 30))
+        v = p.validate_financial_snapshot(parsed, "BSE_RESULTS_SNAPSHOT", date(2026, 9, 30))
+        self.assertEqual(v["status"], "REJECTED")
+
+    def test_normal_small_cap_still_verified(self):
+        snap = {"currency_unit": "in Cr.", "results_in_crores": {
+            "fields": ["title", "Sep-26", "Jun-26", "FY25-26"],
+            "data": [["Revenue", "20.93", "23.74", "114.04"], ["Net Profit", "0.57", "0.65", "2.65"], ["EPS", "1.62", "1.84", "7.51"]]}}
+        parsed = p.parse_bse_snapshot(snap, date(2026, 9, 30))   # Hawa Engineers
+        self.assertEqual(p.validate_financial_snapshot(parsed, "BSE_RESULTS_SNAPSHOT", date(2026, 9, 30))["status"], "VERIFIED")
+
+    def test_stored_snapshot_revalidated_with_new_rules(self):
+        e = self.store.ensure_event(security={"symbol": "X", "isin": "INE000000001"}, period_end=date(2026, 9, 30))
+        e["financialSnapshots"] = {"BSE_RESULTS_SNAPSHOT": {
+            "source": "BSE_RESULTS_SNAPSHOT", "periodEnd": "2026-09-30", "basis": "UNKNOWN",
+            "values": {"revenue_cr": 1399.0, "pat_cr": -0.03, "revenue_qoq_pct": 932566.67},
+            "validation": {"status": "VERIFIED", "issues": ["BASIS_UNKNOWN", "NO_PRIOR_YEAR_COLUMN"]}}}
+        integ = p.apply_financial_snapshots(self.store, e)
+        self.assertEqual(integ["status"], "NO_VERIFIED_SNAPSHOT")
+        self.assertIn("BASIS_UNKNOWN", e["financialSnapshots"]["BSE_RESULTS_SNAPSHOT"]["validation"]["issues"])
+
+    def test_duplicate_company_events_merged_into_isin_event(self):
+        a = self.store.ensure_event(security={"symbol": "GOLKONDA", "bseCode": "513309"}, period_end=date(2026, 9, 30))
+        self.store.merge_field(a, "result_day_rvol", 1.4, source="BSE_PRICE")
+        self.store.save(a)
+        b = self.store.ensure_event(security={"symbol": "GOLKONDA", "bseCode": "513309", "isin": "INE327C01031"},
+                                    period_end=date(2026, 9, 30))
+        self.store.save(b)
+        self.assertEqual(len(p.merge_duplicate_events(self.store)), 1)
+        events = self.store.all()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["eventId"], b["eventId"])
+        self.assertEqual(self.store.value(events[0], "result_day_rvol"), 1.4)
+
+    def test_tracked_move_is_since_first_tracked_price(self):
+        e = {"priceTrail": [{"price": 81.36}, {"price": 80.5}, {"price": 80.5}]}
+        self.assertEqual(p.price_trail_change(e), -1.06)
 
 
 if __name__ == "__main__":
