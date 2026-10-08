@@ -53,3 +53,10 @@ Do not call a fix complete because it compiles. Add deterministic regression tes
 For every important bug: reproduce it, add a regression test, fix the root cause, then run the full relevant test suite.
 Working style
 Inspect the repository, make cohesive changes, test them, then report exact files changed, what changed, test results, remaining limitations, and deployment steps. Correctness and persistence are more important than filling every box. Prefer — / DATA PENDING over a plausible but wrong number.
+Data integrity (engine 2.2)
+Dates: ISO strings (YYYY-MM-DD…) are parsed without day-first heuristics. Never send ISO strings to pandas with dayfirst=True; that turned 2026-09-11 into 2026-11-09.
+Period: a filing's period comes from the exchange period field (NSE toDate) or the filing text (BSE headline: "quarter ended 31.12.2025", "June 2026", "30th September", "Q2 FY27"). Date inference is a last resort and is labelled INFERRED_FROM_FILING_DATE. A filing dated before its period end is rejected.
+Evidence: every declared event is re-verified each run by integrity_pass() against saved raw exchange discovery payloads. Missing/other-period/future evidence revokes the declaration (status REVOKED, values kept for audit). Promotion from SCHEDULED requires a filing that explicitly names the period.
+Financials: each source's parse is stored as a complete snapshot in event.financialSnapshots and validated (VERIFIED / FLAGGED / REJECTED). Exactly one snapshot is applied to the visible fields; fields it lacks show — and are never borrowed from another source. XBRL: no dimensional contexts, 80–100 day durations only, exact concept names, comparatives from the same document. NSE comparison revenue = re_net_sale, not re_total_inc.
+Publish gate: the baseline is the last PUBLISHED data.json, never run_health.json. A large drop caused by revocations needs `--approve-baseline <signature>` from `--integrity-report`; a wrong signature approves nothing.
+Tests: python -m unittest discover -s tests -v (plus --self-test).
