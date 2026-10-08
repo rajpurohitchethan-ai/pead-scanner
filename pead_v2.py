@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.5.2"
+ENGINE_VERSION = "2.5.3"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -642,8 +642,36 @@ class EventStore:
     def _path(self, event_id: str) -> Path:
         return self.root / f"{safe_filename(event_id)}.json"
 
+    # Merged duplicate ids point at the surviving event (engine 2.5.3), so
+    # discovery under an old NSE:/second-ISIN key reuses it instead of
+    # re-creating the duplicate every run. Stored as events/_aliases.map
+    # (not *.json, so all() never treats it as an event).
+    def _alias_path(self) -> Path:
+        return self.root / "_aliases.map"
+
+    def aliases(self) -> dict[str, str]:
+        if not hasattr(self, "_aliases"):
+            try:
+                obj = json.loads(self._alias_path().read_text(encoding="utf-8"))
+                self._aliases = obj if isinstance(obj, dict) else {}
+            except Exception:
+                self._aliases = {}
+        return self._aliases
+
+    def resolve(self, event_id: str) -> str:
+        a, seen = self.aliases(), set()
+        while event_id in a and event_id not in seen:
+            seen.add(event_id)
+            event_id = a[event_id]
+        return event_id
+
+    def add_alias(self, old_id: str, new_id: str) -> None:
+        if old_id and new_id and old_id != new_id:
+            self.aliases()[old_id] = new_id
+            json_dump_atomic(self._alias_path(), self._aliases)
+
     def load(self, event_id: str) -> dict[str, Any] | None:
-        path = self._path(event_id)
+        path = self._path(self.resolve(event_id))
         if not path.exists():
             return None
         try:
@@ -679,7 +707,7 @@ class EventStore:
         security_key = security_key_from_values(
             security.get("isin"), security.get("nseSymbol"), security.get("bseCode"), security.get("symbol")
         )
-        eid = event_id_for(security_key, period_end)
+        eid = self.resolve(event_id_for(security_key, period_end))
         event = self.load(eid)
         if event is None:
             event = {
@@ -738,9 +766,42 @@ class EventStore:
             self.save(event)
             if old_path.exists():
                 old_path.unlink()
+            self.add_alias(old_id, new_id)
             return event
 
-        self.merge_security(target, sec)
+        return self.fold_into(target, event)
+
+    def fold_into(self, target: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+        """Merge duplicate `event` into `target` (normal source precedence),
+        delete the duplicate file and leave an alias to the target."""
+        old_id = event.get("eventId")
+        sec = event.get("security") or {}
+        tsec = target.setdefault("security", {})
+        if sec.get("isin") and tsec.get("isin") and sec["isin"] != tsec["isin"]:
+            alt = tsec.setdefault("altIsins", [])
+            if sec["isin"] not in alt:
+                alt.append(sec["isin"])
+        incoming = {}
+        for k, v in sec.items():
+            if k in {"isin", "altIsins"} and tsec.get("isin"):
+                continue
+            # merge_security lets name/sector/industry overwrite; a duplicate
+            # must not replace a real sector with a placeholder like "—".
+            if k in {"name", "sector", "industry"} and str(tsec.get(k) or "").strip() not in {"", "—", "-"}:
+                continue
+            incoming[k] = v
+        self.merge_security(target, incoming)
+        for extra in ("filings", "financialSnapshots", "priceTrail", "concall", "tradeLog"):
+            if event.get(extra) and not target.get(extra):
+                target[extra] = event[extra]
+        if (event.get("plus") or {}).get("price") and not (target.get("plus") or {}).get("price"):
+            target["plus"] = event["plus"]
+        # Raw price/filing folders stay under the old id; remember it so
+        # replays still find them.
+        merged_from = target.setdefault("mergedFrom", [])
+        for oid in [old_id, *(event.get("mergedFrom") or [])]:
+            if oid and oid != target.get("eventId") and oid not in merged_from:
+                merged_from.append(oid)
         for field, meta in (event.get("fields") or {}).items():
             if not isinstance(meta, dict) or meta.get("status") != "OK":
                 continue
@@ -760,8 +821,9 @@ class EventStore:
                 target_fetch[key] = val
         self.save(target)
         old_path = self._path(old_id)
-        if old_path.exists():
+        if old_path.exists() and old_id != target.get("eventId"):
             old_path.unlink()
+        self.add_alias(old_id, target.get("eventId"))
         return target
 
     def merge_field(
@@ -2889,6 +2951,8 @@ def _security_keys(sec: dict[str, Any]) -> set[str]:
     keys = set()
     if sec.get("isin"):
         keys.add("ISIN:" + str(sec["isin"]).upper())
+    for alt in sec.get("altIsins") or []:
+        keys.add("ISIN:" + str(alt).upper())
     if sec.get("bseCode"):
         keys.add("BSE:" + str(sec["bseCode"]).strip())
     if sec.get("nseSymbol"):
@@ -2956,6 +3020,10 @@ def rederive_snapshots_from_raw(event: dict[str, Any], raw_root: Path = RAW_DIR)
     # (including folders of duplicate/sibling events) can be replayed safely.
     sec = event.get("security") or {}
     prefixes = {safe_filename(event["eventId"]).rsplit("_", 1)[0]}
+    for oid in event.get("mergedFrom") or []:
+        prefixes.add(safe_filename(oid).rsplit("_", 1)[0])
+    for alt in sec.get("altIsins") or []:
+        prefixes.add(safe_filename(str(alt).upper()))
     if sec.get("isin"):
         prefixes.add(safe_filename(str(sec["isin"]).upper()))
     if sec.get("nseSymbol") or sec.get("symbol"):
@@ -2984,47 +3052,110 @@ def rederive_snapshots_from_raw(event: dict[str, Any], raw_root: Path = RAW_DIR)
     return added
 
 
+_NAME_STOP = {"ltd", "limited", "the", "co", "company", "corp", "corporation", "inc", "and", "of", "pvt", "private"}
+
+
+def _issuer_code(isin: Any) -> str | None:
+    s = str(isin or "").strip().upper()
+    return s[3:7] if re.fullmatch(r"IN[A-Z0-9]{10}", s) else None
+
+
+def _name_tokens(name: Any) -> list[str]:
+    toks = re.findall(r"[a-z0-9]+", str(name or "").lower().replace("&", " and "))
+    return [t for t in toks if t not in _NAME_STOP]
+
+
+def same_company(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Guard before folding two events that share a symbol or BSE code.
+    Two ISINs: same issuer code (INE690A01010 / INE690A01028 = old and
+    post-split ISIN of one company). Otherwise the first two name words must
+    agree; with no names, only an identical BSE code counts."""
+    ta, tb = _name_tokens(a.get("name")), _name_tokens(b.get("name"))
+    ja, jb = "".join(ta), "".join(tb)
+    names_match = bool(ta and tb) and (
+        ta[:2] == tb[:2] or (min(len(ta), len(tb)) == 1 and ta[0] == tb[0])
+        or (min(len(ja), len(jb)) >= 8 and ja[:12] == jb[:12]))   # "Extrusiontechnik" vs "Extrusion Technik"
+    ia, ib = _issuer_code(a.get("isin")), _issuer_code(b.get("isin"))
+    if ia and ib and ia != ib:
+        # Different issuer codes: only the same NSE symbol AND the same full
+        # name overrides (one of the two ISINs is malformed/stale).
+        na, nb = normalize_symbol(a.get("nseSymbol")), normalize_symbol(b.get("nseSymbol"))
+        return bool(na and na == nb and ja and ja == jb)
+    if ia and ib:
+        return True
+    if ta and tb:
+        return names_match
+    bc_a, bc_b = str(a.get("bseCode") or "").strip(), str(b.get("bseCode") or "").strip()
+    return bool(bc_a and bc_a == bc_b)
+
+
+def _merge_keys(sec: dict[str, Any]) -> set[str]:
+    keys = set()
+    for k in ("nseSymbol", "symbol", "bseSymbol"):
+        sym = normalize_symbol(sec.get(k))
+        if sym and not sym.endswith((".BO", ".NS")):
+            keys.add("SYM:" + sym)
+    bc = str(sec.get("bseCode") or "").strip()
+    if bc.isdigit():
+        keys.add("BSE:" + bc)
+    return keys
+
+
 def merge_duplicate_events(store: EventStore) -> list[dict[str, Any]]:
     """One company + one period = one event.
 
-    Regression: GOLKONDA appeared twice (NSE:GOLKONDA|… without ISIN and
-    INE327C01031|… with ISIN) because discovery first saw the company without
-    its ISIN. Events without an ISIN that share a BSE code or NSE symbol with an
-    ISIN-keyed event for the same period are folded into the ISIN event.
+    Regressions: GOLKONDA appeared twice (NSE:GOLKONDA|… and INE327C01031|…);
+    in 2.5.2, 82 companies appeared twice in the watchlist because the NSE
+    list gave one copy (ISIN + NSE symbol) and the BSE list another (BSE code
+    + scrip id, sometimes the post-split ISIN, e.g. TTKPRESTIG INE690A01010 vs
+    INE690A01028), and the copies shared no identical key. Events of the same
+    period sharing an NSE symbol / BSE scrip id / BSE code are folded into one
+    when same_company() agrees. Survivor: has ISIN, then has NSE symbol, then
+    most fields. The duplicate id becomes an alias of the survivor.
     """
     events = store.all()
-    by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        while parent.get(x, x) != x:
+            x = parent[x]
+        return x
+
+    by_id = {e["eventId"]: e for e in events}
+    seen: dict[tuple[str, str], list[str]] = {}
     for e in events:
-        sec = e.get("security") or {}
         pe = (e.get("period") or {}).get("end")
-        if sec.get("isin") and pe:
-            for k in ("bseCode", "nseSymbol"):
-                if sec.get(k):
-                    by_key[(f"{k}:{str(sec[k]).strip().upper()}", pe)] = e
+        if not pe:
+            continue
+        sec = e.get("security") or {}
+        for k in _merge_keys(sec):
+            for other in seen.get((k, pe), []):
+                if find(other) != find(e["eventId"]) and same_company(sec, by_id[other].get("security") or {}):
+                    parent[find(e["eventId"])] = find(other)
+            seen.setdefault((k, pe), []).append(e["eventId"])
+
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for e in events:
+        groups.setdefault(find(e["eventId"]), []).append(e)
+
+    def rank(e: dict[str, Any]) -> tuple:
+        sec = e.get("security") or {}
+        ok = sum(1 for m in (e.get("fields") or {}).values() if isinstance(m, dict) and m.get("status") == "OK")
+        return (bool(sec.get("isin")), bool(sec.get("nseSymbol")), ok, e["eventId"])
+
     merged: list[dict[str, Any]] = []
-    for e in events:
-        sec = e.get("security") or {}
-        pe = (e.get("period") or {}).get("end")
-        if sec.get("isin") or not pe:
+    for members in groups.values():
+        if len(members) < 2:
             continue
-        target = None
-        for k in ("bseCode", "nseSymbol"):
-            if sec.get(k):
-                target = by_key.get((f"{k}:{str(sec[k]).strip().upper()}", pe)) or target
-        if target is None or target.get("eventId") == e.get("eventId"):
-            continue
-        dup_id = e["eventId"]
-        sec["isin"] = target["security"]["isin"]
-        # rekey_and_merge copies verified fields into the ISIN event (normal
-        # source precedence) and deletes the duplicate file.
-        store.rekey_and_merge(e)
-        for extra in ("filings", "financialSnapshots", "priceTrail"):
-            if e.get(extra) and not (store.load(target["eventId"]) or {}).get(extra):
-                t = store.load(target["eventId"])
-                t[extra] = e[extra]
-                store.save(t)
-        merged.append({"eventId": dup_id, "symbol": sec.get("symbol"), "at": iso_now(),
-                       "reasons": [f"DUPLICATE_MERGED_INTO:{target['eventId']}"], "before": {}})
+        members.sort(key=rank, reverse=True)
+        target = members[0]
+        for e in members[1:]:
+            both_declared = (boolish(store.value(e, "results_released")) is True
+                             and boolish(store.value(target, "results_released")) is True)
+            target = store.fold_into(target, e)
+            merged.append({"eventId": e["eventId"], "symbol": (e.get("security") or {}).get("symbol"), "at": iso_now(),
+                           "reasons": [f"DUPLICATE_MERGED_INTO:{target['eventId']}"], "before": {},
+                           "bothDeclared": both_declared})
     return merged
 
 
@@ -3786,7 +3917,10 @@ def enrich_concall(event: dict[str, Any], store: EventStore, ctx: SourceContext)
         return
     meta = (event.get("fetch") or {}).get("CONCALL") or {}
     last = parse_datetime(meta.get("lastAttempt"))
-    gap = 6 if current.get("status") in {None, "SCHEDULED"} else 24
+    # Re-check every 6 h until a transcript/recording proves the call happened
+    # (2.5.3: an inferred "held" from an undated notice is re-checked too).
+    proven = current.get("transcriptUrl") or current.get("audioUrl")
+    gap = 24 if proven else 6
     if last and (now_ist() - last).total_seconds() < gap * 3600:
         return
     sec = event.get("security") or {}
@@ -4269,6 +4403,12 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
             "opm": store.value(event, "opm_pct"), "opmPrevQ": store.value(event, "opm_prev_q_pct"),
             "opmPriorYear": store.value(event, "opm_prior_year_pct"), "changeBps": margin,
             "opmTtm": store.value(event, "exchange_opm_ttm_pct"),
+            # 2.5.3: margin change falls back to last quarter when the filing
+            # has no prior-year column; say which one it is.
+            "basis": ("YoY" if store.value(event, "opm_prior_year_pct") is not None
+                      else "QoQ" if margin is not None else None),
+            "revenueQoQ": store.value(event, "revenue_qoq_pct"),
+            "patQoQ": store.value(event, "pat_qoq_pct"),
         },
         "sectorKey": key,
         "sector": (sector_info or {}).get(key) if key else None,
@@ -4626,6 +4766,10 @@ def score_event(store: EventStore, event: dict[str, Any], sector_info: dict[str,
 def _raw_folders_for(event: dict[str, Any], base: Path) -> list[Path]:
     sec = event.get("security") or {}
     prefixes = {safe_filename(event["eventId"]).rsplit("_", 1)[0]}
+    for oid in event.get("mergedFrom") or []:
+        prefixes.add(safe_filename(oid).rsplit("_", 1)[0])
+    for alt in sec.get("altIsins") or []:
+        prefixes.add(safe_filename(str(alt).upper()))
     if sec.get("isin"):
         prefixes.add(safe_filename(str(sec["isin"]).upper()))
     if sec.get("nseSymbol") or sec.get("symbol"):
@@ -5111,8 +5255,10 @@ def quality_gate(new_health: dict[str, Any], old_health: dict[str, Any], approve
     integrity = new_health.get("integrity") or {}
     signature = integrity.get("signature")
     baseline_approved = bool(signature and approved_signature and signature == approved_signature)
-    current_rows = int(new_health.get("activeDashboardEvents") or 0)
-    current_declared = int(new_health.get("resultsFiled") or 0)
+    # Folding a duplicate removes a row but no company: add folds back
+    # before comparing with the previous publish.
+    current_rows = int(new_health.get("activeDashboardEvents") or 0) + int(integrity.get("duplicatesMerged") or 0)
+    current_declared = int(new_health.get("resultsFiled") or 0) + int(integrity.get("declaredMerged") or 0)
     old_rows = int(old_health.get("activeDashboardEvents") or old_health.get("eventsTracked") or 0)
     old_declared = int(old_health.get("resultsFiled") or 0)
     current_comp = float(new_health.get("declaredCompletenessPct") or 0)
@@ -5615,9 +5761,13 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         print("Enrichment:", json.dumps(enrichment_stats, default=str))
         refresh_index_cache(ctx)
         post = integrity_pass(store)
+        post_merges = [r for r in post["revocations"] if any(str(x).startswith("DUPLICATE_MERGED_INTO") for x in r.get("reasons") or [])]
         if post["revoked"] or post["postResultPurged"]:
             print_integrity_summary(post, integrity_signature(post["revocations"]))
 
+    all_merges = [r for r in integrity_stats["revocations"] if any(str(x).startswith("DUPLICATE_MERGED_INTO") for x in r.get("reasons") or [])]
+    if not skip_network:
+        all_merges += post_merges
     replayed = replay_plus(store)
     print(f"Analytics replayed from saved price files for {replayed} events")
     score_stats = score_all(store)
@@ -5634,6 +5784,10 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         "revoked": len(integrity_stats["revocations"]),
         "postResultPurged": integrity_stats["postResultPurged"],
         "financialsApplied": integrity_stats["financialsApplied"],
+        # Duplicate folds shrink the row count without losing any company;
+        # the quality gate discounts them (2.5.3).
+        "duplicatesMerged": len(all_merges),
+        "declaredMerged": sum(1 for r in all_merges if r.get("bothDeclared")),
     }
     published, reasons = publish(store, health, force=force_publish, approved_signature=approved_signature)
     if published:
