@@ -42,6 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
+MODULE_VERSION = "2.6.0"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -436,7 +437,13 @@ def valuation_view(pe: Any, sector_pe: Any, roe: Any, pat_yoy: Any, pb: Any = No
         label = "ATTRACTIVE"
     else:
         label = "FAIR"
-    return {"label": label, "pe": _r2(pe_), "sectorPe": _r2(spe), "peVsSector": rel, "peg": peg, "roe": _r2(roe_), "pb": _r2(pb)}
+    # 2.5.3: ROE above 100% or P/B above 50 means a near-zero book value
+    # (ONIXSOLAR: P/B 327, ROE 1,448%). The ratio is real but meaningless.
+    pb_ = _num(pb)
+    neg_book = (pb_ is not None and pb_ < 0) or (roe_ is not None and roe_ < -100)
+    tiny_book = neg_book or (roe_ is not None and roe_ > 100)
+    return {"label": label, "pe": _r2(pe_), "sectorPe": _r2(spe), "peVsSector": rel, "peg": peg, "roe": _r2(roe_), "pb": _r2(pb),
+            "tinyBook": tiny_book, "bookNote": ("negative book value" if neg_book else "tiny book value") if tiny_book else None}
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +490,14 @@ def market_regime(index_closes: list[float] | None) -> dict[str, Any]:
         return {"label": None, "note": "Index history unavailable"}
     last = closes[-1]
     dma50 = sum(closes[-50:]) / 50
-    dma200 = sum(closes[-200:]) / len(closes[-200:])
+    if len(closes) < 200:
+        # Not enough history for a 200 DMA (was silently averaging ~70 days).
+        ret20 = _pct(last, closes[-21])
+        label = "RISK-ON" if last >= dma50 else "RISK-OFF"
+        return {"label": label, "last": _r2(last), "dma50": _r2(dma50), "dma200": None, "ret20dPct": _r2(ret20),
+                "note": ("Index above its 50 DMA (200 DMA needs more history)." if label == "RISK-ON"
+                         else "Index below its 50 DMA (200 DMA needs more history); size down.")}
+    dma200 = sum(closes[-200:]) / 200
     ret20 = _pct(last, closes[-21])
     if last >= dma50 and last >= dma200:
         label = "RISK-ON"
@@ -622,6 +636,18 @@ def concall_status(filings: list[dict[str, Any]], result_date: date | None, toda
     return out
 
 
+def recheck_concall(concall: dict[str, Any], result_date: date | None, today: date) -> dict[str, Any]:
+    """An undated notice with no transcript/recording cannot prove the call
+    happened; keep it pending until 2 days after the result."""
+    c = dict(concall or {})
+    if (c.get("status") == "DONE" and not c.get("callDate") and not c.get("transcriptUrl") and not c.get("audioUrl")
+            and c.get("noticeUrl") and result_date):
+        until = max(result_date + _td(days=2), date.fromisoformat(c["pendingUntil"]) if c.get("pendingUntil") else result_date)
+        if until >= today:
+            c.update({"status": "SCHEDULED", "pendingUntil": until.isoformat()})
+    return c
+
+
 def call_pending(concall: dict[str, Any] | None) -> bool:
     return bool(concall and concall.get("status") == "SCHEDULED")
 
@@ -679,3 +705,119 @@ def entry_timing_scorecard(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
                      "winRate": _r2(sum(r > 0 for r in rets) / len(rets) * 100) if rets else None,
                      "stopped": sum(bool(t.get("stopped")) for t in trades)})
     return rows
+
+
+# ---------------------------------------------------------------------------
+# Corporate actions (2.5.4): exchange price history is NOT split/bonus
+# adjusted. CORDELIA's 1:10 split looked like a -90% crash (fake 52-week
+# distance, broken EMAs and returns).
+# ---------------------------------------------------------------------------
+
+_SPLIT_FACTORS = (1 / 2, 1 / 3, 2 / 3, 1 / 4, 3 / 4, 1 / 5, 2 / 5, 1 / 10, 1 / 20, 1 / 25, 1 / 50, 1 / 100, 4 / 5, 3 / 5)
+
+
+def adjust_corporate_actions(frame):
+    """Detect overnight price steps that match a split/bonus ratio and divide
+    all earlier prices by it (volumes multiplied). A step counts only when the
+    close drops by >=35% to within 6% of a standard ratio AND the whole new
+    session trades below the old close (gap, not an intraday collapse)."""
+    if frame is None or getattr(frame, "empty", True) or len(frame) < 2:
+        return frame
+    f = frame.sort_values("Date").reset_index(drop=True).copy()
+    closes = f["Close"].astype(float).tolist()
+    highs = f["High"].tolist() if "High" in f else [None] * len(f)
+    factor_after = [1.0] * len(f)
+    events = []
+    for i in range(1, len(f)):
+        prev, cur = closes[i - 1], closes[i]
+        if not prev or not cur or prev <= 0:
+            continue
+        r = cur / prev
+        if r > 0.65:
+            continue
+        hi = highs[i]
+        if hi is not None and hi == hi and float(hi) > prev * 0.8:
+            continue
+        best = min(_SPLIT_FACTORS, key=lambda k: abs(r / k - 1))
+        if abs(r / best - 1) <= 0.06:
+            events.append((i, best))
+    if not events:
+        return f
+    mult = [1.0] * len(f)
+    for i, k in events:
+        for j in range(i):
+            mult[j] *= k
+    for col in ("Open", "High", "Low", "Close"):
+        if col in f:
+            f[col] = [None if v is None or v != v else v * m for v, m in zip(f[col].tolist(), mult)]
+    if "Volume" in f:
+        f["Volume"] = [None if v is None or v != v else v / m for v, m in zip(f["Volume"].tolist(), mult)]
+    f.attrs["corporateActions"] = [{"index": i, "factor": round(k, 4), "date": str(f["Date"].iloc[i])[:10]} for i, k in events]
+    return f
+
+
+# ---------------------------------------------------------------------------
+# One sector taxonomy (2.5.4): NSE's ~22 "Sector" groups. Exchange, legacy
+# BSE industry and Yahoo labels were mixed ("Finance" vs "Financial
+# Services", "Computers - Software" vs "Information Technology").
+# ---------------------------------------------------------------------------
+
+NSE_SECTORS = (
+    "Automobile and Auto Components", "Capital Goods", "Chemicals", "Construction", "Construction Materials",
+    "Consumer Durables", "Consumer Services", "Diversified", "Fast Moving Consumer Goods", "Financial Services",
+    "Forest Materials", "Healthcare", "Information Technology", "Media, Entertainment & Publication",
+    "Metals & Mining", "Oil, Gas & Consumable Fuels", "Power", "Realty", "Services", "Telecommunication",
+    "Textiles", "Utilities",
+)
+_SECTOR_RULES = (
+    # (keywords, sector) - first match wins; order matters
+    (("telecom",), "Telecommunication"),
+    (("industrial gas",), "Chemicals"),
+    (("bank", "financ", "nbfc", "insurance", "capital market", "asset management", "stockbrok", "fintech",
+      "investment", "broking", "credit", "lending", "wealth", "exchange", "depositor"), "Financial Services"),
+    (("software", "computers", "it -", "it services", "information technology", "technology", "it enabled",
+      "data processing"), "Information Technology"),
+    (("pharma", "health", "hospital", "medical", "diagnost", "drug", "biotech"), "Healthcare"),
+    (("tyre", "auto", "2 and 3 wheel", "4 wheel", "tractor", "commercial vehicle"), "Automobile and Auto Components"),
+    (("cement", "construction material", "ceramic", "granite", "sanitary", "glass"), "Construction Materials"),
+    (("real estate", "realty", "residential", "commercial projects"), "Realty"),
+    (("construction", "infrastructure", "civil", "engineering & construction", "epc"), "Construction"),
+    (("refiner", "oil", "gas", "lubricant", "coal", "petroleum", "energy"), "Oil, Gas & Consumable Fuels"),
+    (("power", "electric utilit", "solar", "renewable"), "Power"),
+    (("utilit", "water supply"), "Utilities"),
+    (("steel", "metal", "alumin", "copper", "zinc", "mining", "ferrous", "iron", "ferro alloy"), "Metals & Mining"),
+    (("paint", "durable", "airconditioner", "air conditioner", "gems", "jewel", "watch", "household appliance",
+      "electronics - consumer", "consumer electronics", "luxury", "footwear", "furniture", "plywood"), "Consumer Durables"),
+    (("fertili", "pesticide", "agrochem", "chemical", "plastic", "petrochem", "industrial gas", "dyes", "pigment",
+      "basic materials", "specialty"), "Chemicals"),
+    (("brew", "distill", "beverage", "food", "tea", "coffee", "sugar", "personal care", "personal product",
+      "fmcg", "fast moving", "consumer defensive", "tobacco", "cigarette", "dairy", "edible oil", "household product",
+      "agricultur", "packaged"), "Fast Moving Consumer Goods"),
+    (("textile", "apparel", "yarn", "garment", "fabric", "cotton", "spinning"), "Textiles"),
+    (("media", "entertainment", "printing", "publishing", "broadcast", "film", "advertis"), "Media, Entertainment & Publication"),
+    (("hotel", "leisure", "retail", "tour", "travel", "education", "amusement", "restaurant", "consumer services",
+      "e-commerce", "consumer cyclical", "recreation"), "Consumer Services"),
+    (("electrical", "cable", "diesel engine", "compressor", "pump", "electrode", "industrial product",
+      "industrial manufactur", "capital goods", "engineering", "ship build", "electronics - industrial",
+      "defence", "aerospace", "machinery", "bearing", "industrials", "heavy electrical", "castings", "forgings"), "Capital Goods"),
+    (("shipping", "logistic", "trading", "commercial service", "distributor", "transport", "rental", "airline",
+      "aviation", "ports", "port &", "port services", "courier", "services"), "Services"),
+    (("paper", "forest", "wood", "timber"), "Forest Materials"),
+    (("diversified",), "Diversified"),
+)
+
+
+def canonical_sector(*labels) -> str | None:
+    """Map exchange / legacy BSE / Yahoo labels to one NSE sector name."""
+    for label in labels:
+        v = str(label or "").strip()
+        if not v or v in {"—", "-", "NA", "Miscellaneous", "Others"}:
+            continue
+        for s in NSE_SECTORS:
+            if v.lower() == s.lower():
+                return s
+        low = v.lower()
+        for keys, sector in _SECTOR_RULES:
+            if any(_re.search(r"(?<![a-z])" + _re.escape(k), low) for k in keys):
+                return sector
+    return None
