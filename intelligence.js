@@ -261,7 +261,12 @@
   function viewHealth() {
     const h = S.data.health || {}, c = S.data.counts || {};
     const box = (l, v) => `<div class="hbox"><span>${l}</span><b>${v ?? '—'}</b></div>`;
-    return `<div class="health">
+    const sa = h.selfAudit || {};
+    const tone = { OK: 'good', WARN: 'warn', FAIL: 'bad' };
+    const audit = (sa.checks || []).length ? `<div class="audit"><h3>Automatic data check <span class="tag ${tone[sa.status] || ''}">${esc(sa.status || '')}</span></h3>
+      ${(sa.checks || []).map(c => `<div class="arow"><span class="tag ${tone[c.status] || ''}">${esc(c.status)}</span>
+        <div><b>${esc(c.check)}</b>${c.count ? ` <span class="muted">(${c.count})</span>` : ''}${(c.examples || []).length ? `<div class="muted">${esc(c.examples.join(', '))}</div>` : ''}${c.status !== 'OK' && c.note ? `<div class="muted">${esc(c.note)}</div>` : ''}</div></div>`).join('')}</div>` : '';
+    return audit + `<div class="health">
       ${box('Companies tracked', `${h.activeDashboardEvents ?? '—'} / ${h.eventsTracked ?? '—'}`)}
       ${box('Results declared', h.resultsFiled)}${box('Financials verified', h.financialsVerified)}
       ${box('Financials flagged', h.financialsFlagged)}${box('Reaction measured', h.reactionReady)}
@@ -274,7 +279,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.6.0';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.6.1';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -290,7 +295,10 @@
     $('regime').innerHTML = r.label ? `<span class="dot ${tone}"></span><b>Market ${esc(r.label.toLowerCase())}</b>. ${esc(r.note)}${num(r.ret20dPct) !== null ? ` ${esc(r.index || 'Index')} ${pct(r.ret20dPct)} over 20 days.` : ''}` : `<span class="dot"></span>${esc(r.note && r.note !== 'Index history unavailable' ? r.note : 'Market regime appears after the next data refresh.')}`;
     const decl = declared(), act = decl.filter(it => sig(it)[1] === 'go').length;
     const soon = upcoming().filter(it => { const n = daysTo(it.resultDate); return n !== null && n >= 0 && n <= 7; }).length;
-    $('season').innerHTML = installBanner() + `<strong>${decl.length}</strong> results declared, <strong>${act}</strong> with an actionable setup, <strong>${soon}</strong> companies reporting in the next 7 days.`;
+    const sa = (d.health || {}).selfAudit || {};
+    const fails = (sa.checks || []).filter(c => c.status === 'FAIL');
+    const auditBanner = fails.length ? `<div class="install-bad"><b>Data check found ${fails.length} problem${fails.length > 1 ? 's' : ''}:</b> ${esc(fails.map(c => c.check).join('; '))}. Details in Data health.</div>` : '';
+    $('season').innerHTML = installBanner() + auditBanner + `<strong>${decl.length}</strong> results declared, <strong>${act}</strong> with an actionable setup, <strong>${soon}</strong> companies reporting in the next 7 days.`;
     $('c-setups').textContent = decl.length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
   }
 
