@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.4.0"
+ENGINE_VERSION = "2.5.2"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -512,13 +512,24 @@ def reaction_session(filing_ts: datetime | None, fallback_date: date | None) -> 
         if t < dtime(9, 0):
             return d, "BEFORE_OPEN"
         if t <= dtime(15, 30):
-            return d, "INTRADAY"
+            # Only part of the filing day can react: the reaction is measured
+            # over a two-session window (filing day + next session) and the
+            # next session is the "reaction day" for entries and holds.
+            return next_trading_day(d), "INTRADAY"
         return next_trading_day(d), "AFTER_CLOSE"
     if fallback_date is not None:
         # No timestamp = do not pretend the same-day candle is clean. Use the
         # next session and label the timing unknown so the UI can disclose it.
         return next_trading_day(fallback_date), "UNKNOWN_TIME_NEXT_SESSION"
     return None, "UNKNOWN"
+
+
+def reaction_window_start(filing_ts: datetime | None, timing: str | None, reaction: date | None) -> date | None:
+    """First session of the reaction window: the filing day for intraday
+    filings, otherwise the reaction session itself."""
+    if timing == "INTRADAY" and filing_ts is not None:
+        return filing_ts.astimezone(IST).date()
+    return reaction
 
 
 def safe_filename(value: str) -> str:
@@ -1050,6 +1061,13 @@ class NSEAdapter:
             raise RuntimeError("NSE quote method unavailable")
         return self._call("quote", lambda: fn(symbol), event_id=event_id, symbol=symbol)
 
+    def announcements(self, symbol: str, start: datetime, end: datetime, event_id: str):
+        fn = getattr(self.client, "announcements", None)
+        if fn is None:
+            raise RuntimeError("NSE announcements method unavailable")
+        return self._call("announcements", lambda: fn(index="equities", symbol=symbol, from_date=start, to_date=end) or [],
+                          event_id=event_id, symbol=symbol)
+
     def index_history(self, index: str, start: date, end: date):
         fn = getattr(self.client, "fetch_historical_index_data", None)
         if fn is None:
@@ -1156,6 +1174,12 @@ class BSEAdapter:
             "results_snapshot", lambda: self.client.resultsSnapshot(str(code)),
             event_id=event_id, symbol=symbol,
         )
+
+    def scrip_announcements(self, code: str, start: datetime, end: datetime, event_id: str):
+        def fn():
+            res = self.client.announcements(page_no=1, from_date=start, to_date=end, scripcode=str(code)) or {}
+            return res.get("Table") or []
+        return self._call("scrip_announcements", fn, event_id=event_id, symbol=str(code))
 
     def scrip_results(self, code: str, start: datetime, end: datetime, event_id: str):
         def fn():
@@ -2463,7 +2487,7 @@ def normalize_yahoo_frame(frame: Any):
     return f.dropna(subset=["Date", "Close"]).sort_values("Date").reset_index(drop=True)
 
 
-def price_metrics(frame: Any, reaction_date: date | None) -> dict[str, Any]:
+def price_metrics(frame: Any, reaction_date: date | None, window_start: date | None = None) -> dict[str, Any]:
     if pd is None or frame is None or getattr(frame, "empty", True):
         return {}
     f = frame.copy()
@@ -2481,7 +2505,13 @@ def price_metrics(frame: Any, reaction_date: date | None) -> dict[str, Any]:
     if reaction_date is not None:
         candidates = f.index[f["Date"].dt.date >= reaction_date].tolist()
         reaction_idx = candidates[0] if candidates else None
-    pre_end = reaction_idx if reaction_idx is not None else len(f)
+    # Two-session window for intraday filings: measure from the close before
+    # the filing day; highs/lows/volume span both sessions.
+    win_idx = reaction_idx
+    if reaction_idx is not None and window_start is not None and window_start < reaction_date:
+        w = f.index[(f["Date"].dt.date >= window_start) & (f.index <= reaction_idx)].tolist()
+        win_idx = w[0] if w else reaction_idx
+    pre_end = win_idx if win_idx is not None else len(f)
 
     def pre_move(n: int):
         if pre_end < n + 1:
@@ -2515,20 +2545,21 @@ def price_metrics(frame: Any, reaction_date: date | None) -> dict[str, Any]:
             out["avg_turnover_20d_cr"] = round(float(turnover.tail(20).mean()), 4)
 
     if reaction_idx is not None and reaction_idx < len(f):
-        if reaction_idx > 0:
-            out["result_day_return_pct"] = pct_idx(reaction_idx - 1, reaction_idx)
-        result_low = safe_num(f.loc[reaction_idx, "Low"])
-        result_high = safe_num(f.loc[reaction_idx, "High"])
-        if result_low is None:
-            result_low = safe_num(f.loc[reaction_idx, "Close"])
-        if result_high is None:
-            result_high = safe_num(f.loc[reaction_idx, "Close"])
+        if win_idx > 0:
+            out["result_day_return_pct"] = pct_idx(win_idx - 1, reaction_idx)
+        window = f.loc[win_idx:reaction_idx]
+        lows = pd.to_numeric(window["Low"], errors="coerce").dropna()
+        highs_w = pd.to_numeric(window["High"], errors="coerce").dropna()
+        closes_w = pd.to_numeric(window["Close"], errors="coerce").dropna()
+        result_low = safe_num(lows.min()) if not lows.empty else safe_num(closes_w.min())
+        result_high = safe_num(highs_w.max()) if not highs_w.empty else safe_num(closes_w.max())
         out["result_day_low"] = round2(result_low)
         out["result_day_high"] = round2(result_high)
 
         if "Volume" in f.columns:
-            rv = safe_num(f.loc[reaction_idx, "Volume"])
-            prior = pd.to_numeric(f.loc[max(0, reaction_idx - 20):reaction_idx - 1, "Volume"], errors="coerce").dropna()
+            vols_w = pd.to_numeric(window["Volume"], errors="coerce").dropna()
+            rv = safe_num(vols_w.max()) if not vols_w.empty else None
+            prior = pd.to_numeric(f.loc[max(0, win_idx - 20):win_idx - 1, "Volume"], errors="coerce").dropna()
             avg = float(prior.mean()) if not prior.empty else None
             if rv is not None and avg not in (None, 0):
                 out["result_day_rvol"] = round2(rv / avg)
@@ -2544,7 +2575,7 @@ def price_metrics(frame: Any, reaction_date: date | None) -> dict[str, Any]:
                     out[f"post_result_hold_{n}d"] = bool((lows >= result_low).all())
 
         # Simple Darvas-style post-result box: first 5 sessions after reaction.
-        box = f.iloc[reaction_idx:min(len(f), reaction_idx + 6)]
+        box = f.iloc[win_idx:min(len(f), reaction_idx + 6)]
         highs = pd.to_numeric(box["High"], errors="coerce").dropna()
         if highs.empty:
             highs = pd.to_numeric(box["Close"], errors="coerce").dropna()
@@ -3044,6 +3075,9 @@ def integrity_pass(store: EventStore, *, today: date | None = None, raw_root: Pa
                 if new_session and old_session != new_session.isoformat():
                     store.force_field(event, "reaction_session", new_session.isoformat(), source="DERIVED", note=timing)
                     store.force_field(event, "filing_session", timing, source="DERIVED")
+                    ws = reaction_window_start(ts, timing, new_session)
+                    if ws and ws != new_session:
+                        store.force_field(event, "reaction_window_start", ws.isoformat(), source="DERIVED", note="intraday filing")
                     for f in POST_RESULT_FIELDS:
                         store.revoke_field(event, f, f"reaction session corrected {old_session} -> {new_session}; recompute")
                     (event.setdefault("fetch", {}).get("PRICE_HISTORY") or {}).pop("lastSuccess", None)
@@ -3738,6 +3772,60 @@ def enrich_previous_quarter(event: dict[str, Any], store: EventStore, ctx: Sourc
                        error="; ".join(errors) or (None if found else "no previous-quarter filing found"))
 
 
+def enrich_concall(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
+    """Concall notice / transcript / audio around the result (engine 2.5).
+    Checked every 6 hours while a call may be pending, otherwise daily."""
+    if boolish(store.value(event, "results_released")) is not True:
+        return
+    result_date = parse_date(store.value(event, "result_date"))
+    today = now_ist().date()
+    if result_date is None or (today - result_date).days > 30:
+        return
+    current = event.get("concall") or {}
+    if current.get("status") == "DONE" and current.get("transcriptUrl"):
+        return
+    meta = (event.get("fetch") or {}).get("CONCALL") or {}
+    last = parse_datetime(meta.get("lastAttempt"))
+    gap = 6 if current.get("status") in {None, "SCHEDULED"} else 24
+    if last and (now_ist() - last).total_seconds() < gap * 3600:
+        return
+    sec = event.get("security") or {}
+    symbol = normalize_symbol(sec.get("nseSymbol"))
+    bse_code = str(sec.get("bseCode") or "").strip()
+    if not (symbol or bse_code) or not _extra_budget_ok(1):
+        return
+    start = datetime.combine(result_date - timedelta(days=20), dtime(0, 0))
+    end = datetime.combine(today, dtime(23, 59))
+    filings, errors, raw_ref = [], [], None
+    try:
+        if symbol:
+            with NSEAdapter(ctx) as nse:
+                rows, raw_ref = nse.announcements(symbol, start, end, event["eventId"])
+            for r in rows or []:
+                if isinstance(r, dict):
+                    filings.append({"filedAt": parse_datetime(first(r, "an_dt", "sort_date", "dt")),
+                                    "text": f"{r.get('desc') or ''} {r.get('attchmntText') or ''}",
+                                    "url": r.get("attchmntFile")})
+        else:
+            with BSEAdapter(ctx) as bse:
+                rows, raw_ref = bse.scrip_announcements(bse_code, start, end, event["eventId"])
+            for r in rows or []:
+                if isinstance(r, dict):
+                    att = r.get("ATTACHMENTNAME")
+                    filings.append({"filedAt": parse_datetime(first(r, "NEWS_DT", "DT_TM")),
+                                    "text": f"{r.get('SUBCATNAME') or ''} {r.get('HEADLINE') or ''} {r.get('NEWSSUB') or ''}",
+                                    "url": f"https://www.bseindia.com/xml-data/corpfiling/AttachLive/{att}" if att else None})
+    except Exception as exc:
+        errors.append(f"{type(exc).__name__}: {exc}")
+    if errors:
+        store.record_fetch(event, "CONCALL", ok=False, error="; ".join(errors))
+        return
+    status = pead_plus.concall_status([f for f in filings if f["filedAt"]], result_date, today)
+    status["source"] = "NSE_ANNOUNCEMENTS" if symbol else "BSE_ANNOUNCEMENTS"
+    event["concall"] = status
+    store.record_fetch(event, "CONCALL", ok=True, raw_ref=raw_ref)
+
+
 def previous_quarter_event(store: EventStore, event: dict[str, Any]) -> dict[str, Any] | None:
     period_end = parse_date((event.get("period") or {}).get("end"))
     if period_end is None:
@@ -3801,6 +3889,9 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
     # Upcoming events still benefit from pre-result run-up calculations; use the
     # announced result date as the expected reaction boundary.
     price_boundary = reaction_date or result_date
+    window_start = reaction_window_start(filing_ts, timing, reaction_date)
+    if window_start and window_start != reaction_date:
+        store.merge_field(event, "reaction_window_start", window_start.isoformat(), source="DERIVED", note="intraday filing")
     frame = None
     price_source = None
     raw_ref = None
@@ -3844,7 +3935,7 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
         store.record_fetch(event, "PRICE_HISTORY", ok=False, error="; ".join(errors) or "no price history")
         return
 
-    metrics = price_metrics(frame, price_boundary)
+    metrics = price_metrics(frame, price_boundary, window_start)
     reaction_traded = released and reaction_date is not None and reaction_date <= now_ist().date()
     for field, value in metrics.items():
         if value is None:
@@ -3857,7 +3948,8 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
     try:
         x = pead_plus.extended_features(
             frame, reaction_date, released=reaction_traded,
-            q1_reaction_date=previous_quarter_reaction(store, event), q2_boundary=price_boundary,
+            q1_reaction_date=previous_quarter_reaction(store, event), q2_boundary=window_start or price_boundary,
+            window_start=window_start,
         )
         if x:
             event["plus"] = {
@@ -4033,6 +4125,10 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
             except Exception as exc:
                 store.record_fetch(event, "EXCHANGE_META", ok=False, error=f"{type(exc).__name__}: {exc}")
             try:
+                enrich_concall(event, store, ctx)
+            except Exception as exc:
+                store.record_fetch(event, "CONCALL", ok=False, error=f"{type(exc).__name__}: {exc}")
+            try:
                 had_prev = store.value(event, "prev_quarter_result_ts")
                 enrich_previous_quarter(event, store, ctx)
                 if not had_prev and store.value(event, "prev_quarter_result_ts"):
@@ -4148,7 +4244,17 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
         quality_ok = None
     plan = pead_plus.trade_plan(released=released, reaction_traded=reaction_traded, quality_ok=quality_ok, x=px,
                                 last_price=last_price, result_return=result_ret, rvol=rvol,
-                                result_low=result_low, result_high=result_high, box_high=box_high)
+                                result_low=result_low, result_high=result_high, box_high=box_high,
+                                concall=event.get("concall"),
+                                red_flags=pead_plus.result_red_flags(
+                                    rev_yoy=rev_yoy, pat_yoy=pat_yoy, pat_trend=store.value(event, "pat_trend"),
+                                    margin_change_bps=margin,
+                                    financial_status=(event.get("financialIntegrity") or {}).get("status")))
+    ws = parse_date(store.value(event, "reaction_window_start"))
+    if plan.get("signal") == "WAIT_REACTION" and ws and reaction and ws < reaction:
+        plan["why"] = (f"Result came during market hours, so the reaction is measured over {ws.strftime('%d %b')} and "
+                       f"{reaction.strftime('%d %b')}. The plan is ready after the {reaction.strftime('%d %b')} close.")
+    event["tradeLog"] = pead_plus.update_trade_log(event.get("tradeLog"), plan, last_price, now_ist().date())
     key = sector_key(sec)
     return {
         "strength": strength,
@@ -4169,6 +4275,8 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
         "identity": {k: sec.get(k) for k in ("macroSector", "exchangeSector", "industry", "basicIndustry", "sectorIndex", "bseGroup")},
         "price": px,
         "deliveryPct": store.value(event, "delivery_pct"),
+        "concall": event.get("concall"),
+        "tradeLog": event.get("tradeLog") or None,
         "links": screener_links(sec),
     }
 
@@ -4301,6 +4409,8 @@ def score_event(store: EventStore, event: dict[str, Any], sector_info: dict[str,
     if turnover is not None:
         if turnover >= LIQUIDITY_TURNOVER_CR_MIN:
             score += 5
+        elif turnover >= pead_plus.LIQ_TURNOVER_CR:
+            pass   # tradeable, just not deep: no bonus, no warning
         else:
             score -= 4
             shown = (f"₹{turnover:.1f} Cr" if turnover >= 0.1
@@ -4549,17 +4659,18 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     released = boolish(store.value(event, "results_released")) is True
     reaction = parse_date(store.value(event, "reaction_session"))
     result_date = parse_date(store.value(event, "result_date"))
+    wstart = parse_date(store.value(event, "reaction_window_start")) or reaction
     traded = released and reaction is not None and reaction <= now_ist().date()
     x = pead_plus.extended_features(frame, reaction, released=traded,
                                     q1_reaction_date=previous_quarter_reaction(store, event),
-                                    q2_boundary=reaction or result_date)
+                                    q2_boundary=wstart or result_date, window_start=wstart)
     if not x:
         return False
     event["plus"] = {"price": {k: v for k, v in x.items() if k != "chart"}, "chart": x.get("chart"),
                      "priceSource": source, "computedAt": iso_now(), "replayedFromRaw": True}
     # OHLC from NSE fixes result-day high/low that were close-only before.
     if traded and source == "NSE_PRICE":
-        m = price_metrics(frame, reaction)
+        m = price_metrics(frame, reaction, wstart)
         for field in ("result_day_low", "result_day_high", "result_day_return_pct", "result_day_rvol",
                       "post_result_hold_5d", "post_result_hold_10d", "box_high", "box_breakout"):
             if m.get(field) is not None:
@@ -4875,6 +4986,7 @@ def event_to_intelligence(event: dict[str, Any]) -> dict[str, Any]:
         "patYoYStatus": row["patYoYStatus"],
         "patQoQ": row["patQoQ"],
         "reactionSession": row["reactionSession"],
+        "reactionWindowStart": meta_value(event, "reaction_window_start"),
         "filingSession": row["filingSession"],
         "darvasBoxHigh": row["darvasBoxHigh"],
         "darvasBreakout": row["darvasBreakout"],
@@ -5068,6 +5180,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
     regime = pead_plus.market_regime(index_cache.get("closes"))
     regime["index"] = index_cache.get("index")
     regime["asOf"] = (index_cache.get("dates") or [None])[-1]
+    timing = pead_plus.entry_timing_scorecard([e.get("tradeLog") for e in stored_events])
     card = pead_plus.scorecard([
         {"q1Return": (it["plus"].get("price") or {}).get("q1_reaction_return_pct"),
          "q1ToQ2": (it["plus"].get("price") or {}).get("q1_return_to_q2_pct"),
@@ -5111,7 +5224,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "counts": counts,
         "regime": regime,
         "sectors": sorted(sectors.values(), key=lambda r: (-(r.get("relativeToMarket") or -999), r["sector"])),
-        "scorecard": card,
+        "scorecard": card | {"timing": timing},
         "thresholds": {
             "liquidityTurnoverCr": pead_plus.LIQ_TURNOVER_CR, "liquidityMinPrice": pead_plus.LIQ_MIN_PRICE,
             "maxRiskPct": pead_plus.MAX_RISK_PCT, "strongRevYoY": pead_plus.STRONG_REV_YOY, "strongPatYoY": pead_plus.STRONG_PAT_YOY,
