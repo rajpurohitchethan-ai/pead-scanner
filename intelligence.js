@@ -14,6 +14,22 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const pct = (v, d = 1) => { const n = num(v); return n === null ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(d)}%`; };
   const cls = v => { const n = num(v); return n === null ? '' : n > 0 ? 'up' : n < 0 ? 'down' : ''; };
+  // 2.5.3: when the filing has no last-year column (common on BSE), show the
+  // quarter-on-quarter numbers under an honest heading instead of dashes.
+  const resultFact = (it, m) => {
+    const yoy = num(it.revenueYoY) !== null || num(it.patYoY) !== null || it.patYoYStatus === 'TURNAROUND';
+    const qRev = num(m.revenueQoQ), qPat = num(m.patQoQ ?? it.patQoQ);
+    const useQ = !yoy && (qRev !== null || qPat !== null);
+    const bps = num(m.changeBps);
+    const mBasis = bps === null ? '' : (useQ || m.basis !== 'QoQ') ? '' : ' vs last qtr';
+    const margin = bps !== null ? `, margin ${bps > 0 ? '+' : ''}${bps} bps${mBasis}` : '';
+    if (useQ) {
+      return `<div class="fact"><h3>Result vs last quarter</h3><p><span class="big ${cls(qRev)}">${pct(qRev)}</span>revenue</p>
+          <p><span class="big ${cls(qPat)}">${pct(qPat)}</span>profit${margin}</p><p class="note">Year-ago figures not in the filing yet</p></div>`;
+    }
+    return `<div class="fact"><h3>Result vs last year</h3><p><span class="big ${cls(it.revenueYoY)}">${pct(it.revenueYoY)}</span>revenue</p>
+          <p><span class="big ${cls(it.patYoY)}">${it.patYoYStatus === 'TURNAROUND' ? 'Turnaround' : pct(it.patYoY)}</span>profit${margin}</p></div>`;
+  };
   const inr = (v, d = 2) => { const n = num(v); return n === null ? '—' : '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }); };
   const cr = v => { const n = num(v); if (n === null) return '—'; return n >= 1000 ? `₹${Math.round(n).toLocaleString('en-IN')} Cr` : `₹${n.toFixed(n >= 10 ? 0 : 1)} Cr`; };
   const x = v => { const n = num(v); return n === null ? '—' : `${n.toFixed(2)}x`; };
@@ -122,8 +138,7 @@
     const pc = it.priceContext || {};
     const facts = `
       <div class="facts">
-        <div class="fact"><h3>Result vs last year</h3><p><span class="big ${cls(it.revenueYoY)}">${pct(it.revenueYoY)}</span>revenue</p>
-          <p><span class="big ${cls(it.patYoY)}">${it.patYoYStatus === 'TURNAROUND' ? 'Turnaround' : pct(it.patYoY)}</span>profit${num(m.changeBps) !== null ? `, margin ${num(m.changeBps) > 0 ? '+' : ''}${m.changeBps} bps` : ''}</p></div>
+        ${resultFact(it, m)}
         <div class="fact"><h3>Market reaction</h3><p><span class="big ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}</span>${num(pc.relativeVolume) !== null ? `on ${x(pc.relativeVolume)} usual volume` : 'result session'}</p>
           <p><span class="big ${cls(x1.return_since_result_pct)}">${pct(x1.return_since_result_pct)}</span>since result${x1.sessions_since_reaction != null ? `, ${x1.sessions_since_reaction} sessions` : ''}</p></div>
         <div class="fact"><h3>Expectations before</h3><p><span class="big ${cls(pc.pre20dPct)}">${pct(pc.pre20dPct)}</span>20-day run-up</p>
