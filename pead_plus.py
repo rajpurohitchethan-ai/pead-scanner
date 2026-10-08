@@ -565,7 +565,10 @@ def call_date_from_text(text: str, filed_on: date) -> date | None:
     for mon, d, y in _re.findall(r"([A-Za-z]{3,9})[\s.\-]*(\d{1,2})(?:st|nd|rd|th)?,?\s*(\d{4})", t):
         if mon[:3].lower() in _MONTHS:
             add(y, _MONTHS[mon[:3].lower()], d)
-    return min(found) if found else None
+    # A letter usually starts with its own date ("October 1, 2026"); prefer a
+    # later date (the call) over the filing date itself.
+    later = [c for c in found if c > filed_on]
+    return min(later) if later else (min(found) if found else None)
 
 
 def concall_status(filings: list[dict[str, Any]], result_date: date | None, today: date) -> dict[str, Any]:
@@ -583,6 +586,10 @@ def concall_status(filings: list[dict[str, Any]], result_date: date | None, toda
         rec = {"filedOn": filed_d.isoformat(), "url": f.get("url"), "callDate": None}
         if kind == "NOTICE":
             d = call_date_from_text(f.get("text") or "", filed_d)
+            # A "call date" before the result day is almost always the letter
+            # date or another date in the text, not the call: treat as undated.
+            if d and result_date and d < result_date:
+                d = None
             rec["callDate"] = d.isoformat() if d else None
             notices.append(rec)
         elif kind == "TRANSCRIPT":
@@ -603,8 +610,15 @@ def concall_status(filings: list[dict[str, Any]], result_date: date | None, toda
     elif notices and out["status"] != "DONE":
         n = notices[-1]
         out["noticeUrl"] = n["url"]
-        # Date not readable from the text: treat as pending for 5 days after the notice.
-        out["status"] = "SCHEDULED" if date.fromisoformat(n["filedOn"]) + _td(days=5) >= today else "DONE"
+        # Date not readable from the text. Companies usually file the notice a
+        # week or more before the result and hold the call on or just after
+        # the result day, so stay pending until 5 days after the notice AND
+        # 2 days after the result, whichever is later (engine 2.5.3).
+        until = date.fromisoformat(n["filedOn"]) + _td(days=5)
+        if result_date:
+            until = max(until, result_date + _td(days=2))
+        out["status"] = "SCHEDULED" if until >= today else "DONE"
+        out["pendingUntil"] = until.isoformat()
     return out
 
 
