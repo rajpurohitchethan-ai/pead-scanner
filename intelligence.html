@@ -1,555 +1,215 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PEAD Intelligence Lab</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg:#06090e;
-      --panel:#0f1420;
-      --panel2:#151c2a;
-      --border:#253148;
-      --text:#eef4ff;
-      --muted:#98a7bc;
-      --green:#3dd9a3;
-      --amber:#ffc33d;
-      --red:#ff7188;
-      --blue:#6aaeff;
-    }
-
-    * { box-sizing:border-box; }
-
-    body {
-      margin:0;
-      background:var(--bg);
-      color:var(--text);
-      font-family:Inter,system-ui,Arial,sans-serif;
-    }
-
-    .wrap {
-      max-width:1180px;
-      margin:auto;
-      padding:22px 16px 60px;
-    }
-
-    .top {
-      display:flex;
-      justify-content:space-between;
-      align-items:flex-start;
-      gap:16px;
-      flex-wrap:wrap;
-    }
-
-    h1 {
-      margin:0;
-      font-size:28px;
-    }
-
-    .subtitle {
-      color:var(--muted);
-      margin-top:7px;
-      max-width:760px;
-      line-height:1.5;
-    }
-
-    .safe {
-      border:1px solid rgba(61,217,163,.35);
-      color:var(--green);
-      background:rgba(61,217,163,.08);
-      padding:9px 12px;
-      border-radius:12px;
-      font-size:12px;
-    }
-
-    .summary {
-      display:grid;
-      grid-template-columns:repeat(5,1fr);
-      gap:10px;
-      margin:22px 0;
-    }
-
-    .summary .box {
-      background:var(--panel);
-      border:1px solid var(--border);
-      padding:15px;
-      border-radius:16px;
-    }
-
-    .summary span {
-      display:block;
-      color:var(--muted);
-      font-size:11px;
-      text-transform:uppercase;
-    }
-
-    .summary b {
-      display:block;
-      font-size:28px;
-      margin-top:7px;
-    }
-
-
-    .health-strip {
-      display:grid;
-      grid-template-columns:repeat(7,1fr);
-      gap:10px;
-      margin:-10px 0 20px;
-    }
-
-    .health-strip .health-box {
-      background:rgba(106,174,255,.04);
-      border:1px solid var(--border);
-      padding:12px 14px;
-      border-radius:14px;
-    }
-
-    .health-box span {
-      display:block;
-      color:var(--muted);
-      font-size:10px;
-      text-transform:uppercase;
-    }
-
-    .health-box b {
-      display:block;
-      margin-top:5px;
-      font-size:18px;
-    }
-
-    .health-box.good b { color:var(--green); }
-    .health-box.warn b { color:var(--amber); }
-    .health-box.bad b { color:var(--red); }
-
-    .state-line {
-      margin-top:6px;
-      color:var(--muted);
-      font-size:11px;
-    }
-
-    .controls {
-      display:flex;
-      gap:9px;
-      flex-wrap:wrap;
-      margin-bottom:14px;
-    }
-
-    button,
-    input,
-    select {
-      border:1px solid var(--border);
-      background:var(--panel);
-      color:var(--text);
-      border-radius:12px;
-      padding:11px 13px;
-    }
-
-    button {
-      cursor:pointer;
-    }
-
-    button.active {
-      border-color:var(--green);
-      color:var(--green);
-      background:rgba(61,217,163,.08);
-    }
-
-    input {
-      flex:1;
-      min-width:220px;
-    }
-
-    select {
-      min-width:170px;
-    }
-
-    .sort-group {
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-
-    .price-tracker {
-      display:grid;
-      grid-template-columns:repeat(5,1fr);
-      gap:8px;
-      margin:12px 0 15px;
-      padding:10px;
-      border:1px solid rgba(106,174,255,.22);
-      background:rgba(106,174,255,.04);
-      border-radius:14px;
-    }
-
-    .price-track-cell {
-      min-width:0;
-    }
-
-    .price-track-cell span {
-      display:block;
-      color:var(--muted);
-      font-size:9px;
-      text-transform:uppercase;
-    }
-
-    .price-track-cell b {
-      display:block;
-      margin-top:4px;
-      font-size:13px;
-      overflow-wrap:anywhere;
-    }
-
-    .entry-signal {
-      margin-top:8px;
-    }
-
-    .meta {
-      display:flex;
-      justify-content:space-between;
-      color:var(--muted);
-      font-size:12px;
-      margin:10px 2px 18px;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-
-    .stock-card {
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:20px;
-      padding:18px;
-      margin:14px 0;
-    }
-
-    .stock-head {
-      display:flex;
-      justify-content:space-between;
-      gap:18px;
-      align-items:flex-start;
-    }
-
-    .symbol {
-      font-size:22px;
-      font-weight:800;
-    }
-
-    .name,
-    .sub {
-      color:var(--muted);
-      margin-top:4px;
-    }
-
-    .sub {
-      font-size:12px;
-    }
-
-    .conviction {
-      text-align:right;
-    }
-
-    .conviction div {
-      font-size:28px;
-      font-weight:800;
-    }
-
-    .conviction div span {
-      font-size:13px;
-      color:var(--muted);
-    }
-
-    .conviction small {
-      color:var(--muted);
-    }
-
-    .reality-grid {
-      display:grid;
-      grid-template-columns:repeat(4,1fr);
-      gap:9px;
-      margin:16px 0;
-    }
-
-    .reality-grid > div {
-      background:var(--panel2);
-      border:1px solid var(--border);
-      border-radius:13px;
-      padding:11px;
-    }
-
-    .reality-grid small {
-      display:block;
-      color:var(--muted);
-      font-size:9px;
-      margin-bottom:7px;
-    }
-
-    .badge {
-      display:inline-block;
-      font-size:11px;
-      font-weight:800;
-      padding:5px 8px;
-      border-radius:999px;
-    }
-
-    .good { color:var(--green); }
-    .warn { color:var(--amber); }
-    .bad { color:var(--red); }
-
-    .badge.good {
-      background:rgba(61,217,163,.10);
-      border:1px solid rgba(61,217,163,.25);
-    }
-
-    .badge.warn {
-      background:rgba(255,195,61,.10);
-      border:1px solid rgba(255,195,61,.25);
-    }
-
-    .badge.bad {
-      background:rgba(255,113,136,.10);
-      border:1px solid rgba(255,113,136,.25);
-    }
-
-    .verdict {
-      font-size:14px;
-      font-weight:800;
-      border-top:1px solid var(--border);
-      border-bottom:1px solid var(--border);
-      padding:12px 0;
-    }
-
-    .metrics {
-      display:grid;
-      grid-template-columns:repeat(6,1fr);
-      gap:8px;
-      margin:15px 0;
-    }
-
-    .metric {
-      background:var(--panel2);
-      padding:9px;
-      border-radius:10px;
-      min-width:0;
-    }
-
-    .metric span {
-      display:block;
-      color:var(--muted);
-      font-size:9px;
-    }
-
-    .metric b {
-      display:block;
-      font-size:12px;
-      margin-top:4px;
-      overflow-wrap:anywhere;
-    }
-
-    .evidence-grid {
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:10px;
-    }
-
-    .evidence {
-      background:var(--panel2);
-      border-radius:12px;
-      padding:12px;
-    }
-
-    .evidence h4 {
-      font-size:10px;
-      margin:0 0 7px;
-    }
-
-    .positive h4 { color:var(--green); }
-    .risk h4 { color:var(--red); }
-
-    .evidence ul {
-      margin:0;
-      padding-left:17px;
-      color:#cbd6e6;
-      font-size:12px;
-      line-height:1.6;
-    }
-
-    .commentary {
-      margin-top:11px;
-      padding:11px;
-      border-radius:12px;
-      background:rgba(106,174,255,.06);
-      border:1px solid rgba(106,174,255,.18);
-      font-size:12px;
-      line-height:1.55;
-    }
-
-    .muted {
-      color:var(--muted);
-    }
-
-    .empty {
-      text-align:center;
-      padding:50px 18px;
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:18px;
-      color:var(--muted);
-      line-height:1.6;
-    }
-
-    .note {
-      color:var(--muted);
-      font-size:11px;
-      line-height:1.6;
-      margin-top:22px;
-      padding:12px;
-      border-left:3px solid var(--blue);
-      background:rgba(106,174,255,.04);
-    }
-
-    @media (max-width:850px) {
-      .summary,
-      .health-strip,
-      .price-tracker {
-        grid-template-columns:repeat(2,1fr);
-      }
-
-      .reality-grid {
-        grid-template-columns:repeat(2,1fr);
-      }
-
-      .metrics {
-        grid-template-columns:repeat(3,1fr);
-      }
-
-      .evidence-grid {
-        grid-template-columns:1fr;
-      }
-    }
-
-    @media (max-width:520px) {
-      .metrics {
-        grid-template-columns:repeat(2,1fr);
-      }
-
-      h1 {
-        font-size:24px;
-      }
-
-      .stock-head {
-        align-items:center;
-      }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PEAD Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF1F5; --sheet:#FFFFFF; --sheet-2:#F5F7FA; --line:#D6DCE5; --line-2:#E6EAF0;
+  --ink:#15233F; --ink-2:#4A5874; --ink-3:#7A869C;
+  --gain:#0E7A5F; --gain-bg:#E3F3EE; --loss:#B42318; --loss-bg:#FBE9E7;
+  --act:#3B3FB6; --act-bg:#E8E9FA; --watch:#A86A12; --watch-bg:#FBF1DF;
+  --grid:#E3E8EF; --price:#15233F; --ema:#8A96AD;
+  --num:"IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --text:"Instrument Sans", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F1622; --sheet:#162133; --sheet-2:#1B283D; --line:#2A3A55; --line-2:#22314A;
+    --ink:#E7EDF7; --ink-2:#AAB6CB; --ink-3:#7F8CA4;
+    --gain:#3CC79F; --gain-bg:#12352D; --loss:#F07A6C; --loss-bg:#3A1D1D;
+    --act:#9EA2FF; --act-bg:#262A5A; --watch:#E6B25C; --watch-bg:#3A2D14;
+    --grid:#22314A; --price:#E7EDF7; --ema:#6F7D97; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F1622; --sheet:#162133; --sheet-2:#1B283D; --line:#2A3A55; --line-2:#22314A;
+  --ink:#E7EDF7; --ink-2:#AAB6CB; --ink-3:#7F8CA4;
+  --gain:#3CC79F; --gain-bg:#12352D; --loss:#F07A6C; --loss-bg:#3A1D1D;
+  --act:#9EA2FF; --act-bg:#262A5A; --watch:#E6B25C; --watch-bg:#3A2D14;
+  --grid:#22314A; --price:#E7EDF7; --ema:#6F7D97; color-scheme: dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--text)}
+a{color:var(--act)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--act);outline-offset:2px}
+.n{font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.wrap{max-width:1120px;margin:0 auto;padding:20px 16px 64px}
+
+/* Header */
+.mast{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.mast h1{margin:0;font-size:30px;line-height:1.1;font-weight:700;letter-spacing:-.02em}
+.mast h1 small{display:block;font-size:14px;font-weight:500;color:var(--ink-2);letter-spacing:0;margin-top:6px}
+.regime{max-width:420px;font-size:14px;color:var(--ink-2)}
+.regime b{color:var(--ink)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--ink-3)}
+.dot.on{background:var(--gain)}.dot.mixed{background:var(--watch)}.dot.off{background:var(--loss)}
+.season{margin:14px 0 4px;font-size:16px;color:var(--ink-2)}
+.season strong{color:var(--ink);font-weight:600}
+
+/* Tabs and controls */
+.tabs{display:flex;gap:4px;margin:18px 0 12px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:0;background:none;padding:9px 14px;border-radius:999px;color:var(--ink-2);font-weight:600;white-space:nowrap;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+.tab .c{font-family:var(--num);font-weight:500;opacity:.75;margin-left:5px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.controls input[type=search]{flex:1 1 200px;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sheet)}
+.controls select{padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--sheet)}
+.toggle{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sheet);cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--act);margin:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 14px}
+.chip{border:1px solid var(--line);background:var(--sheet);padding:5px 11px;border-radius:999px;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.chip[aria-pressed="true"]{border-color:var(--act);color:var(--act);background:var(--act-bg)}
+
+/* Sizing panel */
+.sizing{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:10px 12px;margin-bottom:14px;border:1px dashed var(--line);border-radius:10px;font-size:14px;color:var(--ink-2)}
+.sizing label{display:inline-flex;align-items:center;gap:6px}
+.sizing input{width:110px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--sheet)}
+.sizing input.sm{width:64px}
+
+/* Setup cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:14px}
+.card{position:relative;background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:16px 16px 14px 20px;overflow:hidden}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--line)}
+.card.s-go::before{background:var(--act)}
+.card.s-watch::before{background:var(--watch)}
+.card.s-no::before{background:var(--loss)}
+.card.s-pending::before{background:var(--ink-3)}
+.card.dim{opacity:.72}
+.head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.sym{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0}
+.co{color:var(--ink-2);font-size:14px;margin-top:1px}
+.score{text-align:right;flex:none}
+.score .v{font-family:var(--num);font-size:30px;font-weight:600;line-height:1}
+.score .l{font-size:12px;color:var(--ink-3)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px}
+.tag{font-size:12.5px;padding:3px 9px;border-radius:999px;background:var(--sheet-2);color:var(--ink-2);border:1px solid var(--line-2)}
+.tag.go{background:var(--act-bg);color:var(--act);border-color:transparent;font-weight:600}
+.tag.good{background:var(--gain-bg);color:var(--gain);border-color:transparent}
+.tag.bad{background:var(--loss-bg);color:var(--loss);border-color:transparent}
+.tag.warn{background:var(--watch-bg);color:var(--watch);border-color:transparent}
+.meta{font-size:13px;color:var(--ink-3);margin-top:6px}
+.chart{display:block;width:100%;height:auto;margin:12px 0 4px;border-radius:6px;background:var(--sheet-2)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink-3);margin-bottom:8px}
+.legend i{display:inline-block;width:14px;height:2px;vertical-align:4px;margin-right:5px;background:var(--ink-3)}
+.legend .le{background:var(--act)}.legend .ls{background:var(--loss)}.legend .lm{background:var(--ema);height:0;border-top:2px dashed var(--ema)}
+.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 16px;margin:10px 0}
+.fact h3{margin:0 0 3px;font-size:12.5px;font-weight:600;color:var(--ink-3)}
+.fact p{margin:0;font-size:14px;color:var(--ink-2)}
+.fact .big{font-family:var(--num);font-size:17px;font-weight:600;color:var(--ink);margin-right:8px}
+.up,.fact .big.up{color:var(--gain)} .down,.fact .big.down{color:var(--loss)}
+.plan{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px;background:var(--sheet-2)}
+.plan-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.plan-sig{font-weight:700}
+.plan-sig.go{color:var(--act)} .plan-sig.watch{color:var(--watch)} .plan-sig.no{color:var(--loss)} .plan-sig.pending{color:var(--ink-3)}
+.plan-why{font-size:13.5px;color:var(--ink-2);margin:4px 0 0}
+.levels{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.lv span{display:block;font-size:12px;color:var(--ink-3)}
+.lv b{font-family:var(--num);font-size:17px;font-weight:600}
+.lv.e b{color:var(--act)} .lv.s b{color:var(--loss)}
+.qty{font-size:13px;color:var(--ink-2);margin-top:8px}
+details.why{margin-top:10px}
+details.why summary{cursor:pointer;font-size:13.5px;color:var(--ink-2);font-weight:600}
+.why-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;font-size:13.5px}
+.why-cols h4{margin:0 0 4px;font-size:13px}
+.why-cols ul{margin:0;padding-left:18px;color:var(--ink-2)}
+.why-cols .pos h4{color:var(--gain)} .why-cols .neg h4{color:var(--loss)}
+.links{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:13.5px}
+.links a{text-decoration:none;font-weight:600}
+.links a:hover{text-decoration:underline}
+
+/* Ledger (watchlist) */
+.day{margin:18px 0 6px;font-weight:700;font-size:15px;display:flex;gap:10px;align-items:baseline}
+.day small{font-weight:500;color:var(--ink-3)}
+.ledger{background:var(--sheet);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.row{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.3fr) repeat(3,minmax(0,.8fr)) 20px;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--line-2);cursor:pointer}
+.row:first-child{border-top:0}
+.row:hover{background:var(--sheet-2)}
+.row .s{font-weight:700}
+.row .nm{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .k{font-size:11.5px;color:var(--ink-3)}
+.row .v{font-family:var(--num);font-weight:600}
+.row .chev{color:var(--ink-3);transition:transform .15s}
+.row[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.row-detail{padding:4px 12px 14px;border-top:1px dashed var(--line-2);background:var(--sheet-2)}
+.hdr{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.3fr) repeat(3,minmax(0,.8fr)) 20px;gap:10px;padding:0 12px 6px;font-size:12px;color:var(--ink-3)}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;background:var(--sheet);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-top:1px solid var(--line-2)}
+th{font-size:12.5px;color:var(--ink-3);font-weight:600;border-top:0;background:var(--sheet-2)}
+td.r,th.r{text-align:right}
+.bar{position:relative;height:8px;background:var(--line-2);border-radius:4px;min-width:90px}
+.bar i{position:absolute;top:0;bottom:0;border-radius:4px}
+.note{font-size:13.5px;color:var(--ink-2);max-width:70ch}
+.health{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.hbox{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:12px}
+.hbox span{font-size:12.5px;color:var(--ink-3)}
+.hbox b{display:block;font-family:var(--num);font-size:22px;font-weight:600;margin-top:2px}
+.empty{background:var(--sheet);border:1px dashed var(--line);border-radius:14px;padding:28px 20px;text-align:center;color:var(--ink-2)}
+.empty button{margin-top:10px;border:1px solid var(--act);background:var(--act-bg);color:var(--act);padding:8px 14px;border-radius:999px;font-weight:600;cursor:pointer}
+.foot{margin-top:28px;font-size:12.5px;color:var(--ink-3);max-width:80ch}
+.theme-btn{border:1px solid var(--line);background:var(--sheet);border-radius:999px;padding:5px 11px;cursor:pointer;font-size:12.5px;margin-top:8px;color:var(--ink-2)}
+
+@media (max-width:640px){
+  .wrap{padding:14px 12px 56px}
+  .mast h1{font-size:24px}
+  .levels{grid-template-columns:repeat(2,1fr)}
+  .why-cols{grid-template-columns:1fr}
+  .row,.hdr{grid-template-columns:minmax(0,1.5fr) repeat(2,minmax(0,.9fr)) 16px}
+  .row .opt,.hdr .opt{display:none}
+  .hide-sm{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
 </head>
-
 <body>
-  <main class="wrap">
-    <div class="top">
-      <div>
-        <h1>PEAD Intelligence Lab</h1>
-        <div class="subtitle">
-          Persistent PEAD v2 event engine: official result capture, financial parsing,
-          expectation analysis, reaction-session confirmation and Darvas-style entry watch.
-        </div>
-      </div>
+<main class="wrap">
+  <header class="mast">
+    <h1>PEAD radar<small id="sub">Loading results season…</small></h1>
+    <div class="regime"><div id="regime"></div><button class="theme-btn" id="theme" type="button">Dark mode</button></div>
+  </header>
+  <p class="season" id="season"></p>
 
-      <div class="safe">
-        PERSISTENT EVENT STORE · NON-NULL MERGE
-      </div>
-    </div>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" data-tab="setups" aria-selected="true">Declared results<span class="c" id="c-setups"></span></button>
+    <button class="tab" role="tab" data-tab="watch" aria-selected="false">Upcoming watchlist<span class="c" id="c-watch"></span></button>
+    <button class="tab" role="tab" data-tab="sectors" aria-selected="false">Sectors<span class="c" id="c-sectors"></span></button>
+    <button class="tab" role="tab" data-tab="score" aria-selected="false">Scorecard</button>
+    <button class="tab" role="tab" data-tab="health" aria-selected="false">Data health</button>
+  </nav>
 
-    <section class="summary">
-      <div class="box">
-        <span>Analyzed</span>
-        <b id="total">—</b>
-      </div>
+  <div class="controls" id="controls">
+    <input type="search" id="q" placeholder="Search symbol, company or sector" aria-label="Search">
+    <label class="toggle"><input type="checkbox" id="liquid" checked> Tradeable only</label>
+    <select id="sort" aria-label="Sort by">
+      <option value="conviction">Sort: conviction</option>
+      <option value="date">Sort: result date</option>
+      <option value="reaction">Sort: reaction day</option>
+      <option value="since">Sort: move since result</option>
+      <option value="runup">Sort: 20-day run-up</option>
+      <option value="distance">Sort: distance to entry</option>
+    </select>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="sizing" id="sizing">
+    <span>Position size for</span>
+    <label>capital ₹ <input class="n" id="cap" type="number" min="0" step="10000" value="1000000"></label>
+    <label>risk per trade <input class="n sm" id="risk" type="number" min="0.1" max="5" step="0.1" value="1">%</label>
+  </div>
 
-      <div class="box">
-        <span>Results Declared</span>
-        <b id="declared">—</b>
-      </div>
+  <section id="view" aria-live="polite"></section>
 
-      <div class="box">
-        <span>Genuine Results</span>
-        <b id="genuine">—</b>
-      </div>
-
-      <div class="box">
-        <span>Priced In</span>
-        <b id="priced">—</b>
-      </div>
-
-      <div class="box">
-        <span>High Conviction</span>
-        <b id="high">—</b>
-      </div>
-    </section>
-
-    <section class="health-strip" id="health-strip">
-      <div class="health-box"><span>Active / Stored</span><b id="health-events">—</b></div>
-      <div class="health-box"><span>Financials Parsed</span><b id="health-financials">—</b></div>
-      <div class="health-box" title="Exchange snapshot passed validation / needs review (flagged)"><span>Fin. Verified / Flagged</span><b id="health-fin-verified">—</b></div>
-      <div class="health-box" title="Declarations withdrawn because exchange evidence was missing or for another period"><span>Declarations Revoked</span><b id="health-revoked">—</b></div>
-      <div class="health-box"><span>Reaction Ready</span><b id="health-reaction">—</b></div>
-      <div class="health-box"><span>Declared Completeness</span><b id="health-completeness">—</b></div>
-      <div class="health-box"><span>Fetch Failures</span><b id="health-failures">—</b></div>
-    </section>
-
-    <div class="controls">
-      <button data-filter="DECLARED" class="active">Results Declared</button>
-      <button data-filter="HIGH">High Conviction</button>
-      <button data-filter="PRICED">Priced In</button>
-      <button data-filter="PENDING">Data Pending</button>
-      <button data-filter="ENTRY">Entry Signals</button>
-      <button data-filter="UPCOMING">Upcoming Watch</button>
-      <button data-filter="ALL">All Active</button>
-
-      <input
-        id="search"
-        placeholder="Search symbol, company, sector…"
-      >
-
-      <div class="sort-group">
-        <select id="sort-key" aria-label="Sort stocks">
-          <option value="conviction">Conviction</option>
-          <option value="completeness">Data complete</option>
-          <option value="resultDate">Result date</option>
-          <option value="revenue">Revenue YoY</option>
-          <option value="pat">PAT YoY</option>
-          <option value="reaction">Reaction day</option>
-          <option value="rvol">RVOL</option>
-          <option value="price">Current price</option>
-          <option value="entryDistance">Distance to entry</option>
-        </select>
-        <button id="sort-dir" type="button">Descending ↓</button>
-      </div>
-
-      <button id="reload">
-        Reload
-      </button>
-    </div>
-
-    <div class="meta">
-      <span id="count">—</span>
-      <span>
-        Generated:
-        <span id="generated">—</span>
-      </span>
-    </div>
-
-    <section id="cards">
-      <div class="empty">
-        Loading intelligence.json…
-      </div>
-    </section>
-
-    <div class="note">
-      PEAD Intelligence v2 stores every symbol + quarter permanently while the live dashboard shows only active events. Failed fetches
-      never erase verified values. Exchange data outranks fallbacks; missing evidence is shown
-      as DATA PENDING rather than converted into a negative investment conclusion.
-    </div>
-  </main>
-
-  <script src="./intelligence.js?v=4"></script>
+  <p class="foot" id="foot">A mechanical screen, not advice. Levels appear only when a rule-based setup exists; missing data shows as —, never as zero.</p>
+</main>
+<script src="intelligence.js?v=24"></script>
 </body>
 </html>
