@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.6.2"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.7.0"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -195,6 +195,7 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
                                    if r_close is not None and r_high is not None and r_low is not None and r_high > r_low else None),
             "sessions_since_reaction": int(len(f) - 1 - ri),
             "return_since_result_pct": _r2(_pct(last, pre_close)),
+            "pre_result_session": f["Date"].iloc[wi - 1].date().isoformat(),
             "post_result_high": _r2(after["High"].max() if after["High"].notna().any() else after["Close"].max()),
             "post_result_low": _r2(after["Low"].min() if after["Low"].notna().any() else after["Close"].min()),
             "prev_session_high": _r2(f["High"].iloc[-1] if _num(f["High"].iloc[-1]) is not None else close.iloc[-1]),
@@ -907,3 +908,65 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
 
     status = "FAIL" if any(c["status"] == "FAIL" for c in checks) else ("WARN" if any(c["status"] == "WARN" for c in checks) else "OK")
     return {"status": status, "checkedOn": today.isoformat(), "checks": checks}
+
+
+
+# ---------------------------------------------------------------------------
+# Engine 2.7.0: earnings acceleration, relative strength, live entry status
+# ---------------------------------------------------------------------------
+
+ACCEL_PP = 5.0   # percentage-point change in YoY growth that counts as speeding up / slowing down
+
+
+def earnings_acceleration(rev_yoy: Any, pat_yoy: Any, prev_rev_yoy: Any, prev_pat_yoy: Any,
+                          pat_trend: Any = None) -> dict[str, Any]:
+    """Is YoY growth faster this quarter than last quarter? Uses revenue and
+    profit growth; profit counts only when both quarters have an ordinary YoY
+    (no turnaround / loss quarters)."""
+    r, p, pr, pp = _num(rev_yoy), _num(pat_yoy), _num(prev_rev_yoy), _num(prev_pat_yoy)
+    rd = _r2(r - pr) if r is not None and pr is not None else None
+    pdl = _r2(p - pp) if p is not None and pp is not None and str(pat_trend or "").upper() != "TURNAROUND" else None
+    deltas = [d for d in (rd, pdl) if d is not None]
+    if not deltas:
+        return {"label": None, "revenueDeltaPp": rd, "profitDeltaPp": pdl, "prevRevenueYoY": pr, "prevProfitYoY": pp}
+    growing = (r is None or r > 0) and (p is None or p > 0)
+    if all(d >= ACCEL_PP for d in deltas) and growing:
+        label = "ACCELERATING"
+    elif all(d <= -ACCEL_PP for d in deltas):
+        label = "DECELERATING"
+    else:
+        label = "STEADY"
+    return {"label": label, "revenueDeltaPp": rd, "profitDeltaPp": pdl, "prevRevenueYoY": pr, "prevProfitYoY": pp}
+
+
+def relative_strength(stock_return_pct: Any, start: Any, end: Any, dates: list[str] | None,
+                      closes: list[float] | None) -> dict[str, Any]:
+    """Stock return since the result vs NIFTY 500 over the same sessions
+    (close before the result -> latest close)."""
+    sr = _num(stock_return_pct)
+    if sr is None or not start or not end or not dates or not closes:
+        return {"indexReturnPct": None, "relativePct": None}
+    idx = {d: c for d, c in zip(dates, closes)}
+    s0 = max((d for d in idx if d <= str(start)), default=None)
+    s1 = max((d for d in idx if d <= str(end)), default=None)
+    if not s0 or not s1 or s1 < s0:
+        return {"indexReturnPct": None, "relativePct": None}
+    ir = _pct(idx[s1], idx[s0])
+    return {"indexReturnPct": _r2(ir), "relativePct": _r2(sr - ir) if ir is not None else None, "indexAsOf": s1}
+
+
+NEAR_ENTRY_PCT = 2.0
+
+
+def live_entry_status(plan: dict[str, Any] | None, live: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Intraday price against the plan's entry trigger (for the 3 pm alert)."""
+    if not live or _num(live.get("price")) is None:
+        return None
+    price = _num(live["price"])
+    entry = _num((plan or {}).get("entry"))
+    out = {"price": _r2(price), "at": live.get("at"), "entry": _r2(entry), "distancePct": None, "state": None}
+    if entry:
+        dist = (price - entry) / entry * 100
+        out["distancePct"] = _r2(dist)
+        out["state"] = "ABOVE_TRIGGER" if dist >= 0 else ("NEAR_TRIGGER" if dist >= -NEAR_ENTRY_PCT else "BELOW_TRIGGER")
+    return out

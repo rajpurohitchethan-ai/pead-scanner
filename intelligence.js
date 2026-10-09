@@ -113,6 +113,13 @@
   }
 
   // ---------- concall ----------
+  function liveLine(l) {
+    if (!l || num(l.price) === null) return '';
+    const t = l.at ? new Date(l.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
+    const st = { ABOVE_TRIGGER: ['above entry', 'good'], NEAR_TRIGGER: ['near entry', 'warn'], BELOW_TRIGGER: ['below entry', ''] }[l.state];
+    return `<div class="meta">Live ${inr(l.price)}${t ? ` at ${t}` : ''}${st ? ` · <span class="tag ${st[1]}">${pct(l.distancePct)} ${st[0]} ${inr(l.entry)}</span>` : ''}</div>`;
+  }
+
   function concallLine(c) {
     if (!c) return '';
     const link = (url, label) => url ? ` <a href="${esc(url)}" target="_blank" rel="noopener">${label}</a>` : '';
@@ -132,6 +139,9 @@
     if (b) tags.push(`<span class="tag ${BUCKET_TONE[b.code] || ''}" title="${esc(b.why)}">${esc(b.label)}</span>`);
     if (st) tags.push(`<span class="tag ${st[1]}">${st[0]}</span>`);
     if (tail) tags.push(`<span class="tag ${TAIL_TONE[tail] || ''}">Sector ${tail.toLowerCase()}</span>`);
+    const GROWTH = { ACCELERATING: ['Growth accelerating', 'good'], DECELERATING: ['Growth slowing', 'warn'], STEADY: ['Growth steady', ''] };
+    const g = p.growth && GROWTH[p.growth.label];
+    if (g) tags.push(`<span class="tag ${g[1]}" title="YoY growth vs last quarter: revenue ${p.growth.revenueDeltaPp ?? '—'} pp, profit ${p.growth.profitDeltaPp ?? '—'} pp">${g[0]}</span>`);
     if (x1.hv_label) tags.push(`<span class="tag good" title="Highest volume on the result session">${esc(x1.hv_label)}</span>`);
     if (liq.pass === false) tags.push(`<span class="tag bad">${esc(liq.label)}</span>`);
     const m = p.margins || {}, v = p.valuation || {};
@@ -140,7 +150,7 @@
       <div class="facts">
         ${resultFact(it, m)}
         <div class="fact"><h3>Market reaction</h3><p><span class="big ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}</span>${num(pc.relativeVolume) !== null ? `on ${x(pc.relativeVolume)} usual volume` : 'result session'}</p>
-          <p><span class="big ${cls(x1.return_since_result_pct)}">${pct(x1.return_since_result_pct)}</span>since result${x1.sessions_since_reaction != null ? `, ${x1.sessions_since_reaction} sessions` : ''}</p></div>
+          <p><span class="big ${cls(x1.return_since_result_pct)}">${pct(x1.return_since_result_pct)}</span>since result${x1.sessions_since_reaction != null ? `, ${x1.sessions_since_reaction} sessions` : ''}</p>${num(p.relativeStrength?.relativePct) !== null ? `<p><span class="big ${cls(p.relativeStrength.relativePct)}">${pct(p.relativeStrength.relativePct)}</span>vs NIFTY 500 (index ${pct(p.relativeStrength.indexReturnPct)})</p>` : ''}</div>
         <div class="fact"><h3>Expectations before</h3><p><span class="big ${cls(pc.pre20dPct)}">${pct(pc.pre20dPct)}</span>20-day run-up</p>
           <p><span class="big">${pct(pc.distanceFrom52wHighPct)}</span>from 52-week high</p></div>
         <div class="fact"><h3>Valuation</h3><p><span class="big">${num(v.pe) !== null ? num(v.pe).toFixed(1) + 'x' : '—'}</span>P/E${num(v.sectorPe) !== null && Math.abs(num(v.sectorPe) - (num(v.pe) ?? 0)) >= 0.05 ? ` vs sector ${num(v.sectorPe).toFixed(1)}x` : ''}</p>
@@ -161,6 +171,7 @@
       <div class="tags">${tags.join('')}</div>
       <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? dt(it.reactionWindowStart) + '–' : ''}${dt(it.reactionSession)}` : ''}${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? ' (filed in market hours)' : ''}${num(pc.lastClose) !== null ? `, last ${inr(pc.lastClose)}` : ''}</div>
       ${concallLine(p.concall)}
+      ${liveLine(p.live)}
       ${chart(it)}
       ${facts}
       <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}${plan.stage === 'STARTER' && num(plan.entry) !== null ? ' <span class="tag warn">Starter, 1/3 size</span>' : plan.stage === 'FULL' && num(plan.entry) !== null ? ' <span class="tag go">Full size</span>' : ''}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
@@ -181,6 +192,9 @@
       since: it => num(px(it).return_since_result_pct) ?? -999,
       runup: it => -(num(it.priceContext?.pre20dPct) ?? 999),
       distance: it => -Math.abs(num(P(it).plan?.distancePct) ?? 999),
+      volume: it => ({ HVE: 3, HVY: 2, HVQ: 1 }[px(it).hv_label] || 0) * 1000 + (num(it.priceContext?.relativeVolume) ?? 0),
+      rs: it => num(P(it).relativeStrength?.relativePct) ?? -999,
+      growth: it => ({ ACCELERATING: 2, STEADY: 1, DECELERATING: 0 }[P(it).growth?.label] ?? -1) * 1000 + (num(P(it).growth?.revenueDeltaPp) ?? 0),
     }[S.sort];
     return list.slice().sort((a, b) => key(b) - key(a));
   }
@@ -279,7 +293,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.6.2';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.7.0';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

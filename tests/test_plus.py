@@ -540,5 +540,50 @@ class GmbrewOwnersZeroTests(unittest.TestCase):
         self.assertIn("PAT_SWING", v["issues"])
 
 
+class Engine270Tests(unittest.TestCase):
+    """Earnings acceleration, relative strength vs NIFTY 500, live entry status."""
+
+    def test_acceleration_labels(self):
+        self.assertEqual(pp.earnings_acceleration(25, 30, 12, 18)["label"], "ACCELERATING")
+        self.assertEqual(pp.earnings_acceleration(5, 4, 15, 20)["label"], "DECELERATING")
+        self.assertEqual(pp.earnings_acceleration(12, 15, 10, 13)["label"], "STEADY")
+        self.assertEqual(pp.earnings_acceleration(25, None, 12, None)["label"], "ACCELERATING")
+        self.assertIsNone(pp.earnings_acceleration(25, 30, None, None)["label"])
+        # a turnaround's profit % is not comparable; revenue alone decides
+        self.assertEqual(pp.earnings_acceleration(20, 900, 8, -50, "TURNAROUND")["label"], "ACCELERATING")
+        # faster but still shrinking is not "accelerating"
+        self.assertNotEqual(pp.earnings_acceleration(-2, -1, -15, -20)["label"], "ACCELERATING")
+
+    def test_relative_strength(self):
+        dates = ["2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09"]
+        closes = [100.0, 101.0, 102.0, 99.0]
+        r = pp.relative_strength(6.0, "2026-10-07", "2026-10-09", dates, closes)
+        self.assertEqual((r["indexReturnPct"], r["relativePct"]), (-1.98, 7.98))
+        self.assertIsNone(pp.relative_strength(None, "2026-10-07", "2026-10-09", dates, closes)["relativePct"])
+
+    def test_live_entry_status(self):
+        plan = {"entry": 100.0}
+        self.assertEqual(pp.live_entry_status(plan, {"price": 101, "at": "x"})["state"], "ABOVE_TRIGGER")
+        self.assertEqual(pp.live_entry_status(plan, {"price": 98.5, "at": "x"})["state"], "NEAR_TRIGGER")
+        self.assertEqual(pp.live_entry_status(plan, {"price": 95, "at": "x"})["state"], "BELOW_TRIGGER")
+        self.assertIsNone(pp.live_entry_status(plan, None))
+        self.assertIsNone(pp.live_entry_status({}, {"price": 95})["state"])
+
+    def test_previous_quarter_yoy_from_filings(self):
+        C = {"revenue": "revenuefromoperations", "pat": "profitlossforperiod"}
+        rows = [{"periodEnd": pe, "fromDate": fd, "basis": "STANDALONE", "cumulative": False, "xbrlUrl": u, "filedAt": None}
+                for pe, fd, u in (("2025-09-30", "2025-07-01", "ya"), ("2026-06-30", "2026-04-01", "pq"),
+                                  ("2025-06-30", "2025-04-01", "pq_ya"))]
+        docs = {"ya": (1000.0, 100.0), "pq": (1150.0, 120.0), "pq_ya": (1000.0, 100.0)}
+        fetch = lambda u, pe: {"revenue_cr": docs[u][0], "pat_cr": docs[u][1], "_meta": {"concepts": C}}
+        parsed = {"revenue_cr": 1300.0, "pat_cr": 140.0, "_meta": {"concepts": C}}
+        p.fill_comparatives_from_listing(parsed, rows, date(2026, 9, 30), "STANDALONE", fetch)
+        self.assertEqual((parsed["revenue_yoy_pct"], parsed["pat_yoy_pct"]), (30.0, 40.0))
+        self.assertEqual((parsed["prev_q_revenue_yoy_pct"], parsed["prev_q_pat_yoy_pct"]), (15.0, 20.0))
+        g = pp.earnings_acceleration(parsed["revenue_yoy_pct"], parsed["pat_yoy_pct"],
+                                     parsed["prev_q_revenue_yoy_pct"], parsed["prev_q_pat_yoy_pct"])
+        self.assertEqual(g["label"], "ACCELERATING")
+
+
 if __name__ == "__main__":
     unittest.main()

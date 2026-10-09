@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.6.2"
+ENGINE_VERSION = "2.7.0"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -180,6 +180,7 @@ FINANCIAL_FIELDS = {
     "revenue_qoq_pct", "pat_qoq_pct", "pat_trend", "basis",
     "prior_year_revenue_cr", "prior_year_pat_cr",
     "opm_pct", "opm_prev_q_pct", "opm_prior_year_pct", "margin_change_bps",
+    "prev_q_revenue_yoy_pct", "prev_q_pat_yoy_pct",
 }
 EXCHANGE_META_FIELDS = {
     "exchange_pe", "sector_pe", "pb", "roe_pct", "market_cap_cr", "ffmc_cr",
@@ -1829,7 +1830,7 @@ XBRL_EPS_CONCEPTS = [
     "basicearningspershareafterextraordinaryitems", "basicearningspersharebeforeextraordinaryitems",
 ]
 QUARTER_DAYS = (80, 100)
-XBRL_PARSER_VERSION = 3   # bump to re-read every stored XBRL snapshot once
+XBRL_PARSER_VERSION = 4   # bump to re-read every stored XBRL snapshot once
 
 
 def _xbrl_local(tag: str) -> str:
@@ -3974,9 +3975,28 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
                 parsed["revenue_qoq_pct"] = round2(pct_change(parsed["revenue_cr"], rev_o))
             if pat_o is not None and pat_o > 0 and parsed.get("pat_cr") is not None:
                 parsed["pat_qoq_pct"] = round2(pct_change(parsed["pat_cr"], pat_o))
+            meta["prevQuarter"] = {"revenue_cr": rev_o, "pat_cr": pat_o}
         if rev_o is not None or pat_o is not None:
             meta["comparativesFromSameDocument"] = False
             meta.setdefault("comparativeSources", {})[target.isoformat()] = row["xbrlUrl"]
+    # 2.7.0 earnings acceleration: last quarter's own YoY = previous quarter vs
+    # the quarter a year before it (one more filing, same basis and concept).
+    prev = meta.get("prevQuarter") or {}
+    if (prev.get("revenue_cr") is not None or prev.get("pat_cr") is not None) and parsed.get("prev_q_revenue_yoy_pct") is None:
+        target = _shift_quarters(period_end, -5)
+        row = listing_row(listing, target, basis)
+        if row is not None:
+            try:
+                other = fetch_parse(row["xbrlUrl"], target) or {}
+            except Exception as exc:
+                other = {}
+                meta.setdefault("issues", []).append(f"COMPARATIVE_FETCH_FAILED:{target.isoformat()}:{type(exc).__name__}")
+            oc = (other.get("_meta") or {}).get("concepts") or {}
+            if oc.get("revenue") == concepts.get("revenue") and other.get("revenue_cr") is not None and prev.get("revenue_cr") is not None:
+                parsed["prev_q_revenue_yoy_pct"] = round2(pct_change(prev["revenue_cr"], other["revenue_cr"]))
+            if (oc.get("pat") == concepts.get("pat") and other.get("pat_cr") is not None and other["pat_cr"] > 0
+                    and prev.get("pat_cr") is not None):
+                parsed["prev_q_pat_yoy_pct"] = round2(pct_change(prev["pat_cr"], other["pat_cr"]))
     return parsed
 
 
@@ -4184,6 +4204,53 @@ def enrich_exchange_meta(event: dict[str, Any], store: EventStore, ctx: SourceCo
     if pe is not None:
         store.merge_field(event, "trailing_pe", pe, source="NSE_QUOTE" if symbol else "BSE_META")
     store.record_fetch(event, "EXCHANGE_META", ok=got, error="; ".join(errors) or None)
+
+
+_INDEX_CACHE_MEMO: dict[str, Any] = {}
+
+
+LIVE_QUOTE_MAX = int(os.getenv("LIVE_QUOTE_MAX", "40"))
+LIVE_SIGNALS = {"NEAR_ENTRY", "WATCH_BREAKOUT", "WAIT_RECLAIM", "ENTRY_EARLY", "ENTRY_PULLBACK", "ENTRY_BREAKOUT",
+                "ENTRY_TRIGGERED", "WAIT_ACCEPTANCE", "WAIT_BOX"}
+
+
+def market_open_now() -> bool:
+    now = now_ist()
+    return now.weekday() < 5 and (9, 15) <= (now.hour, now.minute) <= (15, 35)
+
+
+def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
+    """2.7.0: during market hours, read the live NSE price of every declared
+    company that has an entry plan (for the 3 pm entry alert and the card's
+    'live vs entry' line). Plans themselves still use closing prices."""
+    if not market_open_now():
+        return 0
+    picks = []
+    for e in store.all():
+        if not dashboard_activity(e) or boolish(store.value(e, "results_released")) is not True:
+            continue
+        plan = ((e.get("derived") or {}).get("plus") or {}).get("plan") or {}
+        sym = normalize_symbol((e.get("security") or {}).get("nseSymbol"))
+        if sym and (plan.get("signal") in LIVE_SIGNALS or safe_num(plan.get("entry")) is not None):
+            picks.append((e, sym))
+    n = 0
+    if not picks:
+        return 0
+    try:
+        with NSEAdapter(ctx) as nse:
+            for e, sym in picks[:LIVE_QUOTE_MAX]:
+                try:
+                    payload, raw_ref = nse.quote(sym, e["eventId"])
+                    price = safe_num(first((payload or {}).get("priceInfo") or {}, "lastPrice")) if isinstance(payload, dict) else None
+                    if price:
+                        e["live"] = {"price": price, "at": iso_now()}
+                        store.save(e)
+                        n += 1
+                except Exception as exc:
+                    store.record_fetch(e, "LIVE_QUOTE", ok=False, error=f"{type(exc).__name__}: {exc}")
+    except Exception as exc:
+        print(f"Live quotes skipped: {type(exc).__name__}: {exc}")
+    return n
 
 
 def load_index_cache() -> dict[str, Any]:
@@ -4885,7 +4952,27 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
                 "the stock is not trading, so there is no reaction to measure.", "notTrading": True}
     event["tradeLog"] = pead_plus.update_trade_log(event.get("tradeLog"), plan, last_price, now_ist().date())
     key = sector_key(sec)
+    # 2.7.0 earnings acceleration: this quarter's YoY vs last quarter's YoY.
+    prev_rev_yoy = store.value(event, "prev_q_revenue_yoy_pct")
+    prev_pat_yoy = store.value(event, "prev_q_pat_yoy_pct")
+    if prev is not None and prev_rev_yoy is None and prev_pat_yoy is None:
+        prev_rev_yoy, prev_pat_yoy = store.value(prev, "revenue_yoy_pct"), store.value(prev, "pat_yoy_pct")
+    growth = pead_plus.earnings_acceleration(rev_yoy, pat_yoy, prev_rev_yoy, prev_pat_yoy,
+                                             store.value(event, "pat_trend")) if released else None
+    # 2.7.0 relative strength vs NIFTY 500 since the result.
+    idx = _INDEX_CACHE_MEMO.get("cache")
+    if idx is None:
+        idx = _INDEX_CACHE_MEMO["cache"] = load_index_cache()
+    rs = (pead_plus.relative_strength(px.get("return_since_result_pct"), px.get("pre_result_session"),
+                                      px.get("last_session"), idx.get("dates"), idx.get("closes"))
+          if px.get("return_since_result_pct") is not None else None)
+    lv = event.get("live") or {}
+    lv_at = parse_datetime(lv.get("at"))
+    live = pead_plus.live_entry_status(plan, lv) if lv_at and lv_at.astimezone(IST).date() == now_ist().date() else None
     return {
+        "growth": growth,
+        "relativeStrength": rs,
+        "live": live,
         "strength": strength,
         "q1Strength": q1_strength,
         "q1Setup": setup,
@@ -5341,7 +5428,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
-PLUS_VERSION = "2.6.0"   # bump to rebuild every stored chart/price analytic once
+PLUS_VERSION = "2.7.0"   # bump to rebuild every stored chart/price analytic once
 
 
 def replay_plus(store: EventStore) -> int:
@@ -6294,6 +6381,8 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         enrichment_stats = enrich_events(store, master, ctx)
         print("Enrichment:", json.dumps(enrichment_stats, default=str))
         refresh_index_cache(ctx)
+        _INDEX_CACHE_MEMO.clear()
+        print(f"Live quotes refreshed: {refresh_live_quotes(store, ctx)}")
         post = integrity_pass(store, master=master)
         if post["revoked"] or post["postResultPurged"]:
             print_integrity_summary(post, integrity_signature(post["revocations"]))

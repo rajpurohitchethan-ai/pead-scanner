@@ -108,3 +108,10 @@ Engine 2.6.2 (first live run of 2.6.1, 9 Oct 2026)
 - session_closed(): a reaction session counts only after 15:45 IST on that day (at 06:20 the card said "Data pending" instead of "Awaiting reaction session").
 - Unit check: a profit swing with revenue in line with last quarter / last year is PAT_SWING (flagged), not UNIT_SUSPECT (rejected) (LOTUSCHO).
 - Untraded scrips (no trade in 20+ days: TIAANC, GOLKONDA, ALSTONE) get NO_ENTRY "No trades since ..." and are excluded from the self-check's reaction/financial FAIL checks (listed separately).
+
+Engine 2.7.0 (new signals, 9 Oct 2026)
+- Earnings acceleration: fill_comparatives_from_listing also reads the filing a year before the previous quarter, so prev_q_revenue_yoy_pct / prev_q_pat_yoy_pct (last quarter's own YoY) are stored; fallback = the archived previous-quarter event's YoY. pead_plus.earnings_acceleration(): ACCELERATING when YoY growth rose >= 5 pp (revenue and/or ordinary profit, both still growing), DECELERATING when it fell >= 5 pp, else STEADY. Card tag + "earnings acceleration" sort. Display only: conviction score unchanged.
+- Volume signature: "volume signature" sort ranks HVE > HVY > HVQ, then relative volume.
+- Relative strength: plus.relativeStrength = return since result minus NIFTY 500 return over the same sessions (close before the result window -> latest close; extended_features now records pre_result_session). Card line + "strength vs NIFTY 500" sort.
+- Live entry status: refresh_live_quotes() reads NSE live prices during market hours (09:15-15:35 IST) for declared companies with an entry plan (max LIVE_QUOTE_MAX=40); plus.live = {price, at, entry, distancePct, state ABOVE_TRIGGER | NEAR_TRIGGER (within 2%) | BELOW_TRIGGER}, today's quotes only. Plans still use closing prices. A weekday 15:02 IST scheduled task reads it and sends the 3 pm entry alert.
+- XBRL_PARSER_VERSION 4, PLUS_VERSION 2.7.0 (one re-read / rebuild).
