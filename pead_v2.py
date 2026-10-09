@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.8.0"
+ENGINE_VERSION = "2.9.0"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1142,6 +1142,31 @@ class NSEAdapter:
             ) or [],
             event_id=event_id, symbol=symbol,
         )
+
+    def _api_get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        """GET an NSE /api endpoint the library has no method for (same
+        transport, cookies and throttling as the library's own calls)."""
+        url = f"{getattr(self.client, 'base_url', 'https://www.nseindia.com/api')}/{path.lstrip('/')}"
+        transport = getattr(self.client, "_transport", None)
+        if transport is not None:
+            resp = transport.request(url, params=params)
+        elif hasattr(self.client, "_req"):
+            resp = self.client._req(url, params=params)
+        else:
+            sess = getattr(self.client, "session", None) or getattr(self.client, "_NSE__session", None)
+            if sess is None:
+                raise RuntimeError("NSE client has no request transport")
+            resp = sess.get(url, params=params)
+        return resp.json() if hasattr(resp, "json") else resp
+
+    def market_breadth(self, index: str = "NIFTY 500"):
+        """Advances / declines of an index today (2.9.0)."""
+        return self._call("advance_decline", lambda: self._api_get("equity-stockIndices-adu", {"index": index.upper()}),
+                          symbol=index, raw_source="NSE_INDEX")
+
+    def fii_dii(self):
+        """Provisional FII/FPI and DII cash-market net buy/sell for the latest day (2.9.0)."""
+        return self._call("fii_dii", lambda: self._api_get("fiidiiTradeReact"), symbol="FII_DII", raw_source="NSE_INDEX")
 
     def integrated_filings(self, symbol: str, event_id: str | None = None):
         """NSE "Integrated Filing - Financials" index for one company (engine 2.6.1).
@@ -4253,6 +4278,62 @@ def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
     return n
 
 
+MARKET_INTERNALS_PATH = MASTER_DIR / "market_internals.json"
+
+
+def parse_fii_dii(payload: Any) -> dict[str, Any] | None:
+    """[{category: 'FII/FPI *', date: '09-Oct-2026', buyValue, sellValue, netValue}, {category: 'DII *', ...}]"""
+    rows = payload if isinstance(payload, list) else (payload.get("data") if isinstance(payload, dict) else None)
+    if not isinstance(rows, list):
+        return None
+    out: dict[str, Any] = {}
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        cat = str(r.get("category") or "").upper()
+        net = safe_num(r.get("netValue"))
+        d = parse_date(r.get("date"))
+        if net is None or d is None:
+            continue
+        if cat.startswith("FII") or "FPI" in cat:
+            out["fiiNetCr"], out["date"] = round2(net), d.isoformat()
+        elif cat.startswith("DII"):
+            out["diiNetCr"], out["date"] = round2(net), d.isoformat()
+    return out if "date" in out else None
+
+
+def refresh_market_internals(ctx: SourceContext) -> dict[str, Any]:
+    """NIFTY 500 advances/declines and FII/DII flows, kept as a 30-day history
+    in master/market_internals.json. Failures keep the old file."""
+    try:
+        cache = json.loads(MARKET_INTERNALS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        cache = {}
+    flows = {r["date"]: r for r in cache.get("flows") or [] if isinstance(r, dict) and r.get("date")}
+    try:
+        with NSEAdapter(ctx) as nse:
+            try:
+                ad, _ = nse.market_breadth("NIFTY 500")
+                adv, dec = safe_num((ad or {}).get("advances")), safe_num((ad or {}).get("declines"))
+                if adv is not None and dec is not None:
+                    cache["advanceDecline"] = {"advances": int(adv), "declines": int(dec),
+                                               "unchanged": int(safe_num((ad or {}).get("unchanged")) or 0), "at": iso_now()}
+            except Exception as exc:
+                print(f"Breadth fetch failed: {type(exc).__name__}: {exc}")
+            try:
+                fd, _ = nse.fii_dii()
+                row = parse_fii_dii(fd)
+                if row:
+                    flows[row["date"]] = {**flows.get(row["date"], {}), **row}
+            except Exception as exc:
+                print(f"FII/DII fetch failed: {type(exc).__name__}: {exc}")
+    except Exception as exc:
+        print(f"Market internals skipped: {type(exc).__name__}: {exc}")
+    cache["flows"] = [flows[k] for k in sorted(flows)][-30:]
+    json_dump_atomic(MARKET_INTERNALS_PATH, cache)
+    return cache
+
+
 def load_index_cache() -> dict[str, Any]:
     try:
         return json.loads(INDEX_CACHE_PATH.read_text(encoding="utf-8"))
@@ -5998,6 +6079,11 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "buckets": {code: sum(((x["plus"].get("bucket") or {}).get("code") == code) for x in items) for code in pead_plus.BUCKETS},
         "nearEntry": sum(x.get("entrySignal") == "NEAR_ENTRY" for x in items),
     }
+    try:
+        internals = json.loads(MARKET_INTERNALS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        internals = {}
+    regime.update(pead_plus.market_internals(items, internals, now_ist().date()))
     pead_plus.peer_context(items, regime)
     try:
         health["selfAudit"] = pead_plus.self_audit(items, regime, health, now_ist().date())
@@ -6406,6 +6492,7 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         print("Enrichment:", json.dumps(enrichment_stats, default=str))
         refresh_index_cache(ctx)
         _INDEX_CACHE_MEMO.clear()
+        refresh_market_internals(ctx)
         print(f"Live quotes refreshed: {refresh_live_quotes(store, ctx)}")
         post = integrity_pass(store, master=master)
         if post["revoked"] or post["postResultPurged"]:

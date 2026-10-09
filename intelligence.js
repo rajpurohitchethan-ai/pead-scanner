@@ -109,7 +109,10 @@
     if (qty < 1) return '<p class="qty">Risk budget is smaller than one share’s stop distance.</p>';
     const atRisk = qty * (e - s), used = qty * e;
     const lead = frac < 1 ? `Starter: ${qty.toLocaleString('en-IN')} of ${fullQty.toLocaleString('en-IN')} shares` : `${qty.toLocaleString('en-IN')} shares`;
-    return `<p class="qty">${lead} risks ${inr(atRisk, 0)} and uses ${inr(used, 0)} (${(used / cap * 100).toFixed(0)}% of capital).</p>`;
+    const capPct = num(store.get('pcap', 15)) ?? 15, budget = cap * capPct / 100, share = used / cap * 100;
+    const over = used > budget;
+    return `<p class="qty">${lead} risks ${inr(atRisk, 0)} and uses ${inr(used, 0)} (${share.toFixed(0)}% of capital).</p>
+      <p class="qty ${over ? 'warn-t' : ''}">PEAD is the tactical part of the portfolio: keep all open PEAD trades within ${capPct}% of capital (${inr(budget, 0)}). ${over ? `This one trade alone is over that limit; take fewer shares (max ${Math.floor(budget / e).toLocaleString('en-IN')}).` : `This trade uses ${(used / budget * 100).toFixed(0)}% of that budget.`}</p>`;
   }
 
   // ---------- concall ----------
@@ -128,9 +131,13 @@
     const role = { LEADER: ['Sector leader', 'warn'], LAGGARD: ['Sector laggard', 'good'], MIDDLE: ['Mid-pack', ''] }[pe.role];
     const rep = (pe.reported || []).map(r => `${esc(r.symbol)} ${pct(r.reaction)}`).join(', ');
     const lead = (pe.leaders || []).map(r => `${esc(r.symbol)} ${pct(r.ret63, 0)}`).join(', ');
+    const pf = P(it).peerFundamentals || {};
+    const ord = n => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : Math.min(n % 10, 4) % 4] || 'th');
+    const fx = (k, label, unit = '%') => { const b = pf[k]; if (!b) return ''; return `<span class="pf"><b>${label}</b> ${k.endsWith('YoY') ? pct(b.value) : num(b.value).toFixed(1) + unit} <span class="meta">(${ord(b.rank)} of ${b.of}, median ${k.endsWith('YoY') ? pct(b.median) : num(b.median).toFixed(1) + unit})</span></span>`; };
+    const fund = [fx('revenueYoY', 'Revenue'), fx('patYoY', 'Profit'), fx('margin', 'Margin'), fx('roe', 'ROE')].filter(Boolean).join('');
     return `<div class="peers"><b>Peers · ${esc(pe.sector)}</b>${role ? ` <span class="tag ${role[1]}">${role[0]}</span>` : ''}
       <span class="meta">${pe.rank ? `#${pe.rank} of ${pe.count} on 3-month move (${pct(pe.ret63)}; sector median ${pct(pe.sectorMedian63)}).` : ''}
-      ${lead ? ` Leaders: ${lead}.` : ''}${rep ? ` Already reported: ${rep}${pe.reportedCount > (pe.reported || []).length ? '…' : ''} (avg reaction ${pct(pe.reportedAvgReaction)}).` : ' No peer has reported yet.'}</span></div>`;
+      ${lead ? ` Leaders: ${lead}.` : ''}${rep ? ` Already reported: ${rep}${pe.reportedCount > (pe.reported || []).length ? '…' : ''} (avg reaction ${pct(pe.reportedAvgReaction)}).` : ' No peer has reported yet.'}</span>${fund ? `<div class="pfs"><b class="meta">Against sector peers</b>${fund}</div>` : ''}</div>`;
   }
   function homework(it) {
     const l = P(it).links || {};
@@ -345,7 +352,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.8.0';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.0';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -358,6 +365,14 @@
     const d = S.data, r = d.regime || {}, c = d.counts || {};
     $('sub').textContent = `${d.liveQuarter || 'Live quarter'} results season, updated ${d.generatedAt ? new Date(d.generatedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}`;
     const tone = { 'RISK-ON': 'on', MIXED: 'mixed', 'RISK-OFF': 'off' }[r.label] || '';
+    const br = r.breadth || {}, ad = r.advanceDecline, fl = r.flows;
+    const crs = v => { const n = num(v); return n === null ? '—' : `${n >= 0 ? '+' : '−'}₹${Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`; };
+    const internals = [
+      num(br.above63Pct) !== null ? `Breadth: ${num(br.above63Pct).toFixed(0)}% of tracked stocks above their 63-day average${num(br.above21Pct) !== null ? `, ${num(br.above21Pct).toFixed(0)}% above 21-day` : ''}` : '',
+      ad && num(ad.advancePct) !== null ? `NIFTY 500 today: ${ad.advances} up / ${ad.declines} down` : '',
+      fl ? `FII ${crs(fl.fiiNetCr)}, DII ${crs(fl.diiNetCr)} on ${dt(fl.date)} (5 days: FII ${crs(fl.fii5dCr)}, DII ${crs(fl.dii5dCr)})${fl.fiiStreak ? `; FIIs net ${fl.fiiStreak > 0 ? 'buyers' : 'sellers'} ${Math.abs(fl.fiiStreak)} day${Math.abs(fl.fiiStreak) > 1 ? 's' : ''} running` : ''}` : '',
+    ].filter(Boolean);
+    $('internals').innerHTML = internals.map(t => `<span>${esc(t)}</span>`).join('');
     $('regime').innerHTML = r.label ? `<span class="dot ${tone}"></span><b>Market ${esc(r.label.toLowerCase())}</b>. ${esc(r.note)}${num(r.ret20dPct) !== null ? ` ${esc(r.index || 'Index')} ${pct(r.ret20dPct)} over 20 days.` : ''}` : `<span class="dot"></span>${esc(r.note && r.note !== 'Index history unavailable' ? r.note : 'Market regime appears after the next data refresh.')}`;
     const decl = declared(), act = decl.filter(it => sig(it)[1] === 'go').length;
     const soon = upcoming().filter(it => { const n = daysTo(it.resultDate); return n !== null && n >= 0 && n <= 7; }).length;
@@ -403,7 +418,7 @@
   const showDir = () => { $('dir').textContent = S.dir === 'asc' ? '↑ Low → high' : '↓ High → low'; $('dir').setAttribute('aria-label', S.dir === 'asc' ? 'Ascending' : 'Descending'); };
   $('dir').addEventListener('click', () => { S.dir = S.dir === 'asc' ? 'desc' : 'asc'; store.set('dir', S.dir); showDir(); render(); });
   $('chips').addEventListener('click', e => { const b = e.target.closest('[data-bucket]'); if (b) { S.bucket = b.dataset.bucket; render(); } });
-  ['cap', 'risk'].forEach(id => $(id).addEventListener('change', e => { store.set(id, num(e.target.value)); render(); }));
+  ['cap', 'risk', 'pcap'].forEach(id => $(id).addEventListener('change', e => { store.set(id, num(e.target.value)); render(); }));
   $('view').addEventListener('click', e => {
     if (e.target.closest('[data-act="show-illiquid"]')) { S.liquid = false; $('liquid').checked = false; render(); return; }
     const srow = e.target.closest('.srow'); if (srow) { const k = 'sector:' + srow.dataset.sector; S.open.has(k) ? S.open.delete(k) : S.open.add(k); render(); return; }
@@ -418,7 +433,7 @@
   S.dir = store.get('dir', 'desc');
   if (!$('sort').querySelector(`option[value="${S.sort}"]`)) S.sort = 'conviction';
   $('liquid').checked = S.liquid; $('sort').value = S.sort; showDir();
-  $('cap').value = store.get('cap', 1000000); $('risk').value = store.get('risk', 1);
+  $('cap').value = store.get('cap', 1000000); $('risk').value = store.get('risk', 1); $('pcap').value = store.get('pcap', 15);
   applyTheme(store.get('theme', null));
   fetch('intelligence.json?t=' + Date.now(), { cache: 'no-store' })
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })

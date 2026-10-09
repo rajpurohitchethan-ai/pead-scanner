@@ -621,5 +621,41 @@ class PeersTopDownTests(unittest.TestCase):
         self.assertEqual(small[0]["plus"]["topDown"]["checks"][0]["status"], "na")
 
 
+class MarketInternalsTests(unittest.TestCase):
+    """2.9.0: breadth, FII/DII flows and peer fundamentals (bottom-up approach)."""
+
+    def test_breadth_and_flows(self):
+        items = [{"priceContext": {"lastClose": c}, "plus": {"price": {"ema21": 100.0, "ema63": 100.0}}} for c in (110, 105, 95, 90)]
+        internals = {"advanceDecline": {"advances": 150, "declines": 350, "unchanged": 0, "at": "2026-10-09T10:00:00Z"},
+                     "flows": [{"date": d, "fiiNetCr": f, "diiNetCr": -f / 2} for d, f in
+                               (("2026-10-05", 500.0), ("2026-10-06", -800.0), ("2026-10-07", -1200.0),
+                                ("2026-10-08", -300.0), ("2026-10-09", -950.0))]}
+        r = pp.market_internals(items, internals, date(2026, 10, 9))
+        self.assertEqual((r["breadth"]["above63Pct"], r["breadth"]["n"]), (50.0, 4))
+        self.assertEqual(r["advanceDecline"]["advancePct"], 30.0)
+        self.assertEqual((r["flows"]["fiiStreak"], r["flows"]["fii5dCr"]), (-4, -2750.0))
+        stale = pp.market_internals(items, {"flows": [{"date": "2026-09-01", "fiiNetCr": 1.0}]}, date(2026, 10, 9))
+        self.assertNotIn("flows", stale)
+
+    def test_parse_fii_dii(self):
+        payload = [{"category": "DII **", "date": "09-Oct-2026", "buyValue": "12000", "sellValue": "9000", "netValue": "3000.55"},
+                   {"category": "FII/FPI **", "date": "09-Oct-2026", "buyValue": "10000", "sellValue": "11500", "netValue": "-1500.2"}]
+        self.assertEqual(p.parse_fii_dii(payload), {"diiNetCr": 3000.55, "fiiNetCr": -1500.2, "date": "2026-10-09"})
+        self.assertIsNone(p.parse_fii_dii({"unexpected": True}))
+
+    def test_peer_fundamentals_rank(self):
+        def it(sym, rev, pat, opm, roe, rel=True):
+            return {"symbol": sym, "resultsReleased": rel, "revenueYoY": rev, "patYoY": pat,
+                    "plus": {"margins": {"opmTtm": opm}, "valuation": {"roe": roe}}}
+        members = [it("A", 11.2, 15.0, 26.0, 60.0), it("B", 8.0, 5.0, 21.0, 30.0), it("C", 4.0, 9.0, 18.0, 20.0),
+                   it("D", None, None, 15.0, 1500.0, rel=False)]
+        members[3]["plus"]["valuation"]["tinyBook"] = True
+        f = pp.peer_fundamentals(members[0], members)
+        self.assertEqual((f["revenueYoY"]["rank"], f["revenueYoY"]["of"]), (1, 3))
+        self.assertEqual((f["margin"]["rank"], f["margin"]["of"]), (1, 4))
+        self.assertEqual(f["roe"]["of"], 3)                 # tiny-book ROE excluded
+        self.assertNotIn("revenueYoY", pp.peer_fundamentals(members[3], members))
+
+
 if __name__ == "__main__":
     unittest.main()

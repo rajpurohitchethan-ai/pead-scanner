@@ -122,3 +122,9 @@ Engine 2.8.0 (top-down check + peers, 9 Oct 2026)
 - NO_ENTRY now states the exact reason (price move on the result, earnings strength with the thresholds, or quality flag).
 - Relative strength is hidden when the index series ends before the stock's last session (was "index 0.0%"); the NIFTY 500 cache is re-fetched after 15:45 IST on weekdays until it contains the day's close (at most every 2 h).
 - Page: Sectors rows expand to the ranked peer list; scorecard tables scroll horizontally on phones; "since result" line hidden on the reaction day; sorts added (top-down check, RVOL, revenue/profit YoY, price, completeness) with a low/high direction toggle and nulls always last.
+
+Engine 2.9.0 (bottom-up approach additions, 9 Oct 2026)
+- Peer fundamentals: pead_plus.peer_fundamentals() ranks a company's revenue / profit YoY against sector peers that have reported this quarter, and its operating margin (TTM, else quarter) and ROE (tiny-book excluded) against all sector peers; needs >= 3 values. plus.peerFundamentals, shown under the peers line.
+- Market internals: refresh_market_internals() (each networked run) stores NIFTY 500 advances/declines (/api/equity-stockIndices-adu) and FII/DII provisional cash flows (/api/fiidiiTradeReact, parse_fii_dii) in master/market_internals.json (30-day flow history). pead_plus.market_internals() adds regime.breadth (share of tracked stocks above their 21 / 63-day EMA), regime.advanceDecline (if <= 3 days old) and regime.flows (latest, 5-day sums, FII buying/selling streak; hidden if > 5 days old). Shown under the market line and in the top-down market note; the market check's status is still the NIFTY 500 regime.
+- PEAD cap: the sizing box takes "PEAD cap % of capital" (default 15%, per-viewer) after the tactical 10-20% bucket of the bottom-up portfolio split, and warns when one trade alone exceeds it.
+- NSEAdapter._api_get() is the shared raw-endpoint helper.

@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.8.0"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.0"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -1008,6 +1008,7 @@ def peer_context(items: list[dict[str, Any]], regime: dict[str, Any] | None) -> 
                 role = "LEADER" if rank <= third else ("LAGGARD" if rank > len(ranked) - third else "MIDDLE")
             others = [m for m in reported if m is not it]
             reactions = [_num(m["priceContext"]["resultDayPct"]) for m in others]
+            plus["peerFundamentals"] = peer_fundamentals(it, members)
             plus["peers"] = {
                 "sector": key, "count": len(ranked), "rank": rank, "role": role,
                 "ret63": _r2(r), "sectorMedian63": _r2(med),
@@ -1031,9 +1032,16 @@ def top_down(it: dict[str, Any], regime: dict[str, Any] | None) -> dict[str, Any
         checks.append({"key": key, "label": label, "status": status, "note": note})
 
     lab = (regime or {}).get("label")
+    extra = []
+    br = ((regime or {}).get("breadth") or {}).get("above63Pct")
+    if br is not None:
+        extra.append(f"{br:.0f}% of tracked stocks above their 63-day average")
+    fl = (regime or {}).get("flows") or {}
+    if fl.get("fiiStreak"):
+        extra.append(f"FIIs net {'buyers' if fl['fiiStreak'] > 0 else 'sellers'} {abs(fl['fiiStreak'])} day(s) running")
     add("market", "Market", {"RISK-ON": "ok", "MIXED": "warn", "RISK-OFF": "bad"}.get(lab, "na"),
         {"RISK-ON": "NIFTY 500 above its 50 & 200 DMA", "MIXED": "NIFTY 500 between its 50 & 200 DMA",
-         "RISK-OFF": "NIFTY 500 below its 50 & 200 DMA"}.get(lab, "Index data pending"))
+         "RISK-OFF": "NIFTY 500 below its 50 & 200 DMA"}.get(lab, "Index data pending") + ("; " + "; ".join(extra) if extra else ""))
     tail = (plus.get("sector") or {}).get("tailwind")
     add("sector", "Sector", {"STRONG": "ok", "POSITIVE": "ok", "NEUTRAL": "warn", "WEAK": "bad"}.get(tail, "na"),
         f"Sector tailwind {tail.lower()}" if tail else "Sector not known yet")
@@ -1076,3 +1084,81 @@ def top_down(it: dict[str, Any], regime: dict[str, Any] | None) -> dict[str, Any
     ok = sum(c["status"] == "ok" for c in checks)
     known = sum(c["status"] != "na" for c in checks)
     return {"checks": checks, "passed": ok, "known": known}
+
+
+
+# ---------------------------------------------------------------------------
+# Engine 2.9.0: market internals (breadth, FII/DII) and peer fundamentals
+# ---------------------------------------------------------------------------
+
+def market_internals(items: list[dict[str, Any]], internals: dict[str, Any] | None, today: date) -> dict[str, Any]:
+    """Breadth from the tracked universe (share of stocks above their 21 / 63
+    day EMA), NIFTY 500 advances/declines today, and FII/DII cash flows."""
+    above21 = above63 = n = 0
+    for it in items:
+        px = (it.get("plus") or {}).get("price") or {}
+        last = _num((it.get("priceContext") or {}).get("lastClose"))
+        e21, e63 = _num(px.get("ema21")), _num(px.get("ema63"))
+        if last is None or e21 is None or e63 is None:
+            continue
+        n += 1
+        above21 += last > e21
+        above63 += last > e63
+    out: dict[str, Any] = {"breadth": {"n": n, "above21Pct": _r2(above21 / n * 100) if n else None,
+                                       "above63Pct": _r2(above63 / n * 100) if n else None}}
+    internals = internals or {}
+    ad = internals.get("advanceDecline") or {}
+    at = str(ad.get("at") or "")[:10]
+    if ad and at and (today - date.fromisoformat(at)).days <= 3:
+        tot = (ad.get("advances") or 0) + (ad.get("declines") or 0)
+        out["advanceDecline"] = {**ad, "advancePct": _r2(ad["advances"] / tot * 100) if tot else None}
+    flows = [f for f in internals.get("flows") or [] if isinstance(f, dict) and f.get("date")]
+    flows.sort(key=lambda f: f["date"])
+    if flows and (today - date.fromisoformat(flows[-1]["date"])).days <= 5:
+        last5 = flows[-5:]
+        fii = [_num(f.get("fiiNetCr")) for f in flows if _num(f.get("fiiNetCr")) is not None]
+        streak = 0
+        if fii:
+            sign = 1 if fii[-1] > 0 else -1
+            for v in reversed(fii):
+                if (v > 0) == (sign > 0) and v != 0:
+                    streak += 1
+                else:
+                    break
+            streak *= sign
+        out["flows"] = {"date": flows[-1]["date"], "fiiNetCr": flows[-1].get("fiiNetCr"), "diiNetCr": flows[-1].get("diiNetCr"),
+                        "fii5dCr": _r2(sum(_num(f.get("fiiNetCr")) or 0 for f in last5)),
+                        "dii5dCr": _r2(sum(_num(f.get("diiNetCr")) or 0 for f in last5)),
+                        "days": len(last5), "fiiStreak": streak}
+    return out
+
+
+def _rank_block(value: Any, values: list[float], higher_is_better: bool = True) -> dict[str, Any] | None:
+    v = _num(value)
+    vals = [x for x in values if x is not None]
+    if v is None or len(vals) < 3:
+        return None
+    ordered = sorted(vals, reverse=higher_is_better)
+    return {"value": _r2(v), "median": _r2(median(vals)), "rank": ordered.index(v) + 1, "of": len(vals)}
+
+
+def peer_fundamentals(it: dict[str, Any], members: list[dict[str, Any]]) -> dict[str, Any]:
+    """This company's growth, margin and ROE against its sector peers.
+    Growth compares companies that have reported THIS quarter; margin (TTM
+    operating margin) and ROE compare every peer with exchange data."""
+    def g(m, key):
+        return _num(m.get(key))
+    reported = [m for m in members if m.get("resultsReleased")]
+    def opm(m):
+        mg = (m.get("plus") or {}).get("margins") or {}
+        return _num(mg.get("opmTtm")) if _num(mg.get("opmTtm")) is not None else _num(mg.get("opm"))
+    def roe(m):
+        v = (m.get("plus") or {}).get("valuation") or {}
+        return None if v.get("tinyBook") else _num(v.get("roe"))
+    out = {
+        "revenueYoY": _rank_block(g(it, "revenueYoY"), [g(m, "revenueYoY") for m in reported]) if it.get("resultsReleased") else None,
+        "patYoY": _rank_block(g(it, "patYoY"), [g(m, "patYoY") for m in reported]) if it.get("resultsReleased") else None,
+        "margin": _rank_block(opm(it), [opm(m) for m in members]),
+        "roe": _rank_block(roe(it), [roe(m) for m in members]),
+    }
+    return {k: v for k, v in out.items() if v is not None}
