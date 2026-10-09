@@ -154,6 +154,18 @@ td.r,th.r{text-align:right}
 .note{font-size:13.5px;color:var(--ink-2);max-width:70ch}
 .fact .note{font-size:12px;margin-top:4px}
 .audit{margin:0 0 14px;padding:12px;border:1px solid var(--line,#2a3446);border-radius:12px}.audit h3{margin:0 0 8px;font-size:15px}.arow{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line,#2a3446);font-size:14px}.arow:first-of-type{border-top:0}.arow .tag{flex:none}.muted{opacity:.75;font-size:13px}
+.td{margin:12px 0 4px;padding:10px 12px;border:1px solid var(--line,#2a3446);border-radius:12px}
+.td-h{font-size:13px;margin-bottom:8px}.td-row{display:flex;flex-wrap:wrap;gap:6px}
+.tdc{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:3px 9px;border-radius:999px;border:1px solid var(--line,#2a3446)}
+.tdc i{font-style:normal;font-weight:700}.tdc.ok{background:var(--gain-bg);color:var(--gain);border-color:transparent}
+.tdc.bad{background:var(--loss-bg);color:var(--loss);border-color:transparent}.tdc.warn{background:var(--watch-bg);color:var(--watch);border-color:transparent}
+.tdc.na{opacity:.6}.td-more{margin-top:6px;font-size:13px}.td-more summary{cursor:pointer;opacity:.8}.td-notes{margin:6px 0 0;padding-left:18px}
+.peers{margin:8px 0;font-size:13.5px;line-height:1.5}.peers .meta{display:block}
+.homework{font-size:12.5px;opacity:.85;margin:10px 0 4px}
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}.tscroll table{min-width:520px}
+.srow{cursor:pointer}.chev-s{display:inline-block;width:12px;opacity:.7}.sdetail td{background:var(--card-2,transparent)}
+.plist{margin:4px 0 8px;padding-left:22px;font-size:13.5px;line-height:1.7}.plist .n{margin:0 4px}
+.controls .dirbtn{white-space:nowrap;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sheet);color:inherit;font:inherit}
 .install-bad{background:#7f1d1d;color:#fff;border-radius:10px;padding:10px 12px;margin:0 0 10px;font-size:14px;line-height:1.4}
 .health{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
 .hbox{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:12px}
@@ -197,15 +209,22 @@ td.r,th.r{text-align:right}
     <label class="toggle"><input type="checkbox" id="liquid" checked> Tradeable only</label>
     <select id="sort" aria-label="Sort by">
       <option value="conviction">Sort: conviction</option>
+      <option value="topdown">Sort: top-down check</option>
       <option value="date">Sort: result date</option>
-      <option value="reaction">Sort: reaction day</option>
+      <option value="reaction">Sort: reaction day %</option>
+      <option value="rvol">Sort: reaction volume (RVOL)</option>
+      <option value="volume">Sort: volume signature (HVE/HVY/HVQ)</option>
       <option value="since">Sort: move since result</option>
+      <option value="rs">Sort: strength vs NIFTY 500</option>
+      <option value="revyoy">Sort: revenue YoY</option>
+      <option value="patyoy">Sort: profit YoY</option>
+      <option value="growth">Sort: earnings acceleration</option>
       <option value="runup">Sort: 20-day run-up</option>
       <option value="distance">Sort: distance to entry</option>
-      <option value="volume">Sort: volume signature (HVE/HVY/HVQ)</option>
-      <option value="rs">Sort: strength vs NIFTY 500</option>
-      <option value="growth">Sort: earnings acceleration</option>
+      <option value="price">Sort: current price</option>
+      <option value="completeness">Sort: data completeness</option>
     </select>
+    <button type="button" class="dirbtn" id="dir">↓ High → low</button>
   </div>
   <div class="chips" id="chips"></div>
   <div class="sizing" id="sizing">
@@ -218,6 +237,6 @@ td.r,th.r{text-align:right}
 
   <p class="foot" id="foot">A mechanical screen, not advice. Levels appear only when a rule-based setup exists; missing data shows as —, never as zero.</p>
 </main>
-<script src="intelligence.js?v=34"></script>
+<script src="intelligence.js?v=35"></script>
 </body>
 </html>

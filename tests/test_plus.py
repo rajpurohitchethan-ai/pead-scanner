@@ -585,5 +585,41 @@ class Engine270Tests(unittest.TestCase):
         self.assertEqual(g["label"], "ACCELERATING")
 
 
+class PeersTopDownTests(unittest.TestCase):
+    """2.8.0: peers (who moved, who lags) and the top-down checklist."""
+
+    def item(self, sym, r63, released=False, reaction=None, rd="2026-10-15"):
+        return {"symbol": sym, "resultsReleased": released, "resultDate": rd,
+                "priceContext": {"resultDayPct": reaction, "lastClose": 110.0},
+                "plus": {"sectorKey": "Information Technology", "sector": {"tailwind": "POSITIVE"},
+                         "price": {"ret_63d_pct": r63, "ema21": 105.0, "ema63": 100.0, "ret_21d_pct": 2.0},
+                         "valuation": {"label": "FAIR"}}}
+
+    def test_roles_reported_peers_and_checklist(self):
+        items = [self.item("CYIENT", 37.8), self.item("COFORGE", 24.2), self.item("PERSISTENT", 13.2),
+                 self.item("TECHM", 4.9), self.item("TCS", 4.2, True, 3.85, "2026-10-08"), self.item("HCLTECH", 2.3),
+                 self.item("LTM", 1.6)]
+        pp.peer_context(items, {"label": "RISK-OFF"})
+        by = {i["symbol"]: i["plus"] for i in items}
+        self.assertEqual(by["CYIENT"]["peers"]["role"], "LEADER")
+        self.assertEqual(by["HCLTECH"]["peers"]["role"], "LAGGARD")
+        self.assertEqual(by["HCLTECH"]["peers"]["reported"][0]["symbol"], "TCS")
+        self.assertEqual(by["HCLTECH"]["peers"]["reportedAvgReaction"], 3.85)
+        self.assertEqual(by["TCS"]["peers"]["reportedCount"], 0)          # a stock is not its own peer
+        st = {c["key"]: c["status"] for c in by["HCLTECH"]["topDown"]["checks"]}
+        self.assertEqual(st, {"market": "bad", "sector": "ok", "peers": "ok", "trend": "ok", "momentum": "ok", "valuation": "ok"})
+        self.assertEqual(by["HCLTECH"]["topDown"]["passed"], 5)
+        self.assertEqual({c["key"]: c["status"] for c in by["CYIENT"]["topDown"]["checks"]}["peers"], "warn")
+
+    def test_peers_that_fell_and_small_sectors(self):
+        items = [self.item("A", 10), self.item("B", 5, True, -6.0), self.item("C", 3), self.item("D", 1)]
+        pp.peer_context(items, None)
+        self.assertEqual({c["key"]: c["status"] for c in items[3]["plus"]["topDown"]["checks"]}["peers"], "bad")
+        small = [self.item("X", 5), self.item("Y", 3)]
+        pp.peer_context(small, None)
+        self.assertIsNone(small[0]["plus"]["peers"]["role"])
+        self.assertEqual(small[0]["plus"]["topDown"]["checks"][0]["status"], "na")
+
+
 if __name__ == "__main__":
     unittest.main()

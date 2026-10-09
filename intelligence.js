@@ -113,6 +113,30 @@
   }
 
   // ---------- concall ----------
+  const TD_ICON = { ok: '✓', warn: '!', bad: '✗', na: '–' };
+  function topDownStrip(it) {
+    const td = P(it).topDown;
+    if (!td || !(td.checks || []).length) return '';
+    return `<div class="td" aria-label="Top-down check: ${td.passed} of ${td.checks.length} pass">
+      <div class="td-h"><b>Top-down check</b> <span class="meta">${td.passed} of ${td.checks.length} pass</span></div>
+      <div class="td-row">${td.checks.map(c => `<span class="tdc ${c.status}" title="${esc(c.note)}"><i aria-hidden="true">${TD_ICON[c.status] || '–'}</i>${esc(c.label)}</span>`).join('')}</div>
+      <details class="td-more"><summary>What each check says</summary><ul class="td-notes">${td.checks.map(c => `<li><b>${esc(c.label)}:</b> ${esc(c.note)}</li>`).join('')}</ul></details></div>`;
+  }
+  function peersLine(it) {
+    const pe = P(it).peers;
+    if (!pe || !pe.count) return '';
+    const role = { LEADER: ['Sector leader', 'warn'], LAGGARD: ['Sector laggard', 'good'], MIDDLE: ['Mid-pack', ''] }[pe.role];
+    const rep = (pe.reported || []).map(r => `${esc(r.symbol)} ${pct(r.reaction)}`).join(', ');
+    const lead = (pe.leaders || []).map(r => `${esc(r.symbol)} ${pct(r.ret63, 0)}`).join(', ');
+    return `<div class="peers"><b>Peers · ${esc(pe.sector)}</b>${role ? ` <span class="tag ${role[1]}">${role[0]}</span>` : ''}
+      <span class="meta">${pe.rank ? `#${pe.rank} of ${pe.count} on 3-month move (${pct(pe.ret63)}; sector median ${pct(pe.sectorMedian63)}).` : ''}
+      ${lead ? ` Leaders: ${lead}.` : ''}${rep ? ` Already reported: ${rep}${pe.reportedCount > (pe.reported || []).length ? '…' : ''} (avg reaction ${pct(pe.reportedAvgReaction)}).` : ' No peer has reported yet.'}</span></div>`;
+  }
+  function homework(it) {
+    const l = P(it).links || {};
+    return `<p class="homework"><b>Your homework</b> (the screener can't judge these): capex and rerating, next growth triggers, FY27/FY28 EPS, fair value.${l.screener ? ` <a href="${esc(l.screener)}" target="_blank" rel="noopener">Screener</a>` : ''}${P(it).concall?.transcriptUrl ? ` · <a href="${esc(P(it).concall.transcriptUrl)}" target="_blank" rel="noopener">Concall transcript</a>` : ''}</p>`;
+  }
+
   function liveLine(l) {
     if (!l || num(l.price) === null) return '';
     const t = l.at ? new Date(l.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -150,7 +174,7 @@
       <div class="facts">
         ${resultFact(it, m)}
         <div class="fact"><h3>Market reaction</h3><p><span class="big ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}</span>${num(pc.relativeVolume) !== null ? `on ${x(pc.relativeVolume)} usual volume` : 'result session'}</p>
-          <p><span class="big ${cls(x1.return_since_result_pct)}">${pct(x1.return_since_result_pct)}</span>since result${x1.sessions_since_reaction != null ? `, ${x1.sessions_since_reaction} sessions` : ''}</p>${num(p.relativeStrength?.relativePct) !== null ? `<p><span class="big ${cls(p.relativeStrength.relativePct)}">${pct(p.relativeStrength.relativePct)}</span>vs NIFTY 500 (index ${pct(p.relativeStrength.indexReturnPct)})</p>` : ''}</div>
+          ${num(x1.sessions_since_reaction) > 0 ? `<p><span class="big ${cls(x1.return_since_result_pct)}">${pct(x1.return_since_result_pct)}</span>since result, ${x1.sessions_since_reaction} session${x1.sessions_since_reaction > 1 ? 's' : ''}</p>` : ''}${num(p.relativeStrength?.relativePct) !== null ? `<p><span class="big ${cls(p.relativeStrength.relativePct)}">${pct(p.relativeStrength.relativePct)}</span>vs NIFTY 500 (index ${pct(p.relativeStrength.indexReturnPct)})</p>` : ''}</div>
         <div class="fact"><h3>Expectations before</h3><p><span class="big ${cls(pc.pre20dPct)}">${pct(pc.pre20dPct)}</span>20-day run-up</p>
           <p><span class="big">${pct(pc.distanceFrom52wHighPct)}</span>from 52-week high</p></div>
         <div class="fact"><h3>Valuation</h3><p><span class="big">${num(v.pe) !== null ? num(v.pe).toFixed(1) + 'x' : '—'}</span>P/E${num(v.sectorPe) !== null && Math.abs(num(v.sectorPe) - (num(v.pe) ?? 0)) >= 0.05 ? ` vs sector ${num(v.sectorPe).toFixed(1)}x` : ''}</p>
@@ -174,29 +198,46 @@
       ${liveLine(p.live)}
       ${chart(it)}
       ${facts}
+      ${topDownStrip(it)}
+      ${peersLine(it)}
       <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}${plan.stage === 'STARTER' && num(plan.entry) !== null ? ' <span class="tag warn">Starter, 1/3 size</span>' : plan.stage === 'FULL' && num(plan.entry) !== null ? ' <span class="tag go">Full size</span>' : ''}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
         <p class="plan-why">${esc(plan.why || 'Plan not computed yet.')}</p>${levels}</div>
       ${(reasons.length || risks.length) ? `<details class="why"><summary>Why it scores ${num(it.convictionScore) ?? '—'}</summary><div class="why-cols">
         <div class="pos"><h4>Supporting</h4><ul>${reasons.map(r => `<li>${esc(r)}</li>`).join('') || '<li>Nothing verified yet.</li>'}</ul></div>
         <div class="neg"><h4>Risks and gaps</h4><ul>${risks.map(r => `<li>${esc(r)}</li>`).join('') || '<li>None flagged.</li>'}</ul></div></div></details>` : ''}
+      ${homework(it)}
       <div class="links">${linkHtml}</div>
     </article>`;
   }
 
   // ---------- views ----------
+  const SORT_KEYS = {
+    conviction: it => num(it.convictionScore),
+    date: it => { const d = daysTo(it.resultDate); return d === null ? null : -d; },
+    reaction: it => num(it.priceContext?.resultDayPct),
+    rvol: it => num(it.priceContext?.relativeVolume),
+    since: it => num(px(it).return_since_result_pct),
+    revyoy: it => num(it.revenueYoY),
+    patyoy: it => num(it.patYoY),
+    price: it => num(it.priceContext?.lastClose),
+    completeness: it => num(it.dataCompletenessPct),
+    runup: it => num(it.priceContext?.pre20dPct),
+    distance: it => { const d = num(P(it).plan?.distancePct); return d === null ? null : -Math.abs(d); },
+    volume: it => { const r = { HVE: 3, HVY: 2, HVQ: 1 }[px(it).hv_label] || 0; return r * 1000 + (num(it.priceContext?.relativeVolume) ?? 0); },
+    rs: it => num(P(it).relativeStrength?.relativePct),
+    growth: it => { const g = { ACCELERATING: 2, STEADY: 1, DECELERATING: 0 }[P(it).growth?.label]; return g === undefined ? null : g * 1000 + (num(P(it).growth?.revenueDeltaPp) ?? 0); },
+    topdown: it => { const t = P(it).topDown; return t ? t.passed * 10 + t.known : null; },
+  };
   function sorted(list) {
-    const key = {
-      conviction: it => num(it.convictionScore) ?? -1,
-      date: it => -(daysTo(it.resultDate) ?? 999),
-      reaction: it => num(it.priceContext?.resultDayPct) ?? -999,
-      since: it => num(px(it).return_since_result_pct) ?? -999,
-      runup: it => -(num(it.priceContext?.pre20dPct) ?? 999),
-      distance: it => -Math.abs(num(P(it).plan?.distancePct) ?? 999),
-      volume: it => ({ HVE: 3, HVY: 2, HVQ: 1 }[px(it).hv_label] || 0) * 1000 + (num(it.priceContext?.relativeVolume) ?? 0),
-      rs: it => num(P(it).relativeStrength?.relativePct) ?? -999,
-      growth: it => ({ ACCELERATING: 2, STEADY: 1, DECELERATING: 0 }[P(it).growth?.label] ?? -1) * 1000 + (num(P(it).growth?.revenueDeltaPp) ?? 0),
-    }[S.sort];
-    return list.slice().sort((a, b) => key(b) - key(a));
+    const key = SORT_KEYS[S.sort] || SORT_KEYS.conviction, dir = S.dir === 'asc' ? 1 : -1;
+    // Missing values always sort last, whichever direction.
+    return list.slice().sort((a, b) => {
+      const ka = key(a), kb = key(b);
+      if (ka === null && kb === null) return 0;
+      if (ka === null) return 1;
+      if (kb === null) return -1;
+      return (ka - kb) * dir;
+    });
   }
 
   function emptyHidden(total, shown, what) {
@@ -225,7 +266,7 @@
       <div class="chev" aria-hidden="true">›</div></div>`;
     if (!open) return row;
     const v = P(it).valuation || {}, liq = P(it).liquidity || {};
-    return row + `<div class="row-detail">${chart(it, 100)}
+    return row + `<div class="row-detail">${chart(it, 100)}${topDownStrip(it)}${peersLine(it)}
       <p class="note">${b ? esc(b.why) + ' ' : ''}${num(x1.q1_reaction_return_pct) !== null ? `Q1 result day ${pct(x1.q1_reaction_return_pct)}${num(x1.q1_reaction_rvol) !== null ? ` on ${x(x1.q1_reaction_rvol)} usual volume` : ''}; ${pct(x1.q1_return_to_q2_pct)} from before the Q1 result to now. ` : 'Q1 result date not found yet. '}${num(v.pe) !== null ? `P/E ${num(v.pe).toFixed(1)}x${num(v.sectorPe) !== null ? ` against sector ${num(v.sectorPe).toFixed(1)}x` : ''}. ` : ''}Liquidity ${esc(liq.label || '—')}${num(it.marketCapCr) !== null ? `, market cap ${cr(it.marketCapCr)}` : ''}.</p>
       <div class="links">${[['screener', 'Screener'], ['tradingview', 'TradingView'], ['nse', 'NSE'], ['bse', 'BSE']].filter(([k]) => P(it).links?.[k]).map(([k, l]) => `<a href="${esc(P(it).links[k])}" target="_blank" rel="noopener">${l}</a>`).join('')}</div></div>`;
   }
@@ -248,28 +289,39 @@
     return html + (all > list.length ? `<p class="foot">${all - list.length} illiquid companies hidden.</p>` : '');
   }
 
+  function sectorPeers(sector) {
+    const list = (S.data.items || []).filter(it => P(it).sectorKey === sector && num(px(it).ret_63d_pct) !== null)
+      .sort((a, b) => num(px(b).ret_63d_pct) - num(px(a).ret_63d_pct));
+    if (!list.length) return '<p class="meta">No priced peers yet.</p>';
+    const role = { LEADER: ['leader', 'warn'], LAGGARD: ['laggard', 'good'], MIDDLE: ['mid', ''] };
+    return `<ol class="plist">${list.map(it => { const r = role[P(it).peers?.role]; const d = daysTo(it.resultDate);
+      return `<li><b>${esc(it.symbol)}</b> <span class="n ${cls(px(it).ret_63d_pct)}">${pct(px(it).ret_63d_pct)}</span>${r ? ` <span class="tag ${r[1]}">${r[0]}</span>` : ''}
+        <span class="meta">${it.resultsReleased ? `reported ${dt(it.resultDate)}${num(it.priceContext?.resultDayPct) !== null ? `, reaction ${pct(it.priceContext.resultDayPct)}` : ''}` : d !== null && d >= 0 ? `reports ${d === 0 ? 'today' : `in ${d}d`}` : ''}</span></li>`; }).join('')}</ol>
+      <p class="meta">Ranked by 3-month move. Laggards in a sector whose reporters reacted well have more room to catch up.</p>`;
+  }
+
   function viewSectors() {
     const rows = (S.data.sectors || []).filter(r => !S.q || r.sector.toLowerCase().includes(S.q.toLowerCase()));
     if (!rows.length) return '<div class="empty">Sector data appears once prices are tracked.</div>';
     const max = Math.max(10, ...rows.map(r => Math.abs(num(r.relativeToMarket) ?? 0)));
     const bar = v => { const n = num(v); if (n === null) return '—'; const w = Math.abs(n) / max * 50; return `<div class="bar" title="${pct(n)} vs market"><i style="left:${n >= 0 ? 50 : 50 - w}%;width:${w}%;background:${n >= 0 ? 'var(--gain)' : 'var(--loss)'}"></i><i style="left:50%;width:1px;background:var(--ink-3)"></i></div>`; };
     return `<p class="note">Tailwind combines how tracked peers moved over 3 months versus the whole universe, and how many peers that already reported had strong earnings.</p>
-      <table><thead><tr><th>Sector</th><th class="hide-sm">3-month vs market</th><th class="r">Relative</th><th class="r hide-sm">Reported</th><th class="r">Strong</th><th>Tailwind</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td>${esc(r.sector)} <span class="meta">(${r.stocks})</span></td><td class="hide-sm">${bar(r.relativeToMarket)}</td><td class="r n ${cls(r.relativeToMarket)}">${pct(r.relativeToMarket)}</td><td class="r n hide-sm">${r.declared}</td><td class="r n">${r.strongResults}</td><td>${r.tailwind ? `<span class="tag ${TAIL_TONE[r.tailwind] || ''}">${r.tailwind.toLowerCase()}</span>` : '—'}</td></tr>`).join('')}
-      </tbody></table>`;
+      <div class="tscroll"><table><thead><tr><th>Sector</th><th class="hide-sm">3-month vs market</th><th class="r">Relative</th><th class="r hide-sm">Reported</th><th class="r">Strong</th><th>Tailwind</th></tr></thead><tbody>
+      ${rows.map(r => `<tr class="srow" role="button" tabindex="0" data-sector="${esc(r.sector)}" aria-expanded="${S.open.has('sector:' + r.sector)}"><td><span class="chev-s" aria-hidden="true">${S.open.has('sector:' + r.sector) ? '▾' : '▸'}</span> ${esc(r.sector)} <span class="meta">(${r.stocks})</span></td><td class="hide-sm">${bar(r.relativeToMarket)}</td><td class="r n ${cls(r.relativeToMarket)}">${pct(r.relativeToMarket)}</td><td class="r n hide-sm">${r.declared}</td><td class="r n">${r.strongResults}</td><td>${r.tailwind ? `<span class="tag ${TAIL_TONE[r.tailwind] || ''}">${r.tailwind.toLowerCase()}</span>` : '—'}</td></tr>${S.open.has('sector:' + r.sector) ? `<tr class="sdetail"><td colspan="6">${sectorPeers(r.sector)}</td></tr>` : ''}`).join('')}
+      </tbody></table></div>`;
   }
 
   function viewScore() {
     const sc = S.data.scorecard || { rows: [] };
     return `<p class="note">${esc(sc.metric)}. This checks the core idea behind the buckets: did stocks with a strong Q1 reaction keep drifting? It fills in as more results are tracked; treat small samples as anecdotes.</p>
-      <table><thead><tr><th>Group</th><th class="r">Stocks</th><th class="r">Average</th><th class="r">Median</th><th class="r">Positive</th></tr></thead><tbody>
+      <div class="tscroll"><table><thead><tr><th>Group</th><th class="r">Stocks</th><th class="r">Average</th><th class="r">Median</th><th class="r">Positive</th></tr></thead><tbody>
       ${sc.rows.map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n ${cls(r.avg)}">${pct(r.avg)}</td><td class="r n ${cls(r.median)}">${pct(r.median)}</td><td class="r n">${num(r.winRate) === null ? '—' : num(r.winRate).toFixed(0) + '%'}</td></tr>`).join('')}
-      </tbody></table>
+      </tbody></table></div>
       <h2 class="day">Entry timing: on the result vs after the concall</h2>
       <p class="note">Every triggered entry is recorded once: the starter taken before the call, and the full entry after it (or when no call is held). Returns run to today, or to the stop if it was hit.</p>
-      <table><thead><tr><th>Entry</th><th class="r">Trades</th><th class="r">Average</th><th class="r">Median</th><th class="r">Positive</th><th class="r">Stopped</th></tr></thead><tbody>
+      <div class="tscroll"><table><thead><tr><th>Entry</th><th class="r">Trades</th><th class="r">Average</th><th class="r">Median</th><th class="r">Positive</th><th class="r">Stopped</th></tr></thead><tbody>
       ${(sc.timing || []).map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n ${cls(r.avg)}">${pct(r.avg)}</td><td class="r n ${cls(r.median)}">${pct(r.median)}</td><td class="r n">${num(r.winRate) === null ? '—' : num(r.winRate).toFixed(0) + '%'}</td><td class="r n">${r.stopped ?? 0}</td></tr>`).join('')}
-      </tbody></table>`;
+      </tbody></table></div>`;
   }
 
   function viewHealth() {
@@ -293,7 +345,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.7.0';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.8.0';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -336,6 +388,7 @@
     $('sizing').style.display = S.tab === 'setups' ? '' : 'none';
     $('liquid').parentElement.style.display = S.tab === 'sectors' ? 'none' : '';
     $('sort').style.display = S.tab === 'setups' ? '' : 'none';
+    $('dir').style.display = S.tab === 'setups' ? '' : 'none';
     document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
     const active = document.querySelector('.tab[aria-selected="true"]');
     if (active && active.scrollIntoView) active.scrollIntoView({ inline: 'center', block: 'nearest' });
@@ -347,19 +400,24 @@
   $('q').addEventListener('input', e => { S.q = e.target.value.trim(); render(); });
   $('liquid').addEventListener('change', e => { S.liquid = e.target.checked; store.set('liquid', S.liquid); render(); });
   $('sort').addEventListener('change', e => { S.sort = e.target.value; store.set('sort', S.sort); render(); });
+  const showDir = () => { $('dir').textContent = S.dir === 'asc' ? '↑ Low → high' : '↓ High → low'; $('dir').setAttribute('aria-label', S.dir === 'asc' ? 'Ascending' : 'Descending'); };
+  $('dir').addEventListener('click', () => { S.dir = S.dir === 'asc' ? 'desc' : 'asc'; store.set('dir', S.dir); showDir(); render(); });
   $('chips').addEventListener('click', e => { const b = e.target.closest('[data-bucket]'); if (b) { S.bucket = b.dataset.bucket; render(); } });
   ['cap', 'risk'].forEach(id => $(id).addEventListener('change', e => { store.set(id, num(e.target.value)); render(); }));
   $('view').addEventListener('click', e => {
     if (e.target.closest('[data-act="show-illiquid"]')) { S.liquid = false; $('liquid').checked = false; render(); return; }
+    const srow = e.target.closest('.srow'); if (srow) { const k = 'sector:' + srow.dataset.sector; S.open.has(k) ? S.open.delete(k) : S.open.add(k); render(); return; }
     const row = e.target.closest('.row'); if (row && !e.target.closest('a')) { const id = row.dataset.id; S.open.has(id) ? S.open.delete(id) : S.open.add(id); render(); }
   });
-  $('view').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('row')) { e.preventDefault(); e.target.click(); } });
+  $('view').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && (e.target.classList.contains('row') || e.target.classList.contains('srow'))) { e.preventDefault(); e.target.click(); } });
   const applyTheme = t => { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; $('theme').textContent = (t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark' ? 'Light mode' : 'Dark mode'; };
   $('theme').addEventListener('click', () => { const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); const next = cur === 'dark' ? 'light' : 'dark'; store.set('theme', next); applyTheme(next); });
 
   // ---------- boot ----------
   S.tab = store.get('tab', 'setups'); S.liquid = store.get('liquid', true); S.sort = store.get('sort', 'conviction');
-  $('liquid').checked = S.liquid; $('sort').value = S.sort;
+  S.dir = store.get('dir', 'desc');
+  if (!$('sort').querySelector(`option[value="${S.sort}"]`)) S.sort = 'conviction';
+  $('liquid').checked = S.liquid; $('sort').value = S.sort; showDir();
   $('cap').value = store.get('cap', 1000000); $('risk').value = store.get('risk', 1);
   applyTheme(store.get('theme', null));
   fetch('intelligence.json?t=' + Date.now(), { cache: 'no-store' })

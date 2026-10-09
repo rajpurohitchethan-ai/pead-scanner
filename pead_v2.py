@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.7.0"
+ENGINE_VERSION = "2.8.0"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -4266,8 +4266,13 @@ def refresh_index_cache(ctx: SourceContext) -> dict[str, Any]:
     cache = load_index_cache()
     last = (cache.get("dates") or [None])[-1]
     recent = bool(last) and (now_ist().date() - date.fromisoformat(last)).days <= 4
-    if cache.get("fetchedOn") == now_ist().date().isoformat() and cache.get("closes") and recent:
+    after_close = now_ist().weekday() < 5 and (now_ist().hour, now_ist().minute) >= (15, 45)
+    todays_close_missing = after_close and last and last < now_ist().date().isoformat()
+    tried = parse_datetime(cache.get("attemptedAt"))
+    if (cache.get("fetchedOn") == now_ist().date().isoformat() and cache.get("closes") and recent
+            and not (todays_close_missing and (tried is None or (now_ist() - tried).total_seconds() > 2 * 3600))):
         return cache
+    cache["attemptedAt"] = iso_now()
     try:
         end = now_ist().date()
         # 2.5.4: NSE returns at most ~70 sessions per request, so a 330-day
@@ -4288,7 +4293,7 @@ def refresh_index_cache(ctx: SourceContext) -> dict[str, Any]:
         if points and (end - date.fromisoformat(points[-1][0])).days > 6:
             raise RuntimeError(f"index history ends {points[-1][0]}, not recent")
         if len(points) >= 55:
-            cache = {"index": "NIFTY 500", "fetchedOn": end.isoformat(),
+            cache = {"index": "NIFTY 500", "fetchedOn": end.isoformat(), "attemptedAt": iso_now(),
                      "dates": [p[0] for p in points], "closes": [p[1] for p in points]}
             json_dump_atomic(INDEX_CACHE_PATH, cache)
     except Exception as exc:
@@ -4941,6 +4946,22 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
                                     margin_change_bps=margin,
                                     financial_status=(event.get("financialIntegrity") or {}).get("status")))
     ws = parse_date(store.value(event, "reaction_window_start"))
+    if plan.get("signal") == "NO_ENTRY" and quality_ok is False and not plan.get("notTrading"):
+        # 2.8.0: say exactly why (was one generic sentence for every stock).
+        bits = []
+        if price_label == "NEGATIVE":
+            bits.append(f"the price moved {safe_num(result_ret):+.1f}% on the result" if safe_num(result_ret) is not None
+                        else "the price response was negative")
+        if strength in {"WEAK", "AVERAGE"}:
+            fmt = lambda v: f"{safe_num(v):+.1f}%" if safe_num(v) is not None else "—"
+            bits.append(f"earnings {strength.lower()} (revenue {fmt(rev_yoy)}, "
+                        f"profit {fmt(pat_yoy)} YoY; strong needs revenue "
+                        f">={pead_plus.STRONG_REV_YOY:.0f}% and profit >={pead_plus.STRONG_PAT_YOY:.0f}%)")
+        if result_label == "LOW QUALITY":
+            bits.append("result quality flagged")
+        if bits:
+            why = "; ".join(bits)
+            plan["why"] = why[0].upper() + why[1:] + "."
     if plan.get("signal") == "WAIT_REACTION" and ws and reaction and ws < reaction:
         plan["why"] = (f"Result came during market hours, so the reaction is measured over {ws.strftime('%d %b')} and "
                        f"{reaction.strftime('%d %b')}. The plan is ready after the {reaction.strftime('%d %b')} close.")
@@ -4963,9 +4984,11 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
     idx = _INDEX_CACHE_MEMO.get("cache")
     if idx is None:
         idx = _INDEX_CACHE_MEMO["cache"] = load_index_cache()
+    idx_last = (idx.get("dates") or [None])[-1]
     rs = (pead_plus.relative_strength(px.get("return_since_result_pct"), px.get("pre_result_session"),
                                       px.get("last_session"), idx.get("dates"), idx.get("closes"))
-          if px.get("return_since_result_pct") is not None else None)
+          if px.get("return_since_result_pct") is not None and idx_last and px.get("last_session")
+          and idx_last >= px["last_session"] else None)   # 2.8.0: no stale-index "index 0.0%"
     lv = event.get("live") or {}
     lv_at = parse_datetime(lv.get("at"))
     live = pead_plus.live_entry_status(plan, lv) if lv_at and lv_at.astimezone(IST).date() == now_ist().date() else None
@@ -5975,6 +5998,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "buckets": {code: sum(((x["plus"].get("bucket") or {}).get("code") == code) for x in items) for code in pead_plus.BUCKETS},
         "nearEntry": sum(x.get("entrySignal") == "NEAR_ENTRY" for x in items),
     }
+    pead_plus.peer_context(items, regime)
     try:
         health["selfAudit"] = pead_plus.self_audit(items, regime, health, now_ist().date())
         json_dump_atomic(LOG_DIR / "self_audit.json", health["selfAudit"])

@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.7.0"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.8.0"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -970,3 +970,109 @@ def live_entry_status(plan: dict[str, Any] | None, live: dict[str, Any] | None) 
         out["distancePct"] = _r2(dist)
         out["state"] = "ABOVE_TRIGGER" if dist >= 0 else ("NEAR_TRIGGER" if dist >= -NEAR_ENTRY_PCT else "BELOW_TRIGGER")
     return out
+
+
+# ---------------------------------------------------------------------------
+# Engine 2.8.0: peers ("who moved, who lags") and the top-down checklist
+# (market -> sector -> peers -> trend -> momentum -> valuation).
+# ---------------------------------------------------------------------------
+
+MIN_PEERS = 4
+
+
+def peer_context(items: list[dict[str, Any]], regime: dict[str, Any] | None) -> None:
+    """Adds plus.peers and plus.topDown to every item (in place). Uses only
+    published fields: sector, 3-month return, reactions of peers that already
+    reported, EMAs, relative strength and valuation."""
+    by_sector: dict[str, list[dict[str, Any]]] = {}
+    for it in items:
+        key = (it.get("plus") or {}).get("sectorKey")
+        if key:
+            by_sector.setdefault(key, []).append(it)
+
+    def ret63(it):
+        return _num(((it.get("plus") or {}).get("price") or {}).get("ret_63d_pct"))
+
+    for key, members in by_sector.items():
+        ranked = sorted([m for m in members if ret63(m) is not None], key=ret63, reverse=True)
+        med = median([ret63(m) for m in ranked]) if ranked else None
+        reported = [m for m in members if m.get("resultsReleased") and _num((m.get("priceContext") or {}).get("resultDayPct")) is not None]
+        reported.sort(key=lambda m: str(m.get("resultDate") or ""), reverse=True)
+        for it in members:
+            plus = it.setdefault("plus", {})
+            r = ret63(it)
+            role, rank = None, None
+            if r is not None and len(ranked) >= MIN_PEERS:
+                rank = next(i for i, m in enumerate(ranked) if m is it) + 1
+                third = len(ranked) / 3
+                role = "LEADER" if rank <= third else ("LAGGARD" if rank > len(ranked) - third else "MIDDLE")
+            others = [m for m in reported if m is not it]
+            reactions = [_num(m["priceContext"]["resultDayPct"]) for m in others]
+            plus["peers"] = {
+                "sector": key, "count": len(ranked), "rank": rank, "role": role,
+                "ret63": _r2(r), "sectorMedian63": _r2(med),
+                "leaders": [{"symbol": m.get("symbol"), "ret63": _r2(ret63(m))} for m in ranked[:3] if m is not it],
+                "laggards": [{"symbol": m.get("symbol"), "ret63": _r2(ret63(m))} for m in ranked[-3:][::-1] if m is not it],
+                "reported": [{"symbol": m.get("symbol"), "reaction": _r2(_num(m["priceContext"]["resultDayPct"])),
+                              "date": m.get("resultDate"), "strength": (m.get("plus") or {}).get("strength")} for m in others[:4]],
+                "reportedCount": len(others),
+                "reportedAvgReaction": _r2(sum(reactions) / len(reactions)) if reactions else None,
+            }
+    for it in items:
+        it.setdefault("plus", {})["topDown"] = top_down(it, regime)
+
+
+def top_down(it: dict[str, Any], regime: dict[str, Any] | None) -> dict[str, Any]:
+    plus = it.get("plus") or {}
+    px = plus.get("price") or {}
+    checks = []
+
+    def add(key, label, status, note):
+        checks.append({"key": key, "label": label, "status": status, "note": note})
+
+    lab = (regime or {}).get("label")
+    add("market", "Market", {"RISK-ON": "ok", "MIXED": "warn", "RISK-OFF": "bad"}.get(lab, "na"),
+        {"RISK-ON": "NIFTY 500 above its 50 & 200 DMA", "MIXED": "NIFTY 500 between its 50 & 200 DMA",
+         "RISK-OFF": "NIFTY 500 below its 50 & 200 DMA"}.get(lab, "Index data pending"))
+    tail = (plus.get("sector") or {}).get("tailwind")
+    add("sector", "Sector", {"STRONG": "ok", "POSITIVE": "ok", "NEUTRAL": "warn", "WEAK": "bad"}.get(tail, "na"),
+        f"Sector tailwind {tail.lower()}" if tail else "Sector not known yet")
+    pe = plus.get("peers") or {}
+    role, avg = pe.get("role"), _num(pe.get("reportedAvgReaction"))
+    if role is None:
+        add("peers", "Peers", "na", "Not enough tracked peers")
+    elif avg is not None and avg < 0:
+        add("peers", "Peers", "bad", f"Peers that reported fell {avg:+.1f}% on average")
+    elif role == "LAGGARD":
+        add("peers", "Peers", "ok", f"Laggard ({pe.get('rank')} of {pe.get('count')}): room to catch up")
+    elif role == "LEADER":
+        add("peers", "Peers", "warn", f"Leader ({pe.get('rank')} of {pe.get('count')}): already moved")
+    else:
+        add("peers", "Peers", "ok" if avg is not None and avg > 0 else "warn",
+            f"Middle of the pack ({pe.get('rank')} of {pe.get('count')})")
+    last = _num((it.get("priceContext") or {}).get("lastClose"))
+    e21, e63 = _num(px.get("ema21")), _num(px.get("ema63"))
+    if last is None or e21 is None or e63 is None:
+        add("trend", "Trend", "na", "Price history pending")
+    elif last > e21 > e63:
+        add("trend", "Trend", "ok", "Uptrend: price above 21 and 63 EMA")
+    elif last < e21 < e63:
+        add("trend", "Trend", "bad", "Downtrend: price below 21 and 63 EMA")
+    else:
+        add("trend", "Trend", "warn", "Sideways: price between its averages")
+    rs = _num((plus.get("relativeStrength") or {}).get("relativePct"))
+    r21 = _num(px.get("ret_21d_pct"))
+    if rs is not None:
+        add("momentum", "Momentum", "ok" if rs > 0 else "bad", f"{rs:+.1f}% vs NIFTY 500 since the result")
+    elif r21 is not None:
+        add("momentum", "Momentum", "ok" if r21 > 0 else ("bad" if r21 < -5 else "warn"), f"{r21:+.1f}% over 1 month")
+    else:
+        add("momentum", "Momentum", "na", "Price history pending")
+    v = plus.get("valuation") or {}
+    vl = v.get("label")
+    add("valuation", "Valuation", {"ATTRACTIVE": "ok", "FAIR": "ok", "EXPENSIVE": "bad", "LOSS-MAKING": "bad"}.get(vl, "na"),
+        {"ATTRACTIVE": "Cheap vs sector / growth", "FAIR": "Reasonable vs sector",
+         "EXPENSIVE": "Expensive vs sector", "LOSS-MAKING": "Loss-making"}.get(vl, "P/E not available"))
+    ok = sum(c["status"] == "ok" for c in checks)
+    known = sum(c["status"] != "na" for c in checks)
+    return {"checks": checks, "passed": ok, "known": known}
