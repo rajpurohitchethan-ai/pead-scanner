@@ -137,4 +137,13 @@ jobs:
           fi
 
           git commit -m "PEAD v2: persistent event update"
-          git push
+          # A code push during the run makes a plain push fail and loses the
+          # whole run. Rebase onto the new main and retry; on a conflict in a
+          # data file this run's version wins (-X theirs = the replayed commit).
+          for i in 1 2 3 4 5; do
+            if git push; then exit 0; fi
+            echo "Push rejected (attempt $i); rebasing onto origin/${GITHUB_REF_NAME}."
+            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" || { git rebase --abort; exit 1; }
+            sleep $((i * 5))
+          done
+          exit 1
