@@ -512,5 +512,33 @@ class SelfAuditTests(unittest.TestCase):
         self.assertEqual(st["Market index data is current"], "OK")
 
 
+class GmbrewOwnersZeroTests(unittest.TestCase):
+    """2.6.2: GMBREW files owners' profit as 0 in its consolidated XBRL."""
+
+    def test_zero_owners_line_uses_total_profit(self):
+        f = FIX / "integrated_GMBREW_Q2FY27_consolidated.xml"
+        if not f.exists():
+            self.skipTest("fixture missing")
+        r = p.parse_xbrl_financials([f.read_bytes()], date(2026, 9, 30))
+        self.assertEqual((r["revenue_cr"], r["pat_cr"]), (860.62, 39.29))
+        self.assertIn("OWNERS_PAT_ZERO_USED_TOTAL", r["_meta"]["issues"])
+
+    def test_session_closed(self):
+        from unittest import mock
+        ist = p.now_ist()
+        with mock.patch.object(p, "now_ist", return_value=ist.replace(hour=6, minute=20)):
+            self.assertFalse(p.session_closed(ist.date()))
+            self.assertTrue(p.session_closed(ist.date() - timedelta(days=1)))
+        with mock.patch.object(p, "now_ist", return_value=ist.replace(hour=16, minute=0)):
+            self.assertTrue(p.session_closed(ist.date()))
+
+    def test_profit_swing_with_steady_revenue_is_not_a_unit_error(self):
+        parsed = {"revenue_cr": 91.43, "pat_cr": -3.8, "revenue_qoq_pct": -0.57, "pat_qoq_pct": -19100.0,
+                  "_meta": {"periodEnd": "2026-09-30", "reference": {"fy_revenue_cr": 579.55, "fy_pat_cr": 0.1}}}
+        v = p.validate_financial_snapshot(parsed, "BSE_RESULTS_SNAPSHOT", date(2026, 9, 30))
+        self.assertNotEqual(v["status"], "REJECTED")
+        self.assertIn("PAT_SWING", v["issues"])
+
+
 if __name__ == "__main__":
     unittest.main()

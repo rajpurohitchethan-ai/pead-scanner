@@ -100,3 +100,11 @@ Engine 2.6.1 (NSE Integrated Filing)
 - tests/test_integrity.py restored (it had been overwritten with test_plus content); tests/test_plus.py added.
 - index.html is the radar page (same file as intelligence.html).
 - Self-audit: pead_plus.self_audit() checks every published run (same-release files, fresh index data, one row per company, no reaction data before a result, declared results have revenue/profit and YoY, reaction measured after its session, price/sector coverage, implausible values). Result in health.selfAudit and logs/self_audit.json; FAIL items show a red banner and the Data health tab lists every check. Read logs/self_audit.json first when auditing.
+
+Engine 2.6.2 (first live run of 2.6.1, 9 Oct 2026)
+- Live result: TCS Q2 FY27 read from NSE Integrated Filing XBRL (revenue ₹73,188 Cr +11.2% YoY, PAT ₹13,884 Cr +15.0%).
+- Owners' PAT filed as 0 (GMBREW consolidated: owners 0, profit for period ₹39.29 Cr) -> total profit is used (issue OWNERS_PAT_ZERO_USED_TOTAL).
+- Like-for-like YoY: when the year-ago quarter exists only STANDALONE, this quarter's STANDALONE filing is used (GMBREW started consolidated filing in 2026). XBRL snapshots are re-read when XBRL_PARSER_VERSION changes and every 3 h while YoY is missing (first 10 days after the result).
+- session_closed(): a reaction session counts only after 15:45 IST on that day (at 06:20 the card said "Data pending" instead of "Awaiting reaction session").
+- Unit check: a profit swing with revenue in line with last quarter / last year is PAT_SWING (flagged), not UNIT_SUSPECT (rejected) (LOTUSCHO).
+- Untraded scrips (no trade in 20+ days: TIAANC, GOLKONDA, ALSTONE) get NO_ENTRY "No trades since ..." and are excluded from the self-check's reaction/financial FAIL checks (listed separately).

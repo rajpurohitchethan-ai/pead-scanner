@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.6.1"
+ENGINE_VERSION = "2.6.2"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -523,6 +523,16 @@ def reaction_session(filing_ts: datetime | None, fallback_date: date | None) -> 
         # next session and label the timing unknown so the UI can disclose it.
         return next_trading_day(fallback_date), "UNKNOWN_TIME_NEXT_SESSION"
     return None, "UNKNOWN"
+
+
+def session_closed(d: date | None) -> bool:
+    """A trading session counts only after its close (15:30 IST + 15 min for
+    EOD data). Before 2.6.2 the reaction day counted from midnight, so at
+    6 am the card said "Data pending" instead of "Awaiting reaction session"."""
+    if d is None:
+        return False
+    now = now_ist()
+    return d < now.date() or (d == now.date() and (now.hour, now.minute) >= (15, 45))
 
 
 def reaction_window_start(filing_ts: datetime | None, timing: str | None, reaction: date | None) -> date | None:
@@ -1819,6 +1829,7 @@ XBRL_EPS_CONCEPTS = [
     "basicearningspershareafterextraordinaryitems", "basicearningspersharebeforeextraordinaryitems",
 ]
 QUARTER_DAYS = (80, 100)
+XBRL_PARSER_VERSION = 3   # bump to re-read every stored XBRL snapshot once
 
 
 def _xbrl_local(tag: str) -> str:
@@ -1959,6 +1970,13 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
 
     pat_concepts = (XBRL_PAT_OWNER_CONCEPTS + XBRL_PAT_CONCEPTS) if basis != "STANDALONE" else XBRL_PAT_CONCEPTS
     pat, pat_concept = pick(pat_concepts, current_ctx)
+    if pat == 0 and pat_concept in XBRL_PAT_OWNER_CONCEPTS:
+        # 2.6.2: companies without minority interest often file the owners'
+        # line as 0 (GMBREW Q2 FY27: owners 0, profit for period ₹39.29 Cr).
+        total, total_concept = pick(XBRL_PAT_CONCEPTS, current_ctx)
+        if total not in (None, 0):
+            pat, pat_concept = total, total_concept
+            issues.append("OWNERS_PAT_ZERO_USED_TOTAL")
     # Comparatives must use the SAME concept as the current quarter.
     same_rev = [rev_concept] if rev_concept else revenue_concepts
     same_pat = [pat_concept] if pat_concept else pat_concepts
@@ -3717,7 +3735,7 @@ SNAPSHOT_REJECT_ISSUES = ("NO_CORE_VALUES", "PERIOD_MISMATCH", "NEGATIVE_REVENUE
 # Issues produced by validate_financial_snapshot itself (recomputed every run);
 # anything else in a snapshot's issue list came from the parser and is kept.
 VALIDATOR_ISSUES = {"NO_CORE_VALUES", "PERIOD_MISMATCH", "NEGATIVE_REVENUE", "ZERO_REVENUE", "EXTREME_REVENUE_YOY",
-                    "PAT_EXCEEDS_REVENUE", "UNOFFICIAL_SOURCE", "UNIT_SUSPECT", "CROSS_SOURCE_MISMATCH"}
+                    "PAT_EXCEEDS_REVENUE", "UNOFFICIAL_SOURCE", "UNIT_SUSPECT", "CROSS_SOURCE_MISMATCH", "PAT_SWING"}
 # Issues that keep the snapshot usable but require a visible review flag.
 SNAPSHOT_FLAG_ISSUES = (
     "EXTREME_REVENUE_YOY", "PAT_EXCEEDS_REVENUE", "REVENUE_IS_TOTAL_INCOME",
@@ -3756,14 +3774,22 @@ def validate_financial_snapshot(parsed: dict[str, Any], source: str, period_end:
     # Profit 50x larger than last quarter's (in either direction) and at least
     # ₹1 Cr: Alstone Sep-26 PAT -106.72 Cr vs +0.07 Cr in Jun-26.
     pat_qoq = safe_num(parsed.get("pat_qoq_pct"))
-    if pat is not None and abs(pat) >= 1 and pat_qoq is not None and abs(pat_qoq) > 5000:
-        issues.append("UNIT_SUSPECT")
-    # One quarter larger than 10x the entire previous financial year.
     ref = meta.get("reference") or {}
+    fy_rev = safe_num(ref.get("fy_revenue_cr"))
+    # 2.6.2: a unit error scales EVERY figure. When revenue is in line with
+    # last quarter and with last year's total, a big profit swing is a real
+    # swing (LOTUSCHO: revenue -0.6% QoQ, loss -3.8 Cr after a 0.02 Cr profit),
+    # so it is flagged, not rejected.
+    revenue_sane = (rev is not None and rev_qoq is not None and -60 < rev_qoq < 150
+                    and (fy_rev in (None, 0) or rev <= 1.5 * abs(fy_rev)))
+    pat_unit_issue = "PAT_SWING" if revenue_sane else "UNIT_SUSPECT"
+    if pat is not None and abs(pat) >= 1 and pat_qoq is not None and abs(pat_qoq) > 5000:
+        issues.append(pat_unit_issue)
+    # One quarter larger than 10x the entire previous financial year.
     for key, value in (("fy_revenue_cr", rev), ("fy_pat_cr", pat)):
         fy = safe_num(ref.get(key))
         if fy not in (None, 0) and value is not None and abs(value) >= 1 and abs(value) > 10 * abs(fy):
-            issues.append("UNIT_SUSPECT")
+            issues.append("UNIT_SUSPECT" if key == "fy_revenue_cr" else pat_unit_issue)
     if FINANCIAL_SNAPSHOT_RANK.get(source, 0) < 90:
         issues.append("UNOFFICIAL_SOURCE")
     issues = sorted(set(issues))
@@ -3965,18 +3991,36 @@ def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceConte
     bse_code = str(sec.get("bseCode") or "").strip()
     listing = nse_result_listing(event, store, ctx) if sec.get("nseSymbol") else []
     chosen = select_xbrl_filing(event)
+    # 2.6.2: compare like with like. If the year-ago quarter exists only as
+    # STANDALONE (GMBREW began consolidated filing in 2026), use the
+    # standalone filing for this quarter too, so YoY is not left blank.
+    if chosen and listing and chosen.get("basis") == "CONSOLIDATED":
+        ya = _shift_quarters(period_end, -4)
+        if listing_row(listing, ya, "CONSOLIDATED") is None and listing_row(listing, ya, "STANDALONE") is not None:
+            alt = listing_row(listing, period_end, "STANDALONE")
+            if alt is not None:
+                chosen = next((f for f in event.get("filings") or [] if f.get("xbrlUrl") == alt["xbrlUrl"]),
+                              {"xbrlUrl": alt["xbrlUrl"], "basis": "STANDALONE", "source": "NSE_INTEGRATED_FILING"})
     xbrl_url = (chosen or {}).get("xbrlUrl") or store.value(event, "xbrl_url")
 
     # 1) Exchange XBRL (highest authority). Re-fetch only for a new document.
     if xbrl_url:
         source = "NSE_XBRL" if "nse" in str(xbrl_url).lower() else "BSE_XBRL"
         existing = (event.get("financialSnapshots") or {}).get(source) or {}
-        if existing.get("documentUrl") != str(xbrl_url) or (existing.get("validation") or {}).get("status") == "REJECTED":
+        ev_vals = existing.get("values") or {}
+        last_try = parse_datetime(((event.get("fetch") or {}).get(source) or {}).get("lastAttempt"))
+        rd_fin = parse_date(store.value(event, "result_date"))
+        retry_comparatives = (ev_vals.get("revenue_yoy_pct") is None and rd_fin is not None
+                              and (now_ist().date() - rd_fin).days <= 10 and
+                              (last_try is None or (now_ist() - last_try).total_seconds() > 3 * 3600))
+        if (existing.get("documentUrl") != str(xbrl_url) or (existing.get("validation") or {}).get("status") == "REJECTED"
+                or existing.get("parserVersion") != XBRL_PARSER_VERSION or retry_comparatives):
             try:
                 parsed, raw_ref = XBRLParser(ctx).fetch_parse(str(xbrl_url), event["eventId"], period_end, source)
                 fill_comparatives_from_listing(parsed, listing, period_end, (chosen or {}).get("basis"),
                                                lambda url, pe: XBRLParser(ctx).fetch_parse(url, event["eventId"], pe, source)[0])
                 snap = store_financial_snapshot(event, source, parsed, raw_ref=raw_ref, document_url=str(xbrl_url))
+                snap["parserVersion"] = XBRL_PARSER_VERSION
                 ok = (snap.get("validation") or {}).get("status") != "REJECTED"
                 store.record_fetch(event, source, ok=ok, raw_ref=raw_ref,
                                    error=None if ok else "XBRL rejected: " + ",".join(snap["validation"]["issues"]))
@@ -4508,7 +4552,7 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
         return
 
     metrics = price_metrics(frame, price_boundary, window_start)
-    reaction_traded = released and reaction_date is not None and reaction_date <= now_ist().date()
+    reaction_traded = released and session_closed(reaction_date)
     for field, value in metrics.items():
         if value is None:
             continue
@@ -4809,7 +4853,7 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
     bucket = pead_plus.classify_bucket(released=released, q2_strength=strength, setup=setup, sustained=px.get("q1_sustained"))
 
     reaction = parse_date(store.value(event, "reaction_session"))
-    reaction_traded = released and reaction is not None and reaction <= now_ist().date()
+    reaction_traded = released and session_closed(reaction)
     if price_label == "NEGATIVE" or result_label == "LOW QUALITY" or strength in {"WEAK", "AVERAGE"}:
         quality_ok: bool | None = False
     elif strength in {"STRONG", "AVERAGE+"}:
@@ -4833,6 +4877,12 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
     if plan.get("signal") == "WAIT_REACTION" and ws and reaction and ws < reaction:
         plan["why"] = (f"Result came during market hours, so the reaction is measured over {ws.strftime('%d %b')} and "
                        f"{reaction.strftime('%d %b')}. The plan is ready after the {reaction.strftime('%d %b')} close.")
+    last_sess = parse_date(px.get("last_session"))
+    if last_sess and (now_ist().date() - last_sess).days > 20:
+        # 2.6.2: suspended / untraded scrips (TIAANC, GOLKONDA, ALSTONE last
+        # traded Apr-May 2026) can never show a reaction; say so plainly.
+        plan = {"signal": "NO_ENTRY", "stage": None, "why": f"No trades since {last_sess.strftime('%d %b %Y')}; "
+                "the stock is not trading, so there is no reaction to measure.", "notTrading": True}
     event["tradeLog"] = pead_plus.update_trade_log(event.get("tradeLog"), plan, last_price, now_ist().date())
     key = sector_key(sec)
     return {
@@ -5265,7 +5315,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     reaction = parse_date(store.value(event, "reaction_session"))
     result_date = parse_date(store.value(event, "result_date"))
     wstart = parse_date(store.value(event, "reaction_window_start")) or reaction
-    traded = released and reaction is not None and reaction <= now_ist().date()
+    traded = released and session_closed(reaction)
     x = pead_plus.extended_features(frame, reaction, released=traded,
                                     q1_reaction_date=previous_quarter_reaction(store, event),
                                     q2_boundary=wstart or result_date, window_start=wstart)

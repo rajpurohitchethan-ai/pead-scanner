@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.6.1"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.6.2"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -857,7 +857,13 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
                        and (it.get("priceContext") or {}).get("resultDayPct") is not None]
     add("No reaction data before a result", future_reaction, fail=True)
 
-    declared = [it for it in items if it.get("resultsReleased")]
+    def not_trading(it):
+        last = d((((it.get("plus") or {}).get("price") or {}).get("last_session")))
+        return last is not None and (today - last).days > 20
+    idle = [it["symbol"] for it in items if it.get("resultsReleased") and not_trading(it)]
+    checks.append({"check": "Declared results of stocks that are not trading", "status": "OK", "count": len(idle),
+                   "examples": idle[:8], "note": "No trades in 20+ days: no reaction or entry is possible."})
+    declared = [it for it in items if it.get("resultsReleased") and not not_trading(it)]
     no_fin_old, no_fin_new, no_yoy = [], [], []
     for it in declared:
         rd = d(it.get("resultDate"))
