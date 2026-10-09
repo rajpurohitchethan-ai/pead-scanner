@@ -370,7 +370,7 @@
     const internals = [
       num(br.above63Pct) !== null ? `Breadth: ${num(br.above63Pct).toFixed(0)}% of tracked stocks above their 63-day average${num(br.above21Pct) !== null ? `, ${num(br.above21Pct).toFixed(0)}% above 21-day` : ''}` : '',
       ad && num(ad.advancePct) !== null ? `NIFTY 500 today: ${ad.advances} up / ${ad.declines} down` : '',
-      fl ? `FII ${crs(fl.fiiNetCr)}, DII ${crs(fl.diiNetCr)} on ${dt(fl.date)} (5 days: FII ${crs(fl.fii5dCr)}, DII ${crs(fl.dii5dCr)})${fl.fiiStreak ? `; FIIs net ${fl.fiiStreak > 0 ? 'buyers' : 'sellers'} ${Math.abs(fl.fiiStreak)} day${Math.abs(fl.fiiStreak) > 1 ? 's' : ''} running` : ''}` : '',
+      fl ? `FII ${crs(fl.fiiNetCr)}, DII ${crs(fl.diiNetCr)} on ${dt(fl.date)} ${num(fl.days) > 1 ? ` (last ${fl.days} days: FII ${crs(fl.fii5dCr)}, DII ${crs(fl.dii5dCr)})` : ''}${fl.fiiStreak ? `; FIIs net ${fl.fiiStreak > 0 ? 'buyers' : 'sellers'} ${Math.abs(fl.fiiStreak)} day${Math.abs(fl.fiiStreak) > 1 ? 's' : ''} running` : ''}` : '',
     ].filter(Boolean);
     $('internals').innerHTML = internals.map(t => `<span>${esc(t)}</span>`).join('');
     $('regime').innerHTML = r.label ? `<span class="dot ${tone}"></span><b>Market ${esc(r.label.toLowerCase())}</b>. ${esc(r.note)}${num(r.ret20dPct) !== null ? ` ${esc(r.index || 'Index')} ${pct(r.ret20dPct)} over 20 days.` : ''}` : `<span class="dot"></span>${esc(r.note && r.note !== 'Index history unavailable' ? r.note : 'Market regime appears after the next data refresh.')}`;
