@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0JNB01012|2026-09-30",
   "createdAt": "2026-10-07T04:24:34Z",
-  "updatedAt": "2026-10-09T08:37:34Z",
+  "updatedAt": "2026-10-09T09:43:33Z",
   "security": {
     "symbol": "NATURO",
     "bseSymbol": "NATURO",
@@ -21,7 +21,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -142,31 +142,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:13Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-09T09:28:58Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-09T09:43:33Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
-      "value": "2026-10-14",
+      "value": "2026-10-09",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-09T08:31:44Z",
+      "fetchedAt": "2026-10-09T09:43:33Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-c76b56ecaec101be.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-775459059177d765.json",
       "note": null
     },
     "reaction_session": {
-      "value": "2026-10-15",
+      "value": "2026-10-12",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-09T05:37:07Z",
+      "fetchedAt": "2026-10-09T09:43:33Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "INTRADAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "INTRADAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-09T05:37:07Z",
+      "fetchedAt": "2026-10-09T09:43:33Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -243,6 +253,42 @@
       "rank": 88,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-09T09:28:58Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-775459059177d765.json",
+      "note": null
+    },
+    "filing_timestamp": {
+      "value": "2026-10-09T14:45:47.217000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-09T09:28:58Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-775459059177d765.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-09T09:28:58Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-775459059177d765.json",
+      "note": null
+    },
+    "reaction_window_start": {
+      "value": "2026-10-09",
+      "source": "DERIVED",
+      "fetchedAt": "2026-10-09T09:43:33Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "intraday filing"
     }
   },
   "fetch": {
@@ -261,15 +307,14 @@
       "rawRef": "raw/bse/NSE_NATURO_2026-09-30/lookup-6e430b1df1b99f81.json"
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-07T04:37:58Z",
-      "lastSuccess": "2026-10-07T04:37:58Z",
+      "lastAttempt": "2026-10-09T09:35:15Z",
+      "lastSuccess": "2026-10-09T09:35:15Z",
       "status": "OK",
       "error": null,
       "rawRef": null
     },
     "PRICE_HISTORY": {
       "lastAttempt": "2026-10-09T05:37:11Z",
-      "lastSuccess": "2026-10-09T05:37:11Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE0JNB01012_2026-09-30/price_volume_12m-a7c2d89aeff2d55f.json"
@@ -287,33 +332,64 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-09T09:35:00Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE0JNB01012_2026-09-30/results_snapshot-bf448c707449a9b2.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-09T09:35:01Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "543579.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-09T09:35:15Z",
+      "lastSuccess": "2026-10-09T09:35:15Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE0JNB01012_2026-09-30/scrip_announcements-e9b05f30c156023f.json"
     }
   },
   "derived": {
     "score": 8,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -350,8 +426,8 @@
         "sector": "Fast Moving Consumer Goods",
         "stocks": 22,
         "momentum63dMedian": -12.44,
-        "relativeToMarket": -5.4,
-        "declared": 3,
+        "relativeToMarket": -5.57,
+        "declared": 4,
         "strongResults": 1,
         "avgReaction": null,
         "tailwind": "WEAK"
@@ -377,7 +453,15 @@
         "atr14": 0.1
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-09",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/543579/",
@@ -588,6 +672,36 @@
         "note": null,
         "replacedAt": "2026-10-08T15:57:21Z"
       }
+    ],
+    "result_date": [
+      {
+        "value": "2026-10-14",
+        "source": "BSE_RESULT_ANNOUNCEMENT",
+        "fetchedAt": "2026-10-09T09:33:05Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-10-09T09:43:33Z"
+      }
+    ],
+    "reaction_session": [
+      {
+        "value": "2026-10-15",
+        "source": "DERIVED",
+        "fetchedAt": "2026-10-09T05:37:07Z",
+        "status": "OK",
+        "note": "UNKNOWN_TIME_NEXT_SESSION",
+        "replacedAt": "2026-10-09T09:43:33Z"
+      }
+    ],
+    "filing_session": [
+      {
+        "value": "UNKNOWN_TIME_NEXT_SESSION",
+        "source": "DERIVED",
+        "fetchedAt": "2026-10-09T05:37:07Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-10-09T09:43:33Z"
+      }
     ]
   },
   "priceTrail": [
@@ -606,5 +720,35 @@
       "price": 2.36,
       "source": "BSE_PRICE"
     }
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-09T14:45:47.217000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "INFERRED_FROM_FILING_DATE",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Revised Outcome of the Board Meeting Naturo Indiabull Ltd - 543579 - Revised Outcome Of The Board Meeting Held On Thursday, November 20, 2025",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-775459059177d765.json",
+      "seenAt": "2026-10-09T09:43:33Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-09T09:35:01Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-09",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }
