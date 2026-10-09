@@ -659,3 +659,114 @@ class MarketInternalsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BseWrongCodeLoopTests(unittest.TestCase):
+    """2.9.1: NSE:BRIGHT (Bright Solar) kept getting BSE 543831 (Bright Outdoor
+    Media) back every run through a stale alias, and the repair left Bright
+    Outdoor's sector, P/E, mergedFrom and master entry on Bright Solar."""
+    P = date(2026, 9, 30)
+    META = {"ISIN": "INE0OMI01019", "PE": "30.85", "PB": "-", "ROE": "-", "OPM": "-", "Group": "M",
+            "Sector": "Consumer Discretionary", "IndustryNew": "Media, Entertainment & Publication",
+            "IGroup": "Media", "ISubGroup": "Advertising & Media Agencies"}
+
+    def _setup(self):
+        root = Path(tempfile.mkdtemp())
+        st = p.EventStore(root / "events")
+        raw = root / "raw"
+        folder = raw / "bse" / "NSE_BRIGHT_2026-09-30"
+        folder.mkdir(parents=True)
+        (folder / "lookup-1.json").write_text(json.dumps({"bse_code": "543831", "company_name": "BRIGHT OUTDOOR MEDIA LTD",
+                                                          "isin": "INE0OMI01019", "symbol": "BRIGHT"}))
+        (folder / "equity_meta-1.json").write_text(json.dumps(self.META))
+        master = p.SymbolMaster(root / "master" / "symbols.json")
+        outdoor = st.ensure_event(security={"isin": "INE0OMI01019", "symbol": "BRIGHT", "bseSymbol": "BRIGHT",
+                                            "bseCode": "543831", "name": "Bright Outdoor Media Ltd"}, period_end=self.P)
+        st.save(outdoor)
+        solar = st.ensure_event(security={"symbol": "BRIGHT", "nseSymbol": "BRIGHT", "name": "Bright Solar Limited"},
+                                period_end=self.P)
+        sec = solar["security"]
+        sec.update({"bseCode": "543831", "bseSymbol": "BRIGHT", "bseGroup": "M",
+                    "macroSector": "Consumer Discretionary", "exchangeSector": "Media, Entertainment & Publication",
+                    "industry": "Media", "basicIndustry": "Advertising & Media Agencies"})
+        st.merge_field(solar, "exchange_pe", 30.85, source="BSE_META")
+        st.merge_field(solar, "trailing_pe", 30.85, source="NSE_QUOTE")     # mislabelled BSE value
+        st.merge_field(solar, "market_cap_cr", 20.87, source="YAHOO_FUNDAMENTALS")
+        solar["mergedFrom"] = ["BSE:543831|2026-09-30"]
+        st.save(solar)
+        st.add_alias("BSE:543831|2026-09-30", solar["eventId"])
+        master.data["securities"]["NSE:BRIGHT"] = dict(sec, securityKey="NSE:BRIGHT")
+        return st, raw, master, solar["eventId"], outdoor["eventId"]
+
+    def test_repair_removes_every_trace_of_the_wrong_company(self):
+        st, raw, master, solar_id, outdoor_id = self._setup()
+        p.repair_lookup_mismatches(st, master, raw)
+        ev = st.load(solar_id)
+        sec = ev["security"]
+        for k in ("bseCode", "bseSymbol", "bseGroup", "macroSector", "exchangeSector", "industry", "basicIndustry"):
+            self.assertNotIn(k, sec, k)
+        self.assertIsNone(st.value(ev, "trailing_pe"))                 # Bright Outdoor's P/E gone
+        self.assertEqual(st.value(ev, "market_cap_cr"), 20.87)         # own values kept
+        self.assertFalse(ev.get("mergedFrom"))
+        self.assertEqual(st.resolve("BSE:543831|2026-09-30"), outdoor_id)   # alias now points at the owner
+        m = master.data["securities"]["NSE:BRIGHT"]
+        self.assertNotIn("bseCode", m)
+        self.assertNotIn("exchangeSector", m)
+
+    def test_already_repaired_event_is_cleaned_and_bse_row_goes_to_owner(self):
+        st, raw, master, solar_id, outdoor_id = self._setup()
+        ev = st.load(solar_id)
+        for k in ("bseCode", "bseSymbol", "bseGroup"):            # state left by 2.9.0's repair
+            ev["security"].pop(k)
+        ev["fields"].pop("exchange_pe")
+        ev["security"]["identityRepaired"] = {"wrongBseCode": "543831", "wrongBseName": "BRIGHT OUTDOOR MEDIA LTD"}
+        st.save(ev)
+        p.repair_lookup_mismatches(st, master, raw)
+        ev = st.load(solar_id)
+        self.assertNotIn("exchangeSector", ev["security"])
+        self.assertIsNone(st.value(ev, "trailing_pe"))
+        # Next discovery of the BSE row (no ISIN) must not land in Bright Solar.
+        row = st.ensure_event(security={"symbol": "BRIGHT", "bseSymbol": "BRIGHT", "bseCode": "543831",
+                                        "name": "Bright Outdoor Media Ltd"}, period_end=self.P)
+        self.assertEqual(row["eventId"], outdoor_id)
+
+    def test_stale_alias_cannot_route_bse_row_into_namesake(self):
+        st, raw, master, solar_id, outdoor_id = self._setup()
+        st.save(dict(st.load(solar_id), security={"symbol": "BRIGHT", "nseSymbol": "BRIGHT",
+                                                  "name": "Bright Solar Limited"}))
+        row = st.ensure_event(security={"symbol": "BRIGHT", "bseSymbol": "BRIGHT", "bseCode": "543831",
+                                        "name": "Bright Outdoor Media Ltd"}, period_end=self.P)
+        self.assertNotEqual(row["eventId"], solar_id)
+
+    def test_trailing_pe_keeps_the_exchange_pe_source(self):
+        st = p.EventStore(Path(tempfile.mkdtemp()) / "events")
+        e = st.ensure_event(security={"symbol": "BRIGHT", "nseSymbol": "BRIGHT", "bseCode": "543831",
+                                      "name": "Bright Solar Limited"}, period_end=self.P)
+
+        class Fake:
+            def __init__(self, ctx): pass
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def quote(self, sym, eid): return {}, None              # SME: NSE quote has no P/E
+            def meta(self, code, eid, sym): return dict(BseWrongCodeLoopTests.META), None
+
+        saved = (p.NSEAdapter, p.BSEAdapter, p.EXTRA_CALL_BUDGET)
+        p.NSEAdapter = p.BSEAdapter = Fake
+        p.EXTRA_CALL_BUDGET = 10 ** 6
+        try:
+            p.enrich_exchange_meta(e, st, None)
+        finally:
+            p.NSEAdapter, p.BSEAdapter, p.EXTRA_CALL_BUDGET = saved
+        self.assertEqual(st.value(e, "trailing_pe"), 30.85)
+        self.assertEqual(p.field_source(e, "trailing_pe"), "BSE_META")   # was labelled NSE_QUOTE
+
+    def test_alias_never_hides_a_live_event(self):
+        # events/_aliases.map has "NSE:BRIGHT|P" -> "NSE:BCG|P" from the 2.5.4
+        # repair; once a BCG event exists, Bright Solar must not resolve to it.
+        st, raw, master, solar_id, outdoor_id = self._setup()
+        bcg = st.ensure_event(security={"symbol": "BCG", "nseSymbol": "BCG", "name": "Brightcom Group Ltd"},
+                              period_end=self.P)
+        st.save(bcg)
+        st.add_alias(solar_id, bcg["eventId"])
+        self.assertEqual(st.resolve(solar_id), solar_id)
+        self.assertEqual(st.load(solar_id)["security"]["name"], "Bright Solar Limited")

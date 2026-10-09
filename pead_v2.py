@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.0"
+ENGINE_VERSION = "2.9.1"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -691,6 +691,11 @@ class EventStore:
 
     def resolve(self, event_id: str) -> str:
         a, seen, start = self.aliases(), set(), event_id
+        # 2.9.1: aliases are left by deleted (rekeyed/folded) files, so an id
+        # whose own file exists is a live event and is never redirected
+        # ("NSE:BRIGHT" -> "NSE:BCG" was left by the 2.5.4 identity repair).
+        if event_id in a and self._path(event_id).exists():
+            return event_id
         while event_id in a and event_id not in seen:
             seen.add(event_id)
             event_id = a[event_id]
@@ -750,8 +755,17 @@ class EventStore:
             # not land in that company's event; key it by its BSE code.
             code = str(security.get("bseCode") or "").strip()
             alt = f"BSE:{code}" if code.isdigit() else f"SYM:{normalize_symbol(security.get('symbol'))}:{normalize_symbol(security.get('name'))}"
-            eid = self.resolve(event_id_for(alt, period_end))
+            alt_id = event_id_for(alt, period_end)
+            eid = self.resolve(alt_id)
             event = self.load(eid)
+            # 2.9.1: a stale alias (BSE:543831 -> NSE:BRIGHT) must not lead
+            # back into the namesake; drop it and use the BSE key itself.
+            if event is not None and _identity_conflict(event.get("security") or {}, security):
+                self.aliases().pop(alt_id, None)
+                json_dump_atomic(self._alias_path(), self.aliases())
+                eid, event = alt_id, None
+                if self._path(alt_id).exists():
+                    event = json.loads(self._path(alt_id).read_text(encoding="utf-8"))
         if event is None:
             event = {
                 "schemaVersion": SCHEMA_VERSION,
@@ -3581,8 +3595,6 @@ def repair_lookup_mismatches(store: EventStore, master: "SymbolMaster | None" = 
     concall) so the next run refetches them for the right company. N is
     replaced by Q only when NSE lists Q itself under a matching name."""
     guesses = _lookup_guesses(raw_root)
-    if not guesses:
-        return []
     bse_names: dict[str, str] = {}
     if master is not None:
         for k, v in (master.data.get("securities") or {}).items():
@@ -3637,13 +3649,17 @@ def repair_lookup_mismatches(store: EventStore, master: "SymbolMaster | None" = 
             fixed.append({"eventId": old_id, "symbol": q, "at": iso_now(), "before": {"nseSymbol": n},
                           "reasons": [f"IDENTITY_REPAIRED:{n}->{new_n or 'BSE_ONLY'}"]})
             break
-    fixed += _repair_bse_lookup_mismatches(store, raw_root)
-    if fixed and master is not None:
+    fixed += _repair_bse_lookup_mismatches(store, raw_root, master)
+    if master is not None:
         master.save()
     return fixed
 
 
-def _repair_bse_lookup_mismatches(store: EventStore, raw_root: Path = RAW_DIR) -> list[dict[str, Any]]:
+_BSE_IDENTITY_KEYS = ("macroSector", "exchangeSector", "industry", "basicIndustry", "bseGroup")
+
+
+def _repair_bse_lookup_mismatches(store: EventStore, raw_root: Path = RAW_DIR,
+                                  master: "SymbolMaster | None" = None) -> list[dict[str, Any]]:
     """Undo BSE codes attached by a BSE lookup that returned a different
     company (NSE:BRIGHT 'Bright Solar' got 543831 'Bright Outdoor Media')."""
     base = raw_root / "bse"
@@ -3654,6 +3670,11 @@ def _repair_bse_lookup_mismatches(store: EventStore, raw_root: Path = RAW_DIR) -
         sec = e.get("security") or {}
         code, name = str(sec.get("bseCode") or ""), sec.get("name")
         if not code or not name or not sec.get("nseSymbol"):
+            # 2.9.1: events repaired by 2.9.0 still carry the other company's
+            # sector / P/E / alias / mergedFrom; finish the clean-up.
+            done = (sec.get("identityRepaired") or {}).get("wrongBseCode")
+            if done and not code and sec.get("nseSymbol"):
+                _clean_wrong_bse_traces(store, e, str(done), raw_root, master)
             continue
         prefix = safe_filename(e["eventId"]).rsplit("_", 1)[0]
         wrong = None
@@ -3673,18 +3694,103 @@ def _repair_bse_lookup_mismatches(store: EventStore, raw_root: Path = RAW_DIR) -
         if str(sec.get("yahooTicker") or "").endswith(".BO"):
             sec["yahooTicker"] = f"{normalize_symbol(sec['nseSymbol'])}.NS"
         sec["identityRepaired"] = {"wrongBseCode": code, "wrongBseName": wrong, "at": iso_now()}
+        bse_pe = store.value(e, "exchange_pe") if field_source(e, "exchange_pe") == "BSE_META" else None
         for f_name in list((e.get("fields") or {}).keys()):
             src = str((e["fields"][f_name] or {}).get("source") or "")
             if src.startswith("BSE_") or (f_name in {"reaction_session", "filing_session"} and src == "DERIVED"):
                 e["fields"].pop(f_name, None)
+        if bse_pe is not None and safe_num(store.value(e, "trailing_pe")) == safe_num(bse_pe):
+            e["fields"].pop("trailing_pe", None)
         if str((e.get("plus") or {}).get("priceSource") or "").startswith("BSE"):
             e.pop("plus", None)
         for extra in ("concall", "tradeLog", "financialSnapshots", "financialIntegrity"):
             e.pop(extra, None)
+        _clean_wrong_bse_traces(store, e, code, raw_root, master, save=False)
         store.save(e)
         fixed.append({"eventId": e["eventId"], "symbol": sec.get("symbol"), "at": iso_now(), "before": {"bseCode": code},
                       "reasons": [f"IDENTITY_REPAIRED:BSE {code} ({wrong}) removed"]})
     return fixed
+
+
+def _clean_wrong_bse_traces(store: EventStore, e: dict[str, Any], code: str, raw_root: Path,
+                            master: "SymbolMaster | None", save: bool = True) -> bool:
+    """Remove what the wrong BSE code left behind (2.9.1): sector labels and
+    P/E that equal the other company's saved BSE meta, mergedFrom / aliases
+    keyed by that code (re-pointed to the event that owns the code), and the
+    code in the symbol master. Idempotent; returns True when something changed."""
+    sec = e.setdefault("security", {})
+    eid = e["eventId"]
+    changed = False
+    prefix = safe_filename(eid).rsplit("_", 1)[0]
+    wrong_isins = set()
+    for f in (raw_root / "bse").glob(f"{prefix}_*/lookup-*.json"):
+        try:
+            pl = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(pl, dict) and str(pl.get("bse_code") or "") == code and pl.get("isin"):
+            wrong_isins.add(str(pl["isin"]).upper())
+    wrong_ident: dict[str, set] = {}
+    wrong_pe: set = set()
+    for f in (raw_root / "bse").glob(f"{prefix}_*/equity_meta-*.json"):
+        try:
+            pl = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(pl, dict) or str(pl.get("ISIN") or "").upper() not in wrong_isins:
+            continue
+        parsed = parse_bse_meta(pl)
+        for k, v in (parsed.get("identity") or {}).items():
+            if v:
+                wrong_ident.setdefault(k, set()).add(v)
+        if parsed.get("exchange_pe") is not None:
+            wrong_pe.add(safe_num(parsed["exchange_pe"]))
+    for k in _BSE_IDENTITY_KEYS:
+        if sec.get(k) is not None and sec.get(k) in wrong_ident.get(k, set()):
+            sec.pop(k, None)
+            changed = True
+    for f_name in ("trailing_pe", "exchange_pe", "pb", "roe_pct", "exchange_opm_ttm_pct"):
+        meta = (e.get("fields") or {}).get(f_name) or {}
+        if f_name == "trailing_pe" and safe_num(meta.get("value")) in wrong_pe and wrong_pe:
+            e["fields"].pop(f_name, None)
+            changed = True
+        elif f_name != "trailing_pe" and str(meta.get("source") or "").startswith("BSE_"):
+            e["fields"].pop(f_name, None)
+            changed = True
+    bse_ids = {i for i in (e.get("mergedFrom") or []) if str(i).startswith(f"BSE:{code}|")}
+    if bse_ids:
+        e["mergedFrom"] = [i for i in e["mergedFrom"] if i not in bse_ids] or None
+        if not e["mergedFrom"]:
+            e.pop("mergedFrom", None)
+        changed = True
+    owner = next((o["eventId"] for o in store.all() if o["eventId"] != eid
+                  and str((o.get("security") or {}).get("bseCode") or "") == code
+                  and (o.get("period") or {}).get("end") == (e.get("period") or {}).get("end")), None)
+    aliases = store.aliases()
+    stale = [k for k, v in aliases.items() if v == eid and k.startswith(f"BSE:{code}|")]
+    for k in stale:
+        if owner:
+            aliases[k] = owner
+        else:
+            aliases.pop(k, None)
+    if stale:
+        json_dump_atomic(store._alias_path(), aliases)
+        changed = True
+    if master is not None:
+        for k, v in (master.data.get("securities") or {}).items():
+            if isinstance(v, dict) and str(v.get("bseCode") or "") == code and \
+                    normalize_symbol(v.get("nseSymbol")) == normalize_symbol(sec.get("nseSymbol")) and \
+                    v.get("name") == sec.get("name"):
+                for kk in ("bseCode", "bseSymbol", "bseGroup"):
+                    v.pop(kk, None)
+                for kk in _BSE_IDENTITY_KEYS:
+                    if v.get(kk) in wrong_ident.get(kk, set()):
+                        v.pop(kk, None)
+                v["identityRepaired"] = sec.get("identityRepaired")
+                changed = True
+    if changed and save:
+        store.save(e)
+    return changed
 
 
 def fill_security_identity(event: dict[str, Any], store: EventStore, master: SymbolMaster, ctx: SourceContext) -> dict[str, Any]:
@@ -4227,7 +4333,10 @@ def enrich_exchange_meta(event: dict[str, Any], store: EventStore, ctx: SourceCo
     # existing valuation logic and sorting use exchange data before Yahoo.
     pe = store.value(event, "exchange_pe")
     if pe is not None:
-        store.merge_field(event, "trailing_pe", pe, source="NSE_QUOTE" if symbol else "BSE_META")
+        # 2.9.1: label it with the source that actually supplied exchange_pe
+        # (an SME's NSE quote has no P/E, so it came from BSE meta).
+        store.merge_field(event, "trailing_pe", pe,
+                          source=field_source(event, "exchange_pe") or ("NSE_QUOTE" if symbol else "BSE_META"))
     store.record_fetch(event, "EXCHANGE_META", ok=got, error="; ".join(errors) or None)
 
 
