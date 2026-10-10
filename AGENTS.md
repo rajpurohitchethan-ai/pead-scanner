@@ -162,3 +162,6 @@ Engine 2.9.4 (audit of 10 Oct 2026)
 - Provenance: force_field updates rawRef/note when the same value comes from another document; resultSourceUrl = the applied snapshot's documentUrl.
 - Self-audit adds "No profit % shown across a loss" (FAIL) and the run-guard check.
 - Tests: tests/test_robustness.py.
+
+Engine 2.9.5 (TradingView chart, 10 Oct 2026)
+- Cards and watchlist rows have a collapsed "Interactive chart" (TradingView Advanced Chart embed, loaded only when opened, theme follows the page). Tested in a browser: NSE symbols are blocked in TradingView embeds ("This symbol is only available on TradingView") and numeric BSE codes don't resolve (BSE:532540 -> "symbol doesn't exist"); BSE tickers work with end-of-day data. links.tvEmbed = "BSE:<security.bseSymbol>" only when a BSE symbol is stored (matches BSE's calendar short_name for all 338 checked); NSE-only companies keep just the TradingView link. Display only; no TradingView data is read by the engine (no public API, terms forbid scraping).

@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.4"
+ENGINE_VERSION = "2.9.5"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5400,6 +5400,11 @@ def screener_links(sec: dict[str, Any]) -> dict[str, str | None]:
                         else f"https://www.tradingview.com/chart/?symbol=BSE%3A{bse_sym}" if bse_sym else None),
         "nse": f"https://www.nseindia.com/get-quotes/equity?symbol={nse}" if nse else None,
         "bse": f"https://www.bseindia.com/stock-share-price/x/{bse_sym or 'x'}/{bse}/" if bse else None,
+        # 2.9.5: TradingView's free embed shows BSE (end-of-day) but not NSE
+        # ("This symbol is only available on TradingView"); it needs BSE's own
+        # ticker (numeric codes don't resolve), so only a stored BSE symbol.
+        "tvEmbed": (f"BSE:{normalize_symbol(sec.get('bseSymbol'))}"
+                    if bse and normalize_symbol(sec.get("bseSymbol")) else None),
     }
 
 

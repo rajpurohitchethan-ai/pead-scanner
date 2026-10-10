@@ -37,6 +37,29 @@
     return `<div class="fact"><h3>Result vs last year</h3><p><span class="big ${cls(it.revenueYoY)}">${pct(it.revenueYoY)}</span>revenue</p>
           <p>${patCell(it.patYoY, it.patYoYStatus)}${margin}</p></div>`;
   };
+  // 2.9.5: TradingView's embeddable chart, loaded only when opened. NSE
+  // symbols are blocked in embeds, so it shows the BSE listing (end of day).
+  const tvChart = it => {
+    const sym = P(it).links?.tvEmbed;
+    return sym ? `<details class="tvd" data-tv="${esc(sym)}"><summary>Interactive chart <span class="nm">TradingView · BSE, end of day</span></summary><div class="tvbox"></div></details>` : '';
+  };
+  const loadTv = d => {
+    const box = d.querySelector('.tvbox');
+    if (!box || box.dataset.loaded) return;
+    box.dataset.loaded = '1';
+    const dark = (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+    const c = document.createElement('div'); c.className = 'tradingview-widget-container'; c.style.height = '100%';
+    const w = document.createElement('div'); w.className = 'tradingview-widget-container__widget'; w.style.height = 'calc(100% - 22px)';
+    const cp = document.createElement('div'); cp.className = 'tradingview-widget-copyright';
+    cp.innerHTML = '<a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">Chart by TradingView</a>';
+    const sc = document.createElement('script');
+    sc.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'; sc.async = true;
+    sc.text = JSON.stringify({ symbol: d.dataset.tv, interval: 'D', range: '6M', timezone: 'Asia/Kolkata', theme: dark ? 'dark' : 'light',
+      style: '1', locale: 'en', autosize: true, hide_side_toolbar: true, allow_symbol_change: false, save_image: false,
+      calendar: false, support_host: 'https://www.tradingview.com' });
+    c.append(w, cp, sc); box.appendChild(c);
+  };
+  document.addEventListener('toggle', e => { if (e.target.classList?.contains('tvd') && e.target.open) loadTv(e.target); }, true);
   const inr = (v, d = 2) => { const n = num(v); return n === null ? '—' : '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }); };
   const cr = v => { const n = num(v); if (n === null) return '—'; return n >= 1000 ? `₹${Math.round(n).toLocaleString('en-IN')} Cr` : `₹${n.toFixed(n >= 10 ? 0 : 1)} Cr`; };
   const x = v => { const n = num(v); return n === null ? '—' : `${n.toFixed(2)}x`; };
@@ -211,6 +234,7 @@
       ${concallLine(p.concall)}
       ${liveLine(p.live)}
       ${chart(it)}
+      ${tvChart(it)}
       ${facts}
       ${topDownStrip(it)}
       ${peersLine(it)}
@@ -280,7 +304,7 @@
       <div class="chev" aria-hidden="true">›</div></div>`;
     if (!open) return row;
     const v = P(it).valuation || {}, liq = P(it).liquidity || {};
-    return row + `<div class="row-detail">${chart(it, 100)}${topDownStrip(it)}${peersLine(it)}
+    return row + `<div class="row-detail">${chart(it, 100)}${tvChart(it)}${topDownStrip(it)}${peersLine(it)}
       <p class="note">${b ? esc(b.why) + ' ' : ''}${num(x1.q1_reaction_return_pct) !== null ? `Q1 result day ${pct(x1.q1_reaction_return_pct)}${num(x1.q1_reaction_rvol) !== null ? ` on ${x(x1.q1_reaction_rvol)} usual volume` : ''}; ${pct(x1.q1_return_to_q2_pct)} from before the Q1 result to now. ` : 'Q1 result date not found yet. '}${num(v.pe) !== null ? `P/E ${num(v.pe).toFixed(1)}x${num(v.sectorPe) !== null ? ` against sector ${num(v.sectorPe).toFixed(1)}x` : ''}. ` : ''}Liquidity ${esc(liq.label || '—')}${num(it.marketCapCr) !== null ? `, market cap ${cr(it.marketCapCr)}` : ''}.</p>
       <div class="links">${[['screener', 'Screener'], ['tradingview', 'TradingView'], ['nse', 'NSE'], ['bse', 'BSE']].filter(([k]) => P(it).links?.[k]).map(([k, l]) => `<a href="${esc(P(it).links[k])}" target="_blank" rel="noopener">${l}</a>`).join('')}</div></div>`;
   }
@@ -359,7 +383,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.4';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.5';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

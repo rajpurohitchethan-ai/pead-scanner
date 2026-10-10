@@ -398,5 +398,16 @@ class ReparsedSnapshotTests(unittest.TestCase):
             self.assertEqual(store.value(e, "pat_cr"), -0.10)
 
 
+
+class TradingViewEmbedTests(unittest.TestCase):
+    """2.9.5: TradingView's embed shows BSE (EOD) but not NSE, and only BSE's
+    own ticker resolves (BSE:532540 -> "This symbol doesn't exist")."""
+
+    def test_embed_symbol_needs_bse_ticker(self):
+        self.assertEqual(p.screener_links({"nseSymbol": "TCS", "bseSymbol": "TCS", "bseCode": "532540"})["tvEmbed"], "BSE:TCS")
+        self.assertIsNone(p.screener_links({"nseSymbol": "NSEONLY"})["tvEmbed"])
+        self.assertIsNone(p.screener_links({"symbol": "X", "bseCode": "500001"})["tvEmbed"])
+
+
 if __name__ == "__main__":
     unittest.main()
