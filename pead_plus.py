@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.3"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.4"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -140,7 +140,7 @@ def _chart(f, reaction_idx: int | None, points: int = 75) -> dict[str, Any]:
 
 def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
                       q1_reaction_date: date | None = None, q2_boundary: date | None = None,
-                      window_start: date | None = None) -> dict[str, Any]:
+                      window_start: date | None = None, q1_window_start: date | None = None) -> dict[str, Any]:
     """Price-derived PEAD features. `reaction_date` is the Q2 reaction session
     (only used when the result is released and that session has traded);
     `q1_reaction_date` replays the previous quarter's reaction on the same chart."""
@@ -214,11 +214,18 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
 
     # Previous quarter (Q1) reaction replayed on this chart.
     qi = _idx_on_or_after(f, q1_reaction_date)
-    if qi is not None and qi > 0:
-        q_pre = _num(close.iloc[qi - 1])
+    # 2.9.4: an intraday Q1 filing has a two-session window, like Q2.
+    qw = qi
+    if qi is not None and q1_window_start is not None and q1_reaction_date is not None and q1_window_start < q1_reaction_date:
+        w = _idx_on_or_after(f, q1_window_start)
+        qw = w if w is not None and w <= qi else qi
+    if qi is not None and qw is not None and qw > 0:
+        q_pre = _num(close.iloc[qw - 1])
         q_close = _num(close.iloc[qi])
-        vol_prior = f["Volume"].iloc[max(0, qi - 20):qi].dropna()
-        q_rvol = (_num(f["Volume"].iloc[qi]) / vol_prior.mean()) if len(vol_prior) >= 10 and vol_prior.mean() > 0 and _num(f["Volume"].iloc[qi]) else None
+        vol_prior = f["Volume"].iloc[max(0, qw - 20):qw].dropna()
+        win_vol = f["Volume"].iloc[qw:qi + 1].dropna()
+        q_vol = _num(win_vol.max()) if not win_vol.empty else None
+        q_rvol = (q_vol / vol_prior.mean()) if len(vol_prior) >= 10 and vol_prior.mean() > 0 and q_vol else None
         # Sustain test is measured up to the Q2 result (or today when Q2 is pending).
         end_i = (_idx_on_or_after(f, q2_boundary) or len(f)) - 1
         end_i = max(qi, min(end_i, len(f) - 1))
@@ -433,6 +440,10 @@ def liquidity(turnover_cr: Any, price: Any) -> dict[str, Any]:
 
 def valuation_view(pe: Any, sector_pe: Any, roe: Any, pat_yoy: Any, pb: Any = None) -> dict[str, Any]:
     pe_, spe, roe_, g = _num(pe), _num(sector_pe), _num(roe), _num(pat_yoy)
+    # 2.9.4: exchanges send 0 for "not available" (NSE sector P/E for RALLIS,
+    # BSE ROE for TIAANC); missing is not zero.
+    spe = spe if spe is not None and spe > 0 else None
+    roe_ = None if roe_ == 0 else roe_
     peg = _r2(pe_ / g) if pe_ and pe_ > 0 and g and g > 0 else None
     rel = _r2(pe_ / spe) if pe_ and pe_ > 0 and spe and spe > 0 else None
     if pe_ is None or pe_ <= 0:
@@ -853,6 +864,18 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
 
     ic = health.get("installCheck") or {}
     add("All files from the same release", [] if ic.get("ok", True) else [f"pead_plus {ic.get('pead_plus')} vs engine {ic.get('engine')}"], fail=True)
+    # 2.9.4: a run that ran out of time or lost a source still publishes; say so.
+    rg = health.get("runGuard") or {}
+    guard_bad = ([f"stopped after {rg.get('budgetMin')} min"] if rg.get("budgetHit") else []) + \
+        [f"{h} switched off ({why})" for h, why in (rg.get("sourcesDown") or {}).items()]
+    add("Last run finished in time with every source answering", guard_bad,
+        note="Data already stored is kept; skipped companies are refreshed next hour.")
+    loss_states = {"TURNAROUND", "DETERIORATION", "LOSS_NARROWING", "LOSS_WIDENING", "LOSS_FLAT"}
+    loss_pct = [it.get("symbol") for it in items
+                if (it.get("patYoY") is not None and it.get("patYoYStatus") in loss_states)
+                or ((((it.get("plus") or {}).get("margins") or {}).get("patQoQ") is not None)
+                    and (((it.get("plus") or {}).get("margins") or {}).get("patQoQStatus") in loss_states))]
+    add("No profit % shown across a loss", loss_pct, fail=True)
     as_of = d(regime.get("asOf"))
     add("Market index data is current", [] if as_of and (today - as_of).days <= 4 else [str(regime.get("asOf"))], fail=True)
 

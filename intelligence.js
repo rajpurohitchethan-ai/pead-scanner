@@ -16,19 +16,26 @@
   const cls = v => { const n = num(v); return n === null ? '' : n > 0 ? 'up' : n < 0 ? 'down' : ''; };
   // 2.5.3: when the filing has no last-year column (common on BSE), show the
   // quarter-on-quarter numbers under an honest heading instead of dashes.
+  // 2.9.4: a loss on either side has no ordinary % change; say what happened.
+  const PAT_STATE = { TURNAROUND: ['Turnaround', 'up'], DETERIORATION: ['Profit → loss', 'down'],
+    LOSS_NARROWING: ['Loss narrowed', 'up'], LOSS_WIDENING: ['Loss widened', 'down'], LOSS_FLAT: ['Loss, flat', ''] };
+  const patCell = (v, status) => {
+    const st = PAT_STATE[status];
+    return st ? `<span class="big ${st[1]}">${st[0]}</span>` : `<span class="big ${cls(v)}">${pct(v)}</span>profit`;
+  };
   const resultFact = (it, m) => {
-    const yoy = num(it.revenueYoY) !== null || num(it.patYoY) !== null || it.patYoYStatus === 'TURNAROUND';
+    const yoy = num(it.revenueYoY) !== null || num(it.patYoY) !== null || !!PAT_STATE[it.patYoYStatus];
     const qRev = num(m.revenueQoQ), qPat = num(m.patQoQ ?? it.patQoQ);
-    const useQ = !yoy && (qRev !== null || qPat !== null);
+    const useQ = !yoy && (qRev !== null || qPat !== null || !!PAT_STATE[m.patQoQStatus]);
     const bps = num(m.changeBps);
     const mBasis = bps === null ? '' : (useQ || m.basis !== 'QoQ') ? '' : ' vs last qtr';
     const margin = bps !== null ? `, margin ${bps > 0 ? '+' : ''}${bps} bps${mBasis}` : '';
     if (useQ) {
       return `<div class="fact"><h3>Result vs last quarter</h3><p><span class="big ${cls(qRev)}">${pct(qRev)}</span>revenue</p>
-          <p><span class="big ${cls(qPat)}">${pct(qPat)}</span>profit${margin}</p><p class="note">Year-ago figures not in the filing yet</p></div>`;
+          <p>${patCell(qPat, m.patQoQStatus)}${margin}</p><p class="note">Year-ago figures not in the filing yet</p></div>`;
     }
     return `<div class="fact"><h3>Result vs last year</h3><p><span class="big ${cls(it.revenueYoY)}">${pct(it.revenueYoY)}</span>revenue</p>
-          <p><span class="big ${cls(it.patYoY)}">${it.patYoYStatus === 'TURNAROUND' ? 'Turnaround' : pct(it.patYoY)}</span>profit${margin}</p></div>`;
+          <p>${patCell(it.patYoY, it.patYoYStatus)}${margin}</p></div>`;
   };
   const inr = (v, d = 2) => { const n = num(v); return n === null ? '—' : '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }); };
   const cr = v => { const n = num(v); if (n === null) return '—'; return n >= 1000 ? `₹${Math.round(n).toLocaleString('en-IN')} Cr` : `₹${n.toFixed(n >= 10 ? 0 : 1)} Cr`; };
@@ -352,7 +359,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.3';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.4';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
