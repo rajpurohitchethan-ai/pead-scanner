@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:KRRAIL|2026-09-30",
   "createdAt": "2026-10-07T04:24:34Z",
-  "updatedAt": "2026-10-10T06:38:20Z",
+  "updatedAt": "2026-10-10T07:15:17Z",
   "security": {
     "symbol": "KRRAIL",
     "bseSymbol": "KRRAIL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "DISCOVERED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,6 +31,11 @@
       "state": "SCHEDULED",
       "at": "2026-10-07T04:24:34Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "DISCOVERED",
+      "at": "2026-10-10T07:05:25Z",
+      "reason": "calendar date belonged to an earlier quarter"
     }
   ],
   "fields": {
@@ -38,10 +43,12 @@
       "value": "2026-10-08",
       "source": "BSE_RESULT_ANNOUNCEMENT",
       "fetchedAt": "2026-10-08T14:30:13Z",
-      "status": "OK",
+      "status": "REVOKED",
       "rank": 110,
       "rawRef": "raw/bse/DISCOVERY/result_calendar-f88c794f5f34bf3b.json",
-      "note": null
+      "note": null,
+      "revokedAt": "2026-10-10T07:05:25Z",
+      "revokedReason": "meeting 2026-10-08 was for period 2026-06-30 (filing 2026-10-08 names it)"
     },
     "reaction_session": {
       "value": "2026-10-09",
@@ -200,9 +207,9 @@
   },
   "derived": {
     "score": 8,
-    "completenessPct": 66.7,
+    "completenessPct": 33.3,
     "completeness": {
-      "present": 2,
+      "present": 1,
       "required": 3
     },
     "resultReality": "AWAITING RESULT",
@@ -264,14 +271,15 @@
         "opmTtm": -5.91,
         "basis": null,
         "revenueQoQ": null,
-        "patQoQ": null
+        "patQoQ": null,
+        "patQoQStatus": null
       },
       "sectorKey": "Construction",
       "sector": {
         "sector": "Construction",
         "stocks": 5,
         "momentum63dMedian": -21.9,
-        "relativeToMarket": -14.73,
+        "relativeToMarket": -14.67,
         "declared": 0,
         "strongResults": 0,
         "avgReaction": null,
@@ -565,8 +573,9 @@
       "reactionIndex": null
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-10T05:28:54Z",
-    "plusVersion": "2.7.0",
+    "computedAt": "2026-10-10T07:15:15Z",
+    "replayedFromRaw": true,
+    "plusVersion": "2.9.4",
     "corporateActions": null
   },
   "tradeLog": {}
