@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.1"
+ENGINE_VERSION = "2.9.2"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5111,8 +5111,14 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
     if prev is not None and boolish(store.value(prev, "results_released")) is True:
         q1_strength = pead_plus.earnings_strength(store.value(prev, "revenue_yoy_pct"), store.value(prev, "pat_yoy_pct"),
                                                   store.value(prev, "pat_trend"), store.value(prev, "margin_change_bps"))
+    if q1_strength is None:
+        # 2.9.2: no archived Q1 event (or one without YoY): use last quarter's
+        # own YoY read from the exchange filings (2.7.0 prev_q_* fields).
+        q1_strength = pead_plus.earnings_strength(store.value(event, "prev_q_revenue_yoy_pct"),
+                                                  store.value(event, "prev_q_pat_yoy_pct"), None)
     setup = pead_plus.q1_setup(px.get("q1_reaction_return_pct"), px.get("q1_reaction_rvol"), q1_strength)
-    bucket = pead_plus.classify_bucket(released=released, q2_strength=strength, setup=setup, sustained=px.get("q1_sustained"))
+    bucket = pead_plus.classify_bucket(released=released, q2_strength=strength, setup=setup, sustained=px.get("q1_sustained"),
+                                       q1_strength=q1_strength)
 
     reaction = parse_date(store.value(event, "reaction_session"))
     reaction_traded = released and session_closed(reaction)
@@ -5823,7 +5829,8 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
         "darvasBreakout": meta_value(event, "box_breakout"),
         "filingSession": meta_value(event, "filing_session"),
         "reactionSession": meta_value(event, "reaction_session"),
-        "trailingPE": round2(meta_value(event, "trailing_pe")),
+        # 2.9.2: NSE quotes P/E 0 for loss-makers; publish null, not 0.0.
+        "trailingPE": round2(pe_) if (pe_ := safe_num(meta_value(event, "trailing_pe"))) is not None and pe_ > 0 else None,
         "forwardPE": round2(meta_value(event, "forward_pe")),
         "peg": round2(meta_value(event, "peg")),
         "roePct": round2(meta_value(event, "roe_pct")),

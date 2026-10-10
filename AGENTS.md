@@ -136,3 +136,10 @@ Engine 2.9.1 (evening check, 9 Oct 2026)
 - EventStore.resolve never redirects an id whose own event file exists (aliases are only left by deleted files; "NSE:BRIGHT" -> "NSE:BCG" from 2.5.4 would have hijacked Bright Solar once a BCG event appeared).
 - enrich_exchange_meta labels trailing_pe with the source of exchange_pe (BSE_META for SME scrips whose NSE quote has no P/E).
 - Tests: tests/test_plus.py BseWrongCodeLoopTests. Two rows with symbol BRIGHT are two different companies (Bright Outdoor Media, BSE; Bright Solar, NSE) - not a duplicate.
+
+Engine 2.9.2 (10 Oct 2026)
+- Q1 strength from filings: build_plus took Q1 earnings strength only from the archived previous-quarter event. POONAWALLA has no Q1 event, so its Q1 (revenue +77.9%, PAT +391.6% YoY) counted as unknown and the card said "Fresh PEAD: Average Q1, sudden Q2 earnings pivot". When the archived event gives no strength, the current event's prev_q_revenue_yoy_pct / prev_q_pat_yoy_pct (2.7.0, from the exchange filings) are used. POONAWALLA -> Re-PEAD (conviction 59 -> 61), GMBREW -> Confirmation (46 -> 52; still NO_ENTRY after its -10% reaction). Bucket rules unchanged.
+- classify_bucket(q1_strength=None) no longer claims "Average Q1": FRESH_PEAD with unknown Q1 reads "Q1 numbers not verified and no Q1 price setup; Q2 earnings pivot."
+- Loss-makers' P/E: NSE quotes P/E 0 (or negative) for loss-makers (CROMPTON, BAJAJELEC, SOLARA, TRF, SWSOLAR, ~40 negatives); the card showed "0.0x" / "-32.7x". valuation_view publishes pe = null when <= 0 (label stays LOSS-MAKING) and the data row's trailingPE is null when <= 0.
+- Tests: Q1StrengthFromFilingsTests, LossMakerPeTests.
+- Open (owner's call): peer_context / sector_stats count every reported peer, including untraded shells (INDBNK: revenue ₹0.26 Cr, turnover ~0), so one micro-cap's -7.2% sets POONAWALLA's peers check to "bad" and Financial Services' average reaction.

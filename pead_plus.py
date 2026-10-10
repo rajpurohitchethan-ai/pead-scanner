@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.1"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.2"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -277,7 +277,8 @@ def q1_setup(q1_return: Any, q1_rvol: Any, q1_strength: str | None = None) -> bo
     return bool(r >= Q1_SETUP_RETURN and (v is None or v >= Q1_SETUP_RVOL))
 
 
-def classify_bucket(*, released: bool, q2_strength: str | None, setup: bool | None, sustained: bool | None) -> dict[str, str] | None:
+def classify_bucket(*, released: bool, q2_strength: str | None, setup: bool | None, sustained: bool | None,
+                    q1_strength: str | None = "UNSPECIFIED") -> dict[str, str] | None:
     if not released:
         if setup is None:
             return None
@@ -295,6 +296,10 @@ def classify_bucket(*, released: bool, q2_strength: str | None, setup: bool | No
     else:
         code = "FRESH_PEAD" if q2_strength == "STRONG" else "NO_CONFIRMATION"
     label, why = BUCKETS[code]
+    # 2.9.2: "Average Q1" only when Q1's numbers are known (POONAWALLA's Q1
+    # was unknown to the engine, yet the card said "Average Q1").
+    if code == "FRESH_PEAD" and q1_strength is None:
+        why = "Q1 numbers not verified and no Q1 price setup; Q2 earnings pivot."
     return {"code": code, "label": label, "why": why}
 
 
@@ -443,7 +448,8 @@ def valuation_view(pe: Any, sector_pe: Any, roe: Any, pat_yoy: Any, pb: Any = No
     pb_ = _num(pb)
     neg_book = (pb_ is not None and pb_ < 0) or (roe_ is not None and roe_ < -100)
     tiny_book = neg_book or (roe_ is not None and roe_ > 100)
-    return {"label": label, "pe": _r2(pe_), "sectorPe": _r2(spe), "peVsSector": rel, "peg": peg, "roe": _r2(roe_), "pb": _r2(pb),
+    # 2.9.2: a P/E of 0 / negative is "loss-making", never a number to show.
+    return {"label": label, "pe": _r2(pe_) if pe_ is not None and pe_ > 0 else None, "sectorPe": _r2(spe), "peVsSector": rel, "peg": peg, "roe": _r2(roe_), "pb": _r2(pb),
             "tinyBook": tiny_book, "bookNote": ("negative book value" if neg_book else "tiny book value") if tiny_book else None}
 
 

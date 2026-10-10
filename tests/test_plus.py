@@ -770,3 +770,63 @@ class BseWrongCodeLoopTests(unittest.TestCase):
         st.add_alias(solar_id, bcg["eventId"])
         self.assertEqual(st.resolve(solar_id), solar_id)
         self.assertEqual(st.load(solar_id)["security"]["name"], "Bright Solar Limited")
+
+
+class Q1StrengthFromFilingsTests(unittest.TestCase):
+    """2.9.2: POONAWALLA Q2 FY27 was labelled 'Fresh PEAD: Average Q1, sudden
+    Q2 pivot' although its Q1 filing showed revenue +77.9% / PAT +391.6% YoY.
+    No archived Q1 event exists, so Q1 strength was unknown; the Q1 YoY read
+    from the filings (prev_q_*_yoy_pct) must be used."""
+
+    def _event(self, st, with_prev_yoy=True):
+        e = st.ensure_event(security={"isin": "INE511C01022", "nseSymbol": "POONAWALLA", "symbol": "POONAWALLA",
+                                      "name": "Poonawalla Fincorp Ltd"}, period_end=date(2026, 9, 30))
+        for f, v in (("results_released", True), ("revenue_yoy_pct", 70.17), ("pat_yoy_pct", 405.19),
+                     ("pat_trend", "PROFIT_GROWTH"), ("result_date", "2026-10-09"), ("reaction_session", "2026-10-12")):
+            st.merge_field(e, f, v, source="NSE_XBRL")
+        if with_prev_yoy:
+            st.merge_field(e, "prev_q_revenue_yoy_pct", 77.85, source="NSE_XBRL")
+            st.merge_field(e, "prev_q_pat_yoy_pct", 391.55, source="NSE_XBRL")
+        e["plus"] = {"price": {"q1_reaction_return_pct": -2.11, "q1_reaction_rvol": 2.84, "q1_sustained": False}}
+        return e
+
+    def _bucket(self, e, st):
+        out = p.build_plus(st, e, released=True, result_label="GENUINE", price_label="UNVERIFIED", sector_info=None,
+                           box_high=None, last_price=447.3, result_ret=None, rvol=None, result_low=None,
+                           result_high=None)
+        return out["q1Strength"], out["bucket"]
+
+    def test_q1_strength_from_filing_yoy(self):
+        st = p.EventStore(Path(tempfile.mkdtemp()) / "events")
+        q1, bucket = self._bucket(self._event(st), st)
+        self.assertEqual(q1, "STRONG")
+        self.assertEqual(bucket["code"], "RE_PEAD")      # strong Q1 numbers, price faded, Q2 confirms
+
+    def test_unknown_q1_does_not_claim_average_q1(self):
+        st = p.EventStore(Path(tempfile.mkdtemp()) / "events")
+        q1, bucket = self._bucket(self._event(st, with_prev_yoy=False), st)
+        self.assertIsNone(q1)
+        self.assertEqual(bucket["code"], "FRESH_PEAD")
+        self.assertNotIn("Average Q1", bucket["why"])
+
+    def test_known_average_q1_keeps_the_text(self):
+        b = pp.classify_bucket(released=True, q2_strength="STRONG", setup=False, sustained=None, q1_strength="AVERAGE")
+        self.assertEqual(b["why"], "Average Q1, sudden Q2 earnings pivot.")
+
+
+class LossMakerPeTests(unittest.TestCase):
+    """2.9.2: NSE quotes P/E 0 for loss-makers (CROMPTON, BAJAJELEC, TRF...);
+    the card showed '0.0x P/E vs sector 20.8x' - a fake zero."""
+
+    def test_zero_pe_is_not_published(self):
+        v = pp.valuation_view(0.0, 20.8, -6.88, None, 3.98)
+        self.assertEqual(v["label"], "LOSS-MAKING")
+        self.assertIsNone(v["pe"])
+        self.assertEqual(v["sectorPe"], 20.8)
+
+    def test_data_row_trailing_pe_zero_is_null(self):
+        st = p.EventStore(Path(tempfile.mkdtemp()) / "events")
+        e = st.ensure_event(security={"isin": "INE299U01018", "nseSymbol": "CROMPTON", "symbol": "CROMPTON",
+                                      "name": "Crompton Greaves Consumer Electricals Ltd"}, period_end=date(2026, 9, 30))
+        st.merge_field(e, "trailing_pe", 0.0, source="NSE_QUOTE")
+        self.assertIsNone(p.event_to_data_row(e)["trailingPE"])
