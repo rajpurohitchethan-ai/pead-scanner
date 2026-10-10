@@ -830,3 +830,42 @@ class LossMakerPeTests(unittest.TestCase):
                                       "name": "Crompton Greaves Consumer Electricals Ltd"}, period_end=date(2026, 9, 30))
         st.merge_field(e, "trailing_pe", 0.0, source="NSE_QUOTE")
         self.assertIsNone(p.event_to_data_row(e)["trailingPE"])
+
+
+class IlliquidPeerTests(unittest.TestCase):
+    """2.9.3 (owner's decision, 10 Oct 2026): peers that fail the liquidity test
+    (₹1 Cr/day, ₹20) do not count as 'peers that reported'. INDBNK (revenue
+    ₹0.26 Cr, turnover ~0) alone set POONAWALLA's peers check to 'bad'."""
+
+    def item(self, sym, r63, released=False, reaction=None, liquid=True, rev=None):
+        return {"symbol": sym, "resultsReleased": released, "resultDate": "2026-10-08", "revenueYoY": rev,
+                "priceContext": {"resultDayPct": reaction, "lastClose": 447.3},
+                "plus": {"sectorKey": "Financial Services", "sector": {"tailwind": "NEUTRAL"},
+                         "liquidity": {"pass": liquid},
+                         "price": {"ret_63d_pct": r63, "ema21": 453.0, "ema63": 457.0, "ret_21d_pct": -1.8},
+                         "valuation": {"label": "FAIR"}}}
+
+    def test_illiquid_reported_peer_ignored(self):
+        items = [self.item("POONAWALLA", -6.2, True, None, rev=70.2), self.item("INDBNK", 11.8, True, -7.21, False, 400.0),
+                 self.item("A", 5.0), self.item("B", -2.0), self.item("C", -9.0)]
+        pp.peer_context(items, None)
+        pe = items[0]["plus"]["peers"]
+        self.assertEqual(pe["reportedCount"], 0)
+        self.assertIsNone(pe["reportedAvgReaction"])
+        self.assertNotEqual({c["key"]: c["status"] for c in items[0]["plus"]["topDown"]["checks"]}["peers"], "bad")
+        self.assertNotIn("revenueYoY", items[0]["plus"]["peerFundamentals"])   # only itself left (< 3 values)
+
+    def test_liquid_reported_peer_still_counts(self):
+        items = [self.item("POONAWALLA", -6.2, True, None), self.item("BAJFINANCE", 3.0, True, -4.0),
+                 self.item("A", 5.0), self.item("B", -2.0)]
+        pp.peer_context(items, None)
+        self.assertEqual(items[0]["plus"]["peers"]["reportedAvgReaction"], -4.0)
+
+    def test_sector_stats_skip_illiquid_results(self):
+        rows = [{"sectorKey": "Financial Services", "ret63": r, "released": rel, "strength": s, "reaction": re_, "liquid": lq}
+                for r, rel, s, re_, lq in ((-6, True, "STRONG", None, True), (12, True, None, -7.21, False),
+                                           (5, False, None, None, True), (-2, False, None, None, None))]
+        s = pp.sector_stats(rows)["Financial Services"]
+        self.assertEqual(s["declared"], 1)
+        self.assertIsNone(s["avgReaction"])
+        self.assertEqual(s["stocks"], 4)               # momentum universe unchanged

@@ -142,4 +142,9 @@ Engine 2.9.2 (10 Oct 2026)
 - classify_bucket(q1_strength=None) no longer claims "Average Q1": FRESH_PEAD with unknown Q1 reads "Q1 numbers not verified and no Q1 price setup; Q2 earnings pivot."
 - Loss-makers' P/E: NSE quotes P/E 0 (or negative) for loss-makers (CROMPTON, BAJAJELEC, SOLARA, TRF, SWSOLAR, ~40 negatives); the card showed "0.0x" / "-32.7x". valuation_view publishes pe = null when <= 0 (label stays LOSS-MAKING) and the data row's trailingPE is null when <= 0.
 - Tests: Q1StrengthFromFilingsTests, LossMakerPeTests.
-- Open (owner's call): peer_context / sector_stats count every reported peer, including untraded shells (INDBNK: revenue ₹0.26 Cr, turnover ~0), so one micro-cap's -7.2% sets POONAWALLA's peers check to "bad" and Financial Services' average reaction.
+- (Resolved in 2.9.3.) peer_context / sector_stats counted every reported peer, including untraded shells (INDBNK: revenue ₹0.26 Cr, turnover ~0).
+
+Engine 2.9.3 (owner's decision, 10 Oct 2026)
+- Illiquid peers excluded from "peers that reported": a peer whose plus.liquidity.pass is False (the existing ₹1 Cr/day and ₹20 test) is left out of peer_context's reported list / average reaction, peer_fundamentals' revenue/profit YoY ranking, and sector_stats' declared / strong-results share and average reaction (sector_universe passes "liquid"). Unknown liquidity still counts. 3-month momentum ranks, margin and ROE comparisons are unchanged.
+- Effect on first run: 169 rows changed peers check and/or tailwind; POONAWALLA peers "bad" -> "warn" (no liquid Financial Services peer has reacted yet); FMCG, Metals & Mining and Consumer Services tailwind WEAK -> NEUTRAL (conviction +3 for their members).
+- Tests: IlliquidPeerTests.

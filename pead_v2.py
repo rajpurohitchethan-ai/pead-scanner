@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.2"
+ENGINE_VERSION = "2.9.3"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5676,6 +5676,7 @@ def sector_universe(store: EventStore, events: list[dict[str, Any]]) -> dict[str
             "strength": pead_plus.earnings_strength(store.value(e, "revenue_yoy_pct"), store.value(e, "pat_yoy_pct"),
                                                     store.value(e, "pat_trend"), store.value(e, "margin_change_bps")) if released else None,
             "reaction": store.value(e, "result_day_return_pct"),
+            "liquid": pead_plus.liquidity(store.value(e, "avg_turnover_20d_cr"), store.value(e, "last_price")).get("pass"),
         })
     return pead_plus.sector_stats(rows)
 

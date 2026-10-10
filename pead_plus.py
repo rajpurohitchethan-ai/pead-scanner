@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.2"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.3"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -470,7 +470,9 @@ def sector_stats(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     out = {}
     for key, rows in groups.items():
         mom = [m for r in rows if (m := _num(r.get("ret63"))) is not None]
-        declared = [r for r in rows if r.get("released")]
+        # 2.9.3 (owner): results of peers failing the liquidity test (untraded
+        # shells) do not count towards how the sector's results came out.
+        declared = [r for r in rows if r.get("released") and r.get("liquid") is not False]
         strong = [r for r in declared if r.get("strength") in {"STRONG", "AVERAGE+"}]
         reacts = [v for r in declared if (v := _num(r.get("reaction"))) is not None]
         med = median(mom) if len(mom) >= 3 else None
@@ -986,6 +988,12 @@ def live_entry_status(plan: dict[str, Any] | None, live: dict[str, Any] | None) 
 MIN_PEERS = 4
 
 
+def _liquid_peer(m: dict[str, Any]) -> bool:
+    """2.9.3 (owner's decision): a peer that fails the liquidity test (₹1 Cr/day,
+    ₹20) is not evidence of how the sector's results are received."""
+    return ((m.get("plus") or {}).get("liquidity") or {}).get("pass") is not False
+
+
 def peer_context(items: list[dict[str, Any]], regime: dict[str, Any] | None) -> None:
     """Adds plus.peers and plus.topDown to every item (in place). Uses only
     published fields: sector, 3-month return, reactions of peers that already
@@ -1002,7 +1010,8 @@ def peer_context(items: list[dict[str, Any]], regime: dict[str, Any] | None) -> 
     for key, members in by_sector.items():
         ranked = sorted([m for m in members if ret63(m) is not None], key=ret63, reverse=True)
         med = median([ret63(m) for m in ranked]) if ranked else None
-        reported = [m for m in members if m.get("resultsReleased") and _num((m.get("priceContext") or {}).get("resultDayPct")) is not None]
+        reported = [m for m in members if m.get("resultsReleased") and _liquid_peer(m)
+                    and _num((m.get("priceContext") or {}).get("resultDayPct")) is not None]
         reported.sort(key=lambda m: str(m.get("resultDate") or ""), reverse=True)
         for it in members:
             plus = it.setdefault("plus", {})
@@ -1154,7 +1163,7 @@ def peer_fundamentals(it: dict[str, Any], members: list[dict[str, Any]]) -> dict
     operating margin) and ROE compare every peer with exchange data."""
     def g(m, key):
         return _num(m.get(key))
-    reported = [m for m in members if m.get("resultsReleased")]
+    reported = [m for m in members if m.get("resultsReleased") and (m is it or _liquid_peer(m))]
     def opm(m):
         mg = (m.get("plus") or {}).get("margins") or {}
         return _num(mg.get("opmTtm")) if _num(mg.get("opmTtm")) is not None else _num(mg.get("opm"))
