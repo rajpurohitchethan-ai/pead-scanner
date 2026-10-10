@@ -54,7 +54,7 @@
     cp.innerHTML = '<a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">Chart by TradingView</a>';
     const sc = document.createElement('script');
     sc.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'; sc.async = true;
-    sc.text = JSON.stringify({ symbol: d.dataset.tv, interval: 'D', range: '6M', timezone: 'Asia/Kolkata', theme: dark ? 'dark' : 'light',
+    sc.text = JSON.stringify({ symbol: d.dataset.tv, interval: 'D', timezone: 'Asia/Kolkata', theme: dark ? 'dark' : 'light',
       style: '1', locale: 'en', autosize: true, hide_side_toolbar: true, allow_symbol_change: false, save_image: false,
       calendar: false, support_host: 'https://www.tradingview.com' });
     c.append(w, cp, sc); box.appendChild(c);
