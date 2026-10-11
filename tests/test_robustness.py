@@ -409,5 +409,24 @@ class TradingViewEmbedTests(unittest.TestCase):
         self.assertIsNone(p.screener_links({"symbol": "X", "bseCode": "500001"})["tvEmbed"])
 
 
+
+class HalfYearOnlyFilingTests(unittest.TestCase):
+    """CORDELIA's Sep-2026 XBRL carries only the Apr-Sep (six-month) figure.
+    Not a parse failure: the self-check flagged it red as "not parsed"."""
+
+    def test_half_year_only_document(self):
+        import pead_plus as pp
+        blob = (Path(__file__).parent / "fixtures" / "nse" / "CORDELIA_H1_2026-09-30.xml").read_bytes()
+        out = p.parse_xbrl_financials([blob], date(2026, 9, 30))
+        issues = out.get("_meta", {}).get("issues") or []
+        self.assertIn("HALF_YEAR_ONLY", issues)
+        self.assertIsNone(out.get("revenue_cr"))      # no quarter figure invented from H1
+        items = [{"symbol": "CORDELIA", "resultsReleased": True, "resultDate": "2026-10-09", "halfYearOnly": True,
+                  "fundamentalSnapshot": {}, "plus": {"price": {"last_session": "2026-10-09"}}}]
+        audit = pp.self_audit(items, {"asOf": "2026-10-09"}, {}, date(2026, 10, 11))
+        bad = [c for c in audit["checks"] if c["status"] == "FAIL"]
+        self.assertEqual(bad, [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.5"
+ENGINE_VERSION = "2.9.6"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -2143,6 +2143,11 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
     prev_ctx = quarter_contexts(_shift_quarters(period_end, -1))
     if not current_ctx:
         issues.append("NO_QUARTER_CONTEXT_FOR_PERIOD")
+        # 2.9.6: some companies (CORDELIA, newly listed) file only the
+        # six-month figure; that is not a parse failure, just no quarter.
+        if any(not c["dimensional"] and c["start"] and c["end"] and 170 <= (c["end"] - c["start"]).days <= 190
+               and abs((c["end"] - period_end).days) <= 3 for c in contexts.values()):
+            issues.append("HALF_YEAR_ONLY")
 
     nature = " ".join(v for k, v in text_facts.items() if "natureofreport" in k or "standaloneconsolidated" in k).lower()
     basis = "CONSOLIDATED" if "consolidated" in nature and "standalone" not in nature else ("STANDALONE" if "standalone" in nature else "UNKNOWN")
@@ -6109,6 +6114,10 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
         "financialBasis": (event.get("financialIntegrity") or {}).get("basis") if released else None,
         "financialStatus": (event.get("financialIntegrity") or {}).get("status") if released else None,
         "financialIssues": (event.get("financialIntegrity") or {}).get("issues") if released else None,
+        # 2.9.6: the filing carries only the six-month figure (no quarter).
+        "halfYearOnly": bool(released and any("HALF_YEAR_ONLY" in ((s.get("validation") or {}).get("issues") or [])
+                                              for s in (event.get("financialSnapshots") or {}).values())
+                             and (event.get("financialIntegrity") or {}).get("selectedSource") is None),
         "revenueDefinition": (event.get("financialIntegrity") or {}).get("revenueDefinition") if released else None,
         "resultReleased": released,
         "peadStatus": event.get("state"),

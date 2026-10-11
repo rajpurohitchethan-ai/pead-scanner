@@ -24,6 +24,9 @@
     return st ? `<span class="big ${st[1]}">${st[0]}</span>` : `<span class="big ${cls(v)}">${pct(v)}</span>profit`;
   };
   const resultFact = (it, m) => {
+    if (it.halfYearOnly && num(it.revenueYoY) === null && num(m.revenueQoQ) === null) {
+      return `<div class="fact"><h3>Result</h3><p class="note">Half-year figures only: this filing has no quarter-only numbers, so there is nothing to compare quarter by quarter.</p></div>`;
+    }
     const yoy = num(it.revenueYoY) !== null || num(it.patYoY) !== null || !!PAT_STATE[it.patYoYStatus];
     const qRev = num(m.revenueQoQ), qPat = num(m.patQoQ ?? it.patQoQ);
     const useQ = !yoy && (qRev !== null || qPat !== null || !!PAT_STATE[m.patQoQStatus]);
@@ -383,7 +386,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.5';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.6';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

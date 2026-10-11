@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.5"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.6"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -896,12 +896,15 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
     checks.append({"check": "Declared results of stocks that are not trading", "status": "OK", "count": len(idle),
                    "examples": idle[:8], "note": "No trades in 20+ days: no reaction or entry is possible."})
     declared = [it for it in items if it.get("resultsReleased") and not not_trading(it)]
-    no_fin_old, no_fin_new, no_yoy = [], [], []
+    no_fin_old, no_fin_new, no_yoy, half = [], [], [], []
     for it in declared:
         rd = d(it.get("resultDate"))
         age = (today - rd).days if rd else 0
         fs = it.get("fundamentalSnapshot") or {}
         if fs.get("revenueCr") is None:
+            if it.get("halfYearOnly"):
+                half.append(it["symbol"])
+                continue
             (no_fin_old if age >= 2 else no_fin_new).append(it["symbol"])
         elif it.get("revenueYoY") is None and it.get("patYoYStatus") is None:
             no_yoy.append(it["symbol"])
@@ -909,6 +912,8 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
         note="Exchange filing not parsed; check the NSE_XBRL / BSE_RESULTS_SNAPSHOT fetch errors.")
     add("Declared results have revenue/profit (filed in last 2 days)", no_fin_new,
         note="Normal for a few hours after filing; the engine re-checks every run.")
+    checks.append({"check": "Declared results with only half-year figures", "status": "OK", "count": len(half),
+                   "examples": half[:8], "note": "The filing has no quarter-only numbers; nothing to parse."})
     add("Declared results have year-on-year figures", no_yoy,
         note="Shown as quarter-on-quarter until the year-ago figures are found.")
 

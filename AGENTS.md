@@ -165,3 +165,6 @@ Engine 2.9.4 (audit of 10 Oct 2026)
 
 Engine 2.9.5 (TradingView chart, 10 Oct 2026)
 - Cards and watchlist rows have a collapsed "Interactive chart" (TradingView Advanced Chart embed, loaded only when opened, theme follows the page). Tested in a browser: NSE symbols are blocked in TradingView embeds ("This symbol is only available on TradingView") and numeric BSE codes don't resolve (BSE:532540 -> "symbol doesn't exist"); BSE tickers work with end-of-day data. links.tvEmbed = "BSE:<security.bseSymbol>" only when a BSE symbol is stored (matches BSE's calendar short_name for all 338 checked); NSE-only companies keep just the TradingView link. Display only; no TradingView data is read by the engine (no public API, terms forbid scraping).
+
+Engine 2.9.6 (11 Oct 2026)
+- Half-year-only filings: CORDELIA's Sep-2026 XBRL has only the Apr-Sep context, so the parse is (correctly) rejected with NO_QUARTER_CONTEXT_FOR_PERIOD; the self-check called it a FAIL ("not parsed"). The parser now adds HALF_YEAR_ONLY when a 170-190 day context ends on the period end; the row publishes halfYearOnly, the card says "Half-year figures only", and the self-check lists it separately (OK) instead of FAIL. No quarter figure is ever derived from H1. Fixture: tests/fixtures/nse/CORDELIA_H1_2026-09-30.xml.
