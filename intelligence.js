@@ -150,6 +150,29 @@
 
   // ---------- concall ----------
   const TD_ICON = { ok: '✓', warn: '!', bad: '✗', na: '–' };
+  // 2.9.8: QoQ detects the change, YoY confirms it, YTD validates execution.
+  function lensBlock(it) {
+    const L = P(it).lens;
+    if (!L) return '';
+    const cell = v => `<td class="r n ${cls(v)}">${pct(v)}</td>`;
+    const st = L.profitStatus ? (PAT_STATE[L.profitStatus] || [])[0] : null;
+    const prow = st ? `<tr><th>Profit</th>${cell(L.profit.qoq)}<td class="r" colspan="2">${esc(st)}</td></tr>`
+      : `<tr><th>Profit</th>${cell(L.profit.qoq)}${cell(L.profit.yoy)}${cell(L.profit.ytd)}</tr>`;
+    return `<div class="lens"><table><thead><tr><th></th><th class="r" title="vs last quarter: is it improving now?">QoQ</th><th class="r" title="vs same quarter last year: is it real growth?">YoY</th><th class="r" title="April to date vs last year: is execution consistent?">YTD</th></tr></thead>
+      <tbody><tr><th>Revenue</th>${cell(L.revenue.qoq)}${cell(L.revenue.yoy)}${cell(L.revenue.ytd)}</tr>${prow}</tbody></table>
+      ${(L.notes || []).length ? `<ul class="lens-notes">${L.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}</div>`;
+  }
+  const checklistChips = cl => `<div class="td-row">${cl.checks.map(c => `<span class="tdc ${c.status}" title="${esc(c.note)}"><i aria-hidden="true">${TD_ICON[c.status] || '–'}</i>${esc(c.label)}</span>`).join('')}</div>
+      <ul class="td-notes">${cl.checks.map(c => `<li><b>${esc(c.label)}:</b> ${esc(c.note)}</li>`).join('')}</ul>`;
+  function sectorChecklist(it) {
+    const sec = (S.data.sectors || []).find(r => r.sector === P(it).sectorKey), cl = sec?.checklist, ex = P(it).execution;
+    if (!cl) return '';
+    const EX = { AHEAD: ['Ahead of sector', 'go'], BEHIND: ['Behind sector', 'bad'], MIXED: ['In line / mixed', 'watch'] };
+    const e = ex?.label ? EX[ex.label] : null;
+    return `<div class="td"><div class="td-h"><b>Sector checklist</b> <span class="meta">${esc(P(it).sectorKey)}: ${cl.score} of ${cl.measured} measured pass (5 questions; ${cl.reported} liquid ${cl.reported === 1 ? 'company has' : 'companies have'} reported)</span></div>
+      ${checklistChips(cl).replace('<ul class="td-notes">', '<details class="td-more"><summary>What each question found</summary><ul class="td-notes">').replace(/<\/ul>$/, '</ul></details>')}
+      ${ex ? `<p class="note"><b>Company execution:</b> ${e ? `<span class="tag ${e[1]}">${e[0]}</span> ` : ''}${esc(ex.note)} A strong sector does not make every stock a winner.</p>` : ''}</div>`;
+  }
   function topDownStrip(it) {
     const td = P(it).topDown;
     if (!td || !(td.checks || []).length) return '';
@@ -239,7 +262,9 @@
       ${chart(it)}
       ${tvChart(it)}
       ${facts}
+      ${lensBlock(it)}
       ${topDownStrip(it)}
+      ${sectorChecklist(it)}
       ${peersLine(it)}
       <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}${plan.stage === 'STARTER' && num(plan.entry) !== null ? ' <span class="tag warn">Starter, 1/3 size</span>' : plan.stage === 'FULL' && num(plan.entry) !== null ? ' <span class="tag go">Full size</span>' : ''}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
         <p class="plan-why">${esc(plan.why || 'Plan not computed yet.')}</p>${levels}</div>
@@ -346,9 +371,9 @@
     if (!rows.length) return '<div class="empty">Sector data appears once prices are tracked.</div>';
     const max = Math.max(10, ...rows.map(r => Math.abs(num(r.relativeToMarket) ?? 0)));
     const bar = v => { const n = num(v); if (n === null) return '—'; const w = Math.abs(n) / max * 50; return `<div class="bar" title="${pct(n)} vs market"><i style="left:${n >= 0 ? 50 : 50 - w}%;width:${w}%;background:${n >= 0 ? 'var(--gain)' : 'var(--loss)'}"></i><i style="left:50%;width:1px;background:var(--ink-3)"></i></div>`; };
-    return `<p class="note">Tailwind combines how tracked peers moved over 3 months versus the whole universe, and how many peers that already reported had strong earnings.</p>
-      <div class="tscroll"><table><thead><tr><th>Sector</th><th class="hide-sm">3-month vs market</th><th class="r">Relative</th><th class="r hide-sm">Reported</th><th class="r">Strong</th><th>Tailwind</th></tr></thead><tbody>
-      ${rows.map(r => `<tr class="srow" role="button" tabindex="0" data-sector="${esc(r.sector)}" aria-expanded="${S.open.has('sector:' + r.sector)}"><td><span class="chev-s" aria-hidden="true">${S.open.has('sector:' + r.sector) ? '▾' : '▸'}</span> ${esc(r.sector)} <span class="meta">(${r.stocks})</span></td><td class="hide-sm">${bar(r.relativeToMarket)}</td><td class="r n ${cls(r.relativeToMarket)}">${pct(r.relativeToMarket)}</td><td class="r n hide-sm">${r.declared}</td><td class="r n">${r.strongResults}</td><td>${r.tailwind ? `<span class="tag ${TAIL_TONE[r.tailwind] || ''}">${r.tailwind.toLowerCase()}</span>` : '—'}</td></tr>${S.open.has('sector:' + r.sector) ? `<tr class="sdetail"><td colspan="6">${sectorPeers(r.sector)}</td></tr>` : ''}`).join('')}
+    return `<p class="note">Tailwind combines how tracked peers moved over 3 months versus the whole universe, and how many peers that already reported had strong earnings. Checklist: five sector questions (demand, orders &amp; capex, earnings, peer confirmation, market strength), scored only where the data exists; tap a sector for details.</p>
+      <div class="tscroll"><table><thead><tr><th>Sector</th><th class="hide-sm">3-month vs market</th><th class="r">Relative</th><th class="r hide-sm">Reported</th><th class="r hide-sm">Strong</th><th class="r">Checklist</th><th>Tailwind</th></tr></thead><tbody>
+      ${rows.map(r => `<tr class="srow" role="button" tabindex="0" data-sector="${esc(r.sector)}" aria-expanded="${S.open.has('sector:' + r.sector)}"><td><span class="chev-s" aria-hidden="true">${S.open.has('sector:' + r.sector) ? '▾' : '▸'}</span> ${esc(r.sector)} <span class="meta">(${r.stocks})</span></td><td class="hide-sm">${bar(r.relativeToMarket)}</td><td class="r n ${cls(r.relativeToMarket)}">${pct(r.relativeToMarket)}</td><td class="r n hide-sm">${r.declared}</td><td class="r n hide-sm">${r.strongResults}</td><td class="r n">${r.checklist && r.checklist.measured ? `${r.checklist.score}/${r.checklist.measured}` : '—'}</td><td>${r.tailwind ? `<span class="tag ${TAIL_TONE[r.tailwind] || ''}">${r.tailwind.toLowerCase()}</span>` : '—'}</td></tr>${S.open.has('sector:' + r.sector) ? `<tr class="sdetail"><td colspan="7">${r.checklist ? `<div class="td"><div class="td-h"><b>Sector checklist</b> <span class="meta">${r.checklist.score} of ${r.checklist.measured} measured pass</span></div>${checklistChips(r.checklist)}</div>` : ''}${sectorPeers(r.sector)}</td></tr>` : ''}`).join('')}
       </tbody></table></div>`;
   }
 
@@ -386,7 +411,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.7';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.8';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.7"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.8"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -1249,3 +1249,164 @@ def peer_fundamentals(it: dict[str, Any], members: list[dict[str, Any]]) -> dict
         "roe": _rank_block(roe(it), [roe(m) for m in members]),
     }
     return {k: v for k, v in out.items() if v is not None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.8: QoQ / YoY / YTD lens and the sector checklist (after @SureshKBN's
+# "When to use QoQ, YoY and YTD" and 5-point sector checklist). Display only:
+# conviction score and entry rules are unchanged.
+# ---------------------------------------------------------------------------
+_LOSS_STATES = {"TURNAROUND", "DETERIORATION", "LOSS_NARROWING", "LOSS_WIDENING", "LOSS_FLAT"}
+
+
+def growth_lens(rev_qoq: Any, rev_yoy: Any, rev_ytd: Any, pat_qoq: Any, pat_yoy: Any, pat_ytd: Any,
+                pat_yoy_status: Any = None) -> dict[str, Any] | None:
+    """QoQ detects the change, YoY confirms the growth, YTD validates execution.
+    Returns the three readings per line plus plain-language notes."""
+    rq, ry, rt, pq, py, pt = (_num(v) for v in (rev_qoq, rev_yoy, rev_ytd, pat_qoq, pat_yoy, pat_ytd))
+    if all(v is None for v in (rq, ry, rt, pq, py, pt)):
+        return None
+    notes: list[str] = []
+    for name, q, y, t in (("Revenue", rq, ry, rt), ("Profit", pq, py, pt)):
+        if y is not None and y > 100 and q is not None and q < 25:
+            notes.append(f"{name} {y:+.0f}% vs last year is mostly a low base: only {q:+.1f}% vs last quarter.")
+        elif y is not None and t is not None:
+            if y >= t + 5:
+                notes.append(f"{name} growth is speeding up: this quarter {y:+.1f}% vs {t:+.1f}% for the year so far.")
+            elif y <= t - 5:
+                notes.append(f"{name} growth is slowing: this quarter {y:+.1f}% vs {t:+.1f}% for the year so far.")
+    if rq is not None and pq is not None:
+        if rq > 0 and pq > 0:
+            notes.append("Improving now: revenue and profit both up on last quarter.")
+        elif rq < 0 and pq < 0:
+            notes.append("Both revenue and profit fell from last quarter (check if the business is seasonal).")
+    if ry is not None and rt is not None and py is not None and pt is not None and min(ry, rt, py, pt) > 0 \
+            and abs(ry - rt) < 5:
+        notes.append("Consistent: this quarter's growth matches the year so far.")
+    return {"revenue": {"qoq": rq, "yoy": ry, "ytd": rt}, "profit": {"qoq": pq, "yoy": py, "ytd": pt},
+            "profitStatus": pat_yoy_status if pat_yoy_status in _LOSS_STATES else None, "notes": notes[:3]}
+
+
+def _median(vals: list[float]) -> float | None:
+    v = sorted(x for x in vals if x is not None)
+    if not v:
+        return None
+    m = len(v) // 2
+    return v[m] if len(v) % 2 else (v[m - 1] + v[m]) / 2
+
+
+def sector_checklists(items: list[dict[str, Any]], sectors: dict[str, dict[str, Any]], today: date) -> None:
+    """Five questions per sector: demand, investment & orders, earnings, peer
+    confirmation, market strength. Uses liquid companies that have reported
+    this quarter; with fewer than 3 a question is 'not enough reports yet'.
+    Orders/capex have no free source and are left to the reader. Adds
+    sectors[name]['checklist'] and, per declared company, plus.execution
+    (its own growth against the sector's median)."""
+    by: dict[str, list[dict[str, Any]]] = {}
+    for it in items:
+        key = (it.get("plus") or {}).get("sectorKey")
+        if key:
+            by.setdefault(key, []).append(it)
+
+    def liquid(it):
+        return ((it.get("plus") or {}).get("liquidity") or {}).get("pass") is not False
+
+    def grew(x, status):
+        return (x is not None and x > 0) or status == "TURNAROUND"
+
+    for name, members in by.items():
+        rep = [it for it in members if it.get("resultsReleased") and liquid(it) and _num(it.get("revenueYoY")) is not None]
+        n = len(rep)
+        checks: list[dict[str, Any]] = []
+        few = f"only {n} liquid {'company has' if n == 1 else 'companies have'} reported"
+
+        # 1 Demand: is revenue growth accelerating across the sector?
+        pairs = [(_num(it.get("revenueYoY")), _num(((it.get("plus") or {}).get("growth") or {}).get("prevRevenueYoY")))
+                 for it in rep]
+        pairs = [(a, b) for a, b in pairs if a is not None and b is not None]
+        if len(pairs) >= 3:
+            now, before = _median([a for a, _ in pairs]), _median([b for _, b in pairs])
+            d = now - before
+            st = "ok" if d >= 2 else "bad" if d <= -2 else "warn"
+            checks.append({"key": "demand", "label": "Demand", "status": st,
+                           "note": f"Median revenue growth {now:+.1f}% vs {before:+.1f}% last quarter ({len(pairs)} companies)."})
+        else:
+            checks.append({"key": "demand", "label": "Demand", "status": "na", "note": f"Not enough reports yet ({few})."})
+
+        # 2 Investment and orders: no reliable free data.
+        checks.append({"key": "orders", "label": "Orders & capex", "status": "na",
+                       "note": "No free source for order books or capex; read the results presentations and concalls."})
+
+        # 3 Earnings: revenue, profit and margins improving?
+        if n >= 3:
+            both = sum(_num(it.get("revenueYoY")) > 0 and grew(_num(it.get("patYoY")), it.get("patYoYStatus")) for it in rep)
+            mg = [_num(((it.get("plus") or {}).get("margins") or {}).get("changeBps")) for it in rep]
+            mg = [m for m in mg if m is not None]
+            share = both / n
+            st = "ok" if share >= 0.6 and (not mg or sum(m > 0 for m in mg) >= len(mg) / 2) else "bad" if share <= 0.4 else "warn"
+            checks.append({"key": "earnings", "label": "Earnings", "status": st,
+                           "note": f"{both} of {n} grew revenue and profit"
+                                   + (f"; margins up at {sum(m > 0 for m in mg)} of {len(mg)}." if mg else ".")})
+        else:
+            checks.append({"key": "earnings", "label": "Earnings", "status": "na", "note": f"Not enough reports yet ({few})."})
+
+        # 4 Peer confirmation: several companies showing the same trend?
+        if n >= 3:
+            up = sum(_num(it.get("revenueYoY")) > 0 for it in rep)
+            st = "ok" if up >= max(3, 2 * n / 3) else "bad" if (n - up) >= max(3, 2 * n / 3) else "warn"
+            checks.append({"key": "peers", "label": "Peer confirmation", "status": st,
+                           "note": f"{up} of {n} reported higher revenue than last year."})
+        else:
+            checks.append({"key": "peers", "label": "Peer confirmation", "status": "na", "note": f"Not enough reports yet ({few})."})
+
+        # 5 Market strength: money flowing in and stocks showing relative strength?
+        rel = _num((sectors.get(name) or {}).get("relativeToMarket"))
+        above = tot = 0
+        for it in members:
+            px = (it.get("plus") or {}).get("price") or {}
+            last, e63 = _num((it.get("priceContext") or {}).get("lastClose")), _num(px.get("ema63"))
+            try:
+                fresh = (today - date.fromisoformat(str(px.get("last_session"))[:10])).days <= 20
+            except ValueError:
+                fresh = False
+            if last is not None and e63 is not None and fresh:
+                tot += 1
+                above += last > e63
+        if rel is None or tot < 4:
+            checks.append({"key": "market", "label": "Market strength", "status": "na", "note": "Too few priced stocks."})
+        else:
+            share = above / tot * 100
+            st = "ok" if rel > 0 and share >= 50 else "bad" if rel < 0 and share < 50 else "warn"
+            checks.append({"key": "market", "label": "Market strength", "status": st,
+                           "note": f"3-month move {rel:+.1f}% vs market; {share:.0f}% of {tot} stocks above their 63-day average."})
+
+        measured = [c for c in checks if c["status"] != "na"]
+        cl = {"score": sum(c["status"] == "ok" for c in measured), "measured": len(measured), "of": 5,
+              "reported": n, "checks": checks,
+              "medianRevenueYoY": _r2(_median([_num(it.get("revenueYoY")) for it in rep])),
+              "medianProfitYoY": _r2(_median([_num(it.get("patYoY")) for it in rep if it.get("patYoYStatus") not in _LOSS_STATES]))}
+        if name in sectors:
+            sectors[name]["checklist"] = cl
+
+        # Company execution vs the sector (tailwind is not execution).
+        for it in members:
+            if not it.get("resultsReleased"):
+                continue
+            ry, py = _num(it.get("revenueYoY")), _num(it.get("patYoY"))
+            mr, mp = cl["medianRevenueYoY"], cl["medianProfitYoY"]
+            peers = [x for x in rep if x is not it]
+            if len(peers) < 2 or (ry is None and py is None):
+                ex = {"label": None, "note": "Not enough sector peers have reported to judge execution."}
+            else:
+                beats = [(ry - mr) if ry is not None and mr is not None else None,
+                         (py - mp) if py is not None and mp is not None and it.get("patYoYStatus") not in _LOSS_STATES else None]
+                b = [x for x in beats if x is not None]
+                lab = "AHEAD" if b and all(x > 0 for x in b) else "BEHIND" if b and all(x < 0 for x in b) else "MIXED"
+                bits = []
+                if beats[0] is not None:
+                    bits.append(f"revenue {ry:+.1f}% vs sector median {mr:+.1f}%")
+                if beats[1] is not None:
+                    bits.append(f"profit {py:+.1f}% vs {mp:+.1f}%")
+                ex = {"label": lab, "note": "; ".join(bits) + "."}
+            ex["sectorScore"] = f"{cl['score']}/{cl['measured']}" if cl["measured"] else None
+            it.setdefault("plus", {})["execution"] = ex

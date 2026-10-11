@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.7"
+ENGINE_VERSION = "2.9.8"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -181,6 +181,8 @@ FINANCIAL_FIELDS = {
     "prior_year_revenue_cr", "prior_year_pat_cr",
     "opm_pct", "opm_prev_q_pct", "opm_prior_year_pct", "margin_change_bps",
     "prev_q_revenue_yoy_pct", "prev_q_pat_yoy_pct",
+    "ytd_revenue_cr", "ytd_pat_cr", "prior_ytd_revenue_cr", "prior_ytd_pat_cr",
+    "ytd_revenue_yoy_pct", "ytd_pat_yoy_pct", "ytd_pat_trend",
 }
 EXCHANGE_META_FIELDS = {
     "exchange_pe", "sector_pe", "pb", "roe_pct", "market_cap_cr", "ffmc_cr",
@@ -2032,7 +2034,7 @@ XBRL_EPS_CONCEPTS = [
 ]
 QUARTER_DAYS = (80, 100)
 SNAPSHOT_PARSER_VERSION = 2   # 2.9.4: re-parse saved BSE/NSE result tables once (PAT model on QoQ)
-XBRL_PARSER_VERSION = 5   # bump to re-read every stored XBRL snapshot once
+XBRL_PARSER_VERSION = 6   # bump to re-read every stored XBRL snapshot once
 
 
 def _xbrl_local(tag: str) -> str:
@@ -2194,8 +2196,37 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
     prev_pat, _ = pick(same_pat, prev_ctx)
     eps, eps_concept = pick(XBRL_EPS_CONCEPTS, current_ctx, monetary=False)
 
+    # 2.9.8: year-to-date (fiscal year start -> period end), same concepts.
+    def ytd_contexts(target_end: date) -> set[str]:
+        fy_start = date(target_end.year if target_end.month >= 4 else target_end.year - 1, 4, 1)
+        return {cid for cid, c in contexts.items()
+                if not c["dimensional"] and c["start"] and c["end"] and abs((c["start"] - fy_start).days) <= 3
+                and abs((c["end"] - target_end).days) <= 3 and (c["end"] - c["start"]).days > 100}
+
+    def quiet(concept: str | None, ctx_ids: set[str]) -> float | None:
+        if not concept or not ctx_ids:
+            return None
+        vals = {round(f["value"], 4) for f in facts if f["name"] == concept and f["context"] in ctx_ids}
+        if len(vals) != 1:
+            return None
+        fact = next(f for f in facts if f["name"] == concept and f["context"] in ctx_ids)
+        unit = units.get(fact["unit"], str(fact["unit"]).upper())
+        return fact["value"] / 1e7 if "INR" in unit and "SHARE" not in unit else None
+
+    ytd_now, ytd_prior = ytd_contexts(period_end), ytd_contexts(_shift_quarters(period_end, -4))
+    ytd_rev, ytd_pat = quiet(rev_concept, ytd_now), quiet(pat_concept, ytd_now)
+    ytd_prior_rev, ytd_prior_pat = quiet(rev_concept, ytd_prior), quiet(pat_concept, ytd_prior)
+    ytd_trend, ytd_pat_pct = pat_trend(ytd_pat, ytd_prior_pat)
+
     trend, pat_yoy = pat_trend(pat, prior_pat)
     return {
+        "ytd_revenue_cr": round2(ytd_rev),
+        "ytd_pat_cr": round2(ytd_pat),
+        "prior_ytd_revenue_cr": round2(ytd_prior_rev),
+        "prior_ytd_pat_cr": round2(ytd_prior_pat),
+        "ytd_revenue_yoy_pct": round2(pct_change(ytd_rev, ytd_prior_rev)),
+        "ytd_pat_yoy_pct": round2(ytd_pat_pct),
+        "ytd_pat_trend": ytd_trend,
         "revenue_cr": round2(rev),
         "pat_cr": round2(pat),
         "eps": round2(eps),
@@ -2214,7 +2245,7 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
             "concepts": {"revenue": rev_concept, "pat": pat_concept, "eps": eps_concept},
             # 2.9.4: unrounded crore figures; growth from rounded crores was off
             # for small companies (INDBANK PAT -13.44% vs -12.97% exact).
-            "exact": {"revenue_cr": rev, "pat_cr": pat},
+            "exact": {"revenue_cr": rev, "pat_cr": pat, "ytd_revenue_cr": ytd_rev, "ytd_pat_cr": ytd_pat},
             "patQoQRawPct": round2(pct_change(pat, prev_pat)),
             "issues": issues,
             "comparativesFromSameDocument": True,
@@ -4404,7 +4435,9 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
     meta = parsed.setdefault("_meta", {})
     concepts = meta.get("concepts") or {}
     basis = basis if basis in {"CONSOLIDATED", "STANDALONE"} else (parsed.get("basis") if parsed.get("basis") in {"CONSOLIDATED", "STANDALONE"} else None)
-    for shift, need in ((-4, parsed.get("prior_year_revenue_cr") is None or parsed.get("prior_year_pat_cr") is None),
+    need_ytd = ((parsed.get("ytd_revenue_cr") is not None and parsed.get("prior_ytd_revenue_cr") is None)
+                or (parsed.get("ytd_pat_cr") is not None and parsed.get("prior_ytd_pat_cr") is None))
+    for shift, need in ((-4, parsed.get("prior_year_revenue_cr") is None or parsed.get("prior_year_pat_cr") is None or need_ytd),
                         (-1, parsed.get("revenue_qoq_pct") is None)):
         if not need:
             continue
@@ -4425,6 +4458,17 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
         pat_o = other.get("pat_cr") if same_pat else None
         rev_n, pat_n = _exact(parsed, "revenue_cr"), _exact(parsed, "pat_cr")
         if shift == -4:
+            # 2.9.8: last year's YTD from last year's own filing when this one lacks it.
+            if parsed.get("ytd_revenue_cr") is not None or parsed.get("ytd_pat_cr") is not None:
+                y_rev = _exact(other, "ytd_revenue_cr") if same_rev else None
+                y_pat = _exact(other, "ytd_pat_cr") if same_pat else None
+                if parsed.get("prior_ytd_revenue_cr") is None and y_rev is not None:
+                    parsed["prior_ytd_revenue_cr"] = round2(y_rev)
+                    parsed["ytd_revenue_yoy_pct"] = round2(pct_change(_exact(parsed, "ytd_revenue_cr"), y_rev))
+                if parsed.get("prior_ytd_pat_cr") is None and y_pat is not None:
+                    parsed["prior_ytd_pat_cr"] = round2(y_pat)
+                    parsed["ytd_pat_trend"], yp = pat_trend(_exact(parsed, "ytd_pat_cr"), y_pat)
+                    parsed["ytd_pat_yoy_pct"] = round2(yp)
             if parsed.get("prior_year_revenue_cr") is None and rev_o is not None:
                 parsed["prior_year_revenue_cr"] = rev_o
                 parsed["revenue_yoy_pct"] = round2(pct_change(rev_n, rev_o))
@@ -5572,6 +5616,11 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
     live = pead_plus.live_entry_status(plan, lv) if lv_at and lv_at.astimezone(IST).date() == now_ist().date() else None
     return {
         "growth": growth,
+        # 2.9.8: QoQ detects the change, YoY confirms it, YTD validates execution.
+        "lens": pead_plus.growth_lens(store.value(event, "revenue_qoq_pct"), store.value(event, "revenue_yoy_pct"),
+                                      store.value(event, "ytd_revenue_yoy_pct"), store.value(event, "pat_qoq_pct"),
+                                      store.value(event, "pat_yoy_pct"), store.value(event, "ytd_pat_yoy_pct"),
+                                      store.value(event, "pat_trend")) if released else None,
         "relativeStrength": rs,
         "live": live,
         "strength": strength,
@@ -6595,6 +6644,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         internals = {}
     regime.update(pead_plus.market_internals(items, internals, now_ist().date()))
     pead_plus.peer_context(items, regime)
+    pead_plus.sector_checklists(items, sectors, now_ist().date())   # 2.9.8
     try:
         health["selfAudit"] = pead_plus.self_audit(items, regime, health, now_ist().date())
         json_dump_atomic(LOG_DIR / "self_audit.json", health["selfAudit"])

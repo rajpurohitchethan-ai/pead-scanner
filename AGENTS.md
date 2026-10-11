@@ -177,3 +177,9 @@ Engine 2.9.7 (second audit, 11 Oct 2026)
 - NSE board meetings: rows whose purpose is "Board Meeting Intimation" count when the description names results (BSHSL 15-Oct-2026 half-yearly results); a past date with no filing never replaces a future scheduled date in apply_discovery.
 - Breadth excludes stocks with no trade in 20+ days; header says "NIFTY 500 last session" (it said "today" on weekends).
 - PLUS_VERSION 2.9.7 (one rebuild). Tests: tests/test_robustness.py Audit11OctTests.
+
+Engine 2.9.8 (QoQ / YoY / YTD + sector checklist, 11 Oct 2026, after @SureshKBN)
+- YTD: the XBRL parser reads the year-to-date context (fiscal-year start -> period end, > 100 days, same revenue / PAT concepts as the quarter): ytd_revenue_cr, ytd_pat_cr, prior_ytd_*, ytd_revenue_yoy_pct, ytd_pat_yoy_pct (PAT model), ytd_pat_trend. When the filing lacks last year's YTD, fill_comparatives_from_listing takes it from last year's own filing (TCS Apr-Sep revenue +12.6%, POONAWALLA +73.5%). XBRL_PARSER_VERSION 6.
+- pead_plus.growth_lens -> plus.lens: QoQ / YoY / YTD for revenue and profit, with notes: low base (YoY > 100% but QoQ < 25%: POONAWALLA profit +405%), speeding up / slowing (YoY vs YTD by 5 pp), improving now (QoQ both up), consistent. Card shows a 3-column table.
+- pead_plus.sector_checklists -> sectors[].checklist (5 questions: demand = median revenue YoY vs last quarter's, orders & capex = never computed (no free source), earnings = share growing revenue and profit (+ margins), peer confirmation = >= 2/3 of reporters growing, market strength = 3-month move vs market and share above 63-day EMA; liquid reporters only, < 3 = "not enough reports yet") and plus.execution (company revenue / profit YoY vs the sector median: AHEAD / BEHIND / MIXED). Sectors tab column + expanded detail; card block under the top-down check. Display only: conviction and entry rules unchanged.
+- Tests: GrowthLensAndSectorChecklistTests.

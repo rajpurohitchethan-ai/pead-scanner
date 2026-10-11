@@ -547,5 +547,61 @@ class Audit11OctTests(unittest.TestCase):
         self.assertEqual((b["n"], b["above21Pct"]), (1, 100.0))
 
 
+
+class GrowthLensAndSectorChecklistTests(unittest.TestCase):
+    """2.9.8: QoQ / YoY / YTD lens and the 5-question sector checklist."""
+
+    def test_ytd_from_filing_and_year_ago_document(self):
+        # TCS Q2 FY27: Apr-Sep revenue 1,45,463 Cr; last year's from last year's filing.
+        C = {"revenue": "rev", "pat": "pat"}
+        parsed = {"revenue_cr": 73188.0, "pat_cr": 13884.0, "ytd_revenue_cr": 145463.0, "ytd_pat_cr": 26662.0,
+                  "_meta": {"concepts": C}}
+        other = {"revenue_cr": 65799.0, "pat_cr": 12075.0, "ytd_revenue_cr": 129236.0, "ytd_pat_cr": 24313.0,
+                 "_meta": {"concepts": C}}
+        listing = [{"periodEnd": "2025-09-30", "fromDate": "2025-07-01", "basis": "CONSOLIDATED", "cumulative": False,
+                    "xbrlUrl": "ya", "filedAt": None}]
+        p.fill_comparatives_from_listing(parsed, listing, date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: other)
+        self.assertEqual(parsed["ytd_revenue_yoy_pct"], 12.56)
+        self.assertEqual(parsed["ytd_pat_yoy_pct"], 9.66)
+
+    def test_low_base_and_acceleration_notes(self):
+        import pead_plus as pp
+        L = pp.growth_lens(12.3, 70.2, 73.5, 21.8, 405.2, 399.0)   # POONAWALLA
+        self.assertTrue(any("low base" in n for n in L["notes"]))
+        L = pp.growth_lens(1.3, 11.2, 12.6, 4.0, 15.0, 9.7)        # TCS
+        self.assertTrue(any("speeding up" in n for n in L["notes"]))
+        self.assertIsNone(pp.growth_lens(None, None, None, None, None, None))
+
+    def _it(self, sym, sector, rev, pat, prev, released=True, last=110, ema=100):
+        return {"symbol": sym, "resultsReleased": released, "revenueYoY": rev, "patYoY": pat,
+                "priceContext": {"lastClose": last},
+                "plus": {"sectorKey": sector, "liquidity": {"pass": True}, "growth": {"prevRevenueYoY": prev},
+                         "margins": {}, "price": {"ema63": ema, "last_session": "2026-10-09"}}}
+
+    def test_sector_checklist_and_execution(self):
+        import pead_plus as pp
+        items = [self._it("A", "IT", 12, 15, 8), self._it("B", "IT", 10, 9, 7), self._it("C", "IT", 14, 20, 9),
+                 self._it("D", "IT", 4, -2, 6), self._it("E", "IT", None, None, None, released=False)]
+        sectors = {"IT": {"sector": "IT", "relativeToMarket": 5.0}}
+        pp.sector_checklists(items, sectors, date(2026, 10, 11))
+        cl = sectors["IT"]["checklist"]
+        st = {c["key"]: c["status"] for c in cl["checks"]}
+        self.assertEqual(st["orders"], "na")                  # never invented
+        self.assertEqual(st["demand"], "ok")                  # median 11.0 vs 7.5 last quarter
+        self.assertEqual(st["peers"], "ok")
+        self.assertEqual(st["market"], "ok")
+        self.assertEqual((cl["score"], cl["measured"]), (4, 4))
+        self.assertEqual(items[3]["plus"]["execution"]["label"], "BEHIND")
+        self.assertEqual(items[2]["plus"]["execution"]["label"], "AHEAD")
+
+    def test_too_few_reports_is_not_scored(self):
+        import pead_plus as pp
+        items = [self._it("A", "FMCG", 12, 15, 8)]
+        sectors = {"FMCG": {"sector": "FMCG", "relativeToMarket": -3.0}}
+        pp.sector_checklists(items, sectors, date(2026, 10, 11))
+        st = {c["key"]: c["status"] for c in sectors["FMCG"]["checklist"]["checks"]}
+        self.assertEqual((st["demand"], st["earnings"], st["peers"]), ("na", "na", "na"))
+
+
 if __name__ == "__main__":
     unittest.main()
