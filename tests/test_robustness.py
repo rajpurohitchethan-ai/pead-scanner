@@ -571,6 +571,8 @@ class GrowthLensAndSectorChecklistTests(unittest.TestCase):
         L = pp.growth_lens(1.3, 11.2, 12.6, 4.0, 15.0, 9.7)        # TCS
         self.assertTrue(any("speeding up" in n for n in L["notes"]))
         self.assertIsNone(pp.growth_lens(None, None, None, None, None, None))
+        L = pp.growth_lens(15.0, 38.3, 36.5, 8.0, 22.5, 34.8)      # PREMIERPOL: profit slowing, not "consistent"
+        self.assertFalse(any("Consistent" in n for n in L["notes"]))
 
     def _it(self, sym, sector, rev, pat, prev, released=True, last=110, ema=100):
         return {"symbol": sym, "resultsReleased": released, "revenueYoY": rev, "patYoY": pat,

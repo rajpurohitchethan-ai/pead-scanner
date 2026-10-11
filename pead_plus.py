@@ -1281,7 +1281,7 @@ def growth_lens(rev_qoq: Any, rev_yoy: Any, rev_ytd: Any, pat_qoq: Any, pat_yoy:
         elif rq < 0 and pq < 0:
             notes.append("Both revenue and profit fell from last quarter (check if the business is seasonal).")
     if ry is not None and rt is not None and py is not None and pt is not None and min(ry, rt, py, pt) > 0 \
-            and abs(ry - rt) < 5:
+            and abs(ry - rt) < 5 and abs(py - pt) < 5 and py <= 100:
         notes.append("Consistent: this quarter's growth matches the year so far.")
     return {"revenue": {"qoq": rq, "yoy": ry, "ytd": rt}, "profit": {"qoq": pq, "yoy": py, "ytd": pt},
             "profitStatus": pat_yoy_status if pat_yoy_status in _LOSS_STATES else None, "notes": notes[:3]}
