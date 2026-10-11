@@ -6235,6 +6235,7 @@ def event_to_intelligence(event: dict[str, Any]) -> dict[str, Any]:
         "financialBasis": row.get("financialBasis"),
         "financialStatus": row.get("financialStatus"),
         "financialIssues": row.get("financialIssues"),
+        "halfYearOnly": row.get("halfYearOnly"),
         "eventState": row["eventState"],
         "dataCompletenessPct": row["dataCompletenessPct"],
         "baseScoreText": row["scoreText"],

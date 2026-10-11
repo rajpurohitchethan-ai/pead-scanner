@@ -428,5 +428,16 @@ class HalfYearOnlyFilingTests(unittest.TestCase):
         self.assertEqual(bad, [])
 
 
+    def test_suspect_figures_warn_not_fail(self):
+        import pead_plus as pp
+        items = [{"symbol": "LCCINFOTEC", "resultsReleased": True, "resultDate": "2026-10-08",
+                  "financialIssues": ["EXTREME_REVENUE_YOY", "UNIT_SUSPECT"], "fundamentalSnapshot": {},
+                  "plus": {"price": {"last_session": "2026-10-09"}}}]
+        audit = pp.self_audit(items, {"asOf": "2026-10-09"}, {}, date(2026, 10, 11))
+        st = {c["check"]: c["status"] for c in audit["checks"]}
+        self.assertEqual(st["Declared results withheld as suspect figures"], "WARN")
+        self.assertEqual(st["Declared results have revenue/profit (filed 2+ days ago)"], "OK")
+
+
 if __name__ == "__main__":
     unittest.main()

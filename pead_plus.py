@@ -896,7 +896,7 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
     checks.append({"check": "Declared results of stocks that are not trading", "status": "OK", "count": len(idle),
                    "examples": idle[:8], "note": "No trades in 20+ days: no reaction or entry is possible."})
     declared = [it for it in items if it.get("resultsReleased") and not not_trading(it)]
-    no_fin_old, no_fin_new, no_yoy, half = [], [], [], []
+    no_fin_old, no_fin_new, no_yoy, half, suspect = [], [], [], [], []
     for it in declared:
         rd = d(it.get("resultDate"))
         age = (today - rd).days if rd else 0
@@ -905,6 +905,9 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
             if it.get("halfYearOnly"):
                 half.append(it["symbol"])
                 continue
+            if set(it.get("financialIssues") or []) & {"UNIT_SUSPECT", "EXTREME_REVENUE_YOY", "NEGATIVE_REVENUE", "PERIOD_MISMATCH"}:
+                suspect.append(it["symbol"])   # 2.9.6: read, then withheld on purpose
+                continue
             (no_fin_old if age >= 2 else no_fin_new).append(it["symbol"])
         elif it.get("revenueYoY") is None and it.get("patYoYStatus") is None:
             no_yoy.append(it["symbol"])
@@ -912,6 +915,8 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
         note="Exchange filing not parsed; check the NSE_XBRL / BSE_RESULTS_SNAPSHOT fetch errors.")
     add("Declared results have revenue/profit (filed in last 2 days)", no_fin_new,
         note="Normal for a few hours after filing; the engine re-checks every run.")
+    add("Declared results withheld as suspect figures", suspect,
+        note="Read from the filing but held back (looks like a unit error or an impossible jump); check the filing.")
     checks.append({"check": "Declared results with only half-year figures", "status": "OK", "count": len(half),
                    "examples": half[:8], "note": "The filing has no quarter-only numbers; nothing to parse."})
     add("Declared results have year-on-year figures", no_yoy,
