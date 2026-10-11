@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.6"
+ENGINE_VERSION = "2.9.7"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1359,7 +1359,7 @@ class NSEAdapter:
             raise RuntimeError("NSE index-history method unavailable")
         return self._call("index_history", lambda: fn(index, from_date=start, to_date=end), symbol=index, raw_source="NSE_INDEX")
 
-    def history(self, symbol: str, start: date, end: date, event_id: str):
+    def history(self, symbol: str, start: date, end: date, event_id: str, series_hint: str | None = None):
         """EQ-series history, plus the stock's active series when EQ stops
         early (2.9.4). NSE moves stocks under surveillance to BE (trade-to-
         trade); an EQ-only request then ends on the switch day (KABRAEXTRU
@@ -1373,18 +1373,27 @@ class NSEAdapter:
         def go():
             rows = list(fn(symbol=symbol, from_date=start, to_date=end) or [])
             last = nse_rows_last_date(rows)
-            if last is not None and (end - last).days <= NSE_SERIES_STALE_DAYS:
+            fresh = last is not None and (end - last).days <= NSE_SERIES_STALE_DAYS
+            gapped = bool(nse_rows_gaps(rows))
+            if fresh and not gapped:
                 self.last_series = "EQ"
                 return rows
-            series = self.active_series(symbol)
-            alt = [x for x in series if x in NSE_ALT_PRICE_SERIES]
-            if not alt or not _extra_budget_ok(1):
+            hint = str(series_hint or "").upper()
+            if hint in NSE_ALT_PRICE_SERIES:
+                alt = [hint]            # 2.9.6: known series (VIJIFIN) - no meta call needed
+            elif fresh:
+                alt = ["BE"]            # 2.9.6: back in EQ after a spell in BE (FAIRCHEMOR gap Jul-Oct)
+            else:
+                alt = [x for x in self.active_series(symbol) if x in NSE_ALT_PRICE_SERIES]
+            if not alt or not _series_budget_ok():
                 return rows
             try:
                 more = list(fn(symbol=symbol, from_date=start, to_date=end, series=alt[0].lower()) or [])
             except Exception:
                 return rows
-            if more:
+            if fresh:
+                self.last_series = "EQ"
+            elif more:
                 self.last_series = alt[0]
             return merge_nse_history_rows(rows, more)
 
@@ -1393,7 +1402,7 @@ class NSEAdapter:
     def active_series(self, symbol: str) -> list[str]:
         """Trading series NSE lists as active for a symbol (getMetaData)."""
         meta_fn = getattr(self.client, "equity_meta_info", None)
-        if meta_fn is None or not _extra_budget_ok(1):
+        if meta_fn is None or not _series_budget_ok():
             return []
         try:
             meta = meta_fn(symbol) or {}
@@ -2388,7 +2397,10 @@ def normalize_nse_integrated(item: dict[str, Any]) -> dict[str, Any] | None:
 
 def normalize_nse_meeting(item: dict[str, Any]) -> dict[str, Any] | None:
     purpose = str(first(item, "bm_purpose", "purpose", "bmPurpose", "subject", "description", "bm_desc", default="") or "")
-    if "result" not in purpose.lower():
+    desc = str(first(item, "bm_desc", "description", default="") or "")
+    # 2.9.6: "Board Meeting Intimation" rows name the results only in the
+    # description (BSHSL: meeting on 15-Oct-2026 "to consider ... results").
+    if "result" not in purpose.lower() and "result" not in desc.lower():
         return None
     symbol = normalize_symbol(first(item, "bm_symbol", "symbol", "Symbol", "symbolCode", "securitySymbol"))
     d = parse_date(first(item, "bm_date", "meetingDate", "bmDate", "date", "boardMeetingDate"))
@@ -2567,8 +2579,13 @@ def apply_discovery(store: EventStore, master: SymbolMaster, candidate: dict[str
             # 2.9.4: this meeting was shown to be for an earlier quarter.
             store.save(event)
             return event
-        if candidate.get("resultDate"):
-            store.merge_field(event, "result_date", candidate["resultDate"].isoformat(), source=source, raw_ref=raw_ref)
+        cur = parse_date(store.value(event, "result_date"))
+        new = candidate.get("resultDate")
+        today = now_ist().date()
+        # 2.9.6: a date already past (no filing came) never replaces a future
+        # scheduled date (BSHSL: rows for 10-Oct and 15-Oct filed together).
+        if new and not (cur and cur >= today and new < today):
+            store.merge_field(event, "result_date", new.isoformat(), source=source, raw_ref=raw_ref)
         if boolish(store.value(event, "results_released")) is not True:
             store.set_state(event, "SCHEDULED", "board meeting/result calendar discovered")
     chosen = select_xbrl_filing(event)
@@ -2837,6 +2854,25 @@ def nse_rows_last_date(rows: list[Any]) -> date | None:
     return max(ds) if ds else None
 
 
+NSE_GAP_DAYS = 10            # > 10 calendar days between sessions = missing data, not a holiday
+SERIES_CALL_BUDGET = int(os.getenv("SERIES_CALL_BUDGET", "60"))
+_SERIES_CALLS = {"n": 0}
+
+
+def _series_budget_ok() -> bool:
+    """Own budget for series look-ups: the shared extra-call budget is often
+    spent by then, which let an EQ-only payload replace a full one (VIJIFIN)."""
+    if _SERIES_CALLS["n"] >= SERIES_CALL_BUDGET:
+        return False
+    _SERIES_CALLS["n"] += 1
+    return True
+
+
+def nse_rows_gaps(rows: list[Any]) -> list[tuple[date, date]]:
+    ds = sorted({d for d in (_nse_row_date(r) for r in rows if isinstance(r, dict)) if d})
+    return [(a, b) for a, b in zip(ds, ds[1:]) if (b - a).days > NSE_GAP_DAYS]
+
+
 def merge_nse_history_rows(rows: list[Any], more: list[Any]) -> list[Any]:
     """One row per session across series (a stock trades in one at a time)."""
     by: dict[date, dict[str, Any]] = {}
@@ -2946,9 +2982,11 @@ PRE_RESULT_FIELDS = ("pre_result_5d_pct", "pre_result_10d_pct", "pre_result_20d_
 def drop_stale_pre_result(store: "EventStore", event: dict[str, Any], metrics: dict[str, Any]) -> bool:
     """Withdraw stored run-up values when the price history before the result is
     months old (untraded scrip): they were computed from stale closes."""
+    gapped = metrics.pop("_preResultGap", None) or []
+    changed = any([store.revoke_field(event, f, "price history has a hole across this window") for f in gapped])
     if not metrics.pop("_preResultStale", False):
-        return False
-    return any([store.revoke_field(event, f, "no trades in the sessions before the result") for f in PRE_RESULT_FIELDS])
+        return changed
+    return any([store.revoke_field(event, f, "no trades in the sessions before the result") for f in PRE_RESULT_FIELDS]) or changed
 
 
 def price_metrics(frame: Any, reaction_date: date | None, window_start: date | None = None) -> dict[str, Any]:
@@ -2969,6 +3007,9 @@ def price_metrics(frame: Any, reaction_date: date | None, window_start: date | N
     if reaction_date is not None:
         candidates = f.index[f["Date"].dt.date >= reaction_date].tolist()
         reaction_idx = candidates[0] if candidates else None
+        # 2.9.6: the reaction session itself is missing from the data.
+        if reaction_idx is not None and (f.loc[reaction_idx, "Date"].date() - reaction_date).days > 5:
+            reaction_idx = None
     # Two-session window for intraday filings: measure from the close before
     # the filing day; highs/lows/volume span both sessions.
     win_idx = reaction_idx
@@ -2983,8 +3024,19 @@ def price_metrics(frame: Any, reaction_date: date | None, window_start: date | N
     last_pre = f.loc[pre_end - 1, "Date"].date() if pre_end >= 1 else None
     pre_stale = last_pre is None or (ref - last_pre).days > PRE_RESULT_MAX_GAP_DAYS
 
+    dates = f["Date"].dt.date.tolist()
+
+    def spans_gap(a: int, b: int) -> bool:
+        # 2.9.6: a hole in the history (stock in another series) is not a move.
+        return any((dates[i + 1] - dates[i]).days > NSE_GAP_DAYS for i in range(max(a, 0), min(b, len(dates) - 1)))
+
+    gapped: list[str] = []
+
     def pre_move(n: int):
         if pre_stale or pre_end < n + 1:
+            return None
+        if spans_gap(pre_end - n - 1, pre_end - 1):
+            gapped.append(f"pre_result_{n}d_pct")
             return None
         return pct_idx(pre_end - n - 1, pre_end - 1)
 
@@ -2996,6 +3048,7 @@ def price_metrics(frame: Any, reaction_date: date | None, window_start: date | N
         "pre_result_10d_pct": pre_move(10),
         "pre_result_20d_pct": pre_move(20),
         "_preResultStale": pre_stale,
+        "_preResultGap": gapped,
         "distance_52w_high_pct": round2(pct_change(latest, high_52)) if latest is not None and high_52 not in (None, 0) else None,
         "last_price": round2(latest),
         "result_day_return_pct": None,
@@ -5082,7 +5135,7 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
             start = (price_boundary or now_ist().date()) - timedelta(days=420)
             end = now_ist().date()
             with NSEAdapter(ctx) as nse:
-                payload, raw_ref = nse.history(symbol, start, end, event["eventId"])
+                payload, raw_ref = nse.history(symbol, start, end, event["eventId"], series_hint=sec.get("nseSeries"))
                 if getattr(nse, "last_series", None) == "EQ":
                     sec.pop("nseSeries", None)
                 elif getattr(nse, "last_series", None):
@@ -5118,6 +5171,17 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
         store.record_fetch(event, "PRICE_HISTORY", ok=False, error="; ".join(errors) or "no price history")
         return
 
+    # 2.9.6: never let an older history replace a newer one (VIJIFIN: an
+    # EQ-only fetch ending 18 Mar replaced EQ+BE prices to 9 Oct).
+    stored_last = parse_date((((event.get("plus") or {}).get("price") or {}).get("last_session")))
+    try:
+        new_last = pd.to_datetime(frame["Date"]).max().date() if pd is not None else None
+    except Exception:
+        new_last = None
+    if stored_last and new_last and new_last < stored_last:
+        store.record_fetch(event, "PRICE_HISTORY", ok=False, raw_ref=raw_ref,
+                           error=f"fetched history ends {new_last}, older than stored {stored_last}; stored prices kept")
+        return
     metrics = price_metrics(frame, price_boundary, window_start)
     drop_stale_pre_result(store, event, metrics)
     reaction_traded = released and session_closed(reaction_date)
@@ -5962,6 +6026,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     if traded and source == "NSE_PRICE":
         m = price_metrics(frame, reaction, wstart)
         m.pop("_preResultStale", None)
+        m.pop("_preResultGap", None)
         for field in ("result_day_low", "result_day_high", "result_day_return_pct", "result_day_rvol",
                       "post_result_hold_5d", "post_result_hold_10d", "box_high", "box_breakout"):
             if m.get(field) is not None:
@@ -5969,7 +6034,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
-PLUS_VERSION = "2.9.4"   # bump to rebuild every stored chart/price analytic once
+PLUS_VERSION = "2.9.7"   # bump to rebuild every stored chart/price analytic once
 
 
 def replay_plus(store: EventStore) -> int:
@@ -6894,6 +6959,7 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
     MASTER_DIR.mkdir(parents=True, exist_ok=True)
 
     RUN_GUARD.reset()
+    _SERIES_CALLS["n"] = 0
     store = EventStore()
     master = SymbolMaster()
     raw = RawCache()

@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.6"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.7"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -167,6 +167,8 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
         out["atr14"] = _r2(close.diff().abs().tail(14).mean() * 1.25)   # close-only proxy (BSE data)
 
     ri = _idx_on_or_after(f, reaction_date) if released else None
+    if ri is not None and (f["Date"].iloc[ri].date() - reaction_date).days > 5:
+        ri = None                         # 2.9.6: reaction session missing from the data
     # Intraday filings: the reaction window starts on the filing day.
     wi = ri
     if ri is not None and window_start is not None and reaction_date is not None and window_start < reaction_date:
@@ -219,6 +221,15 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
     if qi is not None and q1_window_start is not None and q1_reaction_date is not None and q1_window_start < q1_reaction_date:
         w = _idx_on_or_after(f, q1_window_start)
         qw = w if w is not None and w <= qi else qi
+    # 2.9.6: no Q1 replay across a hole in the price history (FAIRCHEMOR,
+    # TIGERLOGS: the "Q1 reaction" was measured from a close months earlier).
+    if qi is not None and qw is not None and qw > 0:
+        d0, d1 = f["Date"].iloc[qw - 1], f["Date"].iloc[qi]
+        q1_date = q1_reaction_date
+        if q1_date is not None and (d1.date() - q1_date).days > 5:
+            qi = None                     # first session found is far after the real reaction day
+        elif (d1 - d0).days > 10 + (qi - qw + 1) * 3:
+            qi = None
     if qi is not None and qw is not None and qw > 0:
         q_pre = _num(close.iloc[qw - 1])
         q_close = _num(close.iloc[qi])
@@ -605,6 +616,26 @@ def call_date_from_text(text: str, filed_on: date) -> date | None:
     return min(later) if later else (min(found) if found else None)
 
 
+def call_date_from_url(url: Any, filed_on: date) -> date | None:
+    """2.9.6: the call date is often only in the attachment's file name
+    (CRAMC "Investor_Meet_October_12_2026.pdf", "InvestorMeet_28092026.pdf").
+    Only a date after the filing day counts (it is then the meeting date)."""
+    if not url:
+        return None
+    name = str(url).rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    d = call_date_from_text(_re.sub(r"[_\-]+", " ", name), filed_on)
+    if d is None:
+        for tok in _re.findall(r"(?<!\d)(\d{8})(?!\d)", name):
+            try:
+                d = date(int(tok[4:]), int(tok[2:4]), int(tok[:2]))
+                break
+            except ValueError:
+                continue
+    if d is None or d <= filed_on or (d - filed_on).days > 60:
+        return None
+    return d
+
+
 def concall_status(filings: list[dict[str, Any]], result_date: date | None, today: date) -> dict[str, Any]:
     """filings: [{"filedAt": datetime|date, "text": str, "url": str|None}] from
     NSE/BSE announcements around the result. Only filings from 20 days before
@@ -619,7 +650,10 @@ def concall_status(filings: list[dict[str, Any]], result_date: date | None, toda
         kind = classify_call_filing(f.get("text") or "")
         rec = {"filedOn": filed_d.isoformat(), "url": f.get("url"), "callDate": None}
         if kind == "NOTICE":
-            d = call_date_from_text(f.get("text") or "", filed_d)
+            url_d = call_date_from_url(f.get("url"), filed_d)
+            if url_d and result_date and url_d < result_date:
+                continue   # 2.9.6: a meeting before the result (CRAMC 28 Sep investor meet)
+            d = url_d or call_date_from_text(f.get("text") or "", filed_d)
             # A "call date" before the result day is almost always the letter
             # date or another date in the text, not the call: treat as undated.
             if d and result_date and d < result_date:
@@ -642,7 +676,7 @@ def concall_status(filings: list[dict[str, Any]], result_date: date | None, toda
         if out["status"] != "DONE":
             out["status"] = "SCHEDULED" if date.fromisoformat(n["callDate"]) >= today else "DONE"
     elif notices and out["status"] != "DONE":
-        n = notices[-1]
+        n = max(notices, key=lambda r: r["filedOn"])   # 2.9.6: exchanges list newest first
         out["noticeUrl"] = n["url"]
         # Date not readable from the text. Companies usually file the notice a
         # week or more before the result and hold the call on or just after
@@ -1149,6 +1183,11 @@ def market_internals(items: list[dict[str, Any]], internals: dict[str, Any] | No
         e21, e63 = _num(px.get("ema21")), _num(px.get("ema63"))
         if last is None or e21 is None or e63 is None:
             continue
+        try:   # 2.9.6: untraded scrips (last session months ago) are not market breadth
+            if (today - date.fromisoformat(str(px.get("last_session"))[:10])).days > 20:
+                continue
+        except ValueError:
+            pass
         n += 1
         above21 += last > e21
         above63 += last > e63

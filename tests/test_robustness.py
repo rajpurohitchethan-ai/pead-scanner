@@ -439,5 +439,113 @@ class HalfYearOnlyFilingTests(unittest.TestCase):
         self.assertEqual(st["Declared results have revenue/profit (filed 2+ days ago)"], "OK")
 
 
+
+class Audit11OctTests(unittest.TestCase):
+    """Second audit (11 Oct 2026)."""
+
+    def setUp(self):
+        p.RUN_GUARD.reset()
+        p._SERIES_CALLS["n"] = 0
+        self.sleep = mock.patch.object(p.time, "sleep", lambda s: None)
+        self.sleep.start()
+
+    def tearDown(self):
+        self.sleep.stop()
+
+    def _adapter(self, client):
+        a = p.NSEAdapter.__new__(p.NSEAdapter)
+        a.client, a.ctx = client, mock.Mock()
+        a.ctx.raw.save.return_value = "raw/ref"
+        return a
+
+    def test_gap_in_eq_history_fetches_be(self):
+        # FAIRCHEMOR: EQ rows jump from 03 Jul to 05 Oct 2026 (stock was in BE).
+        calls = []
+
+        def hist(symbol, from_date=None, to_date=None, series="eq"):
+            calls.append(series)
+            if series == "eq":
+                return [{"mtimestamp": d, "chClosingPrice": 100} for d in ("02-Jul-2026", "03-Jul-2026", "05-Oct-2026", "09-Oct-2026")]
+            return [{"mtimestamp": d, "chClosingPrice": 90} for d in ("06-Jul-2026", "15-Sep-2026", "01-Oct-2026")]
+        c = mock.Mock(spec=["fetch_equity_historical_data"])
+        c.fetch_equity_historical_data.side_effect = hist
+        a = self._adapter(c)
+        rows, _ = a.history("FAIRCHEMOR", date(2025, 8, 1), date(2026, 10, 10), "e")
+        self.assertEqual(calls, ["eq", "be"])
+        self.assertEqual(len(rows), 7)
+        self.assertEqual(a.last_series, "EQ")
+
+    def test_known_series_used_without_meta_call(self):
+        # VIJIFIN trades in BE; the stored series is reused directly.
+        calls = []
+
+        def hist(symbol, from_date=None, to_date=None, series="eq"):
+            calls.append(series)
+            return ([{"mtimestamp": "18-Mar-2026", "chClosingPrice": 3.18}] if series == "eq"
+                    else [{"mtimestamp": "09-Oct-2026", "chClosingPrice": 13.46}])
+        c = mock.Mock(spec=["fetch_equity_historical_data", "equity_meta_info"])
+        c.fetch_equity_historical_data.side_effect = hist
+        a = self._adapter(c)
+        rows, _ = a.history("VIJIFIN", date(2025, 8, 1), date(2026, 10, 10), "e", series_hint="BE")
+        self.assertEqual(calls, ["eq", "be"])
+        c.equity_meta_info.assert_not_called()
+        self.assertEqual(p.nse_rows_last_date(rows), date(2026, 10, 9))
+
+    def test_run_up_and_q1_replay_never_span_a_gap(self):
+        import pead_plus as pp
+        import pandas as pd
+        from datetime import timedelta
+        ds = [date(2026, 6, 1) + timedelta(days=i) for i in range(40) if (date(2026, 6, 1) + timedelta(days=i)).weekday() < 5]
+        later = [p.now_ist().date() - timedelta(days=k) for k in range(12, 0, -1)]
+        later = [d for d in later if d.weekday() < 5]
+        f = pd.DataFrame([{"Date": pd.Timestamp(d), "Open": 100, "High": 101, "Low": 99, "Close": 100 if d in ds else 130,
+                           "Volume": 1000} for d in ds + later])
+        m = p.price_metrics(f, None)
+        self.assertIsNone(m["pre_result_20d_pct"])        # 20 sessions back crosses the gap
+        x = pp.extended_features(f, None, released=False, q1_reaction_date=date(2026, 8, 13))
+        self.assertNotIn("q1_reaction_return_pct", x)       # TIGERLOGS: reaction day missing
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:   # stored FAIRCHEMOR +31% run-up is withdrawn
+            store = p.EventStore(Path(td) / "events")
+            e = store.ensure_event(security={"symbol": "FAIRCHEMOR"}, period_end=date(2026, 9, 30))
+            store.merge_field(e, "pre_result_20d_pct", 31.37, source="NSE_PRICE")
+            self.assertTrue(p.drop_stale_pre_result(store, e, p.price_metrics(f, None)))
+            self.assertIsNone(store.value(e, "pre_result_20d_pct"))
+
+    def test_concall_notice_date_from_file_name(self):
+        import pead_plus as pp
+        from datetime import datetime
+        filings = [  # NSE lists newest first
+            {"filedAt": datetime(2026, 10, 1, 17, 23), "url": "https://x/CRAMC_01102026172256_Investor_Meet_October_12_2026.pdf",
+             "text": "Analysts/Institutional Investor Meet/Con. Call Updates Intimation under Regulation 30"},
+            {"filedAt": datetime(2026, 9, 22, 18, 16), "url": "https://x/CRAMC_22092026181511_InvestorMeet_28092026.pdf",
+             "text": "Analysts/Institutional Investor Meet/Con. Call Updates the Management will meet investors"},
+        ]
+        c = pp.concall_status(filings, date(2026, 10, 9), date(2026, 10, 12))
+        self.assertEqual((c["status"], c["callDate"]), ("SCHEDULED", "2026-10-12"))
+        self.assertIn("October_12", c["noticeUrl"])
+
+    def test_past_meeting_date_does_not_replace_future_one(self):
+        import tempfile
+        rows = [{"bm_symbol": "BSHSL", "bm_date": "15-Oct-2026", "bm_purpose": "Board Meeting Intimation",
+                 "bm_desc": "Board Meeting to be held on 15-Oct-2026 to consider the Half Yearly Unaudited Financial results"},
+                {"bm_symbol": "BSHSL", "bm_date": "10-Oct-2026", "bm_purpose": "Financial Results",
+                 "bm_desc": "To consider and approve the financial results for the period ended September 30, 2026"}]
+        with tempfile.TemporaryDirectory() as td, mock.patch.object(p, "now_ist", lambda: p.datetime(2026, 10, 11, 9, 0)):
+            store = p.EventStore(Path(td) / "events")
+            for r in rows:
+                c = p.normalize_nse_meeting(r)
+                self.assertIsNotNone(c)
+                e = p.apply_discovery(store, p.SymbolMaster(), c, None)
+            self.assertEqual(store.value(store.load(e["eventId"]), "result_date"), "2026-10-15")
+
+    def test_breadth_ignores_untraded(self):
+        import pead_plus as pp
+        items = [{"priceContext": {"lastClose": 10}, "plus": {"price": {"ema21": 20, "ema63": 20, "last_session": "2021-03-22"}}},
+                 {"priceContext": {"lastClose": 30}, "plus": {"price": {"ema21": 20, "ema63": 20, "last_session": "2026-10-09"}}}]
+        b = pp.market_internals(items, None, date(2026, 10, 11))["breadth"]
+        self.assertEqual((b["n"], b["above21Pct"]), (1, 100.0))
+
+
 if __name__ == "__main__":
     unittest.main()

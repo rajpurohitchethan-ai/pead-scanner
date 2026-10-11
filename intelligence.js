@@ -386,7 +386,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.6';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.7';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -403,7 +403,7 @@
     const crs = v => { const n = num(v); return n === null ? '—' : `${n >= 0 ? '+' : '−'}₹${Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`; };
     const internals = [
       num(br.above63Pct) !== null ? `Breadth: ${num(br.above63Pct).toFixed(0)}% of tracked stocks above their 63-day average${num(br.above21Pct) !== null ? `, ${num(br.above21Pct).toFixed(0)}% above 21-day` : ''}` : '',
-      ad && num(ad.advancePct) !== null ? `NIFTY 500 today: ${ad.advances} up / ${ad.declines} down` : '',
+      ad && num(ad.advancePct) !== null ? `NIFTY 500 last session: ${ad.advances} up / ${ad.declines} down` : '',
       fl ? `FII ${crs(fl.fiiNetCr)}, DII ${crs(fl.diiNetCr)} on ${dt(fl.date)}${num(fl.days) > 1 ? ` (last ${fl.days} days: FII ${crs(fl.fii5dCr)}, DII ${crs(fl.dii5dCr)})` : ''}${fl.fiiStreak ? `; FIIs net ${fl.fiiStreak > 0 ? 'buyers' : 'sellers'} ${Math.abs(fl.fiiStreak)} day${Math.abs(fl.fiiStreak) > 1 ? 's' : ''} running` : ''}` : '',
     ].filter(Boolean);
     $('internals').innerHTML = internals.map(t => `<span>${esc(t)}</span>`).join('');
