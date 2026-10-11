@@ -1,5 +1,5 @@
 {
-  "status": "FAIL",
+  "status": "WARN",
   "checkedOn": "2026-10-11",
   "checks": [
     {
@@ -57,28 +57,36 @@
     },
     {
       "check": "Declared results have revenue/profit (filed 2+ days ago)",
-      "status": "FAIL",
-      "count": 1,
-      "examples": [
-        "CORDELIA"
-      ],
+      "status": "OK",
+      "count": 0,
+      "examples": [],
       "note": "Exchange filing not parsed; check the NSE_XBRL / BSE_RESULTS_SNAPSHOT fetch errors."
     },
     {
       "check": "Declared results have revenue/profit (filed in last 2 days)",
       "status": "WARN",
-      "count": 2,
+      "count": 1,
       "examples": [
-        "LCCINFOTEC",
         "GRANDOAK"
       ],
       "note": "Normal for a few hours after filing; the engine re-checks every run."
     },
     {
+      "check": "Declared results withheld as suspect figures",
+      "status": "WARN",
+      "count": 1,
+      "examples": [
+        "LCCINFOTEC"
+      ],
+      "note": "Read from the filing but held back (looks like a unit error or an impossible jump); check the filing."
+    },
+    {
       "check": "Declared results with only half-year figures",
       "status": "OK",
-      "count": 0,
-      "examples": [],
+      "count": 1,
+      "examples": [
+        "CORDELIA"
+      ],
       "note": "The filing has no quarter-only numbers; nothing to parse."
     },
     {
