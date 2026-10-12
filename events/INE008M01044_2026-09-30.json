@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE008M01044|2026-09-30",
   "createdAt": "2026-10-08T04:33:49Z",
-  "updatedAt": "2026-10-12T11:40:37Z",
+  "updatedAt": "2026-10-12T13:06:55Z",
   "security": {
     "symbol": "VERONICAPRO",
     "bseSymbol": "VERONICAPRO",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -151,31 +151,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:13Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-12T12:51:32Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-12T12:56:29Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-12T11:34:31Z",
+      "fetchedAt": "2026-10-12T12:56:11Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-3f1ea9588979fb17.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a1c02bbca8983703.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-13",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-12T10:36:43Z",
+      "fetchedAt": "2026-10-12T12:56:27Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-12T10:36:43Z",
+      "fetchedAt": "2026-10-12T12:56:27Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -217,7 +227,7 @@
     "distance_52w_high_pct": {
       "value": -60.49,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-12T10:36:45Z",
+      "fetchedAt": "2026-10-12T12:56:29Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE008M01044_2026-09-30/price_volume_12m-f01c870a249c3e07.json",
@@ -226,7 +236,7 @@
     "last_price": {
       "value": 0.32,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-12T10:36:45Z",
+      "fetchedAt": "2026-10-12T12:56:29Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE008M01044_2026-09-30/price_volume_12m-f01c870a249c3e07.json",
@@ -235,7 +245,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0003,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-12T10:36:45Z",
+      "fetchedAt": "2026-10-12T12:56:29Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE008M01044_2026-09-30/price_volume_12m-f01c870a249c3e07.json",
@@ -294,6 +304,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE008M01044_2026-09-30/scrip_results-9e4c376a1c408780.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T12:51:32Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a1c02bbca8983703.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-12T18:14:49.773000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T12:51:32Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a1c02bbca8983703.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T12:51:32Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a1c02bbca8983703.json",
+      "note": null
     }
   },
   "fetch": {
@@ -305,8 +342,8 @@
       "rawRef": "raw/bse/NSE_VERONICAPRO_2026-09-30/lookup-c4d22b7ece5238e6.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-12T10:36:45Z",
-      "lastSuccess": "2026-10-12T10:36:45Z",
+      "lastAttempt": "2026-10-12T12:56:29Z",
+      "lastSuccess": "2026-10-12T12:56:29Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE008M01044_2026-09-30/price_volume_12m-f01c870a249c3e07.json"
@@ -331,34 +368,65 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-12T12:56:27Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE008M01044_2026-09-30/results_snapshot-0ae0d34ddf4399c8.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-12T12:56:27Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "531695.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-12T12:56:31Z",
+      "lastSuccess": "2026-10-12T12:56:31Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE008M01044_2026-09-30/scrip_announcements-d1b346848ac341e7.json"
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -396,7 +464,7 @@
         "sector": "Media, Entertainment & Publication",
         "stocks": 12,
         "momentum63dMedian": -11.52,
-        "relativeToMarket": -4.38,
+        "relativeToMarket": -4.35,
         "declared": 0,
         "strongResults": 0,
         "avgReaction": null,
@@ -423,7 +491,15 @@
         "atr14": 0.01
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-12",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/531695/",
@@ -529,6 +605,11 @@
     },
     {
       "timestamp": "2026-10-12T10:36:45Z",
+      "price": 0.32,
+      "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-12T12:56:29Z",
       "price": 0.32,
       "source": "BSE_PRICE"
     }
@@ -706,12 +787,42 @@
       "reactionIndex": null
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-12T10:36:45Z",
+    "computedAt": "2026-10-12T12:56:29Z",
     "plusVersion": "2.9.7",
     "corporateActions": null
   },
   "tradeLog": {},
   "mergedFrom": [
     "NSE:VERONICAPRO|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-12T18:14:49.773000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial Results for the quarter ended 30th September 2026 Veronica Production Ltd - 531695 - Financial Results For The Quarter Ended 30Th September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a1c02bbca8983703.json",
+      "seenAt": "2026-10-12T13:06:54Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-12T12:56:27Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-12",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }
