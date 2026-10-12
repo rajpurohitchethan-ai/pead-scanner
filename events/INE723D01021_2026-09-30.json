@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE723D01021|2026-09-30",
   "createdAt": "2026-10-07T04:24:34Z",
-  "updatedAt": "2026-10-12T10:42:53Z",
+  "updatedAt": "2026-10-12T11:40:38Z",
   "security": {
     "symbol": "RUDRAECO",
     "bseSymbol": "RUDRAECO",
@@ -21,7 +21,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -242,16 +242,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:13Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-12T11:31:59Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-12T11:40:38Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-12T10:35:05Z",
+      "fetchedAt": "2026-10-12T11:34:31Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-c259be52c76ce9c6.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
       "note": null
     },
     "reaction_session": {
@@ -379,6 +389,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE723D01021_2026-09-30/scrip_results-cf4b6d1c2debbf55.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T11:31:59Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-12T16:17:39.437000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T11:31:59Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T11:31:59Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "note": null
     }
   },
   "fetch": {
@@ -423,27 +460,54 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-12T11:34:49Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE723D01021_2026-09-30/results_snapshot-d950ebafc9f39e4b.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-12T11:34:49Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "514010.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-12T11:34:51Z",
+      "lastSuccess": "2026-10-12T11:34:51Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE723D01021_2026-09-30/scrip_announcements-84889519224c70bf.json"
     }
   },
   "derived": {
     "score": 16,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -451,13 +515,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -500,8 +564,8 @@
         "sector": "Textiles",
         "stocks": 12,
         "momentum63dMedian": 18.19,
-        "relativeToMarket": 25.3,
-        "declared": 0,
+        "relativeToMarket": 25.33,
+        "declared": 1,
         "strongResults": 0,
         "avgReaction": null,
         "tailwind": "STRONG"
@@ -533,7 +597,15 @@
         "q1_sustained": true
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-12",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/514010/",
@@ -842,5 +914,35 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:RUDRAECO|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-12T16:17:39.437000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial results for the Quarter ended 30th September, 2026 Rudra Ecovation Ltd - 514010 - Un-Audited Financial Results For The Quarter Ended 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "seenAt": "2026-10-12T11:40:37Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-12T11:34:49Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-12",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }

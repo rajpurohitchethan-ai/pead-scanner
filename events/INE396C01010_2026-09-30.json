@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE396C01010|2026-09-30",
   "createdAt": "2026-10-07T04:24:34Z",
-  "updatedAt": "2026-10-12T10:42:53Z",
+  "updatedAt": "2026-10-12T11:40:38Z",
   "security": {
     "symbol": "NEIL",
     "bseSymbol": "NEIL",
@@ -21,7 +21,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -242,16 +242,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:13Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-12T11:31:57Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-12T11:40:38Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-12T10:35:05Z",
+      "fetchedAt": "2026-10-12T11:34:31Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-c259be52c76ce9c6.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
       "note": null
     },
     "reaction_session": {
@@ -370,6 +380,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE396C01010_2026-09-30/scrip_results-8a2cb19499e7f1c2.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T11:31:57Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-12T16:20:09.630000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T11:31:57Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T11:31:57Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "note": null
     }
   },
   "fetch": {
@@ -414,27 +451,54 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-12T11:34:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE396C01010_2026-09-30/results_snapshot-4a578735576892d2.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-12T11:34:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "539016.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-12T11:34:39Z",
+      "lastSuccess": "2026-10-12T11:34:39Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE396C01010_2026-09-30/scrip_announcements-43302caeca48db0c.json"
     }
   },
   "derived": {
     "score": 8,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -442,13 +506,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_REPEAD",
-        "label": "Watch: re-PEAD",
-        "why": "Q1 setup faded. Strong Q2 could restart the drift."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -489,10 +553,10 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 93,
-        "momentum63dMedian": -7.16,
-        "relativeToMarket": -0.05,
-        "declared": 5,
+        "stocks": 95,
+        "momentum63dMedian": -7.17,
+        "relativeToMarket": -0.03,
+        "declared": 6,
         "strongResults": 1,
         "avgReaction": null,
         "tailwind": "WEAK"
@@ -524,7 +588,15 @@
         "q1_sustained": false
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-12",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/539016/",
@@ -833,5 +905,35 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:NEIL|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-12T16:20:09.630000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Approval of Unaudited Financial Results for the Quarter and Half Year ended September 30, 2026 Neil Industries Ltd - 539016 - Approval Of Unaudited Financial Results For The Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "seenAt": "2026-10-12T11:40:37Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-12T11:34:38Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-12",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }

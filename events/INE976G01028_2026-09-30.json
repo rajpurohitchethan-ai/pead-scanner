@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE976G01028|2026-09-30",
   "createdAt": "2026-10-07T04:24:34Z",
-  "updatedAt": "2026-10-12T10:42:53Z",
+  "updatedAt": "2026-10-12T11:40:38Z",
   "security": {
     "symbol": "RBLBANK",
     "bseSymbol": "RBLBANK",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -154,16 +154,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:13Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-12T11:31:53Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-12T11:40:38Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-12T10:35:05Z",
+      "fetchedAt": "2026-10-12T11:34:31Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-c259be52c76ce9c6.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
       "note": null
     },
     "reaction_session": {
@@ -336,6 +346,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE976G01028_2026-09-30/integrated_filings-1ad5b7746dc9d598.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T11:31:53Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-12T16:47:40.180000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T11:31:53Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T11:31:53Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "note": null
     }
   },
   "fetch": {
@@ -382,39 +419,73 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-09T15:20:44Z",
-      "lastSuccess": "2026-10-09T15:20:44Z",
+      "lastAttempt": "2026-10-12T11:34:52Z",
+      "lastSuccess": "2026-10-12T11:34:52Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE976G01028_2026-09-30/integrated_filings-1ad5b7746dc9d598.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-09T15:20:44Z",
-      "lastSuccess": "2026-10-09T15:20:44Z",
+      "lastAttempt": "2026-10-12T11:34:52Z",
+      "lastSuccess": "2026-10-12T11:34:52Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE976G01028_2026-09-30/integrated_filings-1ad5b7746dc9d598.json"
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-12T11:34:54Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE976G01028_2026-09-30/results_comparison-85e725d5aae3b02b.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-12T11:34:56Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE976G01028_2026-09-30/results_snapshot-bf089796ef59b668.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-12T11:34:56Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "540065.BO: RuntimeError: quarterly statement empty; RBLBANK.NS: RuntimeError: latest statement does not match event quarter",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-12T11:34:59Z",
+      "lastSuccess": "2026-10-12T11:34:59Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE976G01028_2026-09-30/announcements-bf0525dcc5521c7d.json"
     }
   },
   "derived": {
     "score": 25,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -422,13 +493,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -469,10 +540,10 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 93,
-        "momentum63dMedian": -7.16,
-        "relativeToMarket": -0.05,
-        "declared": 5,
+        "stocks": 95,
+        "momentum63dMedian": -7.17,
+        "relativeToMarket": -0.03,
+        "declared": 6,
         "strongResults": 1,
         "avgReaction": null,
         "tailwind": "WEAK"
@@ -504,7 +575,15 @@
         "q1_sustained": true
       },
       "deliveryPct": 33.57,
-      "concall": null,
+      "concall": {
+        "status": "SCHEDULED",
+        "callDate": "2026-10-12",
+        "noticeUrl": "https://nsearchives.nseindia.com/corporate/RBLBANK_07102026194633_ConcallInviteIntimationSigned12102026.pdf",
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-12",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/RBLBANK/",
@@ -798,7 +877,7 @@
     "NSE:RBLBANK|2026-09-30"
   ],
   "nseResultListing": {
-    "fetchedAt": "2026-10-09T15:20:44Z",
+    "fetchedAt": "2026-10-12T11:34:52Z",
     "v": 2,
     "rows": [
       {
@@ -898,5 +977,35 @@
         "filedAt": "2025-04-25T17:00:38+05:30"
       }
     ]
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-12T16:47:40.180000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "RBL Bank Limited informs the exchange about Outcome of Board Meeting in which the unaudited standalone and consolidated financial results of the Bank, for the quarter and half year ended .... RBL Bank Ltd - 540065 - RBL Bank Limited Informs The Exchange About Outcome Of Board Meeting And Financial R",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5086ab902aa32c52.json",
+      "seenAt": "2026-10-12T11:40:37Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-12T11:34:56Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "SCHEDULED",
+    "callDate": "2026-10-12",
+    "noticeUrl": "https://nsearchives.nseindia.com/corporate/RBLBANK_07102026194633_ConcallInviteIntimationSigned12102026.pdf",
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-12",
+    "source": "NSE_ANNOUNCEMENTS"
   }
 }
