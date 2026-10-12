@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE083C01014|2026-09-30",
   "createdAt": "2026-10-07T08:19:51Z",
-  "updatedAt": "2026-10-12T14:47:20Z",
+  "updatedAt": "2026-10-12T15:40:29Z",
   "security": {
     "symbol": "PLASTIBLEN",
     "nseSymbol": "PLASTIBLEN",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -144,16 +144,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:13Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-12T15:31:19Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-12T15:40:29Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-12T14:38:25Z",
+      "fetchedAt": "2026-10-12T15:34:27Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-1cc9b30f92d4b27d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-984212d150b73037.json",
       "note": null
     },
     "reaction_session": {
@@ -335,6 +345,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_PLASTIBLEN_2026-09-30/scrip_results-e105b642a9d2e79c.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T15:31:19Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-984212d150b73037.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-12T20:09:26.397000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T15:31:19Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-984212d150b73037.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-12T15:31:19Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-984212d150b73037.json",
+      "note": null
     }
   },
   "fetch": {
@@ -372,27 +409,75 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_INTEGRATED_FILING": {
+      "lastAttempt": "2026-10-12T15:34:31Z",
+      "lastSuccess": "2026-10-12T15:34:31Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE083C01014_2026-09-30/integrated_filings-7522ae0e1d7058d0.json"
+    },
+    "NSE_RESULT_LISTING": {
+      "lastAttempt": "2026-10-12T15:34:31Z",
+      "lastSuccess": "2026-10-12T15:34:31Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE083C01014_2026-09-30/integrated_filings-7522ae0e1d7058d0.json"
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-12T15:34:33Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE083C01014_2026-09-30/results_comparison-1faf4fedacd30034.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-12T15:34:35Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE083C01014_2026-09-30/results_snapshot-421d556afe6891f4.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-12T15:34:35Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "PLASTIBLEN.NS: RuntimeError: latest statement does not match event quarter; 523648.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-12T15:34:38Z",
+      "lastSuccess": "2026-10-12T15:34:38Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE083C01014_2026-09-30/announcements-1d09136d55c51b92.json"
     }
   },
   "derived": {
     "score": 2,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -400,13 +485,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -449,8 +534,8 @@
         "sector": "Chemicals",
         "stocks": 29,
         "momentum63dMedian": 0.0,
-        "relativeToMarket": 7.14,
-        "declared": 0,
+        "relativeToMarket": 6.94,
+        "declared": 1,
         "strongResults": 0,
         "avgReaction": null,
         "tailwind": "POSITIVE"
@@ -482,7 +567,15 @@
         "q1_sustained": true
       },
       "deliveryPct": 68.48,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-12",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/PLASTIBLEN/",
@@ -792,5 +885,105 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:PLASTIBLEN|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-12T20:09:26.397000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Results-Financial Results for Quarter and Half-Year ended September 30, 2026 Plastiblends India Ltd-$ - 523648 - Results-Financial Results For Quarter And Half-Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-984212d150b73037.json",
+      "seenAt": "2026-10-12T15:40:28Z"
+    }
+  ],
+  "nseResultListing": {
+    "fetchedAt": "2026-10-12T15:34:31Z",
+    "v": 2,
+    "rows": [
+      {
+        "periodEnd": "2026-06-30",
+        "fromDate": "2026-04-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1691604_13072026053652_WEB.xml",
+        "filedAt": "2026-07-13T17:36:53+05:30"
+      },
+      {
+        "periodEnd": "2026-03-31",
+        "fromDate": "2026-01-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1659830_27042026103231_WEB.xml",
+        "filedAt": "2026-04-27T22:32:31+05:30"
+      },
+      {
+        "periodEnd": "2025-12-31",
+        "fromDate": "2025-10-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1614732_30012026052119_WEB.xml",
+        "filedAt": "2026-01-30T17:21:19+05:30"
+      },
+      {
+        "periodEnd": "2025-12-31",
+        "fromDate": "2025-10-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1614731_30012026052112_WEB.xml",
+        "filedAt": "2026-01-30T17:21:12+05:30"
+      },
+      {
+        "periodEnd": "2025-12-31",
+        "fromDate": "2025-10-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1600792_14012026043538_WEB.xml",
+        "filedAt": "2026-01-14T16:35:39+05:30"
+      },
+      {
+        "periodEnd": "2025-09-30",
+        "fromDate": "2025-07-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1550883_16102025071245_WEB.xml",
+        "filedAt": "2025-10-16T19:12:46+05:30"
+      },
+      {
+        "periodEnd": "2025-06-30",
+        "fromDate": "2025-04-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1483649_15072025074637_WEB.xml",
+        "filedAt": "2025-07-15T19:46:37+05:30"
+      },
+      {
+        "periodEnd": "2025-03-31",
+        "fromDate": "2025-01-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1426819_28042025073924_WEB.xml",
+        "filedAt": "2025-04-28T19:39:24+05:30"
+      }
+    ]
+  },
+  "financialIntegrity": {
+    "checkedAt": "2026-10-12T15:34:35Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-12",
+    "source": "NSE_ANNOUNCEMENTS"
+  }
 }
