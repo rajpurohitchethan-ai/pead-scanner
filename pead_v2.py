@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.9"
+ENGINE_VERSION = "2.9.10"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -2034,7 +2034,7 @@ XBRL_EPS_CONCEPTS = [
 ]
 QUARTER_DAYS = (80, 100)
 SNAPSHOT_PARSER_VERSION = 2   # 2.9.4: re-parse saved BSE/NSE result tables once (PAT model on QoQ)
-XBRL_PARSER_VERSION = 6   # bump to re-read every stored XBRL snapshot once
+XBRL_PARSER_VERSION = 7   # bump to re-read every stored XBRL snapshot once
 
 
 def _xbrl_local(tag: str) -> str:
@@ -2187,6 +2187,16 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
         if total not in (None, 0):
             pat, pat_concept = total, total_concept
             issues.append("OWNERS_PAT_ZERO_USED_TOTAL")
+    # 2.9.10: total profit for the period next to the owners' line, so a
+    # comparative filing whose owners' line was a 0 placeholder (it then used
+    # the total) can be matched when this filing's owners PAT == total PAT.
+    pat_total = None
+    if pat_concept in XBRL_PAT_OWNER_CONCEPTS:
+        n_issues = len(issues)
+        pat_total, _ = pick(XBRL_PAT_CONCEPTS, current_ctx)
+        del issues[n_issues:]
+    elif pat_concept in XBRL_PAT_CONCEPTS:
+        pat_total = pat
     # Comparatives must use the SAME concept as the current quarter.
     same_rev = [rev_concept] if rev_concept else revenue_concepts
     same_pat = [pat_concept] if pat_concept else pat_concepts
@@ -2246,6 +2256,7 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
             # 2.9.4: unrounded crore figures; growth from rounded crores was off
             # for small companies (INDBANK PAT -13.44% vs -12.97% exact).
             "exact": {"revenue_cr": rev, "pat_cr": pat, "ytd_revenue_cr": ytd_rev, "ytd_pat_cr": ytd_pat},
+            "patTotalCr": pat_total,
             "patQoQRawPct": round2(pct_change(pat, prev_pat)),
             "issues": issues,
             "comparativesFromSameDocument": True,
@@ -4424,6 +4435,34 @@ def _exact(parsed: dict[str, Any], key: str) -> float | None:
     return safe_num(v) if v is not None else safe_num(parsed.get(key))
 
 
+def _owners_zero_fallback(doc: dict[str, Any]) -> bool:
+    return "OWNERS_PAT_ZERO_USED_TOTAL" in ((doc.get("_meta") or {}).get("issues") or [])
+
+
+def _owners_equal_total(doc: dict[str, Any]) -> bool:
+    meta = doc.get("_meta") or {}
+    if ((meta.get("concepts") or {}).get("pat")) not in XBRL_PAT_OWNER_CONCEPTS:
+        return False
+    owners, total = _exact(doc, "pat_cr"), safe_num(meta.get("patTotalCr"))
+    return owners is not None and total is not None and abs(owners - total) < 0.005
+
+
+def same_pat_concept(cur: dict[str, Any], other: dict[str, Any]) -> bool:
+    """Same PAT concept in two filings. 2.9.10: a filing whose owners' line was
+    a 0 placeholder used total profit (OWNERS_PAT_ZERO_USED_TOTAL); it matches
+    an owners'-line filing only when that filing's owners PAT equals its total
+    PAT (no minority interest), so both numbers mean the same thing (SWANDEF)."""
+    c = ((cur.get("_meta") or {}).get("concepts") or {}).get("pat")
+    o = ((other.get("_meta") or {}).get("concepts") or {}).get("pat")
+    if c == o:
+        return True
+    if _owners_zero_fallback(other) and o in XBRL_PAT_CONCEPTS and _owners_equal_total(cur):
+        return True
+    if _owners_zero_fallback(cur) and c in XBRL_PAT_CONCEPTS and _owners_equal_total(other):
+        return True
+    return False
+
+
 def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[str, Any]], period_end: date,
                                    basis: str | None, fetch_parse) -> dict[str, Any]:
     """NSE's quarterly XBRL often carries only the current period. When the
@@ -4453,7 +4492,7 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
         oc = (other.get("_meta") or {}).get("concepts") or {}
         other = {**other, **{k: v for k, v in ((other.get("_meta") or {}).get("exact") or {}).items() if v is not None}}
         same_rev = oc.get("revenue") == concepts.get("revenue")
-        same_pat = oc.get("pat") == concepts.get("pat")
+        same_pat = same_pat_concept(parsed, other)
         rev_o = other.get("revenue_cr") if same_rev else None
         pat_o = other.get("pat_cr") if same_pat else None
         rev_n, pat_n = _exact(parsed, "revenue_cr"), _exact(parsed, "pat_cr")
@@ -4503,7 +4542,7 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
             o_rev, o_pat = _exact(other, "revenue_cr"), _exact(other, "pat_cr")
             if oc.get("revenue") == concepts.get("revenue") and o_rev is not None and prev.get("revenue_cr") is not None:
                 parsed["prev_q_revenue_yoy_pct"] = round2(pct_change(prev["revenue_cr"], o_rev))
-            if oc.get("pat") == concepts.get("pat") and o_pat is not None and prev.get("pat_cr") is not None:
+            if same_pat_concept(parsed, other) and o_pat is not None and prev.get("pat_cr") is not None:
                 parsed["prev_q_pat_yoy_pct"] = round2(pat_change_pct(prev["pat_cr"], o_pat))
     return parsed
 

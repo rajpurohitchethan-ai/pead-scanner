@@ -618,5 +618,49 @@ class LiveQuoteTests(unittest.TestCase):
         self.assertIsNone(p.quote_last_price({"priceInfo": {}, "orderBook": {}}))
 
 
+class OwnersZeroComparativeTests(unittest.TestCase):
+    """SWANDEF Q2 FY27 (13 Oct 2026): last year's consolidated filing put the
+    owners' PAT line at 0 (profit for period -19.86 Cr), so its parse used the
+    total-profit concept and fill_comparatives_from_listing refused it as a
+    "different concept". The card showed no PAT change at all instead of
+    TURNAROUND (loss -> profit). This year's owners line equals total profit
+    (no minority interest), so the two concepts are the same number."""
+
+    def _parse(self, name, pe):
+        blob = (Path(__file__).parent / "fixtures" / "nse" / name).read_bytes()
+        return p.parse_xbrl_financials([blob], pe)
+
+    def _listing(self):
+        return [{"periodEnd": "2025-09-30", "fromDate": "2025-07-01", "basis": "CONSOLIDATED", "cumulative": False,
+                 "xbrlUrl": "ya"}]
+
+    def test_turnaround_against_owners_zero_year_ago_filing(self):
+        cur = self._parse("SWANDEF_CONS_2026-09-30.xml", date(2026, 9, 30))
+        ya = self._parse("SWANDEF_CONS_2025-09-30.xml", date(2025, 9, 30))
+        self.assertIn("OWNERS_PAT_ZERO_USED_TOTAL", ya["_meta"]["issues"])
+        self.assertAlmostEqual(ya["pat_cr"], -19.86, places=2)
+        self.assertIsNone(cur["prior_year_pat_cr"])
+        p.fill_comparatives_from_listing(cur, self._listing(), date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: ya)
+        self.assertEqual(cur["prior_year_pat_cr"], -19.86)
+        self.assertEqual(cur["pat_trend"], "TURNAROUND")
+        self.assertIsNone(cur["pat_yoy_pct"])                  # no % across a loss
+        self.assertAlmostEqual(cur["revenue_yoy_pct"], 73.99, places=2)
+
+    def test_not_mixed_when_owners_differ_from_total(self):
+        concepts = {"revenue": "revenuefromoperations", "pat": "profitorlossattributabletoownersofparent"}
+        cur = {"revenue_cr": 100.0, "pat_cr": 10.0, "revenue_qoq_pct": 1.0,
+               "_meta": {"concepts": concepts, "patTotalCr": 12.0}}       # minority interest 2 Cr
+        ya = {"revenue_cr": 90.0, "pat_cr": 5.0,
+              "_meta": {"concepts": {**concepts, "pat": "profitlossforperiod"}, "issues": ["OWNERS_PAT_ZERO_USED_TOTAL"]}}
+        p.fill_comparatives_from_listing(cur, self._listing(), date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: ya)
+        self.assertIsNone(cur.get("prior_year_pat_cr"))
+        self.assertIsNone(cur.get("pat_yoy_pct"))
+        # without the zero-owners fallback a different concept is never mixed either
+        ya2 = {**ya, "_meta": {**ya["_meta"], "issues": []}}
+        cur2 = {**cur, "_meta": {**cur["_meta"], "patTotalCr": 10.0}}
+        p.fill_comparatives_from_listing(cur2, self._listing(), date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: ya2)
+        self.assertIsNone(cur2.get("prior_year_pat_cr"))
+
+
 if __name__ == "__main__":
     unittest.main()
