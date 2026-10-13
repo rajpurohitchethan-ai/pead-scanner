@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE967S01014|2026-09-30",
   "createdAt": "2026-10-07T04:24:34Z",
-  "updatedAt": "2026-10-13T11:43:53Z",
+  "updatedAt": "2026-10-13T12:49:36Z",
   "security": {
     "symbol": "MUDRA",
     "bseSymbol": "MUDRA",
@@ -24,7 +24,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -175,31 +175,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:13Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-13T12:38:44Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-13T12:44:18Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-13",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-13T11:34:48Z",
+      "fetchedAt": "2026-10-13T12:42:50Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-11263604f327ebc0.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bc400ba24c69c9eb.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-14",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-13T11:39:23Z",
+      "fetchedAt": "2026-10-13T12:44:17Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-13T11:39:23Z",
+      "fetchedAt": "2026-10-13T12:44:17Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -208,7 +218,7 @@
     "distance_52w_high_pct": {
       "value": 0.0,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-13T11:39:24Z",
+      "fetchedAt": "2026-10-13T12:44:18Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE967S01014_2026-09-30/price_volume_12m-307f97335213f308.json",
@@ -217,7 +227,7 @@
     "last_price": {
       "value": 4.73,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-13T11:39:24Z",
+      "fetchedAt": "2026-10-13T12:44:18Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE967S01014_2026-09-30/price_volume_12m-307f97335213f308.json",
@@ -226,7 +236,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0518,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-13T11:39:24Z",
+      "fetchedAt": "2026-10-13T12:44:18Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE967S01014_2026-09-30/price_volume_12m-307f97335213f308.json",
@@ -276,6 +286,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE967S01014_2026-09-30/scrip_results-665bd374b189f7fb.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-13T12:38:44Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bc400ba24c69c9eb.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-13T17:44:27.200000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-13T12:38:44Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bc400ba24c69c9eb.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-13T12:38:44Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bc400ba24c69c9eb.json",
+      "note": null
     }
   },
   "fetch": {
@@ -301,8 +338,8 @@
       "rawRef": null
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-13T11:39:24Z",
-      "lastSuccess": "2026-10-13T11:39:24Z",
+      "lastAttempt": "2026-10-13T12:44:18Z",
+      "lastSuccess": "2026-10-13T12:44:18Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE967S01014_2026-09-30/price_volume_12m-307f97335213f308.json"
@@ -320,34 +357,65 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-13T12:44:16Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE967S01014_2026-09-30/results_snapshot-06a71941ade21662.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-13T12:44:17Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "539819.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-13T12:44:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "ConnectionError: 403: Forbidden",
+      "rawRef": null
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -383,12 +451,12 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 114,
-        "momentum63dMedian": -7.33,
-        "relativeToMarket": -1.12,
+        "stocks": 115,
+        "momentum63dMedian": -6.48,
+        "relativeToMarket": -0.3,
         "declared": 10,
         "strongResults": 3,
-        "avgReaction": 0.68,
+        "avgReaction": -0.67,
         "tailwind": "WEAK"
       },
       "identity": {
@@ -525,6 +593,11 @@
       "timestamp": "2026-10-13T11:39:24Z",
       "price": 4.73,
       "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-13T12:44:18Z",
+      "price": 4.73,
+      "source": "BSE_PRICE"
     }
   ],
   "plus": {
@@ -555,9 +628,30 @@
       "reactionIndex": null
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-13T11:39:24Z",
+    "computedAt": "2026-10-13T12:44:18Z",
     "plusVersion": "2.9.7",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-13T17:44:27.200000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Enclosed herewith Unaudited Financial Results for the quater and half year ended on September 30, 2026. Mudra Financial Services Ltd - 539819 - Unaudited Financial Results For The Quarter And Half Year Ended On September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bc400ba24c69c9eb.json",
+      "seenAt": "2026-10-13T12:49:35Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-13T12:44:17Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  }
 }
