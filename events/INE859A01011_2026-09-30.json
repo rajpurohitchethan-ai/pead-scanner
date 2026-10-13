@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE859A01011|2026-09-30",
   "createdAt": "2026-10-07T08:19:51Z",
-  "updatedAt": "2026-10-13T06:49:11Z",
+  "updatedAt": "2026-10-13T07:42:30Z",
   "security": {
     "symbol": "PNBGILTS",
     "nseSymbol": "PNBGILTS",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T04:33:49Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-13T07:35:29Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-13T07:42:30Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-13",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-13T06:41:05Z",
+      "fetchedAt": "2026-10-13T07:38:20Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-11263604f327ebc0.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4f379d85b3487cdc.json",
       "note": null
     },
     "reaction_session": {
@@ -226,6 +236,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE859A01011_2026-09-30/scrip_results-688247573efcb7c8.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-13T07:35:29Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4f379d85b3487cdc.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-13T12:56:47.083000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-13T07:35:29Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4f379d85b3487cdc.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-13T07:35:29Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4f379d85b3487cdc.json",
+      "note": null
     }
   },
   "fetch": {
@@ -256,27 +293,75 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_INTEGRATED_FILING": {
+      "lastAttempt": "2026-10-13T07:38:22Z",
+      "lastSuccess": "2026-10-13T07:38:22Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE859A01011_2026-09-30/integrated_filings-c203538ae7afff0d.json"
+    },
+    "NSE_RESULT_LISTING": {
+      "lastAttempt": "2026-10-13T07:38:22Z",
+      "lastSuccess": "2026-10-13T07:38:22Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE859A01011_2026-09-30/integrated_filings-c203538ae7afff0d.json"
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-13T07:38:24Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE859A01011_2026-09-30/results_comparison-bc602ec43008ec9e.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-13T07:38:26Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE859A01011_2026-09-30/results_snapshot-dfa5b2892cbd4b49.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-13T07:38:27Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "PNBGILTS.NS: RuntimeError: latest statement does not match event quarter; 532366.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-13T07:38:29Z",
+      "lastSuccess": "2026-10-13T07:38:29Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE859A01011_2026-09-30/announcements-cd91adb44ca18540.json"
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -284,13 +369,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -331,10 +416,10 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 109,
+        "stocks": 111,
         "momentum63dMedian": -7.36,
-        "relativeToMarket": -0.93,
-        "declared": 7,
+        "relativeToMarket": -0.97,
+        "declared": 8,
         "strongResults": 2,
         "avgReaction": 0.68,
         "tailwind": "WEAK"
@@ -366,7 +451,15 @@
         "q1_sustained": false
       },
       "deliveryPct": 39.91,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-13",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/PNBGILTS/",
@@ -674,5 +767,89 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:PNBGILTS|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-13T12:56:47.083000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial results for the quarter and half year ended on September 2026 PNB Gilts Ltd - 532366 - Unaudited Financial Results For Quarter And Half Year  Ended September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4f379d85b3487cdc.json",
+      "seenAt": "2026-10-13T07:42:29Z"
+    }
+  ],
+  "nseResultListing": {
+    "fetchedAt": "2026-10-13T07:38:22Z",
+    "v": 2,
+    "rows": [
+      {
+        "periodEnd": "2026-06-30",
+        "fromDate": "2026-04-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_NBFC_INDAS_1694707_16072026105712_WEB.xml",
+        "filedAt": "2026-07-16T22:57:11+05:30"
+      },
+      {
+        "periodEnd": "2026-03-31",
+        "fromDate": "2026-01-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_NBFC_INDAS_1655012_20042026042051_WEB.xml",
+        "filedAt": "2026-04-20T16:12:07+05:30"
+      },
+      {
+        "periodEnd": "2025-12-31",
+        "fromDate": "2025-10-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_NBFC_INDAS_1603537_17012026070619_WEB.xml",
+        "filedAt": "2026-01-17T19:06:19+05:30"
+      },
+      {
+        "periodEnd": "2025-09-30",
+        "fromDate": "2025-07-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_NBFC_INDAS_1550892_16102025071649_WEB.xml",
+        "filedAt": "2025-10-16T19:16:49+05:30"
+      },
+      {
+        "periodEnd": "2025-06-30",
+        "fromDate": "2025-04-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_NBFC_INDAS_1491139_23072025022908_WEB.xml",
+        "filedAt": "2025-07-23T14:29:08+05:30"
+      },
+      {
+        "periodEnd": "2025-03-31",
+        "fromDate": "2025-01-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_NBFC_INDAS_1430913_02052025100003_WEB.xml",
+        "filedAt": "2025-05-02T22:00:03+05:30"
+      }
+    ]
+  },
+  "financialIntegrity": {
+    "checkedAt": "2026-10-13T07:38:27Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-13",
+    "source": "NSE_ANNOUNCEMENTS"
+  }
 }
