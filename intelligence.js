@@ -312,6 +312,33 @@
     return `<div class="empty">No ${what} match this view yet.</div>`;
   }
 
+  // 2.9.9: Radar = reaction done, setup still alive, screener watching for an entry.
+  const RADAR = { ENTRY_EARLY: 0, ENTRY_PULLBACK: 0, ENTRY_BREAKOUT: 0, NEAR_ENTRY: 1, PULLBACK_ZONE: 2, WATCH: 3,
+    RISK_TOO_WIDE: 4, EXTENDED: 5, WAIT_CONCALL: 6 };
+  const radar = () => declared().filter(it => {
+    const s = P(it).plan?.signal;
+    return s in RADAR && liquidOk(it) && (num(it.marketCapCr) ?? 0) >= 1000 && !px(it).base_broken;
+  }).sort((a, b) => RADAR[P(a).plan.signal] - RADAR[P(b).plan.signal] || (num(b.convictionScore) ?? 0) - (num(a.convictionScore) ?? 0));
+  function viewRadar() {
+    const list = radar().filter(matches);
+    if (!list.length) return `<div class="empty">Nothing on the radar yet. A stock lands here once its reaction session has traded and the setup is still alive (base intact, earnings good enough, liquid, market cap at least ₹1,000 Cr).</div>`;
+    return `<p class="note">Reaction done, setup alive: the screener is waiting for an entry pattern. Sorted by how close each is to an entry. Tap a row for the full card.</p>
+      <div class="ledger">${list.map(it => {
+        const pl = P(it).plan || {}, s = sig(it), pc = it.priceContext || {}, live = P(it).live;
+        const last = num(live?.price) ?? num(pc.lastClose), low = num(it.resultDayLow);
+        const toBase = last !== null && low ? (last / low - 1) * 100 : null;
+        const trig = num(pl.entry), toTrig = last !== null && trig ? (trig / last - 1) * 100 : null;
+        const open = S.open.has(it.eventId);
+        return `<div class="row radar-row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">
+          <div><div class="s">${esc(it.symbol)}</div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span></div></div>
+          <div><div class="k">Reaction</div><div class="v ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}${num(pc.relativeVolume) !== null ? ` <span class="meta">${num(pc.relativeVolume).toFixed(1)}x vol</span>` : ''}</div></div>
+          <div><div class="k">${live?.price ? 'Live' : 'Last'}</div><div class="v">${inr(last)}</div></div>
+          <div class="opt"><div class="k">Base (result-day low)</div><div class="v">${inr(low)}${toBase !== null ? ` <span class="meta">${pct(toBase)}</span>` : ''}</div></div>
+          <div><div class="k">${trig ? 'Trigger' : 'Risk'}</div><div class="v">${trig ? `${inr(trig)}${toTrig !== null ? ` <span class="meta">${toTrig > 0 ? pct(toTrig) + ' away' : 'above'}</span>` : ''}` : (num(pl.riskPct) !== null ? `${num(pl.riskPct).toFixed(1)}%` : '—')}</div></div>
+          <div class="chev" aria-hidden="true">›</div></div>
+          <div class="radar-why">${esc(pl.why || '')}</div>${open ? `<div class="row-detail">${card(it)}</div>` : ''}`;
+      }).join('')}</div>`;
+  }
   function viewSetups() {
     let list = declared().filter(matches);
     if (S.bucket !== 'ALL') list = list.filter(it => (P(it).bucket?.code || 'NONE') === S.bucket);
@@ -411,7 +438,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.8';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.9';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -439,7 +466,7 @@
     const fails = (sa.checks || []).filter(c => c.status === 'FAIL');
     const auditBanner = fails.length ? `<div class="install-bad"><b>Data check found ${fails.length} problem${fails.length > 1 ? 's' : ''}:</b> ${esc(fails.map(c => c.check).join('; '))}. Details in Data health.</div>` : '';
     $('season').innerHTML = installBanner() + auditBanner + `<strong>${decl.length}</strong> results declared, <strong>${act}</strong> with an actionable setup, <strong>${soon}</strong> companies reporting in the next 7 days.`;
-    $('c-setups').textContent = decl.length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
+    $('c-setups').textContent = decl.length; $('c-radar').textContent = radar().length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
   }
 
   function chips() {
@@ -458,7 +485,7 @@
   function render() {
     if (!S.data) return;
     header(); chips();
-    $('controls').style.display = ['setups', 'watch', 'sectors'].includes(S.tab) ? '' : 'none';
+    $('controls').style.display = ['setups', 'radar', 'watch', 'sectors'].includes(S.tab) ? '' : 'none';
     $('sizing').style.display = S.tab === 'setups' ? '' : 'none';
     $('liquid').parentElement.style.display = S.tab === 'sectors' ? 'none' : '';
     $('sort').style.display = S.tab === 'setups' ? '' : 'none';
@@ -466,7 +493,7 @@
     document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
     const active = document.querySelector('.tab[aria-selected="true"]');
     if (active && active.scrollIntoView) active.scrollIntoView({ inline: 'center', block: 'nearest' });
-    $('view').innerHTML = { setups: viewSetups, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
+    $('view').innerHTML = { setups: viewSetups, radar: viewRadar, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
   }
 
   // ---------- events ----------

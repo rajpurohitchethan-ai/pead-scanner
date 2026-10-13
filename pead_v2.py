@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.8"
+ENGINE_VERSION = "2.9.9"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -6350,6 +6350,7 @@ def event_to_intelligence(event: dict[str, Any]) -> dict[str, Any]:
         "financialStatus": row.get("financialStatus"),
         "financialIssues": row.get("financialIssues"),
         "halfYearOnly": row.get("halfYearOnly"),
+        "resultDayLow": row.get("resultDayLow"),      # 2.9.9: Radar tab (base line)
         "eventState": row["eventState"],
         "dataCompletenessPct": row["dataCompletenessPct"],
         "baseScoreText": row["scoreText"],
