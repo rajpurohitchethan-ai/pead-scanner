@@ -4724,7 +4724,9 @@ _INDEX_CACHE_MEMO: dict[str, Any] = {}
 
 LIVE_QUOTE_MAX = int(os.getenv("LIVE_QUOTE_MAX", "40"))
 LIVE_SIGNALS = {"NEAR_ENTRY", "WATCH_BREAKOUT", "WAIT_RECLAIM", "ENTRY_EARLY", "ENTRY_PULLBACK", "ENTRY_BREAKOUT",
-                "ENTRY_TRIGGERED", "WAIT_ACCEPTANCE", "WAIT_BOX"}
+                "ENTRY_TRIGGERED", "WAIT_ACCEPTANCE", "WAIT_BOX",
+                # 2.9.9: everything on the Radar tab gets a live price too
+                "PULLBACK_ZONE", "WATCH", "RISK_TOO_WIDE", "EXTENDED", "WAIT_CONCALL"}
 
 
 def market_open_now() -> bool:
