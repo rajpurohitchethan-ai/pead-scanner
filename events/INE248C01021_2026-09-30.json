@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE248C01021|2026-09-30",
   "createdAt": "2026-10-09T00:58:12Z",
-  "updatedAt": "2026-10-13T13:47:47Z",
+  "updatedAt": "2026-10-13T14:46:12Z",
   "security": {
     "symbol": "DHARTI",
     "bseSymbol": "DHARTI",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-09T00:58:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-13T14:34:32Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-13T14:38:02Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-13",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-13T13:41:55Z",
+      "fetchedAt": "2026-10-13T14:37:46Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-11263604f327ebc0.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de1bd003abe71d5a.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-14",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-13T11:38:53Z",
+      "fetchedAt": "2026-10-13T14:38:01Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-13T11:38:53Z",
+      "fetchedAt": "2026-10-13T14:38:01Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -82,7 +92,7 @@
     "distance_52w_high_pct": {
       "value": 0.0,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-13T11:38:54Z",
+      "fetchedAt": "2026-10-13T14:38:02Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE248C01021_2026-09-30/price_volume_12m-44e2861c1f26446f.json",
@@ -91,7 +101,7 @@
     "last_price": {
       "value": 66.92,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-13T11:38:54Z",
+      "fetchedAt": "2026-10-13T14:38:02Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE248C01021_2026-09-30/price_volume_12m-44e2861c1f26446f.json",
@@ -100,7 +110,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0002,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-13T11:38:54Z",
+      "fetchedAt": "2026-10-13T14:38:02Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE248C01021_2026-09-30/price_volume_12m-44e2861c1f26446f.json",
@@ -132,6 +142,33 @@
       "rank": 88,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-13T14:34:32Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de1bd003abe71d5a.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-13T19:50:48.347000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-13T14:34:32Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de1bd003abe71d5a.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-13T14:34:32Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de1bd003abe71d5a.json",
+      "note": null
     }
   },
   "fetch": {
@@ -143,8 +180,8 @@
       "rawRef": "raw/bse/NSE_DHARTI_2026-09-30/lookup-eccb2e88eea455d3.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-13T11:38:54Z",
-      "lastSuccess": "2026-10-13T11:38:54Z",
+      "lastAttempt": "2026-10-13T14:38:02Z",
+      "lastSuccess": "2026-10-13T14:38:02Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE248C01021_2026-09-30/price_volume_12m-44e2861c1f26446f.json"
@@ -164,42 +201,73 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-13T13:43:55Z",
+      "lastAttempt": "2026-10-13T14:38:07Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-13T14:38:01Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE248C01021_2026-09-30/results_snapshot-d2d666e1e8b54e1c.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-13T14:38:01Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-13T14:38:07Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "ConnectionError: 403: Forbidden",
       "rawRef": null
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -242,7 +310,7 @@
         "sector": "Fast Moving Consumer Goods",
         "stocks": 33,
         "momentum63dMedian": -9.33,
-        "relativeToMarket": -3.18,
+        "relativeToMarket": -3.21,
         "declared": 1,
         "strongResults": 1,
         "avgReaction": -10.07,
@@ -312,6 +380,11 @@
       "timestamp": "2026-10-13T11:38:54Z",
       "price": 66.92,
       "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-13T14:38:02Z",
+      "price": 66.92,
+      "source": "BSE_PRICE"
     }
   ],
   "plus": {
@@ -340,8 +413,29 @@
       "reactionIndex": null
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-13T11:38:54Z",
+    "computedAt": "2026-10-13T14:38:02Z",
     "plusVersion": "2.9.7",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-13T19:50:48.347000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "The Audited Standalone Financial Results for the quarter and half year ended September 30, 2026 along with Interim Audit Report has been attached herewith. Dharti Proteins Ltd - 531171 - Results - Financial Results For September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de1bd003abe71d5a.json",
+      "seenAt": "2026-10-13T14:46:11Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-13T14:38:01Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
   }
 }
