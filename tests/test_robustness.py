@@ -605,5 +605,18 @@ class GrowthLensAndSectorChecklistTests(unittest.TestCase):
         self.assertEqual((st["demand"], st["earnings"], st["peers"]), ("na", "na", "na"))
 
 
+
+class LiveQuoteTests(unittest.TestCase):
+    """NSE's getSymbolData quote keeps the last price under orderBook; reading
+    priceInfo.lastPrice gave None, so no live price was ever stored."""
+
+    def test_last_price_from_real_quote(self):
+        import json
+        q = json.loads((Path(__file__).parent / "fixtures" / "nse" / "quote_PREMIERPOL_2026-10-13.json").read_text())
+        self.assertEqual(p.quote_last_price(q), 109.12)
+        self.assertEqual(p.quote_last_price({"priceInfo": {"lastPrice": 50.5}}), 50.5)
+        self.assertIsNone(p.quote_last_price({"priceInfo": {}, "orderBook": {}}))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4734,6 +4734,19 @@ def market_open_now() -> bool:
     return now.weekday() < 5 and (9, 15) <= (now.hour, now.minute) <= (15, 35)
 
 
+def quote_last_price(payload: Any) -> float | None:
+    """Last traded price from an NSE quote. 2.9.9: the getSymbolData shape has
+    it under orderBook (priceInfo has no lastPrice), so live prices were never
+    stored and the 3 pm alert had nothing to read."""
+    if not isinstance(payload, dict):
+        return None
+    for sect in ("priceInfo", "orderBook", "metaData", "tradeInfo"):
+        v = safe_num(first(payload.get(sect) or {}, "lastPrice", "ltp", "lastTradedPrice"))
+        if v:
+            return v
+    return safe_num(first(payload, "lastPrice", "ltp")) or None
+
+
 def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
     """2.7.0: during market hours, read the live NSE price of every declared
     company that has an entry plan (for the 3 pm entry alert and the card's
@@ -4756,7 +4769,7 @@ def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
             for e, sym in picks[:LIVE_QUOTE_MAX]:
                 try:
                     payload, raw_ref = nse.quote(sym, e["eventId"], series=(e.get("security") or {}).get("nseSeries"))
-                    price = safe_num(first((payload or {}).get("priceInfo") or {}, "lastPrice")) if isinstance(payload, dict) else None
+                    price = quote_last_price(payload)
                     if price:
                         e["live"] = {"price": price, "at": iso_now()}
                         store.save(e)
