@@ -707,5 +707,38 @@ class EarlyEntryStrictTests(unittest.TestCase):
         self.assertEqual(pp.trade_plan(**kw)["signal"], "ENTRY_EARLY")
 
 
+
+class PositionTrackerTests(unittest.TestCase):
+    """2.9.12 My trades: HCLTECH bought 14 Oct at 1331.80, stop 1225.82."""
+    POS = {"symbol": "HCLTECH", "entryDate": "2026-10-14", "entryPrice": 1331.80, "stop": 1225.82}
+
+    def item(self, close, live=None, e21=1242.8, e63=1257.66):
+        return {"symbol": "HCLTECH", "resultDayLow": 1238.2, "priceContext": {"lastClose": close},
+                "plus": {"price": {"ema21": e21, "ema63": e63, "last_session": "2026-10-20"}, "live": {"price": live, "at": "x"} if live else {}}}
+
+    def test_hold_then_trail_and_stops_never_drop(self):
+        import pead_plus as pp
+        v, st = pp.position_view(self.POS, self.item(1326.0, live=1351.9), None, date(2026, 10, 14))
+        self.assertEqual(v["status"], "HOLD")
+        self.assertEqual((v["oneR"], v["swingStop"]), (1437.78, 1225.82))
+        self.assertAlmostEqual(v["rNow"], 0.19, places=2)
+        v, st = pp.position_view(self.POS, self.item(1445.0, e21=1360, e63=1300), st, date(2026, 10, 20))
+        self.assertEqual(v["status"], "TRAILING")
+        self.assertEqual((v["swingStop"], v["positionStop"]), (1360.0, 1331.8))   # cost floor for the 63 EMA leg
+        v, st = pp.position_view(self.POS, self.item(1420.0, e21=1340, e63=1290), st, date(2026, 10, 21))
+        self.assertEqual(v["swingStop"], 1360.0)          # never moves down
+        self.assertEqual(v["status"], "TRAILING")
+
+    def test_close_below_stop_says_exit(self):
+        import pead_plus as pp
+        v, _ = pp.position_view(self.POS, self.item(1220.0), None, date(2026, 10, 16))
+        self.assertEqual(v["status"], "EXIT")
+
+    def test_missing_item_is_waiting_not_crash(self):
+        import pead_plus as pp
+        v, _ = pp.position_view(self.POS, None, None, date(2026, 10, 14))
+        self.assertEqual(v["status"], "NO_DATA")
+
+
 if __name__ == "__main__":
     unittest.main()

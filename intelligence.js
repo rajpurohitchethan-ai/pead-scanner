@@ -339,6 +339,40 @@
           <div class="radar-why">${esc(pl.why || '')}</div>${open ? `<div class="row-detail">${card(it)}</div>` : ''}`;
       }).join('')}</div>`;
   }
+  // 2.9.12: My trades. Entry/stop come from master/positions.json (public repo:
+  // symbol, date, price only); quantity is kept in this browser only.
+  const POS = { HOLD: ['Hold', 'go'], TRAILING: ['Trailing (past +1R)', 'go'], BELOW_ENTRY: ['Below entry', 'watch'],
+    EXIT_SWING: ['Exit swing part', 'bad'], EXIT: ['Exit: closed below stop', 'bad'], NO_DATA: ['Waiting for data', 'pending'] };
+  function viewTrades() {
+    const list = S.data.positions || [];
+    if (!list.length) return `<div class="empty">No open trades. Tell Claude when you buy, and the trade is tracked here against the screener's plan.</div>`;
+    return `<p class="note">Your open trades, checked every hour against the screener's plan: stop 1% under the result-day low until +1R, then stop to cost and trail the 21 EMA (swing) or 63 EMA (position). Stops are judged on closing prices and never move down. Quantity stays on this device only.</p>
+      <div class="grid">${list.map(p => {
+        const st = POS[p.status] || [p.status, ''];
+        let qty = null; try { qty = num(localStorage.getItem('qty:' + p.symbol)); } catch (e) { /* storage blocked */ }
+        const money = v => v === null ? '—' : `${v >= 0 ? '+' : '−'}₹${Math.abs(Math.round(v)).toLocaleString('en-IN')}`;
+        const pnl = qty && num(p.last) !== null ? (p.last - p.entryPrice) * qty : null;
+        const atRisk = qty && num(p.swingStop) !== null ? (p.swingStop - p.entryPrice) * qty : null;
+        const lv = (l, v, k = '') => `<div class="lv ${k}"><span>${l}</span><b>${v}</b></div>`;
+        return `<article class="card"><div class="head"><div><h2 class="sym">${esc(p.symbol)}</h2><div class="co">Bought ${dt(p.entryDate)} at ${inr(p.entryPrice)}</div></div>
+          <div class="score"><div class="v ${cls(p.pnlPct)}">${pct(p.pnlPct)}</div><div class="l">${num(p.rNow) !== null ? num(p.rNow).toFixed(2) + 'R' : ''}</div></div></div>
+          <div class="tags"><span class="tag ${st[1]}">${esc(st[0])}</span></div>
+          <div class="meta">${p.live ? 'Live' : 'Last close'} ${inr(p.last)}${p.live && num(p.lastClose) !== null ? ` · close ${inr(p.lastClose)}` : ''}</div>
+          <p class="plan-why">${esc(p.note || '')}</p>
+          <div class="levels">${lv('Stop now (swing)', inr(p.swingStop), 's')}${lv('Position stop', inr(p.positionStop), 's')}
+            ${lv('+1R (stop to cost)', inr(p.oneR), 'e')}${lv('+2R', inr(p.twoR))}</div>
+          <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 21 EMA ${inr(p.ema21)}, 63 EMA ${inr(p.ema63)}.</p>
+          <div class="sizing"><label>Quantity <input type="number" min="0" step="1" inputmode="numeric" class="pos-qty" data-sym="${esc(p.symbol)}" value="${qty ?? ''}"></label>
+            ${qty ? `<span class="meta">P&amp;L ${money(pnl)} · at the stop ${money(atRisk)}</span>` : '<span class="meta">enter quantity for rupee P&amp;L</span>'}</div>
+          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}</article>`;
+      }).join('')}</div>`;
+  }
+  document.addEventListener('change', e => {
+    const q = e.target.closest?.('.pos-qty');
+    if (!q) return;
+    try { localStorage.setItem('qty:' + q.dataset.sym, q.value || ''); } catch (err) { /* storage blocked */ }
+    render();
+  });
   function viewSetups() {
     let list = declared().filter(matches);
     if (S.bucket !== 'ALL') list = list.filter(it => (P(it).bucket?.code || 'NONE') === S.bucket);
@@ -438,7 +472,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.11';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.12';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -466,7 +500,7 @@
     const fails = (sa.checks || []).filter(c => c.status === 'FAIL');
     const auditBanner = fails.length ? `<div class="install-bad"><b>Data check found ${fails.length} problem${fails.length > 1 ? 's' : ''}:</b> ${esc(fails.map(c => c.check).join('; '))}. Details in Data health.</div>` : '';
     $('season').innerHTML = installBanner() + auditBanner + `<strong>${decl.length}</strong> results declared, <strong>${act}</strong> with an actionable setup, <strong>${soon}</strong> companies reporting in the next 7 days.`;
-    $('c-setups').textContent = decl.length; $('c-radar').textContent = radar().length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
+    $('c-setups').textContent = decl.length; $('c-radar').textContent = radar().length; $('c-trades').textContent = (d.positions || []).length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
   }
 
   function chips() {
@@ -493,7 +527,7 @@
     document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
     const active = document.querySelector('.tab[aria-selected="true"]');
     if (active && active.scrollIntoView) active.scrollIntoView({ inline: 'center', block: 'nearest' });
-    $('view').innerHTML = { setups: viewSetups, radar: viewRadar, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
+    $('view').innerHTML = { setups: viewSetups, radar: viewRadar, trades: viewTrades, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
   }
 
   // ---------- events ----------

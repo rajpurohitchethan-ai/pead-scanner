@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.11"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.12"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -1425,3 +1425,72 @@ def sector_checklists(items: list[dict[str, Any]], sectors: dict[str, dict[str, 
                 ex = {"label": lab, "note": "; ".join(bits) + "."}
             ex["sectorScore"] = f"{cl['score']}/{cl['measured']}" if cl["measured"] else None
             it.setdefault("plus", {})["execution"] = ex
+
+
+# ---------------------------------------------------------------------------
+# 2.9.12: open positions (My trades tab). Same rules as the trade plan:
+# stop = 1% under the result-day low until +1R, then cost, then trail the
+# 21 EMA (swing) / 63 EMA (position). A stop never moves down. Close basis.
+# ---------------------------------------------------------------------------
+def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[str, Any] | None,
+                  today: date) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Returns (view for the page, updated state to persist)."""
+    st = dict(state or {})
+    entry = _num(pos.get("entryPrice"))
+    it = item or {}
+    pl = it.get("plus") or {}
+    px = pl.get("price") or {}
+    plan = pl.get("plan") or {}
+    low = _num(it.get("resultDayLow"))
+    stop0 = _num(pos.get("stop")) or _num(plan.get("sl")) or (_r2(low * (1 - SL_BUFFER_PCT / 100)) if low else None)
+    close = _num((it.get("priceContext") or {}).get("lastClose"))
+    live = pl.get("live") or {}
+    last = _num(live.get("price")) or close
+    view: dict[str, Any] = {"symbol": pos.get("symbol"), "entryDate": pos.get("entryDate"), "entryPrice": entry,
+                            "setup": pos.get("setup"), "initialStop": stop0, "resultDayLow": low,
+                            "last": last, "lastClose": close, "live": bool(live.get("price")), "at": live.get("at"),
+                            "ema21": _num(px.get("ema21")), "ema63": _num(px.get("ema63")), "status": "NO_DATA",
+                            "note": "Waiting for prices."}
+    if entry is None or stop0 is None or entry <= stop0:
+        view["note"] = "Entry or stop missing."
+        return view, st
+    risk = entry - stop0
+    one_r = entry + risk
+    sess = str(px.get("last_session") or "")[:10]
+    if close is not None and sess and sess >= str(pos.get("entryDate") or ""):   # only closes after buying
+        st["peakClose"] = max(_num(st.get("peakClose")) or close, close)
+    one_r_hit = bool(st.get("oneRHit")) or ((_num(st.get("peakClose")) or 0) >= one_r)
+    st["oneRHit"] = one_r_hit
+    swing = position = stop0
+    if one_r_hit:
+        e21, e63 = view["ema21"], view["ema63"]
+        swing = max(entry, e21) if e21 is not None else entry
+        position = max(entry, e63) if e63 is not None else entry
+    # Never lower a stop that was already raised.
+    swing = max(swing, _num(st.get("swingStop")) or swing)
+    position = max(position, _num(st.get("positionStop")) or position)
+    st["swingStop"], st["positionStop"] = _r2(swing), _r2(position)
+    r_now = (last - entry) / risk if last is not None else None
+    view.update({"riskPerShare": _r2(risk), "riskPct": _r2(risk / entry * 100), "oneR": _r2(one_r),
+                 "twoR": _r2(entry + 2 * risk), "swingStop": _r2(swing), "positionStop": _r2(position),
+                 "rNow": _r2(r_now), "pnlPct": _r2(_pct(last, entry)) if last is not None else None,
+                 "peakClose": _r2(_num(st.get("peakClose"))), "oneRHit": one_r_hit})
+    if last is None:
+        view["note"] = "No price for this stock yet."
+    elif close is not None and close < swing:
+        view["status"], view["note"] = "EXIT_SWING", (
+            f"Closed at {close:,.2f}, below the {'swing trail' if one_r_hit else 'stop'} {swing:,.2f}: the plan says exit"
+            + (" the swing part (position part trails the 63 EMA)." if one_r_hit and close >= position else "."))
+        if close < position:
+            view["status"] = "EXIT"
+    elif one_r_hit:
+        view["status"], view["note"] = "TRAILING", (f"+1R reached: stop at cost or better. Trail swing {swing:,.2f} "
+                                                    f"(21 EMA) / position {position:,.2f} (63 EMA), on a closing basis.")
+    elif last is not None and last < entry:
+        view["status"], view["note"] = "BELOW_ENTRY", (f"Below entry; the stop {stop0:,.2f} (1% under the result-day "
+                                                       f"low {low:,.2f}) stands until +1R at {one_r:,.2f}." if low else
+                                                       f"Below entry; stop {stop0:,.2f} stands until +1R at {one_r:,.2f}.")
+    else:
+        view["status"], view["note"] = "HOLD", (f"Hold. Stop {stop0:,.2f} until +1R at {one_r:,.2f}; then move the stop "
+                                                f"to cost and trail the 21 / 63 EMA.")
+    return view, st

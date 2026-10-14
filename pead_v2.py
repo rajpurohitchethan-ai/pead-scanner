@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.11"
+ENGINE_VERSION = "2.9.12"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -4793,12 +4793,14 @@ def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
     if not market_open_now():
         return 0
     picks = []
+    held = {normalize_symbol(p_.get("symbol")) for p_ in open_positions()}   # 2.9.12: always quote open trades
     for e in store.all():
         if not dashboard_activity(e) or boolish(store.value(e, "results_released")) is not True:
             continue
         plan = ((e.get("derived") or {}).get("plus") or {}).get("plan") or {}
         sym = normalize_symbol((e.get("security") or {}).get("nseSymbol"))
-        if sym and (plan.get("signal") in LIVE_SIGNALS or safe_num(plan.get("entry")) is not None):
+        if sym and (plan.get("signal") in LIVE_SIGNALS or safe_num(plan.get("entry")) is not None
+                    or sym in held):
             picks.append((e, sym))
     n = 0
     if not picks:
@@ -4821,6 +4823,39 @@ def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
 
 
 MARKET_INTERNALS_PATH = MASTER_DIR / "market_internals.json"
+POSITIONS_PATH = MASTER_DIR / "positions.json"            # 2.9.12: owner's open trades (symbol, date, price)
+POSITIONS_STATE_PATH = MASTER_DIR / "positions_state.json"
+
+
+def open_positions() -> list[dict[str, Any]]:
+    try:
+        data = json.loads(POSITIONS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    rows = data.get("positions") if isinstance(data, dict) else data
+    return [r for r in (rows or []) if isinstance(r, dict) and r.get("symbol")
+            and str(r.get("status") or "OPEN").upper() == "OPEN"]
+
+
+def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, Any]]:
+    pos = open_positions()
+    if not pos:
+        return []
+    try:
+        state = json.loads(POSITIONS_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        state = {}
+    by_sym = {}
+    for it in items:
+        by_sym.setdefault(str(it.get("symbol") or "").upper(), it)
+    views = []
+    for p_ in pos:
+        key = f"{str(p_['symbol']).upper()}|{p_.get('entryDate')}"
+        view, st = pead_plus.position_view(p_, by_sym.get(str(p_["symbol"]).upper()), state.get(key), today)
+        state[key] = st
+        views.append(view)
+    json_dump_atomic(POSITIONS_STATE_PATH, state)
+    return views
 
 
 def parse_fii_dii(payload: Any) -> dict[str, Any] | None:
@@ -6701,6 +6736,11 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
     pead_plus.peer_context(items, regime)
     pead_plus.sector_checklists(items, sectors, now_ist().date())   # 2.9.8
     try:
+        positions = position_views(items, now_ist().date())         # 2.9.12
+    except Exception as exc:
+        print(f"Positions skipped: {type(exc).__name__}: {exc}")
+        positions = []
+    try:
         health["selfAudit"] = pead_plus.self_audit(items, regime, health, now_ist().date())
         json_dump_atomic(LOG_DIR / "self_audit.json", health["selfAudit"])
     except Exception as exc:   # the audit must never block publishing
@@ -6717,6 +6757,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "regime": regime,
         "sectors": sorted(sectors.values(), key=lambda r: (-(r.get("relativeToMarket") or -999), r["sector"])),
         "scorecard": card | {"timing": timing},
+        "positions": positions,
         "thresholds": {
             "liquidityTurnoverCr": pead_plus.LIQ_TURNOVER_CR, "liquidityMinPrice": pead_plus.LIQ_MIN_PRICE,
             "maxRiskPct": pead_plus.MAX_RISK_PCT, "strongRevYoY": pead_plus.STRONG_REV_YOY, "strongPatYoY": pead_plus.STRONG_PAT_YOY,
