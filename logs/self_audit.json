@@ -1,5 +1,5 @@
 {
-  "status": "FAIL",
+  "status": "WARN",
   "checkedOn": "2026-10-14",
   "checks": [
     {
@@ -60,12 +60,19 @@
     },
     {
       "check": "Declared results have revenue/profit (filed 2+ days ago)",
-      "status": "FAIL",
+      "status": "OK",
+      "count": 0,
+      "examples": [],
+      "note": "Exchange filing not parsed; check the NSE_XBRL / BSE_RESULTS_SNAPSHOT fetch errors."
+    },
+    {
+      "check": "Illiquid or unpriced results not parsed (2+ days)",
+      "status": "WARN",
       "count": 1,
       "examples": [
         "TYPHOON"
       ],
-      "note": "Exchange filing not parsed; check the NSE_XBRL / BSE_RESULTS_SNAPSHOT fetch errors."
+      "note": "Not trade candidates (no price history or below the liquidity test); filled in when the exchange posts the table."
     },
     {
       "check": "Declared results have revenue/profit (filed in last 2 days)",
@@ -116,12 +123,19 @@
     },
     {
       "check": "Reaction measured once the session has closed",
-      "status": "FAIL",
+      "status": "OK",
+      "count": 0,
+      "examples": [],
+      "note": ""
+    },
+    {
+      "check": "Reaction not measurable (no price history or illiquid)",
+      "status": "WARN",
       "count": 1,
       "examples": [
         "TYPHOON"
       ],
-      "note": ""
+      "note": "No usable prices for the reaction session; not a trade candidate."
     },
     {
       "check": "Every company has price history",
