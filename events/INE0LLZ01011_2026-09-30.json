@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0LLZ01011|2026-09-30",
   "createdAt": "2026-10-09T12:30:51Z",
-  "updatedAt": "2026-10-14T13:01:29Z",
+  "updatedAt": "2026-10-14T13:56:17Z",
   "security": {
     "symbol": "SONA",
     "nseSymbol": "SONA",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "DISCOVERED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,22 +43,29 @@
       "state": "SCHEDULED",
       "at": "2026-10-09T16:27:24Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "DISCOVERED",
+      "at": "2026-10-14T13:56:16Z",
+      "reason": "calendar date belonged to an earlier quarter"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-14T12:53:35Z",
-      "status": "OK",
+      "fetchedAt": "2026-10-14T13:50:20Z",
+      "status": "REVOKED",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7c4cd3ce37cca286.json",
-      "note": null
+      "rawRef": "raw/bse/DISCOVERY/result_calendar-565922c5478b6261.json",
+      "note": null,
+      "revokedAt": "2026-10-14T13:56:16Z",
+      "revokedReason": "meeting 2026-10-14 was for period 2026-06-30 (filing 2026-10-14 names it)"
     },
     "reaction_session": {
       "value": "2026-10-15",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-14T09:46:01Z",
+      "fetchedAt": "2026-10-14T13:53:29Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -67,7 +74,7 @@
     "filing_session": {
       "value": "UNKNOWN_TIME_NEXT_SESSION",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-14T09:46:01Z",
+      "fetchedAt": "2026-10-14T13:53:29Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -76,28 +83,28 @@
     "distance_52w_high_pct": {
       "value": 0.0,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-14T09:46:04Z",
+      "fetchedAt": "2026-10-14T13:53:32Z",
       "status": "OK",
       "rank": 105,
-      "rawRef": "raw/nse_price/INE0LLZ01011_2026-09-30/equity_history-b7cb75a9edf9118e.json",
+      "rawRef": "raw/nse_price/INE0LLZ01011_2026-09-30/equity_history-c31731fe1ee79c2a.json",
       "note": null
     },
     "last_price": {
-      "value": 98.59,
+      "value": 100.57,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-14T09:46:04Z",
+      "fetchedAt": "2026-10-14T13:53:32Z",
       "status": "OK",
       "rank": 105,
-      "rawRef": "raw/nse_price/INE0LLZ01011_2026-09-30/equity_history-b7cb75a9edf9118e.json",
+      "rawRef": "raw/nse_price/INE0LLZ01011_2026-09-30/equity_history-c31731fe1ee79c2a.json",
       "note": null
     },
     "avg_turnover_20d_cr": {
-      "value": 0.9887,
+      "value": 1.2468,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-14T09:46:04Z",
+      "fetchedAt": "2026-10-14T13:53:32Z",
       "status": "OK",
       "rank": 105,
-      "rawRef": "raw/nse_price/INE0LLZ01011_2026-09-30/equity_history-b7cb75a9edf9118e.json",
+      "rawRef": "raw/nse_price/INE0LLZ01011_2026-09-30/equity_history-c31731fe1ee79c2a.json",
       "note": null
     },
     "market_cap_cr": {
@@ -175,11 +182,11 @@
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-14T09:46:04Z",
-      "lastSuccess": "2026-10-14T09:46:04Z",
+      "lastAttempt": "2026-10-14T13:53:32Z",
+      "lastSuccess": "2026-10-14T13:53:32Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse_price/INE0LLZ01011_2026-09-30/equity_history-b7cb75a9edf9118e.json"
+      "rawRef": "raw/nse_price/INE0LLZ01011_2026-09-30/equity_history-c31731fe1ee79c2a.json"
     },
     "EXCHANGE_META": {
       "lastAttempt": "2026-10-14T08:51:50Z",
@@ -226,9 +233,9 @@
   },
   "derived": {
     "score": 5,
-    "completenessPct": 66.7,
+    "completenessPct": 33.3,
     "completeness": {
-      "present": 2,
+      "present": 1,
       "required": 3
     },
     "resultReality": "AWAITING RESULT",
@@ -248,8 +255,12 @@
       "live": null,
       "strength": null,
       "q1Strength": null,
-      "q1Setup": null,
-      "bucket": null,
+      "q1Setup": false,
+      "bucket": {
+        "code": "WATCH_FRESH",
+        "label": "Watch: fresh",
+        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+      },
       "plan": {
         "signal": "WAIT_RESULT",
         "why": "Results not declared yet.",
@@ -265,8 +276,8 @@
         "redFlags": []
       },
       "liquidity": {
-        "pass": false,
-        "label": "Illiquid: ₹0.99 Cr/day"
+        "pass": true,
+        "label": "₹1.2 Cr/day"
       },
       "valuation": {
         "label": "FAIR",
@@ -295,7 +306,7 @@
         "sector": "Textiles",
         "stocks": 24,
         "momentum63dMedian": 7.14,
-        "relativeToMarket": 13.19,
+        "relativeToMarket": 13.11,
         "declared": 1,
         "strongResults": 0,
         "avgReaction": null,
@@ -316,9 +327,15 @@
         "ret_21d_pct": null,
         "ret_63d_pct": null,
         "ret_126d_pct": null,
-        "high_52w": 98.59,
+        "high_52w": 100.57,
         "low_52w": 97.82,
-        "last_session": "2026-10-13"
+        "last_session": "2026-10-14",
+        "q1_reaction_date": "2026-10-14",
+        "q1_reaction_return_pct": 2.01,
+        "q1_reaction_rvol": null,
+        "q1_return_to_q2_pct": 2.01,
+        "q1_max_gain_pct": 2.01,
+        "q1_sustained": true
       },
       "deliveryPct": 70.55,
       "concall": null,
@@ -337,9 +354,7 @@
       "Sector tailwind: Textiles peers are outperforming."
     ],
     "risks": [
-      "Market cap ₹557 Cr is below ₹1,000 Cr rule.",
-      "20D average turnover ₹1.0 Cr/day is thin.",
-      "Illiquid: ₹0.99 Cr/day."
+      "Market cap ₹557 Cr is below ₹1,000 Cr rule."
     ]
   },
   "priceTrail": [
@@ -437,6 +452,11 @@
       "timestamp": "2026-10-14T09:46:04Z",
       "price": 98.59,
       "source": "NSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-14T13:53:32Z",
+      "price": 100.57,
+      "source": "NSE_PRICE"
     }
   ],
   "plus": {
@@ -447,27 +467,35 @@
       "ret_21d_pct": null,
       "ret_63d_pct": null,
       "ret_126d_pct": null,
-      "high_52w": 98.59,
+      "high_52w": 100.57,
       "low_52w": 97.82,
-      "last_session": "2026-10-13"
+      "last_session": "2026-10-14",
+      "q1_reaction_date": "2026-10-14",
+      "q1_reaction_return_pct": 2.01,
+      "q1_reaction_rvol": null,
+      "q1_return_to_q2_pct": 2.01,
+      "q1_max_gain_pct": 2.01,
+      "q1_sustained": true
     },
     "chart": {
       "from": "2026-10-09",
-      "to": "2026-10-13",
+      "to": "2026-10-14",
       "close": [
         97.88,
         97.82,
-        98.59
+        98.59,
+        100.57
       ],
       "ema21": [
         97.88,
         97.87,
-        97.94
+        97.94,
+        98.18
       ],
       "reactionIndex": null
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-10-14T09:46:04Z",
+    "computedAt": "2026-10-14T13:53:32Z",
     "plusVersion": "2.9.7",
     "corporateActions": null
   },
