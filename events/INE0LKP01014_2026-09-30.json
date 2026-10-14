@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0LKP01014|2026-09-30",
   "createdAt": "2026-10-09T16:27:24Z",
-  "updatedAt": "2026-10-14T11:51:15Z",
+  "updatedAt": "2026-10-14T13:01:29Z",
   "security": {
     "symbol": "ARDIALL",
     "bseSymbol": "ARDIALL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-09T16:27:24Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-14T12:49:48Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-14T13:01:29Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-14T11:45:33Z",
+      "fetchedAt": "2026-10-14T12:53:35Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7c4cd3ce37cca286.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4fac060ebcd933d7.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-15",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-14T11:50:23Z",
+      "fetchedAt": "2026-10-14T12:54:01Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-14T11:50:23Z",
+      "fetchedAt": "2026-10-14T12:54:01Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -78,6 +88,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE0LKP01014_2026-09-30/scrip_results-c0054f34e434770c.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-14T12:49:48Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4fac060ebcd933d7.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-14T18:17:48.370000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-14T12:49:48Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4fac060ebcd933d7.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-14T12:49:48Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4fac060ebcd933d7.json",
+      "note": null
     }
   },
   "fetch": {
@@ -89,7 +126,7 @@
       "rawRef": "raw/bse/NSE_ARDIALL_2026-09-30/lookup-00d7f2844b71e006.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-14T11:50:25Z",
+      "lastAttempt": "2026-10-14T12:54:03Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
@@ -110,42 +147,73 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-14T11:50:25Z",
+      "lastAttempt": "2026-10-14T12:54:08Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-14T12:54:01Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE0LKP01014_2026-09-30/results_snapshot-c17230716ec28683.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-14T12:54:01Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-14T12:54:08Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "ConnectionError: 403: Forbidden",
       "rawRef": null
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -189,10 +257,10 @@
         "stocks": 31,
         "momentum63dMedian": -8.27,
         "relativeToMarket": -2.22,
-        "declared": 0,
+        "declared": 2,
         "strongResults": 0,
         "avgReaction": null,
-        "tailwind": "NEUTRAL"
+        "tailwind": "WEAK"
       },
       "identity": {
         "macroSector": "Services",
@@ -217,7 +285,30 @@
     "valuationInputCount": 1,
     "expectationFullWindow": false,
     "reasons": [],
-    "risks": []
+    "risks": [
+      "Sector headwind: Services peers are lagging."
+    ]
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-14T18:17:48.370000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial Result for the Quarter ended as on 30th September 2026 Ardi Alliances Ltd - 504370 - Result-Financial Result For The Quarter Ended As On Sep 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4fac060ebcd933d7.json",
+      "seenAt": "2026-10-14T13:01:28Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-14T12:54:01Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  }
 }
