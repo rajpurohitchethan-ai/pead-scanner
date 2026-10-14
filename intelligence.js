@@ -315,29 +315,40 @@
   // 2.9.9: Radar = reaction done, setup still alive, screener watching for an entry.
   const RADAR = { ENTRY_EARLY: 0, ENTRY_PULLBACK: 0, ENTRY_BREAKOUT: 0, NEAR_ENTRY: 1, PULLBACK_ZONE: 2, WATCH: 3,
     RISK_TOO_WIDE: 4, EXTENDED: 5, WAIT_CONCALL: 6 };
-  const radar = () => declared().filter(it => {
+  // 2.9.14: setups below the ₹1,000 Cr minimum (or with unknown market cap) are
+  // listed separately, labelled, so a live setup is never silently hidden; they
+  // still do not qualify as trade candidates.
+  const MIN_MCAP = () => num(S.data.thresholds?.minMarketCapCr) ?? 1000;
+  const radarAll = () => declared().filter(it => {
     const s = P(it).plan?.signal;
-    return s in RADAR && liquidOk(it) && (num(it.marketCapCr) ?? 0) >= 1000 && !px(it).base_broken;
+    return s in RADAR && liquidOk(it) && !px(it).base_broken;
   }).sort((a, b) => RADAR[P(a).plan.signal] - RADAR[P(b).plan.signal] || (num(b.convictionScore) ?? 0) - (num(a.convictionScore) ?? 0));
+  const bigEnough = it => num(it.marketCapCr) !== null && num(it.marketCapCr) >= MIN_MCAP();
+  const radar = () => radarAll().filter(bigEnough);
+  const radarSmall = () => radarAll().filter(it => !bigEnough(it));
   function viewRadar() {
-    const list = radar().filter(matches);
-    if (!list.length) return `<div class="empty">Nothing on the radar yet. A stock lands here once its reaction session has traded and the setup is still alive (base intact, earnings good enough, liquid, market cap at least ₹1,000 Cr).</div>`;
-    return `<p class="note">Reaction done, setup alive: the screener is waiting for an entry pattern. Sorted by how close each is to an entry. Tap a row for the full card.</p>
-      <div class="ledger">${list.map(it => {
+    const list = radar().filter(matches), small = radarSmall().filter(matches);
+    const smallBlock = small.length ? `<h3 class="radar-sub">Below the ₹${MIN_MCAP().toLocaleString('en-IN')} Cr minimum: not trade candidates</h3>
+      <p class="note">Liquid, setup alive, but the market cap is under the screener's minimum (or not known). Shown so you don't miss them; the size rule is yours to apply.</p>
+      <div class="ledger">${small.map(radarRow).join('')}</div>` : '';
+    if (!list.length) return `<div class="empty">Nothing on the radar yet. A stock lands here once its reaction session has traded and the setup is still alive (base intact, earnings good enough, liquid, market cap at least ₹1,000 Cr).</div>${smallBlock}`;
+    return `<p class="note">Reaction done, setup alive: the screener is waiting for an entry pattern. Sorted by how close each is to an entry. A "Starter 1/3" tag means a third of the size is allowed before the concall. Tap a row for the full card.</p>
+      <div class="ledger">${list.map(radarRow).join('')}</div>${smallBlock}`;
+  }
+  function radarRow(it) {
         const pl = P(it).plan || {}, s = sig(it), pc = it.priceContext || {}, live = P(it).live;
         const last = num(live?.price) ?? num(pc.lastClose), low = num(it.resultDayLow);
         const toBase = last !== null && low ? (last / low - 1) * 100 : null;
         const trig = num(pl.entry), toTrig = last !== null && trig ? (trig / last - 1) * 100 : null;
         const open = S.open.has(it.eventId);
         return `<div class="row radar-row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">
-          <div><div class="s">${esc(it.symbol)}</div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span></div></div>
+          <div><div class="s">${esc(it.symbol)}</div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
           <div><div class="k">Reaction</div><div class="v ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}${num(pc.relativeVolume) !== null ? ` <span class="meta">${num(pc.relativeVolume).toFixed(1)}x vol</span>` : ''}</div></div>
           <div><div class="k">${live?.price ? 'Live' : 'Last'}</div><div class="v">${inr(last)}</div></div>
           <div class="opt"><div class="k">Base (result-day low)</div><div class="v">${inr(low)}${toBase !== null ? ` <span class="meta">${pct(toBase)}</span>` : ''}</div></div>
           <div><div class="k">${trig ? 'Trigger' : 'Risk'}</div><div class="v">${trig ? `${inr(trig)}${toTrig !== null ? ` <span class="meta">${toTrig > 0 ? pct(toTrig) + ' away' : 'above'}</span>` : ''}` : (num(pl.riskPct) !== null ? `${num(pl.riskPct).toFixed(1)}%` : '—')}</div></div>
           <div class="chev" aria-hidden="true">›</div></div>
           <div class="radar-why">${esc(pl.why || '')}</div>${open ? `<div class="row-detail">${card(it)}</div>` : ''}`;
-      }).join('')}</div>`;
   }
   // 2.9.12: My trades. Entry/stop come from master/positions.json (public repo:
   // symbol, date, price only); quantity is kept in this browser only.
@@ -472,7 +483,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.13';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.14';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -500,7 +511,7 @@
     const fails = (sa.checks || []).filter(c => c.status === 'FAIL');
     const auditBanner = fails.length ? `<div class="install-bad"><b>Data check found ${fails.length} problem${fails.length > 1 ? 's' : ''}:</b> ${esc(fails.map(c => c.check).join('; '))}. Details in Data health.</div>` : '';
     $('season').innerHTML = installBanner() + auditBanner + `<strong>${decl.length}</strong> results declared, <strong>${act}</strong> with an actionable setup, <strong>${soon}</strong> companies reporting in the next 7 days.`;
-    $('c-setups').textContent = decl.length; $('c-radar').textContent = radar().length; $('c-trades').textContent = (d.positions || []).length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
+    $('c-setups').textContent = decl.length; $('c-radar').textContent = radar().length + (radarSmall().length ? `+${radarSmall().length}` : ''); $('c-trades').textContent = (d.positions || []).length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
   }
 
   function chips() {

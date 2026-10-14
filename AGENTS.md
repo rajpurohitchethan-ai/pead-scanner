@@ -204,3 +204,7 @@ Engine 2.9.12 (My trades, 14 Oct 2026)
 Engine 2.9.13 (evening check, 14 Oct 2026)
 - Live quote after the close: build_plus kept a quote as plus.live for the whole day, so at 20:21 IST My trades / Radar showed HCLTECH "Live 1,327.80 · close 1,327.00" (a 15:19 quote) and R / P&L used it. pead_plus.live_quote_current(): a quote counts only on its own IST day, and after 15:45 IST it is superseded once the stored history has that session. The 15:02 alert run is unchanged. Tests: LiveQuoteAfterCloseTests.
 - Owner to decide: TRF Q2 FY27 consolidated owners' PAT ₹50.26 Cr (exceptional gain ₹46.5 Cr), total ₹49.85 Cr; last year's consolidated filing has no owners' line (total profit -₹6.81 Cr), so PAT YoY stays "—" (concepts are never mixed; OwnersZeroComparativeTests asserts this). Comparing total profit with total profit would show TURNAROUND.
+
+Engine 2.9.14 (14 Oct 2026, owner: "1/3 quantity entries not in radar")
+- Radar rows show a "Starter 1/3" tag when plan.stage = STARTER (a third of the size before the concall).
+- Liquid live setups below the ₹1,000 Cr minimum (or with unknown market cap) are no longer silently hidden: they are listed in a separate, labelled "Below the ₹1,000 Cr minimum: not trade candidates" section with their market cap tag (SEJALLTD ₹832 Cr, NEAR_ENTRY starter). They still do not qualify; the tab count reads "5+1". intelligence.json thresholds now carry minMarketCapCr. Display only; no rule changed.
