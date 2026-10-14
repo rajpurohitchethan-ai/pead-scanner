@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.10"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.11"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -384,7 +384,9 @@ def trade_plan(*, released: bool, reaction_traded: bool, quality_ok: bool | None
     if sessions is not None and sessions <= EARLY_ENTRY_SESSIONS and (ret or 0) >= EARLY_MIN_RETURN and (vol or 0) >= EARLY_MIN_RVOL \
             and r_close is not None and last >= r_close * 0.99:
         trigger = _num(result_high) or r_close
-        signal = "ENTRY_EARLY" if last >= trigger else "NEAR_ENTRY"
+        # 2.9.11: "above" the result-day high; a close AT the high (HCLTECH 13 Oct,
+        # close 1326 = high 1326) is near entry, triggered on a move above it.
+        signal = "ENTRY_EARLY" if last > trigger else "NEAR_ENTRY"
         why = "Strong reaction on high volume and the gap is holding: early entry above the result-day high."
         plan["style"] = "EARLY"
     elif _num(box_high) is not None and last >= _num(box_high):
@@ -945,8 +947,19 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
             (no_fin_old if age >= 2 else no_fin_new).append(it["symbol"])
         elif it.get("revenueYoY") is None and it.get("patYoYStatus") is None:
             no_yoy.append(it["symbol"])
+    # 2.9.11: red only for stocks that could be trade candidates; unpriced or
+    # illiquid scrips (TYPHOON: BSE XT group, no price history) are a warning.
+    def candidate(sym):
+        it = by_sym.get(sym) or {}
+        pl = it.get("plus") or {}
+        return bool(pl.get("price")) and (pl.get("liquidity") or {}).get("pass") is not False
+    by_sym = {it.get("symbol"): it for it in declared}
+    minor_fin = [x for x in no_fin_old if not candidate(x)]
+    no_fin_old = [x for x in no_fin_old if candidate(x)]
     add("Declared results have revenue/profit (filed 2+ days ago)", no_fin_old, fail=True,
         note="Exchange filing not parsed; check the NSE_XBRL / BSE_RESULTS_SNAPSHOT fetch errors.")
+    add("Illiquid or unpriced results not parsed (2+ days)", minor_fin,
+        note="Not trade candidates (no price history or below the liquidity test); filled in when the exchange posts the table.")
     add("Declared results have revenue/profit (filed in last 2 days)", no_fin_new,
         note="Normal for a few hours after filing; the engine re-checks every run.")
     add("Declared results withheld as suspect figures", suspect,
@@ -961,7 +974,9 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
         rs = d(it.get("reactionSession"))
         if rs and rs < today and (it.get("priceContext") or {}).get("resultDayPct") is None:
             overdue.append(it["symbol"])
-    add("Reaction measured once the session has closed", overdue, fail=True)
+    add("Reaction measured once the session has closed", [x for x in overdue if candidate(x)], fail=True)
+    add("Reaction not measurable (no price history or illiquid)", [x for x in overdue if not candidate(x)],
+        note="No usable prices for the reaction session; not a trade candidate.")
 
     no_price = [it["symbol"] for it in items if not (it.get("plus") or {}).get("price")]
     add("Every company has price history", no_price, note="Filled in rotation, new companies first.")

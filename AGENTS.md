@@ -192,3 +192,7 @@ Engine 2.9.9 (Radar tab, 13 Oct 2026)
 Engine 2.9.10 (evening check, 13 Oct 2026)
 - Owners' PAT 0 in a comparative filing: SWANDEF's year-ago consolidated XBRL (Sep-2025) files the owners' PAT line as 0 (profit for period -19.86 Cr), so its parse used total profit (OWNERS_PAT_ZERO_USED_TOTAL) and fill_comparatives_from_listing refused it as another concept; the Q2 FY27 card had no PAT change at all instead of TURNAROUND. parse_xbrl_financials now stores _meta.patTotalCr (total profit next to the owners' line); same_pat_concept() accepts the zero-owners fallback only when the other filing's owners PAT equals its total PAT (no minority interest). Different concepts are otherwise still never mixed. XBRL_PARSER_VERSION 7 (one re-read). SWANDEF stays FLAGGED (PAT_EXCEEDS_REVENUE: ₹563 Cr tax credit).
 - Tests: tests/test_robustness.py OwnersZeroComparativeTests (fixtures tests/fixtures/nse/SWANDEF_CONS_2025-09-30.xml / _2026-09-30.xml).
+
+Engine 2.9.11 (14 Oct 2026)
+- Self-check FAIL only for possible trade candidates (has price history, liquidity not failed): unpriced / illiquid declared results without parsed figures or reaction (TYPHOON: BSE XT group, no prices, no results table) are WARN "Illiquid or unpriced results not parsed" / "Reaction not measurable".
+- Early entry is strictly ABOVE the result-day high: a close equal to the high (HCLTECH 13 Oct: close 1326 = high 1326) is NEAR_ENTRY with trigger 1326, not ENTRY_EARLY. Tests: UnpricedResultAuditTests, EarlyEntryStrictTests.

@@ -662,5 +662,50 @@ class OwnersZeroComparativeTests(unittest.TestCase):
         self.assertIsNone(cur2.get("prior_year_pat_cr"))
 
 
+
+class UnpricedResultAuditTests(unittest.TestCase):
+    """TYPHOON (BSE XT group, no price history, no results table) turned the
+    whole page red; only possible trade candidates should FAIL."""
+
+    def test_unpriced_result_warns_not_fails(self):
+        import pead_plus as pp
+        items = [{"symbol": "TYPHOON", "resultsReleased": True, "resultDate": "2026-10-12", "reactionSession": "2026-10-13",
+                  "fundamentalSnapshot": {}, "priceContext": {}, "plus": {"liquidity": {"pass": None}}}]
+        audit = pp.self_audit(items, {"asOf": "2026-10-13"}, {}, date(2026, 10, 14))
+        self.assertEqual([c["check"] for c in audit["checks"] if c["status"] == "FAIL"], [])
+        st = {c["check"]: c["status"] for c in audit["checks"]}
+        self.assertEqual(st["Illiquid or unpriced results not parsed (2+ days)"], "WARN")
+        self.assertEqual(st["Reaction not measurable (no price history or illiquid)"], "WARN")
+
+    def test_liquid_candidate_still_fails(self):
+        import pead_plus as pp
+        items = [{"symbol": "BIGCO", "resultsReleased": True, "resultDate": "2026-10-12", "reactionSession": "2026-10-13",
+                  "fundamentalSnapshot": {}, "priceContext": {},
+                  "plus": {"liquidity": {"pass": True}, "price": {"last_session": "2026-10-13"}}}]
+        audit = pp.self_audit(items, {"asOf": "2026-10-13"}, {}, date(2026, 10, 14))
+        fails = {c["check"] for c in audit["checks"] if c["status"] == "FAIL"}
+        self.assertIn("Declared results have revenue/profit (filed 2+ days ago)", fails)
+        self.assertIn("Reaction measured once the session has closed", fails)
+
+
+
+class EarlyEntryStrictTests(unittest.TestCase):
+    def test_close_at_result_day_high_is_near_not_triggered(self):
+        import pead_plus as pp
+        x = {"sessions_since_reaction": 0, "reaction_close": 1326.0, "ema10": 1250, "ema21": 1240, "ema63": 1200}
+        kw = dict(released=True, reaction_traded=True, quality_ok=True, x=x, result_return=8.4, rvol=7.8,
+                  result_low=1238.2, result_high=1326.0, box_high=None)
+        import inspect
+        params = inspect.signature(pp.trade_plan).parameters
+        kw = {k: v for k, v in kw.items() if k in params}
+        if "last_price" in params:
+            kw["last_price"] = 1326.0
+        plan = pp.trade_plan(**kw)
+        self.assertEqual(plan["signal"], "NEAR_ENTRY")
+        self.assertEqual(plan["entry"], 1326.0)
+        kw["last_price"] = 1330.0
+        self.assertEqual(pp.trade_plan(**kw)["signal"], "ENTRY_EARLY")
+
+
 if __name__ == "__main__":
     unittest.main()
