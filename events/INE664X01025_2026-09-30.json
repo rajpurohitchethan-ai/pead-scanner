@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE664X01025|2026-09-30",
   "createdAt": "2026-10-12T16:34:12Z",
-  "updatedAt": "2026-10-14T13:56:18Z",
+  "updatedAt": "2026-10-14T14:51:25Z",
   "security": {
     "symbol": "TTLEL",
     "bseSymbol": "TTLEL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-12T16:34:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-14T14:41:18Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-14T14:51:25Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-14T13:50:20Z",
+      "fetchedAt": "2026-10-14T14:45:08Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-565922c5478b6261.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c520c50ac345b347.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-15",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-14T13:53:26Z",
+      "fetchedAt": "2026-10-14T14:45:54Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-14T13:53:26Z",
+      "fetchedAt": "2026-10-14T14:45:54Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -87,6 +97,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE664X01025_2026-09-30/scrip_results-00203a52174ebed6.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-14T14:41:18Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c520c50ac345b347.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-14T19:36:13.823000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-14T14:41:18Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c520c50ac345b347.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-14T14:41:18Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c520c50ac345b347.json",
+      "note": null
     }
   },
   "fetch": {
@@ -98,7 +135,7 @@
       "rawRef": "raw/bse/NSE_TTLEL_2026-09-30/lookup-560a722512c8c233.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-14T13:53:27Z",
+      "lastAttempt": "2026-10-14T14:45:56Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
@@ -119,42 +156,73 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-14T13:53:27Z",
+      "lastAttempt": "2026-10-14T14:46:00Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-14T14:45:54Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE664X01025_2026-09-30/results_snapshot-72c91bfff8f7d6de.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-14T14:45:54Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-14T14:46:00Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "ConnectionError: 403: Forbidden",
       "rawRef": null
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -198,7 +266,7 @@
         "stocks": 31,
         "momentum63dMedian": -8.27,
         "relativeToMarket": -2.29,
-        "declared": 2,
+        "declared": 3,
         "strongResults": 0,
         "avgReaction": null,
         "tailwind": "WEAK"
@@ -230,5 +298,26 @@
       "Sector headwind: Services peers are lagging."
     ]
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-14T19:36:13.823000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited financial results for the Quater and half year ended 30th september, 2026 TTL Enterprises Ltd - 514236 - Unaudited Financial Results For The Quater And Half Year Ended 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c520c50ac345b347.json",
+      "seenAt": "2026-10-14T14:51:23Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-14T14:45:54Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  }
 }
