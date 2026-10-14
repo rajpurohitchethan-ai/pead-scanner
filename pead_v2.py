@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.12"
+ENGINE_VERSION = "2.9.13"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5702,7 +5702,8 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
           and idx_last >= px["last_session"] else None)   # 2.8.0: no stale-index "index 0.0%"
     lv = event.get("live") or {}
     lv_at = parse_datetime(lv.get("at"))
-    live = pead_plus.live_entry_status(plan, lv) if lv_at and lv_at.astimezone(IST).date() == now_ist().date() else None
+    live = (pead_plus.live_entry_status(plan, lv)
+            if lv_at and pead_plus.live_quote_current(lv_at, px.get("last_session"), now_ist()) else None)
     return {
         "growth": growth,
         # 2.9.8: QoQ detects the change, YoY confirms it, YTD validates execution.

@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.12"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.13"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -1046,6 +1046,26 @@ def relative_strength(stock_return_pct: Any, start: Any, end: Any, dates: list[s
 
 
 NEAR_ENTRY_PCT = 2.0
+
+
+def live_quote_current(live_at: Any, last_session: str | None, now: Any) -> bool:
+    """2.9.13: an intraday quote is the latest price only until the day's close
+    is stored. It must be from today (IST); after 15:45 IST, a stored session
+    on or after the quote's day supersedes it (HCLTECH 14 Oct: a 15:19 quote
+    1,327.80 was shown at 20:21 next to the 1,327.00 close)."""
+    if not live_at or now is None:
+        return False
+    try:
+        at = live_at if isinstance(live_at, _dt) else _dt.fromisoformat(str(live_at).replace("Z", "+00:00"))
+        if at.tzinfo is not None and now.tzinfo is not None:
+            at = at.astimezone(now.tzinfo)
+    except (TypeError, ValueError):
+        return False
+    qd = at.date()
+    if qd != now.date():
+        return False
+    closed = (now.hour, now.minute) >= (15, 45)
+    return not (closed and last_session and str(last_session)[:10] >= qd.isoformat())
 
 
 def live_entry_status(plan: dict[str, Any] | None, live: dict[str, Any] | None) -> dict[str, Any] | None:

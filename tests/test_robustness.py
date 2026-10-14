@@ -740,5 +740,37 @@ class PositionTrackerTests(unittest.TestCase):
         self.assertEqual(v["status"], "NO_DATA")
 
 
+class LiveQuoteAfterCloseTests(unittest.TestCase):
+    """14 Oct 2026 evening: My trades showed HCLTECH "Live 1,327.80 - close
+    1,327.00" at 20:21 IST. The live quote was read at 15:19 IST; once the
+    day's close is stored (after 15:45 IST) the close is the newer price and
+    the 15:19 snapshot must not drive last price, R or P&L."""
+
+    def test_quote_superseded_by_stored_close(self):
+        import pead_plus as pp
+        from datetime import datetime, timedelta, timezone
+        ist = timezone(timedelta(hours=5, minutes=30))
+        at = "2026-10-14T09:49:13Z"                                   # 15:19 IST
+        evening = datetime(2026, 10, 14, 20, 21, tzinfo=ist)
+        self.assertFalse(pp.live_quote_current(at, "2026-10-14", evening))
+        # 3 pm alert run: session still open -> the quote is the latest price
+        self.assertTrue(pp.live_quote_current(at, "2026-10-13", datetime(2026, 10, 14, 15, 20, tzinfo=ist)))
+        # even if a partial row for today is already stored, before 15:45 the quote stands
+        self.assertTrue(pp.live_quote_current(at, "2026-10-14", datetime(2026, 10, 14, 15, 30, tzinfo=ist)))
+        # evening, but today's close not yet stored -> keep the quote
+        self.assertTrue(pp.live_quote_current(at, "2026-10-13", evening))
+        # yesterday's quote is never current
+        self.assertFalse(pp.live_quote_current(at, "2026-10-13", datetime(2026, 10, 15, 10, 0, tzinfo=ist)))
+        self.assertFalse(pp.live_quote_current(None, "2026-10-13", evening))
+
+    def test_position_uses_close_when_no_current_quote(self):
+        import pead_plus as pp
+        pos = {"symbol": "HCLTECH", "entryDate": "2026-10-14", "entryPrice": 1331.80, "stop": 1225.82}
+        item = {"symbol": "HCLTECH", "resultDayLow": 1238.2, "priceContext": {"lastClose": 1327.0},
+                "plus": {"price": {"ema21": 1250.46, "ema63": 1259.83, "last_session": "2026-10-14"}, "live": None}}
+        v, _ = pp.position_view(pos, item, None, date(2026, 10, 14))
+        self.assertEqual((v["last"], v["live"]), (1327.0, False))
+
+
 if __name__ == "__main__":
     unittest.main()
