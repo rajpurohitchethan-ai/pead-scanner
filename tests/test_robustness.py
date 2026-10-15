@@ -789,6 +789,8 @@ class HoldingsWatchTests(unittest.TestCase):
             "Resignation of Chief Financial Officer": ("MGMT", "neg"),
             "Creation of pledge on promoter shares": ("PLEDGE", "neg"),
             "Release of pledge": ("PLEDGE", "pos"),
+            "Dividend: Board of Directors at its meeting declared an interim dividend": ("CORP", "info"),
+            "Appointment of Independent Director": ("MGMT", "info"),
             "Research and development update": ("OTHER", "info"),
         }
         for text, want in cases.items():
