@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE089E01025|2026-09-30",
   "createdAt": "2026-10-12T16:34:12Z",
-  "updatedAt": "2026-10-15T13:10:04Z",
+  "updatedAt": "2026-10-15T14:01:05Z",
   "security": {
     "symbol": "AVENIQUE",
     "bseSymbol": "AVENIQUE",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-12T16:34:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-15T13:49:39Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-15T13:56:25Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-15",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-15T12:58:08Z",
+      "fetchedAt": "2026-10-15T13:55:48Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-09a983d59191ea08.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-53f99d14fd7eacbc.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-16",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-15T11:53:37Z",
+      "fetchedAt": "2026-10-15T13:56:23Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-15T11:53:37Z",
+      "fetchedAt": "2026-10-15T13:56:23Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -64,7 +74,7 @@
     "distance_52w_high_pct": {
       "value": -42.16,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-15T11:53:38Z",
+      "fetchedAt": "2026-10-15T13:56:25Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE089E01025_2026-09-30/price_volume_12m-872bce0109365135.json",
@@ -73,7 +83,7 @@
     "last_price": {
       "value": 3.65,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-15T11:53:38Z",
+      "fetchedAt": "2026-10-15T13:56:25Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE089E01025_2026-09-30/price_volume_12m-872bce0109365135.json",
@@ -82,7 +92,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-15T11:53:38Z",
+      "fetchedAt": "2026-10-15T13:56:25Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE089E01025_2026-09-30/price_volume_12m-872bce0109365135.json",
@@ -141,6 +151,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE089E01025_2026-09-30/scrip_results-554d798d30ff0caf.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-15T13:49:39Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-53f99d14fd7eacbc.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-15T18:36:42.757000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-15T13:49:39Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-53f99d14fd7eacbc.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-15T13:49:39Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-53f99d14fd7eacbc.json",
+      "note": null
     }
   },
   "fetch": {
@@ -152,8 +189,8 @@
       "rawRef": "raw/bse/NSE_AVENIQUE_2026-09-30/lookup-5e8150ffb0e8e6a6.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-15T11:53:38Z",
-      "lastSuccess": "2026-10-15T11:53:38Z",
+      "lastAttempt": "2026-10-15T13:56:25Z",
+      "lastSuccess": "2026-10-15T13:56:25Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE089E01025_2026-09-30/price_volume_12m-872bce0109365135.json"
@@ -178,34 +215,65 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-15T13:56:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE089E01025_2026-09-30/results_snapshot-40b52c991ed57f64.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-15T13:56:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "530701.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-15T13:56:29Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "ConnectionError: 403: Forbidden",
+      "rawRef": null
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -339,6 +407,11 @@
       "timestamp": "2026-10-15T11:53:38Z",
       "price": 3.65,
       "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-15T13:56:25Z",
+      "price": 3.65,
+      "source": "BSE_PRICE"
     }
   ],
   "plus": {
@@ -421,9 +494,30 @@
       "reactionIndex": null
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-15T11:53:38Z",
+    "computedAt": "2026-10-15T13:56:25Z",
     "plusVersion": "2.9.15",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-15T18:36:42.757000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "The Unaudited (Standalone & Consolidated) Financial Results for the quarter and half year ended September 30, 2026 have been attached herewith. Avenique Ltd - 530701 - Result - Unaudited (Standalone & Consolidated) Financial Results For The Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-53f99d14fd7eacbc.json",
+      "seenAt": "2026-10-15T14:01:03Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-15T13:56:23Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  }
 }
