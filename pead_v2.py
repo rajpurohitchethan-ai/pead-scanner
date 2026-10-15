@@ -4947,16 +4947,30 @@ def _yahoo_news(query: str, count: int = 8) -> list[dict[str, Any]]:
     return []
 
 
-def _yahoo_news_multi(queries: Any, count: int = 6) -> list[dict[str, Any]]:
-    """Merge Yahoo headlines from several short searches (newest first, deduped)."""
+NEWS_SOURCE_COUNTS: dict[str, Any] = {}
+
+
+def _yahoo_ticker_news(ticker: str) -> list[dict[str, Any]]:
+    """Yahoo's per-ticker news feed (works for indices and US peers)."""
+    if yf is None or not ticker:
+        return []
+    return pead_plus.normalize_news(getattr(yf.Ticker(ticker), "news", None) or [], limit=10)
+
+
+def _yahoo_news_multi(queries: Any = (), tickers: Any = (), count: int = 6) -> list[dict[str, Any]]:
+    """Merge Yahoo headlines from short keyword searches and per-ticker feeds
+    (newest first, deduped). Per-source counts go to NEWS_SOURCE_COUNTS."""
     if isinstance(queries, str):
         queries = (queries,)
     found: list[dict[str, Any]] = []
-    for q in queries or ():
-        try:
-            found += _yahoo_news(q)
-        except Exception as exc:
-            print(f"News search '{q}' failed: {type(exc).__name__}: {exc}")
+    for kind, keys, fn in (("search", queries or (), _yahoo_news), ("ticker", tickers or (), _yahoo_ticker_news)):
+        for q in keys:
+            try:
+                got = fn(q)
+                NEWS_SOURCE_COUNTS[f"{kind}:{q}"] = len(got)
+                found += got
+            except Exception as exc:
+                NEWS_SOURCE_COUNTS[f"{kind}:{q}"] = f"{type(exc).__name__}: {str(exc)[:80]}"
     return pead_plus.normalize_news(found, limit=count)
 
 
@@ -5009,9 +5023,10 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
             try:
                 name = re.sub(r"\b(ltd|limited)\.?$", "", str(sec.get("name") or sym), flags=re.I).strip()
                 sector = _plus_sector((e.get("derived") or {}).get("plus"))
-                w["news"] = _yahoo_news(f"{name}") or _yahoo_news(f"{sym}.NS")
-                q = pead_plus.SECTOR_MACRO_QUERY.get(sector or "")
-                w["sectorNews"] = _yahoo_news_multi(q) if q else []
+                w["news"] = _yahoo_news_multi((name,), (f"{sym}.NS",))
+                q = pead_plus.SECTOR_MACRO_QUERY.get(sector or "") or ()
+                peers = [t for t, _ in pead_plus.global_peers_for(sector) if "=" not in t][:3]
+                w["sectorNews"] = _yahoo_news_multi(q, peers)
                 w["newsAt"] = iso_now()
             except Exception as exc:
                 print(f"Holdings news {sym} failed: {type(exc).__name__}: {exc}")
@@ -5052,10 +5067,13 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
                 g = cache.setdefault("global", {})
                 g.setdefault("rows", {}).update(rows)
                 g["at"] = iso_now()
-                g["marketNews"] = _yahoo_news_multi(pead_plus.MARKET_MACRO_QUERY, 8) or g.get("marketNews") or []
+                g["marketNews"] = (_yahoo_news_multi(pead_plus.MARKET_MACRO_QUERY, ("^GSPC", "^NSEI", "^IXIC"), 8)
+                                   or g.get("marketNews") or [])
         except Exception as exc:
             print(f"Global markets skipped: {type(exc).__name__}: {exc}")
     cache["symbols"] = {k: v for k, v in syms.items() if k in held}
+    if NEWS_SOURCE_COUNTS:
+        cache["newsSources"] = dict(NEWS_SOURCE_COUNTS)     # what each headline source returned last time
     cache["updatedAt"] = iso_now()
     json_dump_atomic(HOLDINGS_WATCH_PATH, cache)
     return cache
