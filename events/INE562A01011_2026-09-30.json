@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE562A01011|2026-09-30",
   "createdAt": "2026-10-12T13:41:17Z",
-  "updatedAt": "2026-10-15T07:02:31Z",
+  "updatedAt": "2026-10-15T07:55:32Z",
   "security": {
     "symbol": "INDIANB",
     "nseSymbol": "INDIANB",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-12T16:34:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-15T07:47:22Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-15T07:55:32Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-15",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-15T06:54:15Z",
+      "fetchedAt": "2026-10-15T07:51:42Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-76112652a35468fe.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-184e498d26dbb727.json",
       "note": null
     },
     "reaction_session": {
@@ -235,6 +245,33 @@
       "rank": 88,
       "rawRef": "raw/bse/INE562A01011_2026-09-30/equity_meta-62498a796a8a8f8b.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-15T07:47:22Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-184e498d26dbb727.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-15T13:00:18.773000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-15T07:47:22Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-184e498d26dbb727.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-15T07:47:22Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-184e498d26dbb727.json",
+      "note": null
     }
   },
   "fetch": {
@@ -260,18 +297,18 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-12T16:39:22Z",
-      "lastSuccess": "2026-10-12T16:39:22Z",
+      "lastAttempt": "2026-10-15T07:52:01Z",
+      "lastSuccess": "2026-10-15T07:52:01Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/NSE_INDIANB_2026-09-30/integrated_filings-0127aa1985e4d191.json"
+      "rawRef": "raw/nse/INE562A01011_2026-09-30/integrated_filings-0127aa1985e4d191.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-12T16:39:22Z",
-      "lastSuccess": "2026-10-12T16:39:22Z",
+      "lastAttempt": "2026-10-15T07:52:01Z",
+      "lastSuccess": "2026-10-15T07:52:01Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/NSE_INDIANB_2026-09-30/integrated_filings-0127aa1985e4d191.json"
+      "rawRef": "raw/nse/INE562A01011_2026-09-30/integrated_filings-0127aa1985e4d191.json"
     },
     "PREV_QUARTER": {
       "lastAttempt": "2026-10-12T16:39:22Z",
@@ -293,27 +330,61 @@
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/NSE_INDIANB_2026-09-30/lookup-57cc6bbe5ffde2f9.json"
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-15T07:52:03Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE562A01011_2026-09-30/results_comparison-b193ad351ff4bb66.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-15T07:52:05Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE562A01011_2026-09-30/results_snapshot-bb2d1e108f6140cc.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-15T07:52:05Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "INDIANB.NS: RuntimeError: latest statement does not match event quarter; 532814.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-15T07:52:08Z",
+      "lastSuccess": "2026-10-15T07:52:08Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE562A01011_2026-09-30/announcements-b186d52d6e225f87.json"
     }
   },
   "derived": {
     "score": 31,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -321,13 +392,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -371,7 +442,7 @@
         "stocks": 127,
         "momentum63dMedian": -6.52,
         "relativeToMarket": -0.54,
-        "declared": 12,
+        "declared": 13,
         "strongResults": 5,
         "avgReaction": -0.94,
         "tailwind": "NEUTRAL"
@@ -414,7 +485,16 @@
         }
       },
       "deliveryPct": 36.54,
-      "concall": null,
+      "concall": {
+        "status": "SCHEDULED",
+        "callDate": null,
+        "noticeUrl": "https://nsearchives.nseindia.com/corporate/INDIANB_12102026201500_SE_Analyst_Meet_Intimation_12102026.pdf",
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-15",
+        "pendingUntil": "2026-10-17",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/INDIANB/",
@@ -663,7 +743,7 @@
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-12T13:47:52Z",
+    "fetchedAt": "2026-10-15T07:52:01Z",
     "v": 2,
     "rows": [
       {
@@ -767,5 +847,36 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:INDIANB|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-15T13:00:18.773000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Approval of Unaudited (Reviewed) Standalone and Consolidated Financial Results of the Bank for the Second Quarter and Half Year of FY 2026-27 ended on September 30, 2026 and Fund Raising .... Indian Bank - 532814 - Approval Of Unaudited (Reviewed) Standalone And Consolidated Financial Results Of The",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-184e498d26dbb727.json",
+      "seenAt": "2026-10-15T07:55:31Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-15T07:52:05Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "SCHEDULED",
+    "callDate": null,
+    "noticeUrl": "https://nsearchives.nseindia.com/corporate/INDIANB_12102026201500_SE_Analyst_Meet_Intimation_12102026.pdf",
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-15",
+    "pendingUntil": "2026-10-17",
+    "source": "NSE_ANNOUNCEMENTS"
+  }
 }
