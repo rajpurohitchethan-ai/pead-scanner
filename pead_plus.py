@@ -1716,7 +1716,7 @@ def normalize_news(items: Any, limit: int = 6) -> list[dict[str, Any]]:
             or ((c.get("clickThroughUrl") or {}).get("url") if isinstance(c.get("clickThroughUrl"), dict) else None) \
             or c.get("link") or c.get("url")
         pub = (c.get("provider") or {}).get("displayName") if isinstance(c.get("provider"), dict) else c.get("publisher")
-        at = c.get("pubDate") or c.get("displayTime")
+        at = c.get("pubDate") or c.get("displayTime") or c.get("at")
         if at is None and _num(c.get("providerPublishTime")):
             at = _dt.fromtimestamp(int(_num(c["providerPublishTime"])), _tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         if not title or not url or not str(url).startswith("http"):
