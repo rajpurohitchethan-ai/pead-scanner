@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.16"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.17"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -390,7 +390,9 @@ def trade_plan(*, released: bool, reaction_traded: bool, quality_ok: bool | None
         signal = "ENTRY_EARLY" if last > trigger else "NEAR_ENTRY"
         why = "Strong reaction on high volume and the gap is holding: early entry above the result-day high."
         plan["style"] = "EARLY"
-    elif _num(box_high) is not None and last >= _num(box_high):
+    elif _num(box_high) is not None and last > _num(box_high):
+        # 2.9.17: strictly ABOVE the box high, like the early entry (2.9.11).
+        # VIJIFIN 15 Oct closed AT its one-session box high (locked circuit).
         trigger, signal = _num(box_high), "ENTRY_BREAKOUT"
         why = "Closed above the post-result box high."
         plan["style"] = "BREAKOUT"
@@ -734,7 +736,15 @@ def update_trade_log(log: dict[str, Any] | None, plan: dict[str, Any], last_pric
     last = _num(last_price)
     sig = str(plan.get("signal") or "")
     stage = plan.get("stage")
-    if sig.startswith("ENTRY_") and stage in {"STARTER", "FULL"} and plan.get("entry") is not None:
+    triggered = sig.startswith("ENTRY_") and stage in {"STARTER", "FULL"} and plan.get("entry") is not None
+    # 2.9.17: plans use closing prices, so every run on one day reaches the same
+    # verdict. An entry recorded TODAY that this run no longer triggers came
+    # from a superseded verdict (VIJIFIN's at-the-high "breakout"): withdraw it.
+    for key in ("starter", "full"):
+        t = log.get(key)
+        if t and t.get("date") == today.isoformat() and not triggered:
+            log.pop(key)
+    if triggered:
         key = stage.lower()
         if key not in log:
             log[key] = {"date": today.isoformat(), "entry": plan["entry"], "sl": plan["sl"], "signal": sig, "minSeen": last}

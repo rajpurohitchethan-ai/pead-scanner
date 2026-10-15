@@ -951,3 +951,126 @@ class QuoteMarketCapTests(unittest.TestCase):
             e = store.load(e["eventId"])
             self.assertAlmostEqual(store.value(e, "market_cap_cr"), 1143.79, places=1)
             self.assertEqual(p.repair_quote_market_caps(store), 0)      # idempotent
+class TotalProfitOnlyFilingTests(unittest.TestCase):
+    """2.9.17 (15 Oct 2026): TATATECH and MRPL's Q2 FY27 consolidated XBRL has no
+    owners' PAT line, only ProfitLossForPeriod. Last year's filings carry both
+    lines, so their parse picked the owners' concept and fill_comparatives_from_listing
+    refused them as "another concept": revenue YoY showed, PAT YoY stayed blank.
+    The year-ago filing's own ProfitLossForPeriod is the SAME concept and is now used."""
+
+    def _parse(self, name, pe):
+        blob = (Path(__file__).parent / "fixtures" / "nse" / name).read_bytes()
+        return p.parse_xbrl_financials([blob], pe)
+
+    def _listing(self):
+        return [{"periodEnd": pe, "fromDate": fd, "basis": "CONSOLIDATED", "cumulative": False, "xbrlUrl": pe}
+                for pe, fd in (("2026-06-30", "2026-04-01"), ("2025-09-30", "2025-07-01"), ("2025-06-30", "2025-04-01"))]
+
+    def _fill(self, cur, docs):
+        p.fill_comparatives_from_listing(cur, self._listing(), date(2026, 9, 30), "CONSOLIDATED",
+                                         lambda url, pe: docs[url])
+
+    def test_tatatech_total_profit_compared_with_total_profit(self):
+        cur = self._parse("TATATECH_CONS_2026-09-30.xml", date(2026, 9, 30))
+        self.assertEqual(cur["_meta"]["concepts"]["pat"], "profitlossforperiod")
+        docs = {"2025-09-30": self._parse("TATATECH_CONS_2025-09-30.xml", date(2025, 9, 30)),
+                "2026-06-30": self._parse("TATATECH_CONS_2026-06-30.xml", date(2026, 6, 30)),
+                "2025-06-30": self._parse("TATATECH_CONS_2025-06-30.xml", date(2025, 6, 30))}
+        self.assertEqual(docs["2025-09-30"]["_meta"]["concepts"]["pat"], "profitorlossattributabletoownersofparent")
+        self._fill(cur, docs)
+        self.assertEqual(cur["prior_year_pat_cr"], 165.5)
+        self.assertEqual(cur["pat_trend"], "PROFIT_GROWTH")
+        self.assertAlmostEqual(cur["pat_yoy_pct"], 3.59, places=2)
+        self.assertEqual(cur["pat_qoq_trend"], "PROFIT_DECLINE")
+        self.assertIsNotNone(cur.get("prev_q_pat_yoy_pct"))
+
+    def test_mrpl_uses_year_ago_total_not_owners_line(self):
+        cur = self._parse("MRPL_CONS_2026-09-30.xml", date(2026, 9, 30))
+        ya = self._parse("MRPL_CONS_2025-09-30.xml", date(2025, 9, 30))
+        self.assertEqual(ya["pat_cr"], 623.67)                 # owners' line
+        self.assertEqual(ya["_meta"]["patTotalCr"], 627.36)    # profit for the period
+        self._fill(cur, {"2025-09-30": ya})
+        self.assertEqual(cur["prior_year_pat_cr"], 627.36)
+        self.assertAlmostEqual(cur["pat_yoy_pct"], round((1900.76 / 627.36 - 1) * 100, 2), places=1)
+
+    def test_owners_line_current_is_still_never_mixed(self):
+        # TRF case (owner's decision pending): current owners' line vs a
+        # year-ago filing with total profit only stays blank.
+        concepts = {"revenue": "revenuefromoperations", "pat": "profitorlossattributabletoownersofparent"}
+        cur = {"revenue_cr": 100.0, "pat_cr": 50.26, "revenue_qoq_pct": 1.0,
+               "_meta": {"concepts": concepts, "patTotalCr": 49.85, "patTotalConcept": "profitlossforperiod"}}
+        ya = {"revenue_cr": 90.0, "pat_cr": -6.81,
+              "_meta": {"concepts": {**concepts, "pat": "profitlossforperiod"}, "patTotalCr": -6.81,
+                        "patTotalConcept": "profitlossforperiod"}}
+        p.fill_comparatives_from_listing(cur, self._listing()[1:2], date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: ya)
+        self.assertIsNone(cur.get("prior_year_pat_cr"))
+
+    def test_different_total_concepts_not_mixed(self):
+        concepts = {"revenue": "revenuefromoperations", "pat": "profitlossforperiod"}
+        cur = {"revenue_cr": 100.0, "pat_cr": 10.0, "revenue_qoq_pct": 1.0,
+               "_meta": {"concepts": concepts, "patTotalCr": 10.0, "patTotalConcept": "profitlossforperiod"}}
+        ya = {"revenue_cr": 90.0, "pat_cr": 8.0,
+              "_meta": {"concepts": {**concepts, "pat": "profitorlossattributabletoownersofparent"},
+                        "patTotalCr": 9.0, "patTotalConcept": "profitloss"}}
+        p.fill_comparatives_from_listing(cur, self._listing()[1:2], date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: ya)
+        self.assertIsNone(cur.get("prior_year_pat_cr"))
+
+
+class BreakoutStrictTests(unittest.TestCase):
+    """2.9.17: VIJIFIN 15 Oct (locked upper circuit, open = high = low = close
+    16.34, RVOL 0.4) was ENTRY_BREAKOUT "Closed above the post-result box high"
+    with the close EQUAL to the box high. Like the early entry (2.9.11), a
+    breakout needs a close ABOVE the box high; at the high it is NEAR_ENTRY."""
+
+    def _kw(self, last):
+        x = {"sessions_since_reaction": 0, "reaction_close": 16.34, "ema10": 15.0, "ema21": 15.2, "ema63": 15.0}
+        return dict(released=True, reaction_traded=True, quality_ok=True, x=x, last_price=last, result_return=4.95,
+                    rvol=0.4, result_low=16.34, result_high=16.34, box_high=16.34)
+
+    def test_close_at_box_high_is_near_entry(self):
+        import pead_plus as pp
+        plan = pp.trade_plan(**self._kw(16.34))
+        self.assertEqual(plan["signal"], "NEAR_ENTRY")
+        self.assertEqual(plan["entry"], 16.34)
+
+    def test_close_above_box_high_triggers(self):
+        import pead_plus as pp
+        self.assertEqual(pp.trade_plan(**self._kw(16.5))["signal"], "ENTRY_BREAKOUT")
+
+
+class SameDayTradeLogTests(unittest.TestCase):
+    """A trade-log entry recorded today by a run whose verdict a later run on
+    the same day no longer reaches (VIJIFIN's at-the-high 'breakout') is
+    withdrawn, so the entry-timing scorecard does not count a trade that
+    never triggered. Older entries are never touched."""
+
+    def test_same_day_untriggered_entry_withdrawn(self):
+        import pead_plus as pp
+        log = {"full": {"date": "2026-10-15", "entry": 16.34, "sl": 16.18, "signal": "ENTRY_BREAKOUT",
+                        "minSeen": 16.34, "last": 16.34, "returnPct": 0.0}}
+        plan = {"signal": "NEAR_ENTRY", "stage": "FULL", "entry": 16.34, "sl": 16.18}
+        out = pp.update_trade_log(log, plan, 16.34, date(2026, 10, 15))
+        self.assertNotIn("full", out)
+
+    def test_earlier_entry_kept(self):
+        import pead_plus as pp
+        log = {"full": {"date": "2026-10-14", "entry": 16.34, "sl": 16.18, "signal": "ENTRY_BREAKOUT",
+                        "minSeen": 16.34, "last": 16.34, "returnPct": 0.0}}
+        plan = {"signal": "NEAR_ENTRY", "stage": "FULL", "entry": 16.34, "sl": 16.18}
+        out = pp.update_trade_log(log, plan, 16.0, date(2026, 10, 15))
+        self.assertIn("full", out)
+        self.assertEqual(out["full"]["last"], 16.0)
+
+    def test_same_day_triggered_entry_kept(self):
+        import pead_plus as pp
+        log = {"full": {"date": "2026-10-15", "entry": 16.34, "sl": 16.18, "signal": "ENTRY_BREAKOUT", "minSeen": 16.5}}
+        plan = {"signal": "ENTRY_BREAKOUT", "stage": "FULL", "entry": 16.34, "sl": 16.18}
+        self.assertIn("full", pp.update_trade_log(log, plan, 16.5, date(2026, 10, 15)))
+
+    def test_same_day_starter_kept_when_call_ends_and_full_triggers(self):
+        import pead_plus as pp
+        log = {"starter": {"date": "2026-10-15", "entry": 100.0, "sl": 95.0, "signal": "ENTRY_EARLY", "minSeen": 101.0}}
+        plan = {"signal": "ENTRY_EARLY", "stage": "FULL", "entry": 100.0, "sl": 95.0}
+        out = pp.update_trade_log(log, plan, 101.0, date(2026, 10, 15))
+        self.assertIn("starter", out)
+        self.assertIn("full", out)
