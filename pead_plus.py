@@ -1732,6 +1732,23 @@ def normalize_news(items: Any, limit: int = 6) -> list[dict[str, Any]]:
     return uniq[:limit]
 
 
+def balanced_news(per_source: list[list[dict[str, Any]]], limit: int = 6) -> list[dict[str, Any]]:
+    """Up to 2 newest headlines from each source first (so one busy source
+    cannot crowd out the rest), then the remainder; deduplicated, at most
+    `limit`, shown newest first."""
+    lists = [normalize_news(lst, limit=20) for lst in per_source]
+    order = [n for lst in lists for n in lst[:2]] + [n for lst in lists for n in lst[2:]]
+    seen, out = set(), []
+    for n in order:
+        k = n["title"].lower()[:70]
+        if k not in seen:
+            seen.add(k)
+            out.append(n)
+        if len(out) >= limit:
+            break
+    return sorted(out, key=lambda x: x["at"] or "", reverse=True)
+
+
 def holding_watch_view(symbol: str, watch: dict[str, Any] | None, deals: list[dict[str, Any]],
                        pressure: dict[str, Any] | None, delivery_pct: Any, global_rows: dict[str, Any],
                        sector: str | None, today: date) -> dict[str, Any]:

@@ -4962,16 +4962,17 @@ def _yahoo_news_multi(queries: Any = (), tickers: Any = (), count: int = 6) -> l
     (newest first, deduped). Per-source counts go to NEWS_SOURCE_COUNTS."""
     if isinstance(queries, str):
         queries = (queries,)
-    found: list[dict[str, Any]] = []
+    per_source: list[list[dict[str, Any]]] = []
+    cutoff = (now_utc() - timedelta(days=7)).strftime("%Y-%m-%d")
     for kind, keys, fn in (("search", queries or (), _yahoo_news), ("ticker", tickers or (), _yahoo_ticker_news)):
         for q in keys:
             try:
-                got = fn(q)
+                got = [n for n in fn(q) if str(n.get("at") or "")[:10] >= cutoff]   # last 7 days only
                 NEWS_SOURCE_COUNTS[f"{kind}:{q}"] = len(got)
-                found += got
+                per_source.append(got)
             except Exception as exc:
                 NEWS_SOURCE_COUNTS[f"{kind}:{q}"] = f"{type(exc).__name__}: {str(exc)[:80]}"
-    return pead_plus.normalize_news(found, limit=count)
+    return pead_plus.balanced_news(per_source, count)
 
 
 def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, Any]:

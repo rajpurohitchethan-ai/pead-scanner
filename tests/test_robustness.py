@@ -859,6 +859,15 @@ class HoldingsWatchTests(unittest.TestCase):
         self.assertEqual(out[0]["publisher"], "Mint")
         self.assertEqual(pp.normalize_news(out), out)      # merging already-normalised lists keeps them
 
+    def test_balanced_news_one_source_cannot_crowd_out(self):
+        import pead_plus as pp
+        busy = [{"title": f"Accenture story {i}", "url": f"https://a/{i}", "at": f"2026-10-14T1{i}:00:00Z"} for i in range(6)]
+        quiet = [{"title": "H-1B fee update", "url": "https://h/1", "at": "2026-10-10T09:00:00Z"}]
+        out = pp.balanced_news([busy, quiet], 4)
+        self.assertEqual(len(out), 4)
+        self.assertIn("H-1B fee update", [n["title"] for n in out])
+        self.assertEqual(out, sorted(out, key=lambda n: n["at"], reverse=True))
+
     def test_series_summary(self):
         import pead_plus as pp
         rows = [(f"2026-10-{d:02d}", v) for d, v in zip(range(5, 12), (100, 101, 102, 103, 104, 105, 99.75))]
