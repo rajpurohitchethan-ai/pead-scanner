@@ -4947,6 +4947,19 @@ def _yahoo_news(query: str, count: int = 8) -> list[dict[str, Any]]:
     return []
 
 
+def _yahoo_news_multi(queries: Any, count: int = 6) -> list[dict[str, Any]]:
+    """Merge Yahoo headlines from several short searches (newest first, deduped)."""
+    if isinstance(queries, str):
+        queries = (queries,)
+    found: list[dict[str, Any]] = []
+    for q in queries or ():
+        try:
+            found += _yahoo_news(q)
+        except Exception as exc:
+            print(f"News search '{q}' failed: {type(exc).__name__}: {exc}")
+    return pead_plus.normalize_news(found, limit=count)
+
+
 def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, Any]:
     """2.9.15: for the owner's open trades only - exchange filings (orders,
     deals, insider / pledge, legal, management), NSE bulk / block / short-
@@ -4998,7 +5011,7 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
                 sector = _plus_sector((e.get("derived") or {}).get("plus"))
                 w["news"] = _yahoo_news(f"{name}") or _yahoo_news(f"{sym}.NS")
                 q = pead_plus.SECTOR_MACRO_QUERY.get(sector or "")
-                w["sectorNews"] = _yahoo_news(q) if q else []
+                w["sectorNews"] = _yahoo_news_multi(q) if q else []
                 w["newsAt"] = iso_now()
             except Exception as exc:
                 print(f"Holdings news {sym} failed: {type(exc).__name__}: {exc}")
@@ -5039,7 +5052,7 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
                 g = cache.setdefault("global", {})
                 g.setdefault("rows", {}).update(rows)
                 g["at"] = iso_now()
-                g["marketNews"] = _yahoo_news(pead_plus.MARKET_MACRO_QUERY) or g.get("marketNews") or []
+                g["marketNews"] = _yahoo_news_multi(pead_plus.MARKET_MACRO_QUERY, 8) or g.get("marketNews") or []
         except Exception as exc:
             print(f"Global markets skipped: {type(exc).__name__}: {exc}")
     cache["symbols"] = {k: v for k, v in syms.items() if k in held}

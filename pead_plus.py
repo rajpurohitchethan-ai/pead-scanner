@@ -1537,10 +1537,10 @@ _ANN_RULES = (
                      r"\bcontract\b|letter of (?:intent|award)|\bLoI\b|\bLoA\b|bagging|awarded|\bwins?\b|purchase order"),
     ("RATING", "info", r"credit rating|\brating\b"),
     ("MGMT", "neg", r"resign|cessation|step(?:s|ped)? down"),
-    ("MGMT", "info", r"appoint|re-?designat|change in (?:key )?management|\bKMP\b|director"),
     ("CORP", "info", r"buy-?back|dividend|bonus|split|merger|amalgamat|acqui|demerger|scheme of|fund ?rais|"
                      r"preferential|\bQIP\b|rights issue|capacity|commission|plant|expansion|joint venture|"
                      r"\bJV\b|agreement|MoU|partnership|launch"),
+    ("MGMT", "info", r"appoint|re-?designat|change in (?:key )?management|\bKMP\b|director"),
     ("RESULT", "info", r"financial result|outcome of board|earnings call|analyst|investor (?:meet|presentation)|"
                        r"conference call|transcript|press release|recording"),
 )
@@ -1672,19 +1672,19 @@ SECTOR_GLOBAL_PEERS = {
     "Telecommunication": (("VZ", "Verizon"), ("T", "AT&T")),
 }
 # Macro headline searches per sector (Yahoo news search); the market-wide one is always added.
-SECTOR_MACRO_QUERY = {
-    "Information Technology": "H-1B visa tariff IT services outsourcing",
-    "Capital Goods": "power grid transformer demand tariff",
-    "Power": "power grid transmission tariff",
-    "Healthcare": "pharma tariff US FDA",
-    "Metals & Mining": "steel aluminium copper tariff",
-    "Oil, Gas & Consumable Fuels": "crude oil OPEC price",
-    "Chemicals": "chemicals anti-dumping China tariff",
-    "Automobile and Auto Components": "auto tariff US EV",
-    "Textiles": "US tariff textiles India",
-    "Financial Services": "RBI rate policy banks",
+SECTOR_MACRO_QUERY = {      # short keyword searches (Yahoo search matches few words), tried in order
+    "Information Technology": ("H-1B visa", "IT services tariff", "Accenture"),
+    "Capital Goods": ("transformer shortage", "grid equipment", "GE Vernova"),
+    "Power": ("power grid", "GE Vernova"),
+    "Healthcare": ("pharma tariff", "FDA warning letter"),
+    "Metals & Mining": ("steel tariff", "copper price", "aluminium price"),
+    "Oil, Gas & Consumable Fuels": ("OPEC", "crude oil price"),
+    "Chemicals": ("anti-dumping duty", "chemical prices China"),
+    "Automobile and Auto Components": ("auto tariffs", "EV sales"),
+    "Textiles": ("textile tariff", "cotton prices"),
+    "Financial Services": ("RBI policy", "Indian banks"),
 }
-MARKET_MACRO_QUERY = "India stock market Trump tariff FII"
+MARKET_MACRO_QUERY = ("Trump tariff", "India stocks", "FII selling", "Federal Reserve")
 
 
 def global_peers_for(sector: str | None) -> tuple[tuple[str, str], ...]:
