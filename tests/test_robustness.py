@@ -857,6 +857,7 @@ class HoldingsWatchTests(unittest.TestCase):
         out = pp.normalize_news(items)
         self.assertEqual([n["title"] for n in out], ["New shape", "Old shape"])
         self.assertEqual(out[0]["publisher"], "Mint")
+        self.assertEqual(pp.normalize_news(out), out)      # merging already-normalised lists keeps them
 
     def test_series_summary(self):
         import pead_plus as pp
