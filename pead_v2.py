@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.15"
+ENGINE_VERSION = "2.9.16"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -3699,6 +3699,30 @@ def merge_duplicate_events(store: EventStore) -> list[dict[str, Any]]:
     return merged
 
 
+def repair_quote_market_caps(store: EventStore) -> int:
+    """2.9.16: re-read the saved NSE quote behind every stored NSE_QUOTE market
+    cap with the current parser and correct values taken from a quote that
+    reported free float as the total. Returns the number of events fixed."""
+    fixed = 0
+    for e in store.all():
+        fv = (e.get("fields") or {}).get("market_cap_cr") or {}
+        ref = fv.get("rawRef")
+        if fv.get("source") != "NSE_QUOTE" or not ref:
+            continue
+        try:
+            payload = json.loads(Path(ref).read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        new = parse_nse_quote(payload).get("market_cap_cr")
+        old = safe_num(fv.get("value"))
+        if new and old and abs(new / old - 1) > 0.2:
+            store.force_field(e, "market_cap_cr", new, source="NSE_QUOTE", raw_ref=ref,
+                              note=f"was {old:,.2f} Cr: quote reported free float as total; shares in issue x price")
+            store.save(e)
+            fixed += 1
+    return fixed
+
+
 def integrity_pass(store: EventStore, *, today: date | None = None, raw_root: Path = RAW_DIR,
                    master: "SymbolMaster | None" = None) -> dict[str, Any]:
     """Idempotent repair run before scoring/publishing.
@@ -4663,8 +4687,16 @@ def parse_nse_quote(payload: Any) -> dict[str, Any]:
     spe = safe_num(first(sec, "pdSectorPe") or first(meta, "pdSectorPe"))
     out["sector_pe"] = spe if spe is not None and spe > 0 else None   # 2.9.4: "0" = not available
     mcap = safe_num(first(trade, "totalMarketCap"))
-    out["market_cap_cr"] = round2(mcap / 1e7) if mcap else None          # rupees -> crore
     ffmc = safe_num(first(trade, "ffmc"))
+    # 2.9.16: NSE sometimes reports the free-float figure as totalMarketCap
+    # (PREMIERPOL 15 Oct: 294.6 Cr for a 1,144 Cr company). Shares in issue x
+    # last price is the definition; use it when the reported total is > 20% off.
+    issued = safe_num(first(trade, "issuedSize"))
+    last = quote_last_price(payload)
+    calc = issued * last if issued and last else None
+    if calc and (not mcap or abs(mcap / calc - 1) > 0.2):
+        mcap = calc
+    out["market_cap_cr"] = round2(mcap / 1e7) if mcap else None          # rupees -> crore
     out["ffmc_cr"] = round2(ffmc / 1e7) if ffmc else None
     out["delivery_pct"] = safe_num(first(trade, "deliveryToTradedQuantity") or first(sec, "deliveryTotradedQuantity"))
     wk = price.get("weekHighLow") if isinstance(price.get("weekHighLow"), dict) else {}
@@ -7394,6 +7426,7 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         if post["revoked"] or post["postResultPurged"]:
             print_integrity_summary(post, integrity_signature(post["revocations"]))
 
+    print(f"Market caps repaired from saved quotes: {repair_quote_market_caps(store)}")   # 2.9.16
     replayed = replay_plus(store)
     print(f"Analytics replayed from saved price files for {replayed} events")
     score_stats = score_all(store)

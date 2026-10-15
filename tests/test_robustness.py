@@ -913,3 +913,41 @@ class HoldingsWatchTests(unittest.TestCase):
         self.assertEqual(w["pressure"]["label"], "NEUTRAL")
         self.assertEqual(w["deliveryPct"], 55.0)
         self.assertEqual(w["peers"][0]["name"], "Accenture")
+
+
+class QuoteMarketCapTests(unittest.TestCase):
+    """15 Oct 2026: NSE's quote returned totalMarketCap = ffmc (free float) for
+    PREMIERPOL (Rs 294.6 Cr; 10.47 Cr shares x Rs 109.2 = Rs 1,143.8 Cr),
+    HCLTECH, DMART, RBLBANK, GSFC and GRANDOAK. PREMIERPOL fell below the
+    Rs 1,000 Cr minimum and left Radar; HCLTECH showed Rs 1.41 lakh Cr."""
+
+    FIX = Path(__file__).parent / "fixtures" / "nse" / "quote_PREMIERPOL_ffmc_as_mcap_2026-10-15.json"
+
+    def test_free_float_reported_as_total_is_replaced(self):
+        import json
+        q = p.parse_nse_quote(json.loads(self.FIX.read_text()))
+        self.assertAlmostEqual(q["market_cap_cr"], 1143.79, places=1)
+        self.assertAlmostEqual(q["ffmc_cr"], 294.64, places=1)
+
+    def test_consistent_total_is_kept(self):
+        q = p.parse_nse_quote({"tradeInfo": {"totalMarketCap": 1.11e10, "ffmc": 2.8e9, "issuedSize": 104742475,
+                                             "lastPrice": 106.0}})
+        self.assertEqual(q["market_cap_cr"], 1110.0)
+
+    def test_missing_issued_size_keeps_reported_value(self):
+        q = p.parse_nse_quote({"tradeInfo": {"totalMarketCap": 2.946e9, "ffmc": 2.946e9}})
+        self.assertEqual(q["market_cap_cr"], 294.6)
+
+    def test_stored_value_repaired_from_saved_quote(self):
+        import tempfile, shutil
+        with tempfile.TemporaryDirectory() as td:
+            store = p.EventStore(Path(td) / "events")
+            raw = Path(td) / "quote.json"
+            shutil.copy(self.FIX, raw)
+            e = store.ensure_event(security={"symbol": "PREMIERPOL", "nseSymbol": "PREMIERPOL"}, period_end=date(2026, 9, 30))
+            store.merge_field(e, "market_cap_cr", 294.64, source="NSE_QUOTE", raw_ref=str(raw))
+            store.save(e)
+            self.assertEqual(p.repair_quote_market_caps(store), 1)
+            e = store.load(e["eventId"])
+            self.assertAlmostEqual(store.value(e, "market_cap_cr"), 1143.79, places=1)
+            self.assertEqual(p.repair_quote_market_caps(store), 0)      # idempotent
