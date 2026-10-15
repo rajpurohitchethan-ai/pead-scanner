@@ -375,8 +375,45 @@
           <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 21 EMA ${inr(p.ema21)}, 63 EMA ${inr(p.ema63)}.</p>
           <div class="sizing"><label>Quantity <input type="number" min="0" step="1" inputmode="numeric" class="pos-qty" data-sym="${esc(p.symbol)}" value="${qty ?? ''}"></label>
             ${qty ? `<span class="meta">P&amp;L ${money(pnl)} · at the stop ${money(atRisk)}</span>` : '<span class="meta">enter quantity for rupee P&amp;L</span>'}</div>
-          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}</article>`;
-      }).join('')}</div>`;
+          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${watchBlock(p.watch)}</article>`;
+      }).join('')}</div>${globalBlock()}`;
+  }
+  // 2.9.15: filings, deals, selling pressure, global peers and headlines for
+  // open trades. Display only; the exit rules above do not read any of it.
+  const href = u => /^https?:\/\//i.test(String(u || '')) ? esc(u) : null;
+  const ext = (u, label) => href(u) ? `<a href="${href(u)}" target="_blank" rel="noopener">${label}</a>` : label;
+  const KIND = { ORDER: 'Order', DEAL: 'Deal', INSIDER: 'Insider / SAST', PLEDGE: 'Pledge', RATING: 'Rating', LEGAL: 'Legal / tax',
+    MGMT: 'Management', CORP: 'Corporate', RESULT: 'Results / call', OTHER: 'Filing' };
+  const PRESS = { HEAVY_SELLING: ['Heavy selling', 'bad'], SELLING: ['Selling pressure', 'watch'], NEUTRAL: ['No unusual pressure', ''],
+    ACCUMULATION: ['Accumulation', 'go'] };
+  const when = v => { const d = new Date(v); return Number.isNaN(+d) ? '' : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); };
+  const moveCell = r => `<span class="${cls(r.chg1dPct)}">${pct(r.chg1dPct)}</span> <span class="meta">5D ${pct(r.chg5dPct)}</span>`;
+  const headlines = (list, empty) => list && list.length ? `<ul class="wl">${list.map(n => `<li>${ext(n.url, esc(n.title))} <span class="meta">${esc(n.publisher || '')}${n.at ? ' · ' + when(n.at) : ''}</span></li>`).join('')}</ul>` : `<p class="meta">${empty}</p>`;
+  function watchBlock(w) {
+    if (!w) return '';
+    const pr = w.pressure, pl = pr ? (PRESS[pr.label] || [pr.label, '']) : null;
+    const fl = (w.flags || []).length;
+    const filings = (w.filings || []).length ? `<ul class="wl">${w.filings.map(f => `<li><span class="tag ${f.tone === 'neg' ? 'bad' : f.tone === 'pos' ? 'go' : ''}">${esc(KIND[f.kind] || f.kind)}</span> ${ext(f.url, esc(f.text))} <span class="meta">${when(f.at)}</span></li>`).join('')}</ul>`
+      : `<p class="meta">${w.filingsAt ? 'No filings in the last 30 days besides routine ones.' : 'Not checked yet.'}</p>`;
+    const deals = (w.deals || []).length ? `<ul class="wl">${w.deals.map(d => `<li><span class="tag ${d.side === 'SELL' || d.kind === 'SHORT' ? 'bad' : 'go'}">${d.kind === 'SHORT' ? 'Short sale' : esc(d.kind.charAt(0) + d.kind.slice(1).toLowerCase()) + ' ' + esc((d.side || '').toLowerCase())}</span> ${dt(d.date)} · ${num(d.qty) !== null ? num(d.qty).toLocaleString('en-IN') + ' shares' : ''}${num(d.price) !== null ? ' @ ' + inr(d.price) : ''}${d.client ? ' · ' + esc(d.client) : ''}</li>`).join('')}</ul>`
+      : '<p class="meta">No bulk, block or short-selling reports in the last 10 days.</p>';
+    const peers = (w.peers || []).length ? `<div class="wpeers">${w.peers.map(r => `<div><span>${esc(r.name)}</span><b>${moveCell(r)}</b></div>`).join('')}</div>` : '<p class="meta">No global peer list for this sector.</p>';
+    return `<details class="tvd watch"${fl ? ' open' : ''}><summary>News &amp; pressure${fl ? ` <span class="tag watch">${fl} to note</span>` : ''}</summary>
+      ${fl ? `<p class="wflags">${w.flags.map(esc).join(' · ')}</p>` : ''}
+      <h4>Selling pressure</h4>${pr ? `<p><span class="tag ${pl[1]}">${esc(pl[0])}</span> <span class="meta">${pr.distributionDays} distribution / ${pr.accumulationDays} accumulation days in ${pr.sessions} sessions · up/down volume ${num(pr.upDownVolume) !== null ? num(pr.upDownVolume).toFixed(2) : '—'}${num(pr.lastCloseInRangePct) !== null ? ` · last close at ${Math.round(pr.lastCloseInRangePct)}% of the day's range` : ''}${num(w.deliveryPct) !== null ? ` · delivery ${num(w.deliveryPct).toFixed(1)}%` : ''}</span></p>` : '<p class="meta">—</p>'}
+      ${deals}
+      <h4>Exchange filings</h4>${filings}
+      <h4>Global peers (last session)</h4>${peers}
+      <h4>Headlines</h4>${headlines(w.news, w.newsAt ? 'No recent headlines found.' : 'Not checked yet.')}
+      ${(w.sectorNews || []).length ? `<h4>Sector &amp; policy</h4>${headlines(w.sectorNews, '')}` : ''}
+      <p class="meta">Filings and deals: NSE/BSE. Prices and headlines: Yahoo Finance (headlines are unverified; open the source). Filing labels are keyword-based. Not used by the entry or exit rules.</p></details>`;
+  }
+  function globalBlock() {
+    const g = S.data.globalMarkets;
+    if (!g || !(g.markets || []).length) return '';
+    return `<section class="card gm"><h3>Global markets <span class="meta">last session · updated ${when(g.at)}</span></h3>
+      <div class="wpeers">${g.markets.map(r => `<div><span>${esc(r.name)}</span><b>${r.group === 'rates' || r.group === 'risk' ? `${num(r.last).toFixed(2)} ` : ''}${moveCell(r)}</b></div>`).join('')}</div>
+      <h4>Market &amp; policy headlines</h4>${headlines(g.news, 'No headlines found.')}</section>`;
   }
   document.addEventListener('change', e => {
     const q = e.target.closest?.('.pos-qty');
@@ -483,7 +520,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.14';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.15';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

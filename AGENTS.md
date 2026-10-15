@@ -208,3 +208,13 @@ Engine 2.9.13 (evening check, 14 Oct 2026)
 Engine 2.9.14 (14 Oct 2026, owner: "1/3 quantity entries not in radar")
 - Radar rows show a "Starter 1/3" tag when plan.stage = STARTER (a third of the size before the concall).
 - Liquid live setups below the ₹1,000 Cr minimum (or with unknown market cap) are no longer silently hidden: they are listed in a separate, labelled "Below the ₹1,000 Cr minimum: not trade candidates" section with their market cap tag (SEJALLTD ₹832 Cr, NEAR_ENTRY starter). They still do not qualify; the tab count reads "5+1". intelligence.json thresholds now carry minMarketCapCr. Display only; no rule changed.
+
+Engine 2.9.15 (15 Oct 2026, owner: news for stocks we hold)
+- Holdings watch (open trades in master/positions.json only), refreshed about every 2 h (HOLDINGS_WATCH_EVERY_MIN) into master/holdings_watch.json; a failed source keeps the stored data:
+  - Exchange filings, last 30 days (NSE announcements, BSE for BSE-only): pead_plus.holding_filings drops routine compliance filings; classify_announcement labels ORDER / DEAL / INSIDER / PLEDGE / RATING / LEGAL / MGMT / CORP / RESULT / OTHER with a keyword tone (pos / neg / info).
+  - NSE bulk / block / short-selling reports, last 10 days (NSEAdapter.deals -> /api/historicalOR/bulk-block-short-deals), filtered to held symbols (parse_deal_rows).
+  - Global markets (Yahoo, one yf.download): S&P 500, Nasdaq, Nikkei, Hang Seng, VIX, US 10Y, dollar index, USD/INR, Brent, gold, plus sector peers per canonical sector (SECTOR_GLOBAL_PEERS, e.g. IT: Accenture, Cognizant, EPAM, Infosys/Wipro ADRs, IBM).
+  - Headlines: Yahoo news search (yf.Search) for the company, a sector policy query (SECTOR_MACRO_QUERY, e.g. IT: H-1B / tariff) and a market query (Trump tariff / FII). Titles and links only. Google News RSS and Indian publishers' RSS were not used (robots / blocked).
+- pead_plus.selling_pressure() (in extended_features -> plus.price.pressure, every stock): distribution day = close down >= 0.2% on volume >= 1.2x the prior 20-session average, accumulation day = the up equivalent (25 sessions), up/down volume ratio (20), last close in range. HEAVY_SELLING / SELLING / NEUTRAL / ACCUMULATION. PLUS_VERSION 2.9.15 (one rebuild).
+- position_views adds positions[].watch (holding_watch_view: filings, deals, pressure, delivery %, peers with average move, headlines, flags); intelligence.json "globalMarkets". My trades shows a "News & pressure" block per trade (open when something is flagged) and a Global markets card.
+- Display only: no entry, exit or conviction rule reads any of it. Tests: HoldingsWatchTests.

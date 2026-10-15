@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.14"
+ENGINE_VERSION = "2.9.15"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1296,6 +1296,12 @@ class NSEAdapter:
     def fii_dii(self):
         """Provisional FII/FPI and DII cash-market net buy/sell for the latest day (2.9.0)."""
         return self._call("fii_dii", lambda: self._api_get("fiidiiTradeReact"), symbol="FII_DII", raw_source="NSE_INDEX")
+
+    def deals(self, option_type: str, start: date, end: date):
+        """2.9.15: market-wide bulk / block / short-selling report (NSE)."""
+        params = {"optionType": option_type, "from": start.strftime("%d-%m-%Y"), "to": end.strftime("%d-%m-%Y")}
+        return self._call(option_type, lambda: self._api_get("historicalOR/bulk-block-short-deals", params),
+                          symbol=option_type.upper(), raw_source="NSE_DEALS")
 
     def integrated_filings(self, symbol: str, event_id: str | None = None):
         """NSE "Integrated Filing - Financials" index for one company (engine 2.6.1).
@@ -4845,17 +4851,211 @@ def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, A
         state = json.loads(POSITIONS_STATE_PATH.read_text(encoding="utf-8"))
     except Exception:
         state = {}
+    try:
+        watch = json.loads(HOLDINGS_WATCH_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        watch = {}
     by_sym = {}
     for it in items:
         by_sym.setdefault(str(it.get("symbol") or "").upper(), it)
     views = []
     for p_ in pos:
         key = f"{str(p_['symbol']).upper()}|{p_.get('entryDate')}"
-        view, st = pead_plus.position_view(p_, by_sym.get(str(p_["symbol"]).upper()), state.get(key), today)
+        it = by_sym.get(str(p_["symbol"]).upper())
+        view, st = pead_plus.position_view(p_, it, state.get(key), today)
         state[key] = st
+        try:                                                          # 2.9.15
+            pl = (it or {}).get("plus") or {}
+            sym = str(p_["symbol"]).upper()
+            view["watch"] = pead_plus.holding_watch_view(
+                sym, (watch.get("symbols") or {}).get(sym), watch.get("deals") or [],
+                (pl.get("price") or {}).get("pressure"), pl.get("deliveryPct"),
+                (watch.get("global") or {}).get("rows") or {}, _plus_sector(pl), today)
+        except Exception as exc:
+            print(f"Holdings watch view {p_['symbol']} failed: {type(exc).__name__}: {exc}")
         views.append(view)
     json_dump_atomic(POSITIONS_STATE_PATH, state)
     return views
+
+
+HOLDINGS_WATCH_PATH = MASTER_DIR / "holdings_watch.json"   # 2.9.15: filings / deals / global / news for open trades
+HOLDINGS_WATCH_EVERY_MIN = int(os.getenv("HOLDINGS_WATCH_EVERY_MIN", "110"))
+HOLDINGS_FILINGS_DAYS = 30
+HOLDINGS_DEALS_DAYS = 10
+
+
+def _held_events(store: EventStore) -> dict[str, dict[str, Any]]:
+    """Open-trade symbol -> its live-quarter event (NSE symbol, else BSE symbol)."""
+    held = {normalize_symbol(p_.get("symbol")) for p_ in open_positions()}
+    out: dict[str, dict[str, Any]] = {}
+    for e in store.all():
+        if not dashboard_activity(e):
+            continue
+        sec = e.get("security") or {}
+        for sym in (normalize_symbol(sec.get("nseSymbol")), normalize_symbol(sec.get("symbol")),
+                    normalize_symbol(sec.get("bseSymbol"))):
+            if sym and sym in held and sym not in out:
+                out[sym] = e
+    return out
+
+
+def _plus_sector(pl: dict[str, Any] | None) -> str | None:
+    """Canonical sector of a plus block (sectorKey; plus.sector is the sector-stats dict)."""
+    pl = pl or {}
+    s_ = pl.get("sectorKey") or pl.get("sector")
+    if isinstance(s_, dict):
+        s_ = s_.get("sector")
+    return s_ if isinstance(s_, str) else None
+
+
+def _due(stamp: Any, minutes: int) -> bool:
+    t = parse_datetime(stamp)
+    return t is None or (now_ist() - t).total_seconds() >= minutes * 60
+
+
+def _deal_rows(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, dict):
+        payload = payload.get("data")
+    return [r for r in (payload or []) if isinstance(r, dict)]
+
+
+def _yahoo_closes(tickers: list[str]) -> dict[str, list[tuple[str, float]]]:
+    """Daily closes (last ~15 days) for several Yahoo tickers in one call."""
+    if yf is None or not tickers:
+        return {}
+    frame = yf.download(tickers, period="15d", interval="1d", auto_adjust=False, progress=False,
+                        threads=False, timeout=YAHOO_TIMEOUT_SEC, group_by="ticker")
+    out: dict[str, list[tuple[str, float]]] = {}
+    if frame is None or getattr(frame, "empty", True):
+        return out
+    for t in tickers:
+        try:
+            sub = frame[t] if (pd is not None and isinstance(frame.columns, pd.MultiIndex)) else frame
+            col = sub["Close"].dropna()
+            out[t] = [(idx.date().isoformat(), float(v)) for idx, v in col.items()]
+        except Exception:
+            continue
+    return out
+
+
+def _yahoo_news(query: str, count: int = 8) -> list[dict[str, Any]]:
+    if yf is None or not query:
+        return []
+    search = getattr(yf, "Search", None)
+    if search is not None:
+        return pead_plus.normalize_news(getattr(search(query, news_count=count, max_results=1), "news", None) or [])
+    return []
+
+
+def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, Any]:
+    """2.9.15: for the owner's open trades only - exchange filings (orders,
+    deals, insider / pledge, legal, management), NSE bulk / block / short-
+    selling reports, global indices / sector peers / commodities (Yahoo) and
+    headlines (Yahoo news search: company, sector macro, market macro).
+    Refreshed about every 2 h; a failed source keeps the stored data."""
+    try:
+        cache = json.loads(HOLDINGS_WATCH_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        cache = {}
+    events = _held_events(store)
+    if not events:
+        return cache
+    syms = cache.setdefault("symbols", {})
+    today = now_ist().date()
+    for sym, e in events.items():
+        w = syms.setdefault(sym, {})
+        sec = e.get("security") or {}
+        if _due(w.get("filingsAt"), HOLDINGS_WATCH_EVERY_MIN):
+            start = datetime.combine(today - timedelta(days=HOLDINGS_FILINGS_DAYS), dtime(0, 0))
+            end = datetime.combine(today, dtime(23, 59))
+            rows = []
+            try:
+                nse_sym = normalize_symbol(sec.get("nseSymbol"))
+                if nse_sym:
+                    with NSEAdapter(ctx) as nse:
+                        payload, _ = nse.announcements(nse_sym, start, end, e["eventId"])
+                    for r in payload or []:
+                        if isinstance(r, dict):
+                            rows.append({"filedAt": parse_datetime(first(r, "an_dt", "sort_date", "dt")),
+                                         "text": f"{r.get('desc') or ''}: {r.get('attchmntText') or ''}",
+                                         "url": r.get("attchmntFile")})
+                elif sec.get("bseCode"):
+                    with BSEAdapter(ctx) as bse:
+                        payload, _ = bse.scrip_announcements(str(sec["bseCode"]), start, end, e["eventId"])
+                    for r in payload or []:
+                        if isinstance(r, dict):
+                            att = r.get("ATTACHMENTNAME")
+                            rows.append({"filedAt": parse_datetime(first(r, "NEWS_DT", "DT_TM")),
+                                         "text": f"{r.get('SUBCATNAME') or ''}: {r.get('HEADLINE') or r.get('NEWSSUB') or ''}",
+                                         "url": f"https://www.bseindia.com/xml-data/corpfiling/AttachLive/{att}" if att else None})
+                w["filings"] = pead_plus.holding_filings(rows)
+                w["filingsAt"] = iso_now()
+            except Exception as exc:
+                print(f"Holdings filings {sym} failed: {type(exc).__name__}: {exc}")
+        if _due(w.get("newsAt"), HOLDINGS_WATCH_EVERY_MIN):
+            try:
+                name = re.sub(r"\b(ltd|limited)\.?$", "", str(sec.get("name") or sym), flags=re.I).strip()
+                sector = _plus_sector((e.get("derived") or {}).get("plus"))
+                w["news"] = _yahoo_news(f"{name}") or _yahoo_news(f"{sym}.NS")
+                q = pead_plus.SECTOR_MACRO_QUERY.get(sector or "")
+                w["sectorNews"] = _yahoo_news(q) if q else []
+                w["newsAt"] = iso_now()
+            except Exception as exc:
+                print(f"Holdings news {sym} failed: {type(exc).__name__}: {exc}")
+    held = set(events)
+    if _due(cache.get("dealsAt"), HOLDINGS_WATCH_EVERY_MIN):
+        try:
+            deals = []
+            with NSEAdapter(ctx) as nse:
+                for opt, kind in (("bulk_deals", "BULK"), ("block_deals", "BLOCK"), ("short_selling", "SHORT")):
+                    try:
+                        payload, _ = nse.deals(opt, today - timedelta(days=HOLDINGS_DEALS_DAYS), today)
+                        deals += pead_plus.parse_deal_rows(_deal_rows(payload), kind, held)
+                    except Exception as exc:
+                        print(f"Deals {opt} failed: {type(exc).__name__}: {exc}")
+            old = [d for d in cache.get("deals") or [] if d.get("symbol") in held
+                   and str(d.get("date")) >= (today - timedelta(days=HOLDINGS_DEALS_DAYS)).isoformat()]
+            seen, merged = set(), []
+            for d in deals + old:
+                k = (d["symbol"], d["date"], d["kind"], d.get("client"), d.get("side"), d.get("qty"))
+                if k not in seen:
+                    seen.add(k)
+                    merged.append(d)
+            cache["deals"] = merged
+            cache["dealsAt"] = iso_now()
+        except Exception as exc:
+            print(f"Deals skipped: {type(exc).__name__}: {exc}")
+    if _due((cache.get("global") or {}).get("at"), HOLDINGS_WATCH_EVERY_MIN):
+        try:
+            sectors = {_plus_sector((e.get("derived") or {}).get("plus")) for e in events.values()}
+            tickers = [t for t, _, _ in pead_plus.GLOBAL_MARKETS]
+            for s_ in sectors:
+                tickers += [t for t, _ in pead_plus.global_peers_for(s_)]
+            tickers = list(dict.fromkeys(tickers))
+            closes = _yahoo_closes(tickers)
+            rows = {t: pead_plus.summarize_series(c) for t, c in closes.items()}
+            rows = {t: r for t, r in rows.items() if r}
+            if rows:
+                g = cache.setdefault("global", {})
+                g.setdefault("rows", {}).update(rows)
+                g["at"] = iso_now()
+                g["marketNews"] = _yahoo_news(pead_plus.MARKET_MACRO_QUERY) or g.get("marketNews") or []
+        except Exception as exc:
+            print(f"Global markets skipped: {type(exc).__name__}: {exc}")
+    cache["symbols"] = {k: v for k, v in syms.items() if k in held}
+    cache["updatedAt"] = iso_now()
+    json_dump_atomic(HOLDINGS_WATCH_PATH, cache)
+    return cache
+
+
+def global_markets_view() -> dict[str, Any]:
+    try:
+        g = json.loads(HOLDINGS_WATCH_PATH.read_text(encoding="utf-8")).get("global") or {}
+    except Exception:
+        return {}
+    rows = g.get("rows") or {}
+    markets = [{"ticker": t, "name": n, "group": grp, **rows[t]} for t, n, grp in pead_plus.GLOBAL_MARKETS if t in rows]
+    return {"at": g.get("at"), "markets": markets, "news": g.get("marketNews") or []} if markets else {}
 
 
 def parse_fii_dii(payload: Any) -> dict[str, Any] | None:
@@ -6173,7 +6373,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
-PLUS_VERSION = "2.9.7"   # bump to rebuild every stored chart/price analytic once
+PLUS_VERSION = "2.9.15"   # bump to rebuild every stored chart/price analytic once
 
 
 def replay_plus(store: EventStore) -> int:
@@ -6759,6 +6959,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "sectors": sorted(sectors.values(), key=lambda r: (-(r.get("relativeToMarket") or -999), r["sector"])),
         "scorecard": card | {"timing": timing},
         "positions": positions,
+        "globalMarkets": global_markets_view(),                       # 2.9.15
         "thresholds": {
             "liquidityTurnoverCr": pead_plus.LIQ_TURNOVER_CR, "liquidityMinPrice": pead_plus.LIQ_MIN_PRICE,
             "maxRiskPct": pead_plus.MAX_RISK_PCT, "minMarketCapCr": MIN_MCAP_CR, "strongRevYoY": pead_plus.STRONG_REV_YOY, "strongPatYoY": pead_plus.STRONG_PAT_YOY,
@@ -7153,6 +7354,10 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         _INDEX_CACHE_MEMO.clear()
         refresh_market_internals(ctx)
         print(f"Live quotes refreshed: {refresh_live_quotes(store, ctx)}")
+        try:
+            refresh_holdings_watch(store, ctx)                            # 2.9.15
+        except Exception as exc:
+            print(f"Holdings watch skipped: {type(exc).__name__}: {exc}")
         post = integrity_pass(store, master=master)
         if post["revoked"] or post["postResultPurged"]:
             print_integrity_summary(post, integrity_signature(post["revocations"]))

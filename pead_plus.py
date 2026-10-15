@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.14"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.15"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -249,6 +249,7 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
             "q1_max_gain_pct": _r2(_pct(seg.max(), q_pre)),
             "q1_sustained": bool(_num(close.iloc[end_i]) >= (q_close or 0)) if q_close else None,
         })
+    out["pressure"] = selling_pressure(f)          # 2.9.15
     out["chart"] = _chart(f, chart_marker)
     return out
 
@@ -568,7 +569,7 @@ def scorecard(items: list[dict[str, Any]]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 import re as _re
-from datetime import datetime as _dt, timedelta as _td
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz
 
 _CALL_WORDS = _re.compile(r"(con(ference)?[\s.\-]*call|earnings?\s+call|analysts?\s*/?\s*(institutional\s+)?investors?\s+meet|investor\s+call|analyst\s+meet|investors?\s+meet)", _re.I)
 _TRANSCRIPT = _re.compile(r"transcript", _re.I)
@@ -1514,3 +1515,252 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
         view["status"], view["note"] = "HOLD", (f"Hold. Stop {stop0:,.2f} until +1R at {one_r:,.2f}; then move the stop "
                                                 f"to cost and trail the 21 / 63 EMA.")
     return view, st
+
+
+# ---------------------------------------------------------------------------
+# 2.9.15 Holdings watch: exchange filings, deals, selling pressure, global
+# markets and headlines for the owner's open trades. Display only: no entry
+# or exit rule reads any of this.
+# ---------------------------------------------------------------------------
+
+# (kind, tone, pattern) - first match wins. Tone is keyword-based and only a
+# hint; the filing itself is the source.
+_ANN_RULES = (
+    ("PLEDGE", "neg", r"\bpledg|encumbr|invocation"),
+    ("PLEDGE", "pos", r"release of (?:pledge|encumbrance)|revocation of pledge"),
+    ("INSIDER", "info", r"\bSAST\b|Regulation 29|Reg(?:ulation)?\.? ?7\(2\)|Regulation 31|insider trading|\bPIT\b|"
+                        r"acquisition of shares|disposal of shares|change in (?:promoter )?shareholding"),
+    ("DEAL", "info", r"bulk deal|block deal"),
+    ("LEGAL", "neg", r"tax demand|show cause|penalt|litigation|\bGST\b|income tax|search (?:and|&) seizure|\bsurvey\b|\bfine\b|"
+                     r"adjudicat|arbitrat|\bSEBI order|court|tribunal|\bNCLT\b"),
+    ("ORDER", "pos", r"\border(?:s)?\b(?! of the| dated| passed| under| of hon| from the (?:hon|court|tribunal))|"
+                     r"\bcontract\b|letter of (?:intent|award)|\bLoI\b|\bLoA\b|bagging|awarded|\bwins?\b|purchase order"),
+    ("RATING", "info", r"credit rating|\brating\b"),
+    ("MGMT", "neg", r"resign|cessation|step(?:s|ped)? down"),
+    ("MGMT", "info", r"appoint|re-?designat|change in (?:key )?management|\bKMP\b|director"),
+    ("CORP", "info", r"buy-?back|dividend|bonus|split|merger|amalgamat|acqui|demerger|scheme of|fund ?rais|"
+                     r"preferential|\bQIP\b|rights issue|capacity|commission|plant|expansion|joint venture|"
+                     r"\bJV\b|agreement|MoU|partnership|launch"),
+    ("RESULT", "info", r"financial result|outcome of board|earnings call|analyst|investor (?:meet|presentation)|"
+                       r"conference call|transcript|press release|recording"),
+)
+_ANN_RX = [(k, t, _re.compile(p, _re.I)) for k, t, p in _ANN_RULES]
+
+
+def classify_announcement(text: str) -> tuple[str, str]:
+    """(kind, tone) for an exchange announcement: ORDER / DEAL / INSIDER /
+    PLEDGE / RATING / LEGAL / MGMT / CORP / RESULT / OTHER; tone pos / neg / info."""
+    t = _re.sub(r"\s+", " ", text or "")
+    # Release of a pledge reads as "pledge" too: check it first.
+    if _re.search(r"release of (?:pledge|encumbrance)|revocation of pledge", t, _re.I):
+        return "PLEDGE", "pos"
+    for kind, tone, rx in _ANN_RX:
+        if rx.search(t):
+            return kind, tone
+    return "OTHER", "info"
+
+
+def holding_filings(rows: list[dict[str, Any]], limit: int = 12) -> list[dict[str, Any]]:
+    """rows: {filedAt (datetime), text, url} -> newest first, classified,
+    trading-window / routine compliance filings dropped."""
+    out = []
+    routine = _re.compile(r"trading window|loss of share certificate|duplicate share|newspaper (?:publication|advertisement)|"
+                          r"certificate under regulation 74|regulation 74\(5\)|compliance certificate|"
+                          r"\bESOP\b|allotment of .*(?:esop|employee)|copy of newspaper", _re.I)
+    for r in rows or []:
+        at = r.get("filedAt")
+        text = _re.sub(r"\s+", " ", str(r.get("text") or "")).strip()
+        if at is None or not text or routine.search(text):
+            continue
+        kind, tone = classify_announcement(text)
+        out.append({"at": at.isoformat() if hasattr(at, "isoformat") else str(at), "kind": kind, "tone": tone,
+                    "text": text[:280], "url": r.get("url")})
+    out.sort(key=lambda x: x["at"], reverse=True)
+    seen, uniq = set(), []
+    for x in out:
+        k = (x["at"][:10], x["text"][:80])
+        if k not in seen:
+            seen.add(k)
+            uniq.append(x)
+    return uniq[:limit]
+
+
+def parse_deal_rows(rows: list[dict[str, Any]], kind: str, symbols: set[str]) -> list[dict[str, Any]]:
+    """NSE bulk / block / short-selling report rows for the given symbols."""
+    out = []
+    for r in rows or []:
+        if not isinstance(r, dict):
+            continue
+        sym = str(r.get("BD_SYMBOL") or r.get("SS_SYMBOL") or r.get("symbol") or "").strip().upper()
+        if sym not in symbols:
+            continue
+        raw_d = str(r.get("BD_DT_DATE") or r.get("SS_DATE") or r.get("date") or "")
+        try:
+            d = _dt.strptime(raw_d.title(), "%d-%b-%Y").date().isoformat()
+        except ValueError:
+            continue
+        if kind == "SHORT":
+            out.append({"symbol": sym, "date": d, "kind": kind, "qty": _num(r.get("SS_QTY"))})
+        else:
+            out.append({"symbol": sym, "date": d, "kind": kind,
+                        "client": str(r.get("BD_CLIENT_NAME") or "").strip() or None,
+                        "side": str(r.get("BD_BUY_SELL") or "").strip().upper() or None,
+                        "qty": _num(r.get("BD_QTY_TRD")), "price": _num(r.get("BD_TP_WATP"))})
+    return out
+
+
+def selling_pressure(frame: Any, lookback: int = 25) -> dict[str, Any] | None:
+    """Volume behaviour over the last `lookback` sessions:
+    distribution day = close down >= 0.2% on volume >= 1.2x the prior 20-session
+    average; accumulation day = close up >= 0.2% on such volume; up/down volume ratio
+    over 20 sessions; where the last close sits in its day's range.
+    Label: HEAVY_SELLING / SELLING / NEUTRAL / ACCUMULATION (screener heuristic)."""
+    f = _clean(frame)
+    if f is None or len(f) < 22 or not f["Volume"].notna().any():
+        return None
+    close, vol = f["Close"], f["Volume"]
+    chg = close.pct_change() * 100
+    vup = vol >= vol.shift(1).rolling(20, min_periods=10).mean() * 1.2   # heavy volume vs the prior 20 sessions
+    tail = slice(len(f) - lookback, len(f)) if len(f) > lookback else slice(1, len(f))
+    dist = int(((chg <= -0.2) & vup).iloc[tail].sum())
+    acc = int(((chg >= 0.2) & vup).iloc[tail].sum())
+    last20 = f.iloc[-20:]
+    c20 = chg.iloc[-20:]
+    upv = float(last20["Volume"][c20 > 0].sum())
+    dnv = float(last20["Volume"][c20 < 0].sum())
+    udr = _r2(upv / dnv) if dnv > 0 else None
+    hi, lo, last = _num(f["High"].iloc[-1]), _num(f["Low"].iloc[-1]), _num(close.iloc[-1])
+    cir = _r2((last - lo) / (hi - lo) * 100) if hi is not None and lo is not None and last is not None and hi > lo else None
+    avg20 = _num(vol.iloc[-21:-1].mean())
+    last_rvol = _r2(_num(vol.iloc[-1]) / avg20) if avg20 else None
+    if dist >= 5 and dist >= acc + 3 and (udr is None or udr < 0.8):
+        label = "HEAVY_SELLING"
+    elif dist >= 3 and dist > acc and (udr is None or udr < 1.0):
+        label = "SELLING"
+    elif acc >= dist + 2 and (udr or 0) >= 1.3:
+        label = "ACCUMULATION"
+    else:
+        label = "NEUTRAL"
+    return {"label": label, "distributionDays": dist, "accumulationDays": acc, "sessions": min(lookback, len(f) - 1),
+            "upDownVolume": udr, "lastCloseInRangePct": cir, "lastDownOnVolume": bool(chg.iloc[-1] <= -0.2 and (last_rvol or 0) >= 1.5),
+            "lastRvol": last_rvol, "asOf": f["Date"].iloc[-1].date().isoformat()}
+
+
+# Global context per sector: listed peers / commodities whose overnight move
+# tends to show up in Indian prices. Tickers are Yahoo symbols.
+GLOBAL_MARKETS = (
+    ("^GSPC", "S&P 500", "index"), ("^IXIC", "Nasdaq", "index"), ("^N225", "Nikkei 225", "index"),
+    ("^HSI", "Hang Seng", "index"), ("^VIX", "US VIX", "risk"), ("^TNX", "US 10Y yield", "rates"),
+    ("DX-Y.NYB", "Dollar index", "fx"), ("USDINR=X", "USD/INR", "fx"), ("BZ=F", "Brent crude", "commodity"),
+    ("GC=F", "Gold", "commodity"),
+)
+SECTOR_GLOBAL_PEERS = {
+    "Information Technology": (("ACN", "Accenture"), ("CTSH", "Cognizant"), ("EPAM", "EPAM"), ("INFY", "Infosys ADR"),
+                               ("WIT", "Wipro ADR"), ("IBM", "IBM")),
+    "Capital Goods": (("GEV", "GE Vernova"), ("ETN", "Eaton"), ("HUBB", "Hubbell"), ("ENR.DE", "Siemens Energy"),
+                      ("SU.PA", "Schneider"), ("HG=F", "Copper")),
+    "Power": (("GEV", "GE Vernova"), ("NEE", "NextEra"), ("ENR.DE", "Siemens Energy"), ("HG=F", "Copper")),
+    "Healthcare": (("XLV", "US healthcare ETF"), ("TEVA", "Teva"), ("VTRS", "Viatris"), ("DRREDDY.NS", "Dr Reddy's")),
+    "Metals & Mining": (("HG=F", "Copper"), ("ALI=F", "Aluminium"), ("FCX", "Freeport"), ("BHP", "BHP"), ("VALE", "Vale")),
+    "Oil, Gas & Consumable Fuels": (("BZ=F", "Brent crude"), ("NG=F", "Natural gas"), ("XOM", "Exxon"), ("SHEL", "Shell")),
+    "Chemicals": (("DOW", "Dow"), ("LYB", "LyondellBasell"), ("BZ=F", "Brent crude")),
+    "Automobile and Auto Components": (("TM", "Toyota"), ("GM", "GM"), ("F", "Ford"), ("APTV", "Aptiv")),
+    "Financial Services": (("XLF", "US financials ETF"), ("HDB", "HDFC Bank ADR"), ("IBN", "ICICI Bank ADR")),
+    "Fast Moving Consumer Goods": (("XLP", "US staples ETF"), ("UL", "Unilever"), ("NSRGY", "Nestle")),
+    "Textiles": (("CT=F", "Cotton"), ("XRT", "US retail ETF")),
+    "Consumer Durables": (("XLY", "US discretionary ETF"), ("GC=F", "Gold")),
+    "Telecommunication": (("VZ", "Verizon"), ("T", "AT&T")),
+}
+# Macro headline searches per sector (Yahoo news search); the market-wide one is always added.
+SECTOR_MACRO_QUERY = {
+    "Information Technology": "H-1B visa tariff IT services outsourcing",
+    "Capital Goods": "power grid transformer demand tariff",
+    "Power": "power grid transmission tariff",
+    "Healthcare": "pharma tariff US FDA",
+    "Metals & Mining": "steel aluminium copper tariff",
+    "Oil, Gas & Consumable Fuels": "crude oil OPEC price",
+    "Chemicals": "chemicals anti-dumping China tariff",
+    "Automobile and Auto Components": "auto tariff US EV",
+    "Textiles": "US tariff textiles India",
+    "Financial Services": "RBI rate policy banks",
+}
+MARKET_MACRO_QUERY = "India stock market Trump tariff FII"
+
+
+def global_peers_for(sector: str | None) -> tuple[tuple[str, str], ...]:
+    return SECTOR_GLOBAL_PEERS.get(sector or "", ())
+
+
+def summarize_series(closes: list[tuple[str, float]]) -> dict[str, Any] | None:
+    """[(iso date, close)] oldest first -> last, 1-session and 5-session % change."""
+    pts = [(d, _num(c)) for d, c in closes if _num(c) is not None]
+    if not pts:
+        return None
+    d, last = pts[-1]
+    prev = pts[-2][1] if len(pts) >= 2 else None
+    prev5 = pts[-6][1] if len(pts) >= 6 else None
+    return {"date": d, "last": _r2(last), "chg1dPct": _r2(_pct(last, prev)) if prev else None,
+            "chg5dPct": _r2(_pct(last, prev5)) if prev5 else None}
+
+
+def normalize_news(items: Any, limit: int = 6) -> list[dict[str, Any]]:
+    """Yahoo news items (old flat and new nested 'content' shapes) -> headline,
+    publisher, time, link. Titles and links only; never article text."""
+    out = []
+    for n in items or []:
+        if not isinstance(n, dict):
+            continue
+        c = n.get("content") if isinstance(n.get("content"), dict) else n
+        title = str(c.get("title") or "").strip()
+        url = ((c.get("canonicalUrl") or {}).get("url") if isinstance(c.get("canonicalUrl"), dict) else None) \
+            or ((c.get("clickThroughUrl") or {}).get("url") if isinstance(c.get("clickThroughUrl"), dict) else None) \
+            or c.get("link")
+        pub = (c.get("provider") or {}).get("displayName") if isinstance(c.get("provider"), dict) else c.get("publisher")
+        at = c.get("pubDate") or c.get("displayTime")
+        if at is None and _num(c.get("providerPublishTime")):
+            at = _dt.fromtimestamp(int(_num(c["providerPublishTime"])), _tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if not title or not url or not str(url).startswith("http"):
+            continue
+        out.append({"title": title[:200], "publisher": pub, "at": str(at) if at else None, "url": url})
+    out.sort(key=lambda x: x["at"] or "", reverse=True)
+    seen, uniq = set(), []
+    for x in out:
+        k = x["title"].lower()[:70]
+        if k not in seen:
+            seen.add(k)
+            uniq.append(x)
+    return uniq[:limit]
+
+
+def holding_watch_view(symbol: str, watch: dict[str, Any] | None, deals: list[dict[str, Any]],
+                       pressure: dict[str, Any] | None, delivery_pct: Any, global_rows: dict[str, Any],
+                       sector: str | None, today: date) -> dict[str, Any]:
+    """What the My trades card shows under 'News & pressure'."""
+    w = watch or {}
+    mine = [d for d in deals or [] if d.get("symbol") == symbol]
+    mine.sort(key=lambda d: d["date"], reverse=True)
+    peers = []
+    for t, name in global_peers_for(sector):
+        g = global_rows.get(t)
+        if g:
+            peers.append({"ticker": t, "name": name, **g})
+    sells = [d for d in mine if d.get("side") == "SELL" or d.get("kind") == "SHORT"]
+    flags = []
+    if pressure and pressure.get("label") in ("SELLING", "HEAVY_SELLING"):
+        flags.append(f"{pressure['distributionDays']} distribution days in {pressure['sessions']} sessions")
+    if pressure and pressure.get("lastDownOnVolume"):
+        flags.append(f"last session fell on {pressure['lastRvol']}x volume")
+    if any(d.get("kind") in ("BULK", "BLOCK") and d.get("side") == "SELL" for d in mine):
+        flags.append("bulk/block selling filed")
+    neg = [f for f in w.get("filings") or [] if f.get("tone") == "neg"]
+    if neg:
+        flags.append(f"{len(neg)} negative-sounding filing(s)")
+    peer_moves = [p["chg1dPct"] for p in peers if p.get("chg1dPct") is not None]
+    peer_avg = _r2(sum(peer_moves) / len(peer_moves)) if peer_moves else None
+    if peer_avg is not None and peer_avg <= -1.5:
+        flags.append(f"global peers {peer_avg:+.1f}% last session")
+    return {"filings": w.get("filings") or [], "filingsAt": w.get("filingsAt"),
+            "deals": mine[:8], "dealsSelling": len(sells), "pressure": pressure,
+            "deliveryPct": _r2(_num(delivery_pct)), "peers": peers, "peerAvg1dPct": peer_avg,
+            "news": w.get("news") or [], "sectorNews": w.get("sectorNews") or [], "newsAt": w.get("newsAt"),
+            "flags": flags}

@@ -774,3 +774,130 @@ class LiveQuoteAfterCloseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HoldingsWatchTests(unittest.TestCase):
+    """2.9.15: news / filings / deals / pressure / global peers for open trades."""
+
+    def test_announcement_classes(self):
+        import pead_plus as pp
+        cases = {
+            "Bagging/Receiving of orders/contracts: order worth Rs 450 Cr from PGCIL": ("ORDER", "pos"),
+            "Disclosure under SEBI (SAST) Regulations, 2011": ("INSIDER", "info"),
+            "GST demand order received from the department": ("LEGAL", "neg"),
+            "Credit Rating: ICRA reaffirmed AA+": ("RATING", "info"),
+            "Resignation of Chief Financial Officer": ("MGMT", "neg"),
+            "Creation of pledge on promoter shares": ("PLEDGE", "neg"),
+            "Release of pledge": ("PLEDGE", "pos"),
+            "Research and development update": ("OTHER", "info"),
+        }
+        for text, want in cases.items():
+            self.assertEqual(pp.classify_announcement(text), want, text)
+
+    def test_filings_newest_first_routine_dropped(self):
+        import pead_plus as pp
+        from datetime import datetime
+        rows = [
+            {"filedAt": datetime(2026, 10, 10, 10), "text": "Trading Window: closure of trading window", "url": "https://x/1.pdf"},
+            {"filedAt": datetime(2026, 10, 12, 18), "text": "Bagging/Receiving of orders: new deal win", "url": "https://x/2.pdf"},
+            {"filedAt": datetime(2026, 10, 11, 9), "text": "Updates: Credit rating", "url": None},
+            {"filedAt": None, "text": "no date", "url": None},
+        ]
+        out = pp.holding_filings(rows)
+        self.assertEqual([f["kind"] for f in out], ["ORDER", "RATING"])
+
+    def test_deal_rows_filter_and_parse(self):
+        import pead_plus as pp
+        bulk = [{"BD_DT_DATE": "14-OCT-2026", "BD_SYMBOL": "HCLTECH", "BD_CLIENT_NAME": "SOME FUND", "BD_BUY_SELL": "SELL",
+                 "BD_QTY_TRD": 1200000, "BD_TP_WATP": 1330.5},
+                {"BD_DT_DATE": "14-OCT-2026", "BD_SYMBOL": "OTHER", "BD_BUY_SELL": "BUY", "BD_QTY_TRD": 1}]
+        short = [{"SS_DATE": "13-OCT-2026", "SS_SYMBOL": "HCLTECH", "SS_QTY": 600}]
+        b = pp.parse_deal_rows(bulk, "BULK", {"HCLTECH"})
+        s = pp.parse_deal_rows(short, "SHORT", {"HCLTECH"})
+        self.assertEqual(b, [{"symbol": "HCLTECH", "date": "2026-10-14", "kind": "BULK", "client": "SOME FUND",
+                              "side": "SELL", "qty": 1200000.0, "price": 1330.5}])
+        self.assertEqual(s, [{"symbol": "HCLTECH", "date": "2026-10-13", "kind": "SHORT", "qty": 600.0}])
+
+    def _frame(self, closes, vols):
+        import pandas as pd
+        n = len(closes)
+        return pd.DataFrame({"Date": pd.bdate_range("2026-08-03", periods=n), "Open": closes,
+                             "High": [c * 1.01 for c in closes], "Low": [c * 0.99 for c in closes],
+                             "Close": closes, "Volume": vols})
+
+    def test_selling_pressure_counts_down_days_on_rising_volume(self):
+        import pead_plus as pp
+        closes, vols, c = [], [], 100.0
+        for i in range(40):
+            if i >= 28 and i % 2 == 0:
+                c *= 0.98; v = 2500          # down on heavy volume: distribution
+            elif i >= 28:
+                c *= 1.003; v = 800          # weak, light bounces
+            else:
+                c *= 1.001; v = 1000
+            closes.append(round(c, 2)); vols.append(v)
+        pr = pp.selling_pressure(self._frame(closes, vols))
+        self.assertGreaterEqual(pr["distributionDays"], 6)
+        self.assertIn(pr["label"], ("SELLING", "HEAVY_SELLING"))
+        flat = pp.selling_pressure(self._frame([100 + (i % 3) * 0.01 for i in range(40)], [1000] * 40))
+        self.assertEqual(flat["label"], "NEUTRAL")
+        self.assertIsNone(pp.selling_pressure(self._frame([100.0] * 10, [1000] * 10)))
+
+    def test_news_shapes_and_bad_links(self):
+        import pead_plus as pp
+        items = [
+            {"title": "Old shape", "publisher": "Reuters", "link": "https://a.example/1", "providerPublishTime": 1760000000},
+            {"id": "x", "content": {"title": "New shape", "pubDate": "2026-10-14T05:00:00Z",
+                                    "provider": {"displayName": "Mint"}, "canonicalUrl": {"url": "https://b.example/2"}}},
+            {"title": "Script link", "link": "javascript:alert(1)"},
+            {"title": "new shape", "link": "https://dup.example"},
+        ]
+        out = pp.normalize_news(items)
+        self.assertEqual([n["title"] for n in out], ["New shape", "Old shape"])
+        self.assertEqual(out[0]["publisher"], "Mint")
+
+    def test_series_summary(self):
+        import pead_plus as pp
+        rows = [(f"2026-10-{d:02d}", v) for d, v in zip(range(5, 12), (100, 101, 102, 103, 104, 105, 99.75))]
+        s = pp.summarize_series(rows)
+        self.assertEqual((s["date"], s["last"], s["chg1dPct"], s["chg5dPct"]), ("2026-10-11", 99.75, -5.0, -1.24))
+        self.assertIsNone(pp.summarize_series([]))
+
+    def test_watch_view_flags(self):
+        import pead_plus as pp
+        from datetime import date
+        v = pp.holding_watch_view(
+            "HCLTECH", {"filings": [{"kind": "LEGAL", "tone": "neg", "text": "Tax demand", "at": "2026-10-14T10:00:00"}]},
+            [{"symbol": "HCLTECH", "date": "2026-10-14", "kind": "BULK", "side": "SELL", "qty": 1},
+             {"symbol": "TARIL", "date": "2026-10-14", "kind": "BULK", "side": "SELL", "qty": 1}],
+            {"label": "SELLING", "distributionDays": 5, "sessions": 25, "lastDownOnVolume": False},
+            41.2, {"ACN": {"chg1dPct": -2.0}, "CTSH": {"chg1dPct": -1.5}}, "Information Technology", date(2026, 10, 15))
+        self.assertEqual(len(v["deals"]), 1)
+        self.assertEqual(v["peerAvg1dPct"], -1.75)
+        self.assertEqual(len(v["flags"]), 4)
+        self.assertEqual([p_["ticker"] for p_ in v["peers"]], ["ACN", "CTSH"])
+        quiet = pp.holding_watch_view("HCLTECH", None, [], None, None, {}, None, date(2026, 10, 15))
+        self.assertEqual(quiet["flags"], [])
+        self.assertIsNone(quiet["deliveryPct"])
+
+    def test_position_views_attach_watch(self):
+        import json, tempfile
+        from datetime import date
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "positions.json").write_text(json.dumps({"positions": [
+                {"symbol": "HCLTECH", "entryDate": "2026-10-14", "entryPrice": 1331.8, "stop": 1225.82, "status": "OPEN"}]}))
+            (d / "watch.json").write_text(json.dumps({"symbols": {"HCLTECH": {"filings": [], "filingsAt": "2026-10-15T04:00:00Z"}},
+                                                      "deals": [], "global": {"rows": {"ACN": {"chg1dPct": 0.5}}}}))
+            item = {"symbol": "HCLTECH", "resultDayLow": 1238.2, "priceContext": {"lastClose": 1327.0},
+                    "plus": {"sector": {"sector": "Information Technology", "tailwind": "POSITIVE"},
+                             "sectorKey": "Information Technology", "deliveryPct": 55.0,
+                             "price": {"last_session": "2026-10-14", "pressure": {"label": "NEUTRAL"}}}}
+            with mock.patch.object(p, "POSITIONS_PATH", d / "positions.json"), \
+                 mock.patch.object(p, "POSITIONS_STATE_PATH", d / "state.json"), \
+                 mock.patch.object(p, "HOLDINGS_WATCH_PATH", d / "watch.json"):
+                views = p.position_views([item], date(2026, 10, 15))
+        w = views[0]["watch"]
+        self.assertEqual(w["pressure"]["label"], "NEUTRAL")
+        self.assertEqual(w["deliveryPct"], 55.0)
+        self.assertEqual(w["peers"][0]["name"], "Accenture")
