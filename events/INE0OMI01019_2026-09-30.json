@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0OMI01019|2026-09-30",
   "createdAt": "2026-10-07T04:24:34Z",
-  "updatedAt": "2026-10-16T11:59:04Z",
+  "updatedAt": "2026-10-16T13:11:08Z",
   "security": {
     "symbol": "BRIGHT",
     "bseSymbol": "BRIGHT",
@@ -24,7 +24,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -245,16 +245,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:13Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-16T12:50:26Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-16T13:11:08Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-16",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-16T11:46:35Z",
+      "fetchedAt": "2026-10-16T12:56:06Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-a8111e8a4ee534dd.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
       "note": null
     },
     "reaction_session": {
@@ -346,6 +356,33 @@
       "rank": 88,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-16T12:50:26Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-16T17:57:28.220000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-16T12:50:26Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-16T12:50:26Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "note": null
     }
   },
   "fetch": {
@@ -394,33 +431,43 @@
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -462,8 +509,8 @@
       "sector": {
         "sector": "Media, Entertainment & Publication",
         "stocks": 20,
-        "momentum63dMedian": -9.33,
-        "relativeToMarket": -4.1,
+        "momentum63dMedian": -10.04,
+        "relativeToMarket": -4.83,
         "declared": 2,
         "strongResults": 1,
         "avgReaction": -1.46,
@@ -810,6 +857,20 @@
       "timestamp": "2026-10-16T10:44:01Z",
       "price": 340.0,
       "source": "BSE_PRICE"
+    }
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-16T17:57:28.220000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited half yearly results for September 30, 2026 Bright Outdoor Media Ltd - 543831 - Results-Financials Results For September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "seenAt": "2026-10-16T13:11:06Z"
     }
   ]
 }

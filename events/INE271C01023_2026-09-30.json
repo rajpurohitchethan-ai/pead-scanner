@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE271C01023|2026-09-30",
   "createdAt": "2026-10-10T12:29:04Z",
-  "updatedAt": "2026-10-16T11:59:04Z",
+  "updatedAt": "2026-10-16T13:11:08Z",
   "security": {
     "symbol": "DLF",
     "nseSymbol": "DLF",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-12T16:34:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-16T12:50:31Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-16T13:11:08Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-16",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-16T11:46:35Z",
+      "fetchedAt": "2026-10-16T12:56:06Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-a8111e8a4ee534dd.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
       "note": null
     },
     "reaction_session": {
@@ -253,6 +263,33 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-16T12:50:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-16T17:11:56.447000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-16T12:50:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-16T12:50:31Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "note": null
     }
   },
   "fetch": {
@@ -308,23 +345,29 @@
   },
   "derived": {
     "score": 18,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "ATTRACTIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -332,13 +375,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -379,10 +422,10 @@
       "sectorKey": "Realty",
       "sector": {
         "sector": "Realty",
-        "stocks": 19,
-        "momentum63dMedian": -10.51,
-        "relativeToMarket": -5.28,
-        "declared": 2,
+        "stocks": 20,
+        "momentum63dMedian": -11.27,
+        "relativeToMarket": -6.06,
+        "declared": 3,
         "strongResults": 1,
         "avgReaction": 2.54,
         "tailwind": "WEAK"
@@ -798,5 +841,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:DLF|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-16T17:11:56.447000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Un-audited financial results (standalone & consolidated) for the quarter and half-year ended 30th September 2026 DLF Ltd - 532868 - Outcome Of Board Meeting",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "seenAt": "2026-10-16T13:11:06Z"
+    }
   ]
 }

@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE111F01024|2026-09-30",
   "createdAt": "2026-10-08T10:28:59Z",
-  "updatedAt": "2026-10-16T11:59:04Z",
+  "updatedAt": "2026-10-16T13:11:08Z",
   "security": {
     "symbol": "PAUSHAKLTD",
     "nseSymbol": "PAUSHAKLTD",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-09T00:58:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-16T12:50:29Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-16T13:11:08Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-16",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-16T11:46:35Z",
+      "fetchedAt": "2026-10-16T12:56:06Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-a8111e8a4ee534dd.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
       "note": null
     },
     "reaction_session": {
@@ -225,6 +235,33 @@
       "rank": 98,
       "rawRef": "raw/nse/NSE_PAUSHAKLTD_2026-09-30/integrated_filings-56378a835cab407d.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-16T12:50:29Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-16T17:19:06.593000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-16T12:50:29Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-16T12:50:29Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "note": null
     }
   },
   "fetch": {
@@ -280,23 +317,29 @@
   },
   "derived": {
     "score": 21,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -304,13 +347,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_CONFIRM",
-        "label": "Watch: Q1 held",
-        "why": "Q1 setup sustained. Needs Q2 confirmation."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -351,10 +394,10 @@
       "sectorKey": "Chemicals",
       "sector": {
         "sector": "Chemicals",
-        "stocks": 39,
-        "momentum63dMedian": -5.89,
-        "relativeToMarket": -0.66,
-        "declared": 1,
+        "stocks": 42,
+        "momentum63dMedian": -5.54,
+        "relativeToMarket": -0.33,
+        "declared": 2,
         "strongResults": 1,
         "avgReaction": -8.93,
         "tailwind": "NEUTRAL"
@@ -705,5 +748,19 @@
   },
   "mergedFrom": [
     "NSE:PAUSHAKLTD|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-16T17:19:06.593000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial Results of the Company. Paushak Ltd - 532742 - Unaudited Financial Results Of The Company For The Quarter And Half Year Ended On 30Th September, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-1057d8e83f00801c.json",
+      "seenAt": "2026-10-16T13:11:06Z"
+    }
   ]
 }
