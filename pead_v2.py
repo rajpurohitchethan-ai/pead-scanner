@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.20"
+ENGINE_VERSION = "2.9.21"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -4640,7 +4640,25 @@ def comparable_pat(cur: dict[str, Any], other: dict[str, Any], key: str = "pat_c
             and ((om.get("concepts") or {}).get("pat")) in XBRL_PAT_OWNER_CONCEPTS
             and om.get("patTotalConcept") == c):
         return safe_num(om.get("patTotalCr"))
+    # 2.9.21: the reverse (DLF). The current owners' line EQUALS its own total
+    # profit (no minority interest) and the other filing has only that total
+    # element: both numbers are the same element's total profit. An owners'
+    # line that differs from its total (TRF) is never compared with a total.
+    cm = cur.get("_meta") or {}
+    o = (om.get("concepts") or {}).get("pat")
+    if (c in XBRL_PAT_OWNER_CONCEPTS and _owners_equal_total(cur)
+            and cm.get("patTotalConcept") and o == cm.get("patTotalConcept")
+            and not _owners_zero_fallback(other)):
+        return safe_num(other.get(key))
     return None
+
+
+def comparatives_missing(vals: dict[str, Any]) -> bool:
+    """Year-ago revenue or profit comparison missing from a stored snapshot.
+    2.9.21: a missing PAT change counts too (DLF: revenue YoY found, PAT YoY
+    blank), so the 3-hourly re-read within 10 days of the result covers it."""
+    vals = vals or {}
+    return vals.get("revenue_yoy_pct") is None or (vals.get("pat_yoy_pct") is None and not vals.get("pat_trend"))
 
 
 def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[str, Any]], period_end: date,
@@ -4758,7 +4776,7 @@ def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceConte
         ev_vals = existing.get("values") or {}
         last_try = parse_datetime(((event.get("fetch") or {}).get(source) or {}).get("lastAttempt"))
         rd_fin = parse_date(store.value(event, "result_date"))
-        retry_comparatives = (ev_vals.get("revenue_yoy_pct") is None and rd_fin is not None
+        retry_comparatives = (comparatives_missing(ev_vals) and rd_fin is not None
                               and (now_ist().date() - rd_fin).days <= 10 and
                               (last_try is None or (now_ist() - last_try).total_seconds() > 3 * 3600))
         if (existing.get("documentUrl") != str(xbrl_url) or (existing.get("validation") or {}).get("status") == "REJECTED"

@@ -1016,6 +1016,69 @@ class TotalProfitOnlyFilingTests(unittest.TestCase):
         self.assertIsNone(cur.get("prior_year_pat_cr"))
 
 
+class OwnersEqualTotalVsTotalOnlyTests(unittest.TestCase):
+    """2.9.21 (16 Oct 2026): DLF's Q2 FY27 consolidated XBRL carries an owners'
+    PAT line (1,301.35 Cr) EQUAL to its profit for the period (no minority
+    interest); last year's filing has only ProfitLossForPeriod (1,180.09 Cr).
+    same_pat_concept refused them, so the card showed revenue YoY but no PAT
+    change. When the current owners' line equals its own total, the total
+    element is the same number, so it is compared with the other filing's total
+    of the SAME element. TRF (owners != total) stays blank: owner's decision."""
+
+    def _parse(self, name, pe):
+        blob = (Path(__file__).parent / "fixtures" / "nse" / name).read_bytes()
+        return p.parse_xbrl_financials([blob], pe)
+
+    def test_dlf_pat_yoy_from_year_ago_total(self):
+        cur = self._parse("DLF_CONS_2026-09-30.xml", date(2026, 9, 30))
+        ya = self._parse("DLF_CONS_2025-09-30.xml", date(2025, 9, 30))
+        self.assertEqual(cur["_meta"]["concepts"]["pat"], "profitorlossattributabletoownersofparent")
+        self.assertEqual(ya["_meta"]["concepts"]["pat"], "profitlossforperiod")
+        listing = [{"periodEnd": "2025-09-30", "fromDate": "2025-07-01", "basis": "CONSOLIDATED",
+                    "cumulative": False, "xbrlUrl": "ya"}]
+        p.fill_comparatives_from_listing(cur, listing, date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: ya)
+        self.assertEqual(cur["prior_year_pat_cr"], 1180.09)
+        self.assertEqual(cur["pat_trend"], "PROFIT_GROWTH")
+        self.assertAlmostEqual(cur["pat_yoy_pct"], round((1301.35 / 1180.09 - 1) * 100, 2), places=1)
+        self.assertEqual(cur["prior_year_revenue_cr"], 1643.04)
+
+    def test_other_direction_owners_equal_total_in_year_ago(self):
+        concepts = {"revenue": "revenuefromoperations", "pat": "profitlossforperiod"}
+        cur = {"revenue_cr": 100.0, "pat_cr": 12.0, "revenue_qoq_pct": 1.0,
+               "_meta": {"concepts": concepts, "patTotalCr": 12.0, "patTotalConcept": "profitlossforperiod"}}
+        ya = {"revenue_cr": 90.0, "pat_cr": 10.0,
+              "_meta": {"concepts": {**concepts, "pat": "profitorlossattributabletoownersofparent"},
+                        "patTotalCr": 10.0, "patTotalConcept": "profitlossforperiod"}}
+        listing = [{"periodEnd": "2025-09-30", "fromDate": "2025-07-01", "basis": "CONSOLIDATED",
+                    "cumulative": False, "xbrlUrl": "ya"}]
+        p.fill_comparatives_from_listing(cur, listing, date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: ya)
+        self.assertEqual(cur["prior_year_pat_cr"], 10.0)
+
+    def test_owners_different_from_total_still_blank(self):
+        concepts = {"revenue": "revenuefromoperations", "pat": "profitorlossattributabletoownersofparent"}
+        cur = {"revenue_cr": 100.0, "pat_cr": 50.26, "revenue_qoq_pct": 1.0,
+               "_meta": {"concepts": concepts, "patTotalCr": 49.85, "patTotalConcept": "profitlossforperiod"}}
+        ya = {"revenue_cr": 90.0, "pat_cr": -6.81,
+              "_meta": {"concepts": {**concepts, "pat": "profitlossforperiod"}, "patTotalCr": -6.81,
+                        "patTotalConcept": "profitlossforperiod"}}
+        self.assertFalse(p.same_pat_concept(cur, ya))
+        self.assertIsNone(p.comparable_pat(cur, ya))
+
+    def test_missing_pat_change_triggers_comparative_retry(self):
+        self.assertTrue(p.comparatives_missing({"revenue_yoy_pct": -23.28, "pat_cr": 1301.35}))
+        self.assertTrue(p.comparatives_missing({}))
+        self.assertFalse(p.comparatives_missing({"revenue_yoy_pct": 5.0, "pat_yoy_pct": 3.0}))
+        self.assertFalse(p.comparatives_missing({"revenue_yoy_pct": 5.0, "pat_yoy_pct": None, "pat_trend": "TURNAROUND"}))
+
+    def test_owners_equal_total_but_other_total_element_differs(self):
+        concepts = {"revenue": "revenuefromoperations", "pat": "profitorlossattributabletoownersofparent"}
+        cur = {"revenue_cr": 100.0, "pat_cr": 10.0,
+               "_meta": {"concepts": concepts, "patTotalCr": 10.0, "patTotalConcept": "profitlossforperiod"}}
+        ya = {"revenue_cr": 90.0, "pat_cr": 8.0,
+              "_meta": {"concepts": {**concepts, "pat": "profitloss"}, "patTotalCr": 8.0, "patTotalConcept": "profitloss"}}
+        self.assertIsNone(p.comparable_pat(cur, ya))
+
+
 class BreakoutStrictTests(unittest.TestCase):
     """2.9.17: VIJIFIN 15 Oct (locked upper circuit, open = high = low = close
     16.34, RVOL 0.4) was ENTRY_BREAKOUT "Closed above the post-result box high"
