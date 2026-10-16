@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.21"
+ENGINE_VERSION = "2.9.22"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -6159,6 +6159,9 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
         plan = {"signal": "NO_ENTRY", "stage": None, "why": f"No trades since {last_sess.strftime('%d %b %Y')}; "
                 "the stock is not trading, so there is no reaction to measure.", "notTrading": True}
     event["tradeLog"] = pead_plus.update_trade_log(event.get("tradeLog"), plan, last_price, now_ist().date())
+    if not plan.get("notTrading"):                                    # 2.9.21: a triggered entry is held
+        plan = pead_plus.hold_triggered_entry(plan, event.get("tradeLog"), last_price, px,
+                                              event.get("concall"), now_ist().date())
     key = sector_key(sec)
     # 2.7.0 earnings acceleration: this quarter's YoY vs last quarter's YoY.
     prev_rev_yoy = store.value(event, "prev_q_revenue_yoy_pct")
@@ -6649,7 +6652,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
-PLUS_VERSION = "2.9.20"   # bump to rebuild every stored chart/price analytic once
+PLUS_VERSION = "2.9.22"   # bump to rebuild every stored chart/price analytic once
 
 
 def replay_plus(store: EventStore) -> int:

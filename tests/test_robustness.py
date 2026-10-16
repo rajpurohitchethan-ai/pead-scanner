@@ -1399,3 +1399,80 @@ class SectorFavourTests(unittest.TestCase):
         sectors = {"S": {}}
         pp.sector_favour(rows, sectors, {}, date(2026, 10, 16))
         self.assertEqual(sectors["S"]["favour"]["status"], "NOT_ENOUGH")
+
+
+class TriggeredEntryTests(unittest.TestCase):
+    """16 Oct 2026: PREMIERPOL was PULLBACK_ZONE on 15 Oct (enter above 109.39);
+    on 16 Oct it closed at 111.51 (owner bought at 109.49), but the card said
+    WATCH "no entry pattern yet": the close was more than 3% above the 10 EMA,
+    so the pullback branch never ran. HCLTECH's early entry of 13 Oct became
+    RISK_TOO_WIDE "wait for a tighter base" once the price moved on."""
+
+    def _plan(self, x, last, **kw):
+        import pead_plus as pp
+        args = dict(released=True, reaction_traded=True, quality_ok=True, x=x, last_price=last,
+                    result_return=11.73, rvol=6.59, result_low=106.2, result_high=113.6, box_high=120.0,
+                    concall={"status": "NONE_FOUND"})
+        args.update(kw)
+        return pp.trade_plan(**args)
+
+    def test_breakout_day_from_pullback_zone_is_an_entry(self):
+        x = {"ema10": 105.25, "ema21": 99.85, "ema63": 87.35, "sessions_since_reaction": 4, "reaction_close": 113.0,
+             "prev_close": 106.13, "prev_ema10": 104.08, "prev_ema21": 98.68,
+             "reclaimed_prev_high": True, "day_before_high": 109.39, "prev_session_high": 112.0}
+        plan = self._plan(x, 111.51)
+        self.assertEqual(plan["signal"], "ENTRY_PULLBACK")
+        self.assertEqual((plan["entry"], plan["sl"]), (109.39, 105.14))
+        # without the previous session in the zone it stays a watch
+        x2 = dict(x, prev_close=118.0)
+        self.assertEqual(self._plan(x2, 111.51)["signal"], "WATCH")
+
+    def test_triggered_entry_is_held_not_reset(self):
+        import pead_plus as pp
+        from datetime import date
+        log = {"full": {"date": "2026-10-13", "entry": 1326.0, "sl": 1225.82, "signal": "ENTRY_EARLY",
+                        "minSeen": 1326.0, "maxSeen": 1384.8, "last": 1380.0}}
+        plan = {"signal": "RISK_TOO_WIDE", "why": "Stop under the result-day low is 13.0% away", "entry": None, "sl": None,
+                "stage": "FULL", "sizeFraction": 1.0}
+        held = pp.hold_triggered_entry(plan, log, 1380.0, {"ema21": 1271.29, "ema63": 1259.83},
+                                       {"status": "DONE"}, date(2026, 10, 16))
+        self.assertEqual(held["signal"], "ENTRY_TRIGGERED")
+        self.assertEqual((held["entry"], held["sl"], held["triggeredOn"], held["triggeredBy"]),
+                         (1326.0, 1225.82, "2026-10-13", "ENTRY_EARLY"))
+        self.assertIn("13 Oct", held["why"])
+        self.assertNotIn("tighter base", held["why"])        # no contradicting "wait" text
+        self.assertEqual(held["tslSwing"], 1225.82)          # +1R (1426.18) not reached yet
+        # stopped trades and a fresh entry signal are left alone
+        stopped = {"full": dict(log["full"], stopped=True, stoppedOn="2026-10-15")}
+        self.assertEqual(pp.hold_triggered_entry(plan, stopped, 1380.0, {}, None, date(2026, 10, 16))["signal"], "RISK_TOO_WIDE")
+        fresh = dict(plan, signal="ENTRY_PULLBACK", entry=1390.0, sl=1225.82)
+        self.assertEqual(pp.hold_triggered_entry(fresh, log, 1395.0, {}, None, date(2026, 10, 16))["signal"], "ENTRY_PULLBACK")
+        # close below the stop: not held
+        self.assertEqual(pp.hold_triggered_entry(plan, log, 1220.0, {}, None, date(2026, 10, 16))["signal"], "RISK_TOO_WIDE")
+
+    def test_held_trail_after_one_r_uses_best_close(self):
+        import pead_plus as pp
+        from datetime import date
+        log = {"full": {"date": "2026-10-13", "entry": 1326.0, "sl": 1225.82, "signal": "ENTRY_EARLY",
+                        "minSeen": 1326.0, "maxSeen": 1440.0, "last": 1410.0}}
+        held = pp.hold_triggered_entry({"signal": "EXTENDED", "stage": "FULL"}, log, 1410.0,
+                                       {"ema21": 1300.0, "ema63": 1270.0}, None, date(2026, 10, 20))
+        self.assertEqual((held["tslSwing"], held["tslPosition"]), (1326.0, 1326.0))   # stop to cost after +1R
+
+    def test_starter_held_and_trade_log_tracks_best_close(self):
+        import pead_plus as pp
+        from datetime import date
+        log = pp.update_trade_log(None, {"signal": "ENTRY_EARLY", "stage": "STARTER", "entry": 876.0, "sl": 838.03},
+                                  966.15, date(2026, 10, 15))
+        log = pp.update_trade_log(log, {"signal": "NEAR_ENTRY", "stage": "STARTER"}, 870.35, date(2026, 10, 16))
+        self.assertEqual(log["starter"]["maxSeen"], 966.15)
+        held = pp.hold_triggered_entry({"signal": "NEAR_ENTRY", "stage": "STARTER", "entry": 876.0},
+                                       log, 870.35, {}, {"status": "SCHEDULED"}, date(2026, 10, 16))
+        self.assertEqual((held["signal"], held["stage"]), ("ENTRY_TRIGGERED", "STARTER"))
+        self.assertIn("below the entry", held["why"])
+
+    def test_box_still_forming_is_said(self):
+        x = {"ema10": 194.17, "ema21": 192.48, "sessions_since_reaction": 1, "reaction_close": 196.0}
+        plan = self._plan(x, 200.85, result_return=2.15, rvol=1.78, result_low=190.66, result_high=199.0, box_high=204.0)
+        self.assertEqual(plan["signal"], "NEAR_ENTRY")
+        self.assertIn("still forming", plan["why"])

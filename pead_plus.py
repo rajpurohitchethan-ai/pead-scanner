@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.21"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.22"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -151,6 +151,10 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
     last = _num(close.iloc[-1])
     out: dict[str, Any] = {
         "ema10": _ema(close, 10), "ema21": _ema(close, 21), "ema63": _ema(close, 63),
+        # 2.9.21: the previous session, to recognise a breakout day out of the pullback zone
+        "prev_close": _r2(close.iloc[-2]) if len(close) >= 2 else None,
+        "prev_ema10": _ema(close.iloc[:-1], 10) if len(close) > 11 else None,
+        "prev_ema21": _ema(close.iloc[:-1], 21) if len(close) > 22 else None,
         "ret_21d_pct": _r2(_pct(last, close.iloc[-22])) if len(f) > 22 else None,
         "ret_63d_pct": _r2(_pct(last, close.iloc[-64])) if len(f) > 64 else None,
         "ret_126d_pct": _r2(_pct(last, close.iloc[-127])) if len(f) > 127 else None,
@@ -327,7 +331,20 @@ def classify_bucket(*, released: bool, q2_strength: str | None, setup: bool | No
 # Trade plan
 # ---------------------------------------------------------------------------
 
-ACTIONABLE = {"ENTRY_EARLY", "ENTRY_PULLBACK", "ENTRY_BREAKOUT", "NEAR_ENTRY", "PULLBACK_ZONE"}
+ACTIONABLE = {"ENTRY_EARLY", "ENTRY_PULLBACK", "ENTRY_BREAKOUT", "ENTRY_TRIGGERED", "NEAR_ENTRY", "PULLBACK_ZONE"}
+
+
+BOX_SESSIONS = 5               # post-result box = reaction day + 5 sessions (pead_v2.price_metrics)
+
+
+def _prev_in_pullback_zone(x: dict[str, Any]) -> bool:
+    pc, e10, e21 = _num(x.get("prev_close")), _num(x.get("prev_ema10")), _num(x.get("prev_ema21"))
+    if pc is None:
+        return False
+    band = 1 + PULLBACK_BAND_PCT / 100
+    in21 = e21 is not None and e21 * 0.995 <= pc <= e21 * band
+    in10 = e10 is not None and e10 * 0.995 <= pc <= e10 * band and (x.get("sessions_since_reaction") or 0) >= 4
+    return in21 or in10
 
 
 def trade_plan(*, released: bool, reaction_traded: bool, quality_ok: bool | None, x: dict[str, Any],
@@ -407,11 +424,24 @@ def trade_plan(*, released: bool, reaction_traded: bool, quality_ok: bool | None
             signal = "PULLBACK_ZONE"
             why = "Pulled back to the 10/21 EMA while the result base holds: enter on a move above today's high."
         plan["style"] = "PULLBACK"
+    elif x.get("reclaimed_prev_high") and _num(x.get("day_before_high")) is not None and _prev_in_pullback_zone(x):
+        # 2.9.21: yesterday sat in the pullback zone and today closed above
+        # yesterday's high. A strong breakout day closes well clear of the
+        # EMAs, so the zone test above misses it (PREMIERPOL 16 Oct: 111.51
+        # vs 10 EMA 105.25 -> "no entry pattern yet").
+        trigger, signal = _num(x.get("day_before_high")), "ENTRY_PULLBACK"
+        why = "Pulled back to the 10/21 EMA, then closed above the pullback day's high."
+        plan["style"] = "PULLBACK"
     elif ema21 is not None and last > ema21 * (1 + EXTENDED_ABOVE_EMA21_PCT / 100):
         return done("EXTENDED", f"More than {EXTENDED_ABOVE_EMA21_PCT:.0f}% above the 21 EMA: wait for a pullback.")
     elif _num(box_high) is not None and _pct(_num(box_high), last) is not None and _pct(_num(box_high), last) <= NEAR_TRIGGER_PCT:
         trigger, signal = _num(box_high), "NEAR_ENTRY"
         why = "Within 3% of the post-result box high."
+        if sessions is not None and sessions < BOX_SESSIONS:
+            # 2.9.21: the box is the reaction day + 5 sessions; until then a new
+            # high raises the trigger (GROWW 200.80 -> 204.00 on 16 Oct).
+            why += (f" The box is still forming (session {sessions + 1} of {BOX_SESSIONS + 1}): "
+                    "a new high raises the trigger.")
         plan["style"] = "BREAKOUT"
     else:
         return done("WATCH", "Base intact; no entry pattern yet (early, pullback or breakout).")
@@ -788,12 +818,63 @@ def update_trade_log(log: dict[str, Any] | None, plan: dict[str, Any], last_pric
         if not t or last is None:
             continue
         t["minSeen"] = min(x for x in (t.get("minSeen"), last) if x is not None)
+        t["maxSeen"] = max(x for x in (t.get("maxSeen"), t.get("entry"), last) if x is not None)
         t["last"] = last
         if not t.get("stopped") and t.get("sl") is not None and t["minSeen"] <= t["sl"]:
             t["stopped"], t["stoppedOn"] = True, today.isoformat()
         exit_px = t["sl"] if t.get("stopped") else last
         t["returnPct"] = _r2(_pct(exit_px, t["entry"]))
     return log
+
+
+def hold_triggered_entry(plan: dict[str, Any], log: dict[str, Any] | None, last_price: Any, x: dict[str, Any],
+                         concall: dict[str, Any] | None, today: date) -> dict[str, Any]:
+    """2.9.21: once an entry has triggered (trade log) and its stop has not
+    been hit, the plan keeps that entry instead of hunting for a new pattern
+    (HCLTECH's 13 Oct early entry turned into "risk too wide, wait for a
+    tighter base" on 16 Oct). A fresh ENTRY_* signal today still wins.
+    Stop: the entry's own stop until a close at +1R, then cost / 21 EMA
+    (swing) and cost / 63 EMA (position), as in the plan."""
+    last = _num(last_price)
+    if str(plan.get("signal") or "").startswith("ENTRY_") or not log or last is None:
+        return plan
+    t = None
+    for key in ("full", "starter"):
+        c = log.get(key)
+        if c and not c.get("stopped") and _num(c.get("entry")) is not None and _num(c.get("sl")) is not None:
+            t, stage = c, key.upper()
+            break
+    if t is None:
+        return plan
+    entry, sl = _num(t["entry"]), _num(t["sl"])
+    if last <= sl or entry <= sl:
+        return plan
+    per_r = entry - sl
+    best = max(x_ for x_ in (_num(t.get("maxSeen")), last, entry) if x_ is not None)
+    one_r = best >= entry + per_r
+    e21, e63 = _num(x.get("ema21")), _num(x.get("ema63"))
+    tsl_s = _r2(max(entry, e21) if e21 is not None else entry) if one_r else sl
+    tsl_p = _r2(max(entry, e63) if e63 is not None else entry) if one_r else sl
+    try:
+        on = date.fromisoformat(str(t.get("date"))[:10]).strftime("%d %b")
+    except ValueError:
+        on = str(t.get("date"))
+    kind = {"ENTRY_EARLY": "early", "ENTRY_PULLBACK": "pullback", "ENTRY_BREAKOUT": "breakout"}.get(t.get("signal"), "")
+    where = ("above the entry" if last >= entry else f"below the entry ({_pct(last, entry):+.1f}%) but above the stop")
+    why = (f"{'Starter (1/3) ' if stage == 'STARTER' else ''}{kind + ' ' if kind else ''}entry triggered on {on} above "
+           f"{entry:,.2f}; now {where}. Hold while the close stays above "
+           + (f"the trail {tsl_s:,.2f} (+1R reached)." if one_r else f"the stop {sl:,.2f}; +1R at {entry + per_r:,.2f}."))
+    if stage == "STARTER" and (concall or {}).get("status") == "DONE":
+        why += " Concall done: the rest can be added on the next entry signal."
+    elif stage == "STARTER":
+        why += " Add the rest only if the concall confirms."
+    held = dict(plan)
+    held.update({"signal": "ENTRY_TRIGGERED", "why": why, "entry": _r2(entry), "sl": _r2(sl),
+                 "riskPct": _r2(_pct(entry, sl)), "tslSwing": tsl_s, "tslPosition": tsl_p,
+                 "rNow": _r2((last - entry) / per_r), "distancePct": _r2(_pct(entry, last)),
+                 "stage": stage, "sizeFraction": STARTER_FRACTION if stage == "STARTER" else 1.0,
+                 "triggeredOn": t.get("date"), "triggeredBy": t.get("signal"), "oneRHit": one_r})
+    return held
 
 
 def entry_timing_scorecard(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
