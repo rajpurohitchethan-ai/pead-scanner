@@ -1118,3 +1118,147 @@ class HoldingsNotesTests(unittest.TestCase):
             (d / "notes.json").write_text("{not json")
             with mock.patch.object(p, "HOLDINGS_NOTES_PATH", d / "notes.json"):
                 self.assertEqual(p.holdings_notes(date(2026, 10, 16)), {})
+
+
+class EnrichmentSlotTests(unittest.TestCase):
+    """16 Oct 2026: 123 declared results > 120 slots. The declared-first sort
+    gave every slot to declared companies, so upcoming ones (BPCL, results
+    23 Oct) were last priced 12 Oct and never-enriched ones (LICI, TEAMLEASE)
+    were never reached."""
+
+    def _ev(self, i, released, rd, last_session=None, sector=True, attempt=None):
+        from datetime import date as _d
+        ev = {"eventId": f"E{i:04d}", "period": {"end": "2026-09-30"},
+              "security": {"nseSymbol": f"S{i}", **({"exchangeSector": "Information Technology"} if sector else {})},
+              "fields": {"result_date": {"value": rd.isoformat(), "status": "OK"},
+                         "results_released": {"value": released, "status": "OK"},
+                         "revenue_cr": {"value": 10.0, "status": "OK"}, "pat_cr": {"value": 1.0, "status": "OK"}},
+              "fetch": {"PRICE_HISTORY": {"lastAttempt": attempt or "2026-10-16T05:00:00Z"}}}
+        if last_session:
+            ev["plus"] = {"price": {"last_session": last_session.isoformat()}}
+        return ev
+
+    def test_upcoming_and_never_enriched_get_slots_when_declared_exceed_cap(self):
+        from datetime import date as _d, datetime as _dt
+        now = _dt(2026, 10, 16, 11, 0, tzinfo=p.IST)
+        today = now.date()
+        declared = [self._ev(i, True, _d(2026, 10, 9), last_session=_d(2026, 10, 12)) for i in range(123)]
+        upcoming = [self._ev(500 + i, False, _d(2026, 10, 23), last_session=_d(2026, 10, 9)) for i in range(5)]
+        never = [self._ev(900, False, _d(2026, 11, 5), sector=False)]
+        cands = declared + upcoming + never
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            old = sorted(cands, key=p._enrichment_priority)[:120]
+            # The bug: the old order is all declared.
+            self.assertTrue(all(e in declared for e in old))
+            sel, counts = p.select_for_enrichment(cands, 120, today)
+        self.assertEqual(len(sel), 120)
+        for e in upcoming + never:
+            self.assertIn(e, sel)
+        self.assertEqual(counts["upcomingStale"], 5)
+        self.assertEqual(counts["neverEnriched"], 1)
+        # Unused upcoming / never-enriched slots flow back to declared work.
+        self.assertEqual(sum(1 for e in sel if e in declared), 114)
+
+    def test_settled_declared_yields_to_work_and_fresh_results_come_first(self):
+        from datetime import date as _d, datetime as _dt
+        now = _dt(2026, 10, 16, 11, 0, tzinfo=p.IST)
+        today = now.date()
+        settled = self._ev(1, True, _d(2026, 10, 1), last_session=_d(2026, 10, 15))
+        fresh = self._ev(2, True, _d(2026, 10, 15), last_session=_d(2026, 10, 14))
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(settled, today), ("D", 0))
+            self.assertEqual(p.enrichment_group(fresh, today), ("A", 0))
+            # During market hours the last closed session is yesterday.
+            self.assertEqual(p.last_completed_session(today), _d(2026, 10, 15))
+            sel, _ = p.select_for_enrichment([settled, fresh], 1, today)
+        self.assertEqual(sel, [fresh])
+
+    def test_upcoming_rotation_is_least_recently_enriched_first(self):
+        from datetime import date as _d, datetime as _dt
+        now = _dt(2026, 10, 16, 11, 0, tzinfo=p.IST)
+        a = self._ev(1, False, _d(2026, 10, 17), last_session=_d(2026, 10, 9), attempt="2026-10-16T04:00:00Z")
+        b = self._ev(2, False, _d(2026, 10, 23), last_session=_d(2026, 10, 9), attempt="2026-10-12T04:00:00Z")
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]), \
+                mock.patch.object(p, "ENRICH_SLOTS_DECLARED", 0), mock.patch.object(p, "ENRICH_SLOTS_UPCOMING", 1):
+            sel, _ = p.select_for_enrichment([a, b], 1, now.date())
+        self.assertEqual(sel, [b])
+
+
+class FilingTagsAndPeerGroupTests(unittest.TestCase):
+    """2.9.19: PREMIERPOL's NSE volume queries were tagged Order ("The
+    Exchange, in order to ensure..."); SEJALLTD's corrigendum was a plain
+    results tag; PREMIERPOL / SEJALLTD got power-grid peers and GROWW banks."""
+
+    SPURT = ("Spurt in Volume: Significant increase in volume has been observed in Premier Polyfilm Limited. "
+             "The Exchange, in order to ensure that investors have latest relevant information about the company "
+             "and to inform the market place so that the interest of the investors is safeguarded, has sought "
+             "clarification from the company")
+    CORR = ("General Updates: Sejal Glass Limited has informed the Exchange about Corrigendum To Standalone "
+            "Financial Results For Quarter and Half Year Ended September 30, 2026")
+
+    def test_volume_query_is_not_an_order(self):
+        import pead_plus as pp
+        self.assertEqual(pp.classify_announcement(self.SPURT), ("QUERY", "info"))
+        self.assertEqual(pp.classify_announcement("Movement in price: the Exchange sought clarification"), ("QUERY", "info"))
+        # Real orders still are.
+        self.assertEqual(pp.classify_announcement("Bagging/Receiving of orders/contracts: order worth Rs 450 Cr"), ("ORDER", "pos"))
+        self.assertEqual(pp.classify_announcement("Receipt of purchase order from NTPC"), ("ORDER", "pos"))
+        self.assertEqual(pp.classify_announcement("Company received orders in order to expand"), ("ORDER", "pos"))
+
+    def test_corrigendum_is_flagged(self):
+        import pead_plus as pp
+        self.assertEqual(pp.classify_announcement(self.CORR), ("CORRECTION", "warn"))
+        self.assertEqual(pp.classify_announcement("Revised Financial Results for the quarter"), ("CORRECTION", "warn"))
+        self.assertEqual(pp.classify_announcement("Outcome of Board Meeting: financial results"), ("RESULT", "info"))
+
+    def test_stored_filings_are_relabelled_in_the_view(self):
+        import pead_plus as pp
+        from datetime import date as _d
+        watch = {"filings": [{"at": "2026-09-24T10:00:00", "kind": "ORDER", "tone": "pos", "text": self.SPURT},
+                             {"at": "2026-10-15T18:55:00", "kind": "RESULT", "tone": "info", "text": self.CORR}]}
+        v = pp.holding_watch_view("PREMIERPOL", watch, [], None, None, {}, "Capital Goods", _d(2026, 10, 16),
+                                  industry="Plastic Products - Industrial")
+        self.assertEqual([(f["kind"], f["tone"]) for f in v["filings"]], [("QUERY", "info"), ("CORRECTION", "warn")])
+        self.assertIn("correction / corrigendum filed", v["flags"])
+        self.assertEqual(v["peerGroup"], "Plastics & packaging")
+
+    def test_peers_follow_the_industry(self):
+        import pead_plus as pp
+        names = lambda s, i: {t for t, _ in pp.global_peers_for(s, i)}
+        power = {"GEV", "ETN", "HUBB"}
+        self.assertFalse(power & names("Capital Goods", "Plastic Products - Industrial"))
+        self.assertFalse(power & names("Capital Goods", "Glass - Industrial"))
+        self.assertIn("SGO.PA", names("Capital Goods", "Glass - Industrial"))
+        self.assertTrue(power <= names("Capital Goods", "Heavy Electrical Equipment"))
+        self.assertTrue(power <= names("Capital Goods", "Cables - Electricals"))
+        broking = names("Financial Services", "Stockbroking & Allied")
+        self.assertIn("HOOD", broking)
+        self.assertFalse({"HDB", "IBN"} & broking)
+        # Banks keep the bank list; an unknown Capital Goods industry gets broad industrials, not power.
+        self.assertIn("HDB", names("Financial Services", "Private Sector Bank"))
+        self.assertFalse(power & names("Capital Goods", "Industrial Products"))
+        self.assertEqual(names("Information Technology", None), names("Information Technology", "Computers - Software & Consulting"))
+        self.assertEqual(pp.global_peers_for(None, None), ())
+        self.assertIn("SEBI", pp.macro_queries_for("Financial Services", "Stockbroking & Allied"))
+
+
+class RunupScorecardTests(unittest.TestCase):
+    def test_buckets_reaction_and_drift(self):
+        import pead_plus as pp
+        rows = [
+            {"runup20": 1.33, "reaction": 8.42, "sinceResult": 11.2, "sessions": 2, "liquid": True},   # HCLTECH: drift +2.56%
+            {"runup20": -7.8, "reaction": -2.0, "sinceResult": None, "sessions": 0, "liquid": True},    # reaction only
+            {"runup20": 27.9, "reaction": -5.0, "sinceResult": -9.75, "sessions": 1, "liquid": True},   # drift -5%
+            {"runup20": 15.0, "reaction": 4.0, "sinceResult": 6.0, "sessions": 1, "liquid": False},     # illiquid: out
+            {"runup20": None, "reaction": 4.0, "sinceResult": 6.0, "sessions": 1, "liquid": True},      # no run-up: out
+            {"runup20": 10.0, "reaction": 3.0, "sinceResult": 3.0, "sessions": 3, "liquid": None},      # boundary -> warm
+        ]
+        r = {x["group"]: x for x in pp.runup_scorecard(rows)["rows"]}
+        tight = r["0% to 10% (tight base)"]
+        self.assertEqual((tight["n"], tight["nDrift"]), (1, 1))
+        self.assertAlmostEqual(tight["avgDrift"], 2.56, places=2)
+        cool = r["Below 0% (cool / pullback)"]
+        self.assertEqual((cool["n"], cool["nDrift"], cool["avgDrift"], cool["winRate"]), (1, 0, None, None))
+        self.assertAlmostEqual(r["Above 20% (extended)"]["avgDrift"], -5.0, places=2)
+        warm = r["10% to 20% (warm)"]
+        self.assertEqual((warm["n"], warm["avgDrift"], warm["winRate"]), (1, 0.0, 0.0))

@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.18"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.19"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -564,6 +564,37 @@ def scorecard(items: list[dict[str, Any]]) -> dict[str, Any]:
         rows.append({"group": k, "n": len(vals), "avg": _r2(sum(vals) / len(vals)), "median": _r2(median(vals)),
                      "winRate": _r2(sum(v > 0 for v in vals) / len(vals) * 100)})
     return {"metric": "Return from the day before the Q1 result to the Q2 result (or today)", "rows": rows}
+
+
+RUNUP_BUCKETS = (("Below 0% (cool / pullback)", None, 0.0), ("0% to 10% (tight base)", 0.0, 10.0),
+                 ("10% to 20% (warm)", 10.0, 20.0), ("Above 20% (extended)", 20.0, None))
+
+
+def runup_scorecard(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """2.9.19: this quarter's declared results grouped by their 20-day run-up
+    into the result. rows: {runup20, reaction, sinceResult, sessions, liquid}.
+    Drift = close-to-close after the reaction session ((1 + since result) /
+    (1 + reaction) - 1), only once at least one session has traded after it.
+    Illiquid names and rows without a run-up or reaction are left out."""
+    out = []
+    for label, lo, hi in RUNUP_BUCKETS:
+        reac, drift = [], []
+        for r in rows:
+            ru, rx = _num(r.get("runup20")), _num(r.get("reaction"))
+            if ru is None or rx is None or r.get("liquid") is False or rx <= -100:
+                continue
+            if (lo is not None and ru < lo) or (hi is not None and ru >= hi):
+                continue
+            reac.append(rx)
+            since, n = _num(r.get("sinceResult")), _num(r.get("sessions"))
+            if since is not None and n is not None and n >= 1:
+                drift.append(((1 + since / 100) / (1 + rx / 100) - 1) * 100)
+        out.append({"group": label, "n": len(reac), "avgReaction": _r2(sum(reac) / len(reac)) if reac else None,
+                    "nDrift": len(drift), "avgDrift": _r2(sum(drift) / len(drift)) if drift else None,
+                    "medianDrift": _r2(median(drift)) if drift else None,
+                    "winRate": _r2(sum(d > 0 for d in drift) / len(drift) * 100) if drift else None})
+    return {"metric": "20-day run-up into the result vs the reaction and the drift after it (this quarter, liquid names)",
+            "rows": out}
 
 
 # ---------------------------------------------------------------------------
@@ -1536,6 +1567,12 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
 # (kind, tone, pattern) - first match wins. Tone is keyword-based and only a
 # hint; the filing itself is the source.
 _ANN_RULES = (
+    # 2.9.19: corrections first (SEJALLTD "Corrigendum To Standalone Financial
+    # Results" was a plain results tag), then exchange surveillance queries
+    # (NSE "Spurt in Volume" text says "The Exchange, in order to ensure..."
+    # and was tagged ORDER / pos for PREMIERPOL).
+    ("CORRECTION", "warn", r"corrigendum|\berrat(?:a|um)\b|restat(?:ed|ement)|revised (?:financial )?results|"
+                           r"(?:qualified|modified|adverse) (?:audit )?opinion"),
     ("PLEDGE", "neg", r"\bpledg|encumbr|invocation"),
     ("PLEDGE", "pos", r"release of (?:pledge|encumbrance)|revocation of pledge"),
     ("INSIDER", "info", r"\bSAST\b|Regulation 29|Reg(?:ulation)?\.? ?7\(2\)|Regulation 31|insider trading|\bPIT\b|"
@@ -1543,7 +1580,9 @@ _ANN_RULES = (
     ("DEAL", "info", r"bulk deal|block deal"),
     ("LEGAL", "neg", r"tax demand|show cause|penalt|litigation|\bGST\b|income tax|search (?:and|&) seizure|\bsurvey\b|\bfine\b|"
                      r"adjudicat|arbitrat|\bSEBI order|court|tribunal|\bNCLT\b"),
-    ("ORDER", "pos", r"\border(?:s)?\b(?! of the| dated| passed| under| of hon| from the (?:hon|court|tribunal))|"
+    ("QUERY", "info", r"spurt in (?:volume|price)|significant increase in (?:volume|price)|"
+                      r"(?:price|volume) movement|movement in (?:the )?(?:price|volume)|clarification"),
+    ("ORDER", "pos", r"(?<!in )\border(?:s)?\b(?! to\b| of the| dated| passed| under| of hon| from the (?:hon|court|tribunal))|"
                      r"\bcontract\b|letter of (?:intent|award)|\bLoI\b|\bLoA\b|bagging|awarded|\bwins?\b|purchase order"),
     ("RATING", "info", r"credit rating|\brating\b"),
     ("MGMT", "neg", r"resign|cessation|step(?:s|ped)? down"),
@@ -1667,8 +1706,9 @@ GLOBAL_MARKETS = (
 SECTOR_GLOBAL_PEERS = {
     "Information Technology": (("ACN", "Accenture"), ("CTSH", "Cognizant"), ("EPAM", "EPAM"), ("INFY", "Infosys ADR"),
                                ("WIT", "Wipro ADR"), ("IBM", "IBM")),
-    "Capital Goods": (("GEV", "GE Vernova"), ("ETN", "Eaton"), ("HUBB", "Hubbell"), ("ENR.DE", "Siemens Energy"),
-                      ("SU.PA", "Schneider"), ("HG=F", "Copper")),
+    # 2.9.19: Capital Goods without a known industry gets broad industrials;
+    # the power-equipment names moved to the electrical-equipment industry group.
+    "Capital Goods": (("XLI", "US industrials ETF"), ("CAT", "Caterpillar"), ("ABBN.SW", "ABB")),
     "Power": (("GEV", "GE Vernova"), ("NEE", "NextEra"), ("ENR.DE", "Siemens Energy"), ("HG=F", "Copper")),
     "Healthcare": (("XLV", "US healthcare ETF"), ("TEVA", "Teva"), ("VTRS", "Viatris"), ("DRREDDY.NS", "Dr Reddy's")),
     "Metals & Mining": (("HG=F", "Copper"), ("ALI=F", "Aluminium"), ("FCX", "Freeport"), ("BHP", "BHP"), ("VALE", "Vale")),
@@ -1684,7 +1724,7 @@ SECTOR_GLOBAL_PEERS = {
 # Macro headline searches per sector (Yahoo news search); the market-wide one is always added.
 SECTOR_MACRO_QUERY = {      # short keyword searches (Yahoo search matches few words), tried in order
     "Information Technology": ("H-1B visa", "IT services tariff", "Accenture"),
-    "Capital Goods": ("transformer shortage", "grid equipment", "GE Vernova"),
+    "Capital Goods": ("India capex", "industrial production India"),
     "Power": ("power grid", "GE Vernova"),
     "Healthcare": ("pharma tariff", "FDA warning letter"),
     "Metals & Mining": ("steel tariff", "copper price", "aluminium price"),
@@ -1697,8 +1737,57 @@ SECTOR_MACRO_QUERY = {      # short keyword searches (Yahoo search matches few w
 MARKET_MACRO_QUERY = ("Trump tariff", "India stocks", "FII selling", "Federal Reserve")
 
 
-def global_peers_for(sector: str | None) -> tuple[tuple[str, str], ...]:
-    return SECTOR_GLOBAL_PEERS.get(sector or "", ())
+# 2.9.19: peers by NSE basic industry before the broad sector. NSE puts
+# Premier Polyfilm (Plastic Products - Industrial) and Sejal Glass (Glass -
+# Industrial) in Capital Goods, whose list was all power-grid names, and
+# Groww (Stockbroking & Allied) in Financial Services, whose list is banks.
+# (pattern on the industry label, group, global peers, headline searches);
+# first match wins; no match -> the sector lists above.
+INDUSTRY_PEER_GROUPS = (
+    (r"stock ?brok|exchange and data|depositor|clearing|asset management|financial products distributor|"
+     r"fintech|financial technology|wealth|capital market",
+     "Capital markets", (("HOOD", "Robinhood"), ("SCHW", "Charles Schwab"), ("IBKR", "Interactive Brokers"),
+                         ("ICE", "ICE (exchanges)")), ("SEBI", "India IPO", "demat accounts")),
+    (r"insurance", "Insurance", (("MET", "MetLife"), ("PRU", "Prudential"), ("AIG", "AIG")), ("IRDAI", "insurance India")),
+    (r"heavy electrical|electrical equipment|cables|transformer|switchgear|power equipment",
+     "Electrical equipment", (("GEV", "GE Vernova"), ("ETN", "Eaton"), ("HUBB", "Hubbell"), ("ENR.DE", "Siemens Energy"),
+                              ("SU.PA", "Schneider"), ("HG=F", "Copper")),
+     ("transformer shortage", "grid equipment", "GE Vernova")),
+    (r"plastic|packaging|polymer|films",
+     "Plastics & packaging", (("AMCR", "Amcor"), ("DOW", "Dow"), ("LYB", "LyondellBasell"), ("BZ=F", "Brent crude")),
+     ("PVC prices", "polymer prices")),
+    (r"glass|ceramic|sanitaryware|plywood|laminate|other construction materials",
+     "Glass & building products", (("SGO.PA", "Saint-Gobain"), ("OC", "Owens Corning"), ("APOG", "Apogee")),
+     ("India real estate", "housing demand India")),
+    (r"aerospace|defen[cs]e|ship ?building",
+     "Aerospace & defence", (("ITA", "US aerospace & defense ETF"), ("LMT", "Lockheed Martin"), ("RTX", "RTX")),
+     ("defence order", "defense budget")),
+    (r"iron & steel|\bsteel\b|castings|forgings",
+     "Steel", (("HG=F", "Copper"), ("ALI=F", "Aluminium"), ("NUE", "Nucor"), ("MT", "ArcelorMittal")),
+     ("steel tariff", "steel prices")),
+)
+_INDUSTRY_PEER_RX = [(_re.compile(p, _re.I), g, peers, q) for p, g, peers, q in INDUSTRY_PEER_GROUPS]
+
+
+def peer_group_for(sector: str | None, industry: str | None = None) -> tuple[str | None, tuple, tuple]:
+    """(group label, global peers, headline searches): industry group first,
+    else the sector's lists (label = sector), else nothing."""
+    ind = str(industry or "")
+    if ind:
+        for rx, g, peers, q in _INDUSTRY_PEER_RX:
+            if rx.search(ind):
+                return g, peers, q
+    if sector and (sector in SECTOR_GLOBAL_PEERS or sector in SECTOR_MACRO_QUERY):
+        return sector, SECTOR_GLOBAL_PEERS.get(sector, ()), SECTOR_MACRO_QUERY.get(sector, ())
+    return None, (), ()
+
+
+def global_peers_for(sector: str | None, industry: str | None = None) -> tuple[tuple[str, str], ...]:
+    return peer_group_for(sector, industry)[1]
+
+
+def macro_queries_for(sector: str | None, industry: str | None = None) -> tuple[str, ...]:
+    return peer_group_for(sector, industry)[2]
 
 
 def summarize_series(closes: list[tuple[str, float]]) -> dict[str, Any] | None:
@@ -1761,13 +1850,14 @@ def balanced_news(per_source: list[list[dict[str, Any]]], limit: int = 6) -> lis
 
 def holding_watch_view(symbol: str, watch: dict[str, Any] | None, deals: list[dict[str, Any]],
                        pressure: dict[str, Any] | None, delivery_pct: Any, global_rows: dict[str, Any],
-                       sector: str | None, today: date) -> dict[str, Any]:
+                       sector: str | None, today: date, industry: str | None = None) -> dict[str, Any]:
     """What the My trades card shows under 'News & pressure'."""
     w = watch or {}
     mine = [d for d in deals or [] if d.get("symbol") == symbol]
     mine.sort(key=lambda d: d["date"], reverse=True)
     peers = []
-    for t, name in global_peers_for(sector):
+    group = peer_group_for(sector, industry)[0]
+    for t, name in global_peers_for(sector, industry):
         g = global_rows.get(t)
         if g:
             peers.append({"ticker": t, "name": name, **g})
@@ -1779,14 +1869,20 @@ def holding_watch_view(symbol: str, watch: dict[str, Any] | None, deals: list[di
         flags.append(f"last session fell on {pressure['lastRvol']}x volume")
     if any(d.get("kind") in ("BULK", "BLOCK") and d.get("side") == "SELL" for d in mine):
         flags.append("bulk/block selling filed")
-    neg = [f for f in w.get("filings") or [] if f.get("tone") == "neg"]
+    neg = [f for f in w.get("filings") or [] if classify_announcement(f.get("text") or "")[1] == "neg"]
     if neg:
         flags.append(f"{len(neg)} negative-sounding filing(s)")
+    if any(classify_announcement(f.get("text") or "")[0] == "CORRECTION" for f in w.get("filings") or []):
+        flags.append("correction / corrigendum filed")
     peer_moves = [p["chg1dPct"] for p in peers if p.get("chg1dPct") is not None]
     peer_avg = _r2(sum(peer_moves) / len(peer_moves)) if peer_moves else None
     if peer_avg is not None and peer_avg <= -1.5:
         flags.append(f"global peers {peer_avg:+.1f}% last session")
-    return {"filings": w.get("filings") or [], "filingsAt": w.get("filingsAt"),
+    # 2.9.19: re-label stored filings with the current rules (tags were fixed
+    # at fetch time, so the old "Order" tag on a volume query stayed 2 h).
+    filings = [{**f, **dict(zip(("kind", "tone"), classify_announcement(f.get("text") or "")))}
+               for f in w.get("filings") or [] if isinstance(f, dict)]
+    return {"filings": filings, "filingsAt": w.get("filingsAt"), "peerGroup": group,
             "deals": mine[:8], "dealsSelling": len(sells), "pressure": pressure,
             "deliveryPct": _r2(_num(delivery_pct)), "peers": peers, "peerAvg1dPct": peer_avg,
             "news": w.get("news") or [], "sectorNews": w.get("sectorNews") or [], "newsAt": w.get("newsAt"),

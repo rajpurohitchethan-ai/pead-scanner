@@ -200,11 +200,19 @@
     return `<p class="homework"><b>Your homework</b> (the screener can't judge these): capex and rerating, next growth triggers, FY27/FY28 EPS, fair value.${l.screener ? ` <a href="${esc(l.screener)}" target="_blank" rel="noopener">Screener</a>` : ''}${P(it).concall?.transcriptUrl ? ` · <a href="${esc(P(it).concall.transcriptUrl)}" target="_blank" rel="noopener">Concall transcript</a>` : ''}</p>`;
   }
 
-  function liveLine(l) {
+  // 2.9.19: one price vocabulary on every card. A live quote shows a LIVE pill
+  // and the close next to it is the previous session's ("prev close"); with
+  // no live quote the price is the last close (CLOSED).
+  const dayPct = (a, b) => num(a) !== null && num(b) ? (num(a) / num(b) - 1) * 100 : null;
+  function priceState(live, at) {
+    const t = at ? new Date(at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
+    return live ? `<span class="tag good">LIVE${t ? ' ' + t : ''}</span>` : `<span class="tag">CLOSED</span> Last close`;
+  }
+  function liveLine(l, prevClose) {
     if (!l || num(l.price) === null) return '';
-    const t = l.at ? new Date(l.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
     const st = { ABOVE_TRIGGER: ['above entry', 'good'], NEAR_TRIGGER: ['near entry', 'warn'], BELOW_TRIGGER: ['below entry', ''] }[l.state];
-    return `<div class="meta">Live ${inr(l.price)}${t ? ` at ${t}` : ''}${st ? ` · <span class="tag ${st[1]}">${pct(l.distancePct)} ${st[0]} ${inr(l.entry)}</span>` : ''}</div>`;
+    const d = dayPct(l.price, prevClose);
+    return `<div class="meta">${priceState(true, l.at)} ${inr(l.price)}${d !== null ? ` · <span class="${cls(d)}">day ${pct(d)}</span>` : ''}${st ? ` · <span class="tag ${st[1]}">${pct(l.distancePct)} ${st[0]} ${inr(l.entry)}</span>` : ''}</div>`;
   }
 
   function concallLine(c) {
@@ -256,9 +264,9 @@
       <div class="head"><div><h2 class="sym">${esc(it.symbol)}</h2><div class="co">${esc(it.name)}</div></div>
         <div class="score"><div class="v">${num(it.convictionScore) ?? '—'}</div><div class="l">conviction</div></div></div>
       <div class="tags">${tags.join('')}</div>
-      <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? dt(it.reactionWindowStart) + '–' : ''}${dt(it.reactionSession)}` : ''}${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? ' (filed in market hours)' : ''}${num(pc.lastClose) !== null ? `, last ${inr(pc.lastClose)}` : ''}</div>
+      <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? dt(it.reactionWindowStart) + '–' : ''}${dt(it.reactionSession)}` : ''}${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? ' (filed in market hours)' : ''}${num(pc.lastClose) !== null ? `, ${p.live && num(p.live.price) !== null ? 'prev close' : 'last close'} ${inr(pc.lastClose)}` : ''}</div>
       ${concallLine(p.concall)}
-      ${liveLine(p.live)}
+      ${liveLine(p.live, pc.lastClose)}
       ${chart(it)}
       ${tvChart(it)}
       ${facts}
@@ -344,7 +352,7 @@
         return `<div class="row radar-row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">
           <div><div class="s">${esc(it.symbol)}</div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
           <div><div class="k">Reaction</div><div class="v ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}${num(pc.relativeVolume) !== null ? ` <span class="meta">${num(pc.relativeVolume).toFixed(1)}x vol</span>` : ''}</div></div>
-          <div><div class="k">${live?.price ? 'Live' : 'Last'}</div><div class="v">${inr(last)}</div></div>
+          <div><div class="k">${live?.price ? 'Live' : 'Last close'}</div><div class="v">${inr(last)}</div></div>
           <div class="opt"><div class="k">Base (result-day low)</div><div class="v">${inr(low)}${toBase !== null ? ` <span class="meta">${pct(toBase)}</span>` : ''}</div></div>
           <div><div class="k">${trig ? 'Trigger' : 'Risk'}</div><div class="v">${trig ? `${inr(trig)}${toTrig !== null ? ` <span class="meta">${toTrig > 0 ? pct(toTrig) + ' away' : 'above'}</span>` : ''}` : (num(pl.riskPct) !== null ? `${num(pl.riskPct).toFixed(1)}%` : '—')}</div></div>
           <div class="chev" aria-hidden="true">›</div></div>
@@ -358,7 +366,7 @@
     const list = S.data.positions || [];
     if (!list.length) return `<div class="empty">No open trades. Tell Claude when you buy, and the trade is tracked here against the screener's plan.</div>`;
     return `<p class="note">Your open trades, checked every hour against the screener's plan: stop 1% under the result-day low until +1R, then stop to cost and trail the 21 EMA (swing) or 63 EMA (position). Stops are judged on closing prices and never move down. Quantity stays on this device only.</p>
-      <div class="grid">${list.map(p => {
+      ${tradesRisk(list)}<div class="grid">${list.map(p => {
         const st = POS[p.status] || [p.status, ''];
         let qty = null; try { qty = num(localStorage.getItem('qty:' + p.symbol)); } catch (e) { /* storage blocked */ }
         const money = v => v === null ? '—' : `${v >= 0 ? '+' : '−'}₹${Math.abs(Math.round(v)).toLocaleString('en-IN')}`;
@@ -368,7 +376,7 @@
         return `<article class="card"><div class="head"><div><h2 class="sym">${esc(p.symbol)}</h2><div class="co">Bought ${dt(p.entryDate)} at ${inr(p.entryPrice)}</div></div>
           <div class="score"><div class="v ${cls(p.pnlPct)}">${pct(p.pnlPct)}</div><div class="l">${num(p.rNow) !== null ? num(p.rNow).toFixed(2) + 'R' : ''}</div></div></div>
           <div class="tags"><span class="tag ${st[1]}">${esc(st[0])}</span></div>
-          <div class="meta">${p.live ? 'Live' : 'Last close'} ${inr(p.last)}${p.live && num(p.lastClose) !== null ? ` · close ${inr(p.lastClose)}` : ''}</div>
+          <div class="meta">${priceState(!!p.live, p.at)} ${inr(p.last)}${p.live && num(p.lastClose) !== null ? ` · prev close ${inr(p.lastClose)} · <span class="${cls(dayPct(p.last, p.lastClose))}">day ${pct(dayPct(p.last, p.lastClose))}</span>` : ''}</div>
           <p class="plan-why">${esc(p.note || '')}</p>
           <div class="levels">${lv('Stop now (swing)', inr(p.swingStop), 's')}${lv('Position stop', inr(p.positionStop), 's')}
             ${lv('+1R (stop to cost)', inr(p.oneR), 'e')}${lv('+2R', inr(p.twoR))}</div>
@@ -378,12 +386,28 @@
           ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
       }).join('')}</div>${globalBlock()}`;
   }
+  // 2.9.19: total rupee risk to the current stops over the trades with a quantity entered.
+  function tradesRisk(list) {
+    let risk = 0, used = 0, n = 0;
+    for (const p of list) {
+      let q = null; try { q = num(localStorage.getItem('qty:' + p.symbol)); } catch (e) { /* storage blocked */ }
+      const stop = num(p.swingStop) ?? num(p.initialStop);
+      if (!q || stop === null || num(p.last) === null) continue;
+      n += 1; used += q * num(p.last); risk += Math.max(0, num(p.last) - stop) * q;
+    }
+    if (!n) return '';
+    const cap = num(store.get('cap', 1000000));
+    const of = v => cap ? ` (${(v / cap * 100).toFixed(1)}% of ₹${Math.round(cap).toLocaleString('en-IN')} capital)` : '';
+    const rOff = (S.data.regime || {}).label === 'RISK-OFF';
+    return `<p class="note"><b>Open risk to stops</b> ₹${Math.round(risk).toLocaleString('en-IN')}${of(risk)} · <b>deployed</b> ₹${Math.round(used).toLocaleString('en-IN')}${of(used)} over ${n} trade${n > 1 ? 's' : ''} with a quantity entered.${rOff ? ' <span class="tag warn">Market risk-off</span>' : ''} <span class="meta">From the current price to each stop; capital is the Setups tab figure.</span></p>`;
+  }
   // 2.9.15: filings, deals, selling pressure, global peers and headlines for
   // open trades. Display only; the exit rules above do not read any of it.
   const href = u => /^https?:\/\//i.test(String(u || '')) ? esc(u) : null;
   const ext = (u, label) => href(u) ? `<a href="${href(u)}" target="_blank" rel="noopener">${label}</a>` : label;
   const KIND = { ORDER: 'Order', DEAL: 'Deal', INSIDER: 'Insider / SAST', PLEDGE: 'Pledge', RATING: 'Rating', LEGAL: 'Legal / tax',
-    MGMT: 'Management', CORP: 'Corporate', RESULT: 'Results / call', OTHER: 'Filing' };
+    MGMT: 'Management', CORP: 'Corporate', RESULT: 'Results / call', OTHER: 'Filing',
+    CORRECTION: 'Correction', QUERY: 'Exchange query' };   // 2.9.19
   const PRESS = { HEAVY_SELLING: ['Heavy selling', 'bad'], SELLING: ['Selling pressure', 'watch'], NEUTRAL: ['No unusual pressure', ''],
     ACCUMULATION: ['Accumulation', 'go'] };
   const when = v => { const d = new Date(v); return Number.isNaN(+d) ? '' : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); };
@@ -393,17 +417,17 @@
     if (!w) return '';
     const pr = w.pressure, pl = pr ? (PRESS[pr.label] || [pr.label, '']) : null;
     const fl = (w.flags || []).length;
-    const filings = (w.filings || []).length ? `<ul class="wl">${w.filings.map(f => `<li><span class="tag ${f.tone === 'neg' ? 'bad' : f.tone === 'pos' ? 'go' : ''}">${esc(KIND[f.kind] || f.kind)}</span> ${ext(f.url, esc(f.text))} <span class="meta">${when(f.at)}</span></li>`).join('')}</ul>`
+    const filings = (w.filings || []).length ? `<ul class="wl">${w.filings.map(f => `<li><span class="tag ${f.tone === 'neg' ? 'bad' : f.tone === 'pos' ? 'go' : f.tone === 'warn' ? 'warn' : ''}">${esc(KIND[f.kind] || f.kind)}</span> ${ext(f.url, esc(f.text))} <span class="meta">${when(f.at)}</span></li>`).join('')}</ul>`
       : `<p class="meta">${w.filingsAt ? 'No filings in the last 30 days besides routine ones.' : 'Not checked yet.'}</p>`;
     const deals = (w.deals || []).length ? `<ul class="wl">${w.deals.map(d => `<li><span class="tag ${d.side === 'SELL' || d.kind === 'SHORT' ? 'bad' : 'go'}">${d.kind === 'SHORT' ? 'Short sale' : esc(d.kind.charAt(0) + d.kind.slice(1).toLowerCase()) + ' ' + esc((d.side || '').toLowerCase())}</span> ${dt(d.date)} · ${num(d.qty) !== null ? num(d.qty).toLocaleString('en-IN') + ' shares' : ''}${num(d.price) !== null ? ' @ ' + inr(d.price) : ''}${d.client ? ' · ' + esc(d.client) : ''}</li>`).join('')}</ul>`
       : '<p class="meta">No bulk, block or short-selling reports in the last 10 days.</p>';
-    const peers = (w.peers || []).length ? `<div class="wpeers">${w.peers.map(r => `<div><span>${esc(r.name)}</span><b>${moveCell(r)}</b></div>`).join('')}</div>` : '<p class="meta">No global peer list for this sector.</p>';
+    const peers = (w.peers || []).length ? `<div class="wpeers">${w.peers.map(r => `<div><span>${esc(r.name)}</span><b>${moveCell(r)}</b></div>`).join('')}</div>` : `<p class="meta">${w.peerGroup ? 'Peer prices load with the next global-markets refresh (about every 2 hours).' : 'No global peer list for this sector.'}</p>`;
     return `<details class="tvd watch"${fl ? ' open' : ''}><summary>News &amp; pressure${fl ? ` <span class="tag watch">${fl} to note</span>` : ''}</summary>
       ${fl ? `<p class="wflags">${w.flags.map(esc).join(' · ')}</p>` : ''}
       <h4>Selling pressure</h4>${pr ? `<p><span class="tag ${pl[1]}">${esc(pl[0])}</span> <span class="meta">${pr.distributionDays} distribution / ${pr.accumulationDays} accumulation days in ${pr.sessions} sessions · up/down volume ${num(pr.upDownVolume) !== null ? num(pr.upDownVolume).toFixed(2) : '—'}${num(pr.lastCloseInRangePct) !== null ? ` · last close at ${Math.round(pr.lastCloseInRangePct)}% of the day's range` : ''}${num(w.deliveryPct) !== null ? ` · delivery ${num(w.deliveryPct).toFixed(1)}%` : ''}</span></p>` : '<p class="meta">—</p>'}
       ${deals}
       <h4>Exchange filings</h4>${filings}
-      <h4>Global peers (last session)</h4>${peers}
+      <h4>Global peers (last session)${w.peerGroup ? ` <span class="meta">${esc(w.peerGroup)}</span>` : ''}</h4>${peers}
       <h4>Headlines</h4>${headlines(w.news, w.newsAt ? 'No recent headlines found.' : 'Not checked yet.')}
       ${(w.sectorNews || []).length ? `<h4>Sector &amp; policy</h4>${headlines(w.sectorNews, '')}` : ''}
       <p class="meta">Filings and deals: NSE/BSE. Prices and headlines: Yahoo Finance (headlines are unverified; open the source). Filing labels are keyword-based. Not used by the entry or exit rules.</p></details>`;
@@ -508,6 +532,16 @@
       <p class="note">Every triggered entry is recorded once: the starter taken before the call, and the full entry after it (or when no call is held). Returns run to today, or to the stop if it was hit.</p>
       <div class="tscroll"><table><thead><tr><th>Entry</th><th class="r">Trades</th><th class="r">Average</th><th class="r">Median</th><th class="r">Positive</th><th class="r">Stopped</th></tr></thead><tbody>
       ${(sc.timing || []).map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n ${cls(r.avg)}">${pct(r.avg)}</td><td class="r n ${cls(r.median)}">${pct(r.median)}</td><td class="r n">${num(r.winRate) === null ? '—' : num(r.winRate).toFixed(0) + '%'}</td><td class="r n">${r.stopped ?? 0}</td></tr>`).join('')}
+      </tbody></table></div>${runupTable(sc.runup)}`;
+  }
+  // 2.9.19: does a big run-up into the numbers spoil the reaction and the drift?
+  function runupTable(ru) {
+    if (!ru || !(ru.rows || []).length) return '';
+    const rate = v => num(v) === null ? '—' : num(v).toFixed(0) + '%';
+    return `<h2 class="day">Run-up into the result vs drift after it</h2>
+      <p class="note">${esc(ru.metric)}. Drift is close to close after the reaction session, so it only counts stocks with at least one session since; it is days old this early in the season. Display only: no rule uses it.</p>
+      <div class="tscroll"><table><thead><tr><th>20-day run-up</th><th class="r">Stocks</th><th class="r">Avg reaction</th><th class="r">With drift</th><th class="r">Avg drift</th><th class="r">Median drift</th><th class="r">Positive</th></tr></thead><tbody>
+      ${ru.rows.map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n ${cls(r.avgReaction)}">${pct(r.avgReaction)}</td><td class="r n">${r.nDrift}</td><td class="r n ${cls(r.avgDrift)}">${pct(r.avgDrift)}</td><td class="r n ${cls(r.medianDrift)}">${pct(r.medianDrift)}</td><td class="r n">${rate(r.winRate)}</td></tr>`).join('')}
       </tbody></table></div>`;
   }
 
@@ -532,7 +566,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.18';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.19';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -581,6 +615,9 @@
     header(); chips();
     $('controls').style.display = ['setups', 'radar', 'watch', 'sectors'].includes(S.tab) ? '' : 'none';
     $('sizing').style.display = S.tab === 'setups' ? '' : 'none';
+    // 2.9.19: a hint only; the risk input keeps whatever the viewer typed.
+    const rOff = (S.data.regime || {}).label === 'RISK-OFF', rNow = num(store.get('risk', 1));
+    $('riskhint').innerHTML = rOff && rNow !== null && rNow > 0.5 ? '<span class="tag warn">Market risk-off: suggested 0.5% risk</span>' : '';
     $('liquid').parentElement.style.display = S.tab === 'sectors' ? 'none' : '';
     $('sort').style.display = S.tab === 'setups' ? '' : 'none';
     $('dir').style.display = S.tab === 'setups' ? '' : 'none';

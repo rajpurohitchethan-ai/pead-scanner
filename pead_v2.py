@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.18"
+ENGINE_VERSION = "2.9.19"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1663,6 +1663,132 @@ def _enrichment_priority(event: dict[str, Any]) -> tuple[int, int, int, str]:
     # 0 never priced, 1 price due, 2 only sector/valuation due, 3 nothing due
     tier = 0 if (released or never_priced) else 1 if price_due else 2 if meta_due else 3
     return bucket, tier, distance, str(event.get("eventId") or "")
+
+
+# 2.9.19: slot reservation. With 123 declared results and a 120-event cap the
+# declared-first sort above gave every slot to declared companies (all of them
+# are "tier 0"), so from 12 Oct no upcoming company was re-priced (BPCL's last
+# session stayed 09 Oct a week before its result) and never-enriched companies
+# (LICI, TEAMLEASE: no price, no sector) were never reached.
+ENRICH_SLOTS_DECLARED = int(os.getenv("ENRICH_SLOTS_DECLARED", "35"))   # A: declared that still need work
+ENRICH_SLOTS_UPCOMING = int(os.getenv("ENRICH_SLOTS_UPCOMING", "45"))   # B: reporting within 7 days, prices stale
+ENRICH_UPCOMING_WINDOW_DAYS = 7
+ENRICH_RECENT_RESULT_DAYS = 5     # declared this recently: concall / transcript / reaction still moving
+
+
+def last_completed_session(today: date | None = None) -> date:
+    """Latest trading session whose close is in (session_closed)."""
+    d = today or now_ist().date()
+    for _ in range(15):
+        if is_trading_day(d) and session_closed(d):
+            return d
+        d -= timedelta(days=1)
+    return d
+
+
+def _last_enriched(event: dict[str, Any]) -> datetime:
+    """Latest attempt of any per-event fetch; oldest first rotates the list."""
+    ts = [parse_datetime((v or {}).get("lastAttempt")) for v in (event.get("fetch") or {}).values() if isinstance(v, dict)]
+    ts = [t for t in ts if t is not None]
+    return max(ts) if ts else datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def enrichment_group(event: dict[str, Any], today: date | None = None,
+                     last_session: date | None = None, held: set[str] | None = None) -> tuple[str, int]:
+    """(group, rank within the group; lower first).
+    A  declared, still needs work. Rank 0 result in the last 2 days with
+       prices behind or figures missing; 1 open trade / live plan with prices
+       behind; 2 prices behind the last closed session; 3 figures not read;
+       4 concall pending or result in the last 5 days (transcript check).
+    B  not declared: result due today or in the last 2 days (filing awaited,
+       rank 0), or within 7 days / overdue with prices behind (rank 1).
+    C  never enriched: no price history or no sector.
+    D  everything else (settled declared, fresh upcoming, far upcoming)."""
+    today = today or now_ist().date()
+    last_session = last_session or last_completed_session(today)
+    released = boolish(meta_value(event, "results_released")) is True
+    rd = parse_date(meta_value(event, "result_date"))
+    price = (event.get("plus") or {}).get("price") or {}
+    ls = parse_date(price.get("last_session"))
+    never_priced = not price
+    behind = never_priced or ls is None or ls < last_session
+    if released:
+        age = (today - rd).days if rd is not None else None
+        concall = str((event.get("concall") or {}).get("status") or "").upper() == "SCHEDULED"
+        no_figures = meta_value(event, "revenue_cr") is None or meta_value(event, "pat_cr") is None
+        sec = event.get("security") or {}
+        signal = str((((event.get("derived") or {}).get("plus") or {}).get("plan") or {}).get("signal") or "")
+        live = signal in LIVE_SIGNALS or bool(held and {str(sec.get("nseSymbol") or "").upper(),
+                                                         str(sec.get("bseSymbol") or "").upper()} & held)
+        if age is not None and 0 <= age <= 2 and (behind or no_figures):
+            return "A", 0
+        if behind and live:
+            return "A", 1
+        if behind:
+            return "A", 2
+        if no_figures:
+            return "A", 3
+        if concall or (age is not None and 0 <= age <= ENRICH_RECENT_RESULT_DAYS):
+            return "A", 4
+        return "D", 0
+    if rd is not None and 0 <= (today - rd).days <= 2:
+        return "B", 0
+    if rd is not None and (rd - today).days <= ENRICH_UPCOMING_WINDOW_DAYS and behind:
+        return "B", 1
+    if never_priced or not sector_key(event.get("security") or {}):
+        return "C", 0
+    return "D", 1
+
+
+def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: date | None = None
+                          ) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Reserve slots: A up to ENRICH_SLOTS_DECLARED, B up to
+    ENRICH_SLOTS_UPCOMING, C fills the rest; unused slots go to the leftovers
+    in the old priority order. Within a group the least recently enriched
+    goes first, so a company whose figures never parse cannot hold a slot
+    every hour. Order of the result = processing order (run budget)."""
+    today = today or now_ist().date()
+    last_session = last_completed_session(today)
+    held = {str(r.get("symbol") or "").upper() for r in open_positions()} - {""}
+    groups: dict[str, list[tuple[tuple, dict[str, Any]]]] = {"A": [], "B": [], "C": [], "D": []}
+    tag: dict[int, str] = {}
+    for ev in candidates:
+        g, rank = enrichment_group(ev, today, last_session, held)
+        tag[id(ev)] = g
+        rd = parse_date(meta_value(ev, "result_date"))
+        dist = abs((rd - today).days) if rd is not None else 9999
+        last = _last_enriched(ev)
+        eid = str(ev.get("eventId") or "")
+        if g == "A":
+            key = (rank, last, dist, eid)
+        elif g in ("B", "C"):
+            # Pure rotation, least recently enriched first. A result due now
+            # jumps the queue only when not looked at for 3 h (the per-company
+            # filing listing is cached 3 h anyway), so the 38 "due today"
+            # rows cannot take all 45 upcoming slots every hour.
+            due_now = g == "B" and rank == 0 and (now_ist() - last).total_seconds() >= 3 * 3600
+            key = (0 if due_now else 1, last, dist, eid)
+        else:
+            key = _enrichment_priority(ev)
+        groups[g].append((key, ev))
+    for g in groups:
+        groups[g].sort(key=lambda x: x[0])
+    a = [e for _, e in groups["A"]]
+    b = [e for _, e in groups["B"]]
+    c = [e for _, e in groups["C"]]
+    d = [e for _, e in groups["D"]]
+    cap = max(0, int(cap))
+    take_a = a[:min(ENRICH_SLOTS_DECLARED, cap)]
+    take_b = b[:min(ENRICH_SLOTS_UPCOMING, cap - len(take_a))]
+    take_c = c[:cap - len(take_a) - len(take_b)]
+    selected = take_a + take_b + take_c
+    rest = a[len(take_a):] + b[len(take_b):] + c[len(take_c):] + d
+    selected += rest[:cap - len(selected)]
+    counts = {"declaredNeedsWork": len(a), "upcomingStale": len(b), "neverEnriched": len(c), "settled": len(d),
+              "selectedDeclared": sum(1 for e in selected if tag[id(e)] == "A"),
+              "selectedUpcoming": sum(1 for e in selected if tag[id(e)] == "B"),
+              "selectedNeverEnriched": sum(1 for e in selected if tag[id(e)] == "C")}
+    return selected, counts
 
 
 class YahooAdapter:
@@ -4928,7 +5054,8 @@ def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, A
             view["watch"] = pead_plus.holding_watch_view(
                 sym, (watch.get("symbols") or {}).get(sym), watch.get("deals") or [],
                 (pl.get("price") or {}).get("pressure"), pl.get("deliveryPct"),
-                (watch.get("global") or {}).get("rows") or {}, _plus_sector(pl), today)
+                (watch.get("global") or {}).get("rows") or {}, _plus_sector(pl), today,
+                industry=(it or {}).get("industry"))
         except Exception as exc:
             print(f"Holdings watch view {p_['symbol']} failed: {type(exc).__name__}: {exc}")
         view["notes"] = (notes.get("symbols") or {}).get(str(p_["symbol"]).upper())
@@ -4956,6 +5083,11 @@ def _held_events(store: EventStore) -> dict[str, dict[str, Any]]:
             if sym and sym in held and sym not in out:
                 out[sym] = e
     return out
+
+
+def _sec_industry(sec: dict[str, Any]) -> str | None:
+    """Most specific industry label of a security (NSE basic industry first)."""
+    return next((str(v) for v in (sec.get("basicIndustry"), sec.get("industry")) if str(v or "").strip()), None)
 
 
 def _plus_sector(pl: dict[str, Any] | None) -> str | None:
@@ -5084,8 +5216,9 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
                 name = re.sub(r"\b(ltd|limited)\.?$", "", str(sec.get("name") or sym), flags=re.I).strip()
                 sector = _plus_sector((e.get("derived") or {}).get("plus"))
                 w["news"] = _yahoo_news_multi((name,), (f"{sym}.NS",))
-                q = pead_plus.SECTOR_MACRO_QUERY.get(sector or "") or ()
-                peers = [t for t, _ in pead_plus.global_peers_for(sector) if "=" not in t][:3]
+                industry = _sec_industry(sec)                                  # 2.9.19
+                q = pead_plus.macro_queries_for(sector, industry)
+                peers = [t for t, _ in pead_plus.global_peers_for(sector, industry) if "=" not in t][:3]
                 w["sectorNews"] = _yahoo_news_multi(q, peers)
                 w["newsAt"] = iso_now()
             except Exception as exc:
@@ -5115,10 +5248,11 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
             print(f"Deals skipped: {type(exc).__name__}: {exc}")
     if _due((cache.get("global") or {}).get("at"), HOLDINGS_WATCH_EVERY_MIN):
         try:
-            sectors = {_plus_sector((e.get("derived") or {}).get("plus")) for e in events.values()}
+            sectors = {(_plus_sector((e.get("derived") or {}).get("plus")), _sec_industry(e.get("security") or {}))
+                       for e in events.values()}
             tickers = [t for t, _, _ in pead_plus.GLOBAL_MARKETS]
-            for s_ in sectors:
-                tickers += [t for t, _ in pead_plus.global_peers_for(s_)]
+            for s_, ind_ in sectors:
+                tickers += [t for t, _ in pead_plus.global_peers_for(s_, ind_)]
             tickers = list(dict.fromkeys(tickers))
             closes = _yahoo_closes(tickers)
             rows = {t: pead_plus.summarize_series(c) for t, c in closes.items()}
@@ -5762,9 +5896,9 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
     candidates.sort(key=_enrichment_priority)
 
     # Hard cap prevents an unexpectedly noisy exchange response from turning an
-    # hourly run into a 60-minute historical backfill. Highest-priority released
-    # and near-term events win; deferred events remain safely persisted.
-    selected = candidates[:MAX_ACTIVE_ENRICH_EVENTS]
+    # hourly run into a 60-minute historical backfill. 2.9.19: slots are
+    # reserved per group (select_for_enrichment); deferred events stay persisted.
+    selected, slot_counts = select_for_enrichment(candidates, MAX_ACTIVE_ENRICH_EVENTS)
     deferred_by_cap = max(0, len(candidates) - len(selected))
     reason_counts: dict[str, int] = {}
     for _, (_, reason) in classified:
@@ -5777,6 +5911,7 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
         "activeCandidates": len(candidates),
         "selectedForEnrichment": len(selected),
         "deferredByCap": deferred_by_cap,
+        "slots": slot_counts,
         "activityReasons": reason_counts,
         "yahooBudget": _YAHOO_BUDGET_USED,
     }
@@ -7024,6 +7159,18 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
          "q1Setup": it["plus"].get("q1Setup")}
         for it in items
     ])
+    try:                                                              # 2.9.19
+        runup = pead_plus.runup_scorecard([
+            {"runup20": (it.get("priceContext") or {}).get("pre20dPct"),
+             "reaction": (it.get("priceContext") or {}).get("resultDayPct"),
+             "sinceResult": (it["plus"].get("price") or {}).get("return_since_result_pct"),
+             "sessions": (it["plus"].get("price") or {}).get("sessions_since_reaction"),
+             "liquid": (it["plus"].get("liquidity") or {}).get("pass")}
+            for it in items if it.get("resultsReleased")
+        ])
+    except Exception as exc:
+        print(f"Run-up scorecard skipped: {type(exc).__name__}: {exc}")
+        runup = None
     health["activeDashboardEvents"] = len(events)
     health["archiveEvents"] = max(0, len(stored_events) - len(events))
 
@@ -7079,7 +7226,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "counts": counts,
         "regime": regime,
         "sectors": sorted(sectors.values(), key=lambda r: (-(r.get("relativeToMarket") or -999), r["sector"])),
-        "scorecard": card | {"timing": timing},
+        "scorecard": card | {"timing": timing, "runup": runup},
         "positions": positions,
         "globalMarkets": global_markets_view(),                       # 2.9.15
         "marketNote": holdings_notes(now_ist().date()).get("market"),   # 2.9.18
