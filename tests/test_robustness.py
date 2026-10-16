@@ -1074,3 +1074,47 @@ class SameDayTradeLogTests(unittest.TestCase):
         out = pp.update_trade_log(log, plan, 101.0, date(2026, 10, 15))
         self.assertIn("starter", out)
         self.assertIn("full", out)
+
+
+class HoldingsNotesTests(unittest.TestCase):
+    """2.9.18: the evening check writes master/holdings_notes.json (summary +
+    impact per open trade); the page shows it on My trades."""
+
+    def _write(self, d, data):
+        import json
+        (d / "notes.json").write_text(json.dumps(data))
+
+    def test_fresh_notes_attach_and_old_ones_hide(self):
+        import json, tempfile
+        from datetime import date
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "positions.json").write_text(json.dumps({"positions": [
+                {"symbol": "SEJALLTD", "entryDate": "2026-10-16", "entryPrice": 879.95, "stop": 838.03, "status": "OPEN"},
+                {"symbol": "GROWW", "entryDate": "2026-10-16", "entryPrice": 200.8, "stop": 188.75, "status": "OPEN"}]}))
+            self._write(d, {"market": {"date": "2026-10-16", "impact": "negative", "summary": "US tariffs widened."},
+                            "symbols": {"sejalltd": {"date": "2026-10-16", "impact": "POSITIVE", "summary": "Order win.",
+                                                     "points": [{"text": "Rs 40 Cr order", "source": "NSE", "url": "https://x/a.pdf"},
+                                                                {"text": "bad link", "url": "javascript:x"}]},
+                                        "GROWW": {"date": "2026-10-09", "impact": "NEGATIVE", "summary": "Old news."}}})
+            with mock.patch.object(p, "POSITIONS_PATH", d / "positions.json"), \
+                 mock.patch.object(p, "POSITIONS_STATE_PATH", d / "state.json"), \
+                 mock.patch.object(p, "HOLDINGS_WATCH_PATH", d / "missing.json"), \
+                 mock.patch.object(p, "HOLDINGS_NOTES_PATH", d / "notes.json"):
+                views = {v["symbol"]: v for v in p.position_views([], date(2026, 10, 16))}
+                market = p.holdings_notes(date(2026, 10, 16))["market"]
+        n = views["SEJALLTD"]["notes"]
+        self.assertEqual((n["impact"], n["summary"]), ("POSITIVE", "Order win."))
+        self.assertEqual(n["points"][0]["url"], "https://x/a.pdf")
+        self.assertIsNone(n["points"][1]["url"])           # only http(s) links
+        self.assertIsNone(views["GROWW"]["notes"])          # older than 4 days
+        self.assertEqual(market["impact"], "NEGATIVE")
+
+    def test_missing_or_broken_file_is_empty(self):
+        import tempfile
+        from datetime import date
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "notes.json").write_text("{not json")
+            with mock.patch.object(p, "HOLDINGS_NOTES_PATH", d / "notes.json"):
+                self.assertEqual(p.holdings_notes(date(2026, 10, 16)), {})

@@ -375,7 +375,7 @@
           <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 21 EMA ${inr(p.ema21)}, 63 EMA ${inr(p.ema63)}.</p>
           <div class="sizing"><label>Quantity <input type="number" min="0" step="1" inputmode="numeric" class="pos-qty" data-sym="${esc(p.symbol)}" value="${qty ?? ''}"></label>
             ${qty ? `<span class="meta">P&amp;L ${money(pnl)} · at the stop ${money(atRisk)}</span>` : '<span class="meta">enter quantity for rupee P&amp;L</span>'}</div>
-          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${watchBlock(p.watch)}</article>`;
+          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
       }).join('')}</div>${globalBlock()}`;
   }
   // 2.9.15: filings, deals, selling pressure, global peers and headlines for
@@ -408,12 +408,24 @@
       ${(w.sectorNews || []).length ? `<h4>Sector &amp; policy</h4>${headlines(w.sectorNews, '')}` : ''}
       <p class="meta">Filings and deals: NSE/BSE. Prices and headlines: Yahoo Finance (headlines are unverified; open the source). Filing labels are keyword-based. Not used by the entry or exit rules.</p></details>`;
   }
+  // 2.9.18: Claude's evening read: what the news says and what it means for the stock.
+  const IMPACT = { POSITIVE: ['Positive for the stock', 'go'], NEGATIVE: ['Negative for the stock', 'bad'],
+    MIXED: ['Mixed', 'watch'], NEUTRAL: ['No real impact', ''] };
+  function noteBlock(n, title = "Tonight's read") {
+    if (!n) return '';
+    const im = IMPACT[n.impact] || IMPACT.NEUTRAL;
+    return `<div class="tnote"><div class="tnote-h"><b>${esc(title)}</b> <span class="tag ${im[1]}">${esc(im[0])}</span> <span class="meta">${dt(n.date)}</span></div>
+      <p>${esc(n.summary)}</p>
+      ${(n.points || []).length ? `<ul class="wl">${n.points.map(x => `<li>${esc(x.text)}${x.source || x.url ? ` <span class="meta">${ext(x.url, esc(x.source || 'source'))}</span>` : ''}</li>`).join('')}</ul>` : ''}
+      ${n.watch ? `<p class="meta"><b>Watch:</b> ${esc(n.watch)}</p>` : ''}
+      <p class="meta">Written by Claude from exchange filings and news; check the sources before acting.</p></div>`;
+  }
   function globalBlock() {
     const g = S.data.globalMarkets;
     if (!g || !(g.markets || []).length) return '';
     return `<section class="card gm"><h3>Global markets <span class="meta">last session · updated ${when(g.at)}</span></h3>
       <div class="wpeers">${g.markets.map(r => `<div><span>${esc(r.name)}</span><b>${r.group === 'rates' || r.group === 'risk' ? `${num(r.last).toFixed(2)} ` : ''}${moveCell(r)}</b></div>`).join('')}</div>
-      <h4>Market &amp; policy headlines</h4>${headlines(g.news, 'No headlines found.')}</section>`;
+      ${noteBlock(S.data.marketNote, 'Market tonight')}<h4>Market &amp; policy headlines</h4>${headlines(g.news, 'No headlines found.')}</section>`;
   }
   document.addEventListener('change', e => {
     const q = e.target.closest?.('.pos-qty');
@@ -520,7 +532,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.17';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.18';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

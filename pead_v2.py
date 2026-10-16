@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.17"
+ENGINE_VERSION = "2.9.18"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -4912,6 +4912,7 @@ def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, A
         watch = json.loads(HOLDINGS_WATCH_PATH.read_text(encoding="utf-8"))
     except Exception:
         watch = {}
+    notes = holdings_notes(today)                                     # 2.9.18
     by_sym = {}
     for it in items:
         by_sym.setdefault(str(it.get("symbol") or "").upper(), it)
@@ -4930,6 +4931,7 @@ def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, A
                 (watch.get("global") or {}).get("rows") or {}, _plus_sector(pl), today)
         except Exception as exc:
             print(f"Holdings watch view {p_['symbol']} failed: {type(exc).__name__}: {exc}")
+        view["notes"] = (notes.get("symbols") or {}).get(str(p_["symbol"]).upper())
         views.append(view)
     json_dump_atomic(POSITIONS_STATE_PATH, state)
     return views
@@ -5135,6 +5137,37 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
     cache["updatedAt"] = iso_now()
     json_dump_atomic(HOLDINGS_WATCH_PATH, cache)
     return cache
+
+
+HOLDINGS_NOTES_PATH = MASTER_DIR / "holdings_notes.json"   # 2.9.18: Claude's evening read of the news per open trade
+HOLDINGS_NOTES_MAX_AGE_DAYS = 4
+
+
+def holdings_notes(today: date) -> dict[str, Any]:
+    """master/holdings_notes.json, written by the evening check:
+    {"market": note, "symbols": {SYM: note}} where note = {date, impact
+    POSITIVE|NEGATIVE|MIXED|NEUTRAL, summary, points: [{text, source, url}]}.
+    Notes older than HOLDINGS_NOTES_MAX_AGE_DAYS are not shown."""
+    try:
+        data = json.loads(HOLDINGS_NOTES_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    def fresh(n: Any) -> dict[str, Any] | None:
+        if not isinstance(n, dict) or not n.get("summary"):
+            return None
+        d = parse_date(n.get("date"))
+        if d is None or (today - d).days > HOLDINGS_NOTES_MAX_AGE_DAYS or d > today:
+            return None
+        impact = str(n.get("impact") or "NEUTRAL").upper()
+        pts = [x for x in (n.get("points") or []) if isinstance(x, dict) and x.get("text")][:8]
+        return {"date": d.isoformat(), "impact": impact if impact in ("POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL") else "NEUTRAL",
+                "summary": str(n["summary"])[:900], "watch": str(n.get("watch") or "")[:300] or None,
+                "points": [{"text": str(x["text"])[:400], "source": x.get("source"),
+                            "url": x.get("url") if str(x.get("url") or "").startswith("http") else None} for x in pts]}
+
+    syms = {str(k).upper(): fresh(v) for k, v in (data.get("symbols") or {}).items()}
+    return {"market": fresh(data.get("market")), "symbols": {k: v for k, v in syms.items() if v}}
 
 
 def global_markets_view() -> dict[str, Any]:
@@ -7049,6 +7082,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "scorecard": card | {"timing": timing},
         "positions": positions,
         "globalMarkets": global_markets_view(),                       # 2.9.15
+        "marketNote": holdings_notes(now_ist().date()).get("market"),   # 2.9.18
         "thresholds": {
             "liquidityTurnoverCr": pead_plus.LIQ_TURNOVER_CR, "liquidityMinPrice": pead_plus.LIQ_MIN_PRICE,
             "maxRiskPct": pead_plus.MAX_RISK_PCT, "minMarketCapCr": MIN_MCAP_CR, "strongRevYoY": pead_plus.STRONG_REV_YOY, "strongPatYoY": pead_plus.STRONG_PAT_YOY,
