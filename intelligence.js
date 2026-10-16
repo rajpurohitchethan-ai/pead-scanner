@@ -164,6 +164,21 @@
   }
   const checklistChips = cl => `<div class="td-row">${cl.checks.map(c => `<span class="tdc ${c.status}" title="${esc(c.note)}"><i aria-hidden="true">${TD_ICON[c.status] || '–'}</i>${esc(c.label)}</span>`).join('')}</div>
       <ul class="td-notes">${cl.checks.map(c => `<li><b>${esc(c.label)}:</b> ${esc(c.note)}</li>`).join('')}</ul>`;
+  // 2.9.20: is the sector losing favour? (after @SureshKBN)
+  const FAV = { IN_FAVOUR: ['In favour', 'go'], NEUTRAL: ['Neutral', ''], OUT_OF_FAVOUR: ['Out of favour', 'watch'],
+    DETERIORATING: ['Deteriorating', 'bad'], NOT_ENOUGH: ['Not enough data', 'pending'] };
+  const favTag = f => f ? `<span class="tag ${(FAV[f.status] || ['', ''])[1]}" title="${esc(f.note || '')}">${esc((FAV[f.status] || [f.status])[0])}</span>` : '—';
+  function favourBlock(f, title = 'Sector favour') {
+    if (!f || !(f.signals || []).length) return '';
+    return `<div class="td"><div class="td-h"><b>${esc(title)}</b> ${favTag(f)} <span class="meta">${esc(f.note)}</span></div>
+      ${checklistChips({ checks: f.signals })}<p class="meta"><b>Fundamentals:</b> ${esc(f.fundamentalsNote || '—')} Out of favour is not the same as fundamentals deteriorating.</p></div>`;
+  }
+  function sectorFavourLine(it) {
+    const f = P(it).favour;
+    if (!f || f.status === 'NOT_ENOUGH') return '';
+    const sec = (S.data.sectors || []).find(r => r.sector === f.sector);
+    return favourBlock(sec?.favour, `Sector favour: ${f.sector}`).replace('<ul class="td-notes">', '<details class="td-more"><summary>What each signal found</summary><ul class="td-notes">').replace(/<\/ul><p class="meta">/, '</ul></details><p class="meta">');
+  }
   function sectorChecklist(it) {
     const sec = (S.data.sectors || []).find(r => r.sector === P(it).sectorKey), cl = sec?.checklist, ex = P(it).execution;
     if (!cl) return '';
@@ -273,6 +288,7 @@
       ${lensBlock(it)}
       ${topDownStrip(it)}
       ${sectorChecklist(it)}
+      ${sectorFavourLine(it)}
       ${peersLine(it)}
       <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}${plan.stage === 'STARTER' && num(plan.entry) !== null ? ' <span class="tag warn">Starter, 1/3 size</span>' : plan.stage === 'FULL' && num(plan.entry) !== null ? ' <span class="tag go">Full size</span>' : ''}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
         <p class="plan-why">${esc(plan.why || 'Plan not computed yet.')}</p>${levels}</div>
@@ -383,7 +399,7 @@
           <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 21 EMA ${inr(p.ema21)}, 63 EMA ${inr(p.ema63)}.</p>
           <div class="sizing"><label>Quantity <input type="number" min="0" step="1" inputmode="numeric" class="pos-qty" data-sym="${esc(p.symbol)}" value="${qty ?? ''}"></label>
             ${qty ? `<span class="meta">P&amp;L ${money(pnl)} · at the stop ${money(atRisk)}</span>` : '<span class="meta">enter quantity for rupee P&amp;L</span>'}</div>
-          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
+          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${p.sectorFavour && p.sectorFavour.status !== 'NOT_ENOUGH' ? `<p class="meta"><b>Sector:</b> ${esc(p.sectorFavour.sector)} ${favTag(p.sectorFavour)} ${esc(p.sectorFavour.note)}</p>` : ''}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
       }).join('')}</div>${globalBlock()}`;
   }
   // 2.9.19: total rupee risk to the current stops over the trades with a quantity entered.
@@ -516,9 +532,9 @@
     if (!rows.length) return '<div class="empty">Sector data appears once prices are tracked.</div>';
     const max = Math.max(10, ...rows.map(r => Math.abs(num(r.relativeToMarket) ?? 0)));
     const bar = v => { const n = num(v); if (n === null) return '—'; const w = Math.abs(n) / max * 50; return `<div class="bar" title="${pct(n)} vs market"><i style="left:${n >= 0 ? 50 : 50 - w}%;width:${w}%;background:${n >= 0 ? 'var(--gain)' : 'var(--loss)'}"></i><i style="left:50%;width:1px;background:var(--ink-3)"></i></div>`; };
-    return `<p class="note">Tailwind combines how tracked peers moved over 3 months versus the whole universe, and how many peers that already reported had strong earnings. Checklist: five sector questions (demand, orders &amp; capex, earnings, peer confirmation, market strength), scored only where the data exists; tap a sector for details.</p>
-      <div class="tscroll"><table><thead><tr><th>Sector</th><th class="hide-sm">3-month vs market</th><th class="r">Relative</th><th class="r hide-sm">Reported</th><th class="r hide-sm">Strong</th><th class="r">Checklist</th><th>Tailwind</th></tr></thead><tbody>
-      ${rows.map(r => `<tr class="srow" role="button" tabindex="0" data-sector="${esc(r.sector)}" aria-expanded="${S.open.has('sector:' + r.sector)}"><td><span class="chev-s" aria-hidden="true">${S.open.has('sector:' + r.sector) ? '▾' : '▸'}</span> ${esc(r.sector)} <span class="meta">(${r.stocks})</span></td><td class="hide-sm">${bar(r.relativeToMarket)}</td><td class="r n ${cls(r.relativeToMarket)}">${pct(r.relativeToMarket)}</td><td class="r n hide-sm">${r.declared}</td><td class="r n hide-sm">${r.strongResults}</td><td class="r n">${r.checklist && r.checklist.measured ? `${r.checklist.score}/${r.checklist.measured}` : '—'}</td><td>${r.tailwind ? `<span class="tag ${TAIL_TONE[r.tailwind] || ''}">${r.tailwind.toLowerCase()}</span>` : '—'}</td></tr>${S.open.has('sector:' + r.sector) ? `<tr class="sdetail"><td colspan="7">${r.checklist ? `<div class="td"><div class="td-h"><b>Sector checklist</b> <span class="meta">${r.checklist.score} of ${r.checklist.measured} measured pass</span></div>${checklistChips(r.checklist)}</div>` : ''}${sectorPeers(r.sector)}</td></tr>` : ''}`).join('')}
+    return `<p class="note">Tailwind combines how tracked peers moved over 3 months versus the whole universe, and how many peers that already reported had strong earnings. Checklist: five sector questions (demand, orders &amp; capex, earnings, peer confirmation, market strength), scored only where the data exists. Favour: five signs a sector is losing favour (relative weakness, poor reaction to good results, failed breakouts, shrinking participation, paying less for growth); "out of favour" with growing results is sentiment, "deteriorating" means results are weakening too. Tap a sector for details.</p>
+      <div class="tscroll"><table class="sectbl"><thead><tr><th>Sector</th><th class="hide-sm">3-month vs market</th><th class="r">Relative</th><th>Favour</th><th class="r hide-sm">Reported</th><th class="r hide-sm">Strong</th><th class="r">Checklist</th><th class="hide-sm">Tailwind</th></tr></thead><tbody>
+      ${rows.map(r => `<tr class="srow" role="button" tabindex="0" data-sector="${esc(r.sector)}" aria-expanded="${S.open.has('sector:' + r.sector)}"><td><span class="chev-s" aria-hidden="true">${S.open.has('sector:' + r.sector) ? '▾' : '▸'}</span> ${esc(r.sector)} <span class="meta">(${r.stocks})</span></td><td class="hide-sm">${bar(r.relativeToMarket)}</td><td class="r n ${cls(r.relativeToMarket)}">${pct(r.relativeToMarket)}</td><td>${favTag(r.favour)}</td><td class="r n hide-sm">${r.declared}</td><td class="r n hide-sm">${r.strongResults}</td><td class="r n">${r.checklist && r.checklist.measured ? `${r.checklist.score}/${r.checklist.measured}` : '—'}</td><td class="hide-sm">${r.tailwind ? `<span class="tag ${TAIL_TONE[r.tailwind] || ''}">${r.tailwind.toLowerCase()}</span>` : '—'}</td></tr>${S.open.has('sector:' + r.sector) ? `<tr class="sdetail"><td colspan="8">${favourBlock(r.favour)}${r.checklist ? `<div class="td"><div class="td-h"><b>Sector checklist</b> <span class="meta">${r.checklist.score} of ${r.checklist.measured} measured pass</span></div>${checklistChips(r.checklist)}</div>` : ''}${sectorPeers(r.sector)}</td></tr>` : ''}`).join('')}
       </tbody></table></div>`;
   }
 
@@ -566,7 +582,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.19';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.20';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

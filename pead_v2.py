@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.19"
+ENGINE_VERSION = "2.9.20"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5059,6 +5059,7 @@ def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, A
         except Exception as exc:
             print(f"Holdings watch view {p_['symbol']} failed: {type(exc).__name__}: {exc}")
         view["notes"] = (notes.get("symbols") or {}).get(str(p_["symbol"]).upper())
+        view["sectorFavour"] = ((it or {}).get("plus") or {}).get("favour")   # 2.9.20
         views.append(view)
     json_dump_atomic(POSITIONS_STATE_PATH, state)
     return views
@@ -6630,7 +6631,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
-PLUS_VERSION = "2.9.17"   # bump to rebuild every stored chart/price analytic once
+PLUS_VERSION = "2.9.20"   # bump to rebuild every stored chart/price analytic once
 
 
 def replay_plus(store: EventStore) -> int:
@@ -7205,6 +7206,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
     regime.update(pead_plus.market_internals(items, internals, now_ist().date()))
     pead_plus.peer_context(items, regime)
     pead_plus.sector_checklists(items, sectors, now_ist().date())   # 2.9.8
+    pead_plus.sector_favour(items, sectors, regime, now_ist().date())   # 2.9.20
     try:
         positions = position_views(items, now_ist().date())         # 2.9.12
     except Exception as exc:

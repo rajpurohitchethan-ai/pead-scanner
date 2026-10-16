@@ -1262,3 +1262,77 @@ class RunupScorecardTests(unittest.TestCase):
         self.assertAlmostEqual(r["Above 20% (extended)"]["avgDrift"], -5.0, places=2)
         warm = r["10% to 20% (warm)"]
         self.assertEqual((warm["n"], warm["avgDrift"], warm["winRate"]), (1, 0.0, 0.0))
+
+
+class SectorFavourTests(unittest.TestCase):
+    """2.9.20: "How to know when a sector is out of favour" (@SureshKBN)."""
+
+    def _frame(self, closes):
+        import pandas as pd
+        n = len(closes)
+        return pd.DataFrame({"Date": pd.bdate_range("2025-06-02", periods=n), "Open": closes, "High": closes,
+                             "Low": closes, "Close": closes, "Volume": [1000] * n})
+
+    def test_failed_breakout_and_52w_highs(self):
+        import pead_plus as pp
+        base = [100.0 + (i % 5) * 0.1 for i in range(180)]
+        # breaks out 10 sessions ago to 120, then sinks to 110 (> 5% under the peak)
+        failed = base[:170] + [120.0, 119.0, 116.0, 113.0, 112.0, 111.0, 110.5, 110.0, 110.0, 110.0]
+        f = pp.favour_signals(pp._clean(self._frame(failed)))
+        self.assertTrue(f["breakout_recent"])
+        self.assertTrue(f["breakout_failed"])
+        self.assertTrue(f["nh52_recent"])
+        held = base[:170] + [120.0, 121.0, 122.0, 121.5, 122.5, 123.0, 122.0, 123.5, 124.0, 124.5]
+        self.assertFalse(pp.favour_signals(pp._clean(self._frame(held)))["breakout_failed"])
+        flat = pp.favour_signals(pp._clean(self._frame(base)))
+        self.assertFalse(flat["breakout_recent"])
+        self.assertIsNone(flat["breakout_failed"])
+        short = pp.favour_signals(pp._clean(self._frame(base[:100])))
+        self.assertIsNone(short["nh52_recent"])                     # < 160 sessions: unknown, not False
+
+    def _item(self, sym, r21, r63, *, strong=None, react=None, ema_above=True, bo=None, bof=None, nhr=False, nhp=False):
+        return {"symbol": sym, "resultsReleased": strong is not None,
+                "priceContext": {"lastClose": 100.0, "resultDayPct": react},
+                "plus": {"sectorKey": "S", "strength": strong, "liquidity": {"pass": True},
+                         "price": {"last_session": "2026-10-16", "ret_21d_pct": r21, "ret_63d_pct": r63,
+                                   "ema63": 90.0 if ema_above else 110.0, "breakout_recent": bo, "breakout_failed": bof,
+                                   "nh52_recent": nhr, "nh52_prior": nhp}}}
+
+    def test_out_of_favour_vs_deteriorating_vs_in_favour(self):
+        import pead_plus as pp
+        from datetime import date
+        reg = {"ret20dPct": -1.7, "ret63dPct": -4.6}
+        weak = [self._item(f"W{i}", -8, -15, strong="STRONG", react=-2, ema_above=False, bo=True, bof=True,
+                           nhr=False, nhp=True) for i in range(6)]
+        sectors = {"S": {"checklist": {"reported": 6, "medianRevenueYoY": 15.0, "medianProfitYoY": 25.0}}}
+        pp.sector_favour(weak, sectors, reg, date(2026, 10, 16))
+        f = sectors["S"]["favour"]
+        self.assertEqual(f["status"], "OUT_OF_FAVOUR")
+        self.assertEqual(f["fundamentals"], "ok")
+        self.assertEqual({s["key"]: s["status"] for s in f["signals"]},
+                         {"relative": "bad", "reaction": "bad", "breakouts": "bad", "participation": "bad", "valuation": "bad"})
+        self.assertEqual(weak[0]["plus"]["favour"]["status"], "OUT_OF_FAVOUR")
+        sectors = {"S": {"checklist": {"reported": 6, "medianRevenueYoY": -4.0, "medianProfitYoY": -12.0}}}
+        pp.sector_favour(weak, sectors, reg, date(2026, 10, 16))
+        self.assertEqual(sectors["S"]["favour"]["status"], "DETERIORATING")
+        strong = [self._item(f"G{i}", 4, 6, strong="STRONG", react=5, bo=True, bof=False, nhr=True, nhp=True) for i in range(6)]
+        sectors = {"S": {"checklist": {"reported": 6, "medianRevenueYoY": 15.0, "medianProfitYoY": 25.0}}}
+        pp.sector_favour(strong, sectors, reg, date(2026, 10, 16))
+        self.assertEqual(sectors["S"]["favour"]["status"], "IN_FAVOUR")
+
+    def test_strong_sector_with_some_failed_breakouts_is_not_out_of_favour(self):
+        # Capital Goods 16 Oct: beating the index but 11 of 16 breakouts failed -> NEUTRAL, not out of favour.
+        import pead_plus as pp
+        from datetime import date
+        rows = [self._item(f"C{i}", 2, 6, bo=True, bof=(i < 4), ema_above=(i % 2 == 0)) for i in range(6)]
+        sectors = {"S": {"checklist": {"reported": 6, "medianRevenueYoY": 30.0, "medianProfitYoY": 44.0}}}
+        pp.sector_favour(rows, sectors, {"ret20dPct": -1.7, "ret63dPct": -4.6}, date(2026, 10, 16))
+        self.assertEqual(sectors["S"]["favour"]["status"], "NEUTRAL")
+
+    def test_too_little_data(self):
+        import pead_plus as pp
+        from datetime import date
+        rows = [self._item("A", 1, 1)]
+        sectors = {"S": {}}
+        pp.sector_favour(rows, sectors, {}, date(2026, 10, 16))
+        self.assertEqual(sectors["S"]["favour"]["status"], "NOT_ENOUGH")

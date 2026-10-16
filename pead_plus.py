@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.19"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.20"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -249,6 +249,7 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
             "q1_max_gain_pct": _r2(_pct(seg.max(), q_pre)),
             "q1_sustained": bool(_num(close.iloc[end_i]) >= (q_close or 0)) if q_close else None,
         })
+    out.update(favour_signals(f))                  # 2.9.20
     out["pressure"] = selling_pressure(f)          # 2.9.15
     out["chart"] = _chart(f, chart_marker)
     return out
@@ -531,10 +532,12 @@ def market_regime(index_closes: list[float] | None) -> dict[str, Any]:
         ret20 = _pct(last, closes[-21])
         label = "RISK-ON" if last >= dma50 else "RISK-OFF"
         return {"label": label, "last": _r2(last), "dma50": _r2(dma50), "dma200": None, "ret20dPct": _r2(ret20),
+                "ret63dPct": _r2(_pct(last, closes[-64])) if len(closes) >= 64 else None,
                 "note": ("Index above its 50 DMA (200 DMA needs more history)." if label == "RISK-ON"
                          else "Index below its 50 DMA (200 DMA needs more history); size down.")}
     dma200 = sum(closes[-200:]) / 200
     ret20 = _pct(last, closes[-21])
+    ret63 = _pct(last, closes[-64]) if len(closes) >= 64 else None
     if last >= dma50 and last >= dma200:
         label = "RISK-ON"
     elif last < dma50 and last < dma200:
@@ -542,6 +545,7 @@ def market_regime(index_closes: list[float] | None) -> dict[str, Any]:
     else:
         label = "MIXED"
     return {"label": label, "last": _r2(last), "dma50": _r2(dma50), "dma200": _r2(dma200), "ret20dPct": _r2(ret20),
+            "ret63dPct": _r2(ret63),
             "note": {"RISK-ON": "Index above 50 & 200 DMA: PEAD tends to work best.",
                      "MIXED": "Index between its 50 and 200 DMA: be selective.",
                      "RISK-OFF": "Index below 50 & 200 DMA: PEAD drifts fail more often; size down."}[label]}
@@ -1494,6 +1498,160 @@ def sector_checklists(items: list[dict[str, Any]], sectors: dict[str, dict[str, 
 # stop = 1% under the result-day low until +1R, then cost, then trail the
 # 21 EMA (swing) / 63 EMA (position). A stop never moves down. Close basis.
 # ---------------------------------------------------------------------------
+
+FAVOUR_LABELS = {"IN_FAVOUR": "In favour", "NEUTRAL": "Neutral", "OUT_OF_FAVOUR": "Out of favour (fundamentals fine)",
+                 "DETERIORATING": "Fundamentals deteriorating", "NOT_ENOUGH": "Not enough data"}
+
+
+def sector_favour(items: list[dict[str, Any]], sectors: dict[str, dict[str, Any]], regime: dict[str, Any] | None,
+                  today: date) -> None:
+    """2.9.20, after @SureshKBN's "How to know when a sector is out of favour".
+    Five price signals per sector (liquid stocks with prices <= 20 days old):
+    1 relative weakness (median 1M / 3M move vs NIFTY 500), 2 good results,
+    poor reaction (STRONG reporters whose result-day move was <= 0), 3 failed
+    breakouts (new 3-month high in the last 20 sessions, now > 5% under the
+    peak), 4 participation (52-week highs now vs the 20 sessions before; share
+    above the 63-day EMA), 5 valuation compression proxy (median profit growth
+    > 10% while the median 3-month move is negative; real P/E history has no
+    free source). Fundamentals from the sector checklist (median revenue /
+    profit YoY). Status: OUT_OF_FAVOUR (prices weak, fundamentals fine or
+    unknown) / DETERIORATING (prices and results weak) when two signals are
+    bad, or three are bad/warn including relative strength; IN_FAVOUR when
+    relative strength is ok and at most one other warns; else NEUTRAL.
+    Adds sectors[name]["favour"] and plus.favour per company. Display only."""
+    reg = regime or {}
+    idx1, idx3 = _num(reg.get("ret20dPct")), _num(reg.get("ret63dPct"))
+    by: dict[str, list[dict[str, Any]]] = {}
+    for it in items:
+        key = (it.get("plus") or {}).get("sectorKey")
+        if key:
+            by.setdefault(key, []).append(it)
+
+    def fresh(it):
+        px = (it.get("plus") or {}).get("price") or {}
+        try:
+            return (today - date.fromisoformat(str(px.get("last_session"))[:10])).days <= 20
+        except ValueError:
+            return False
+
+    def liquid(it):
+        return ((it.get("plus") or {}).get("liquidity") or {}).get("pass") is not False
+
+    for name, members in by.items():
+        priced = [it for it in members if liquid(it) and fresh(it)]
+        px = lambda it: (it.get("plus") or {}).get("price") or {}
+        sig: list[dict[str, Any]] = []
+
+        # 1 Relative weakness
+        m1 = _median([_num(px(it).get("ret_21d_pct")) for it in priced])
+        m3 = _median([_num(px(it).get("ret_63d_pct")) for it in priced])
+        if len(priced) >= 4 and m1 is not None and m3 is not None and idx1 is not None:
+            r1 = m1 - idx1
+            r3 = (m3 - idx3) if idx3 is not None else None
+            lag = [x for x in (r1, r3) if x is not None]
+            st = "bad" if all(x <= -3 for x in lag) else "warn" if any(x <= -2 for x in lag) else "ok"
+            sig.append({"key": "relative", "label": "Relative strength", "status": st,
+                        "note": f"Median move 1M {m1:+.1f}% vs NIFTY 500 {idx1:+.1f}%"
+                                + (f"; 3M {m3:+.1f}% vs {idx3:+.1f}%." if r3 is not None else ".")})
+        else:
+            sig.append({"key": "relative", "label": "Relative strength", "status": "na", "note": "Too few priced stocks or no index data."})
+
+        # 2 Good results, poor reaction
+        strong = [it for it in members if it.get("resultsReleased") and liquid(it)
+                  and (it.get("plus") or {}).get("strength") == "STRONG"
+                  and _num((it.get("priceContext") or {}).get("resultDayPct")) is not None]
+        if len(strong) >= 3:
+            weak = [it for it in strong if _num(it["priceContext"]["resultDayPct"]) <= 0]
+            sh = len(weak) / len(strong)
+            st = "bad" if sh >= 0.5 else "warn" if sh >= 0.34 else "ok"
+            sig.append({"key": "reaction", "label": "Reaction to good results", "status": st,
+                        "note": f"{len(weak)} of {len(strong)} companies with strong results fell or stayed flat on the result day"
+                                + (f" ({', '.join(str(it.get('symbol')) for it in weak[:4])})." if weak else ".")})
+        else:
+            sig.append({"key": "reaction", "label": "Reaction to good results", "status": "na",
+                        "note": f"Only {len(strong)} liquid compan{'y has' if len(strong) == 1 else 'ies have'} strong results with a measured reaction."})
+
+        # 3 Failed breakouts
+        bos = [it for it in priced if px(it).get("breakout_recent")]
+        if len(bos) >= 3:
+            failed = [it for it in bos if px(it).get("breakout_failed")]
+            sh = len(failed) / len(bos)
+            st = "bad" if sh >= 0.5 else "warn" if sh >= 0.34 else "ok"
+            sig.append({"key": "breakouts", "label": "Breakouts holding", "status": st,
+                        "note": f"{len(failed)} of {len(bos)} stocks that made a new 3-month high in the last 20 sessions are now more than 5% below their peak."})
+        else:
+            sig.append({"key": "breakouts", "label": "Breakouts holding", "status": "na",
+                        "note": f"Only {len(bos)} new 3-month high{'s' if len(bos) != 1 else ''} in the last 20 sessions."})
+
+        # 4 Participation
+        long_hist = [it for it in priced if px(it).get("nh52_recent") is not None]
+        above = [it for it in priced if _num(px(it).get("ema63")) is not None
+                 and _num((it.get("priceContext") or {}).get("lastClose")) is not None]
+        if len(above) >= 4:
+            share = sum(_num(it["priceContext"]["lastClose"]) > _num(px(it)["ema63"]) for it in above) / len(above) * 100
+            now = sum(bool(px(it).get("nh52_recent")) for it in long_hist)
+            before = sum(bool(px(it).get("nh52_prior")) for it in long_hist)
+            shrinking = before >= 3 and now < before * 0.5
+            st = "bad" if shrinking or share < 30 else "warn" if (before >= 3 and now < before) or share < 50 else "ok"
+            sig.append({"key": "participation", "label": "Participation", "status": st,
+                        "note": f"{now} at 52-week highs in the last 20 sessions vs {before} in the 20 before; "
+                                f"{share:.0f}% of {len(above)} above their 63-day average."})
+        else:
+            sig.append({"key": "participation", "label": "Participation", "status": "na", "note": "Too few priced stocks."})
+
+        # 5 Valuation compression (proxy)
+        cl = (sectors.get(name) or {}).get("checklist") or {}
+        mp, mr = _num(cl.get("medianProfitYoY")), _num(cl.get("medianRevenueYoY"))
+        reported = cl.get("reported") or 0
+        if reported >= 3 and mp is not None and m3 is not None:
+            st = "bad" if mp > 10 and m3 <= -8 else "warn" if mp > 10 and m3 < 0 else "ok"
+            sig.append({"key": "valuation", "label": "Paying for growth", "status": st,
+                        "note": f"Median profit growth {mp:+.1f}% while the median 3-month move is {m3:+.1f}%"
+                                + (" (investors paying less for the same growth)." if st != "ok" else ".")
+                                + " Rough proxy: no free P/E history."})
+        else:
+            sig.append({"key": "valuation", "label": "Paying for growth", "status": "na",
+                        "note": "Not enough reports yet. Rough proxy only: no free P/E history."})
+
+        # Fundamentals
+        if reported >= 3 and mr is not None and mp is not None:
+            fund = "weak" if (mr < 0 or mp < 0) else "ok"
+            fnote = f"Median revenue {mr:+.1f}%, profit {mp:+.1f}% YoY ({reported} liquid reporters)."
+        else:
+            fund, fnote = "na", "Results not known yet (fewer than 3 liquid reporters)."
+
+        measured = [x for x in sig if x["status"] != "na"]
+        bad = sum(x["status"] == "bad" for x in measured)
+        warn = sum(x["status"] == "warn" for x in measured)
+        rel_st = sig[0]["status"]
+        if len(measured) < 2:
+            status = "NOT_ENOUGH"
+        elif bad >= 2 or (bad + warn >= 3 and rel_st in ("warn", "bad")):
+            # Relative weakness has to agree unless two signals are clearly bad.
+            status = "DETERIORATING" if fund == "weak" else "OUT_OF_FAVOUR"
+        elif bad == 0 and warn <= 1 and rel_st == "ok":
+            status = "IN_FAVOUR" if fund != "weak" else "NEUTRAL"
+        else:
+            status = "NEUTRAL"
+        if status == "OUT_OF_FAVOUR":
+            note = ("Prices are losing favour while results still grow: sentiment, not fundamentals; can turn into an opportunity later."
+                    if fund == "ok" else "Prices are losing favour; results not known yet.")
+        elif status == "DETERIORATING":
+            note = "Prices and results are both weakening: higher risk."
+        elif status == "IN_FAVOUR":
+            note = "No sign of the sector losing favour."
+        elif status == "NOT_ENOUGH":
+            note = "Not enough data to judge."
+        else:
+            note = "Some signs of fading interest; watch how stocks react to good news."
+        fav = {"status": status, "label": FAVOUR_LABELS[status], "note": note, "bad": bad, "warn": warn,
+               "measured": len(measured), "fundamentals": fund, "fundamentalsNote": fnote, "signals": sig}
+        if name in sectors:
+            sectors[name]["favour"] = fav
+        for it in members:
+            it.setdefault("plus", {})["favour"] = {"status": status, "label": FAVOUR_LABELS[status], "note": note,
+                                                   "sector": name, "bad": bad, "warn": warn, "measured": len(measured)}
+
 def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[str, Any] | None,
                   today: date) -> tuple[dict[str, Any], dict[str, Any]]:
     """Returns (view for the page, updated state to persist)."""
@@ -1655,6 +1813,37 @@ def parse_deal_rows(rows: list[dict[str, Any]], kind: str, symbols: set[str]) ->
                         "client": str(r.get("BD_CLIENT_NAME") or "").strip() or None,
                         "side": str(r.get("BD_BUY_SELL") or "").strip().upper() or None,
                         "qty": _num(r.get("BD_QTY_TRD")), "price": _num(r.get("BD_TP_WATP"))})
+    return out
+
+
+def favour_signals(f: Any) -> dict[str, Any]:
+    """2.9.20 per-stock inputs for the sector favour check (closing prices):
+    breakout_recent: a close above the previous 63 sessions' highest close
+      within the last 20 sessions; breakout_failed: since then the last close
+      is > 5% below the highest close after that breakout.
+    nh52_recent / nh52_prior: a close at a 52-week (252-session) high in the
+      last 20 sessions / in the 20 before those (needs >= 160 sessions)."""
+    out: dict[str, Any] = {"breakout_recent": None, "breakout_failed": None, "nh52_recent": None, "nh52_prior": None}
+    if f is None or len(f) < 84:
+        return out
+    c = [_num(x) for x in f["Close"].tolist()]
+    n = len(c)
+    bo = None
+    for i in range(max(63, n - 20), n):
+        prior = [x for x in c[i - 63:i] if x is not None]
+        if c[i] is not None and prior and c[i] > max(prior):
+            bo = i
+            break
+    out["breakout_recent"] = bo is not None
+    if bo is not None:
+        peak = max(x for x in c[bo:] if x is not None)
+        out["breakout_failed"] = bool(c[-1] is not None and c[-1] < peak * 0.95)
+    if n >= 160:
+        def at_high(i):
+            w = [x for x in c[max(0, i - 251):i + 1] if x is not None]
+            return c[i] is not None and w and c[i] >= max(w)
+        out["nh52_recent"] = any(at_high(i) for i in range(n - 20, n))
+        out["nh52_prior"] = any(at_high(i) for i in range(n - 40, n - 20))
     return out
 
 
