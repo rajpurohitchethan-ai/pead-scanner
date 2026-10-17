@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE608A01012|2026-09-30",
   "createdAt": "2026-10-14T12:49:37Z",
-  "updatedAt": "2026-10-17T12:58:47Z",
+  "updatedAt": "2026-10-17T13:51:03Z",
   "security": {
     "symbol": "PSB",
     "nseSymbol": "PSB",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-15T02:44:01Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-17T13:37:08Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-17T13:51:03Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-17",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-17T12:48:40Z",
+      "fetchedAt": "2026-10-17T13:44:44Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-2c79055cf9d7b271.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c8a029b483c87aca.json",
       "note": null
     },
     "reaction_session": {
@@ -226,6 +236,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE608A01012_2026-09-30/integrated_filings-c9621d04cbe1f9be.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-17T13:37:08Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c8a029b483c87aca.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-17T18:45:19.487000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-17T13:37:08Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c8a029b483c87aca.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-17T13:37:08Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c8a029b483c87aca.json",
+      "note": null
     }
   },
   "fetch": {
@@ -244,15 +281,15 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-16T10:45:50Z",
-      "lastSuccess": "2026-10-16T10:45:50Z",
+      "lastAttempt": "2026-10-17T13:45:04Z",
+      "lastSuccess": "2026-10-17T13:45:04Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE608A01012_2026-09-30/integrated_filings-c9621d04cbe1f9be.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-16T10:45:50Z",
-      "lastSuccess": "2026-10-16T10:45:50Z",
+      "lastAttempt": "2026-10-17T13:45:04Z",
+      "lastSuccess": "2026-10-17T13:45:04Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE608A01012_2026-09-30/integrated_filings-c9621d04cbe1f9be.json"
@@ -270,27 +307,61 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-17T13:45:06Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE608A01012_2026-09-30/results_comparison-2e1879ac76b3ee7b.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-17T13:45:08Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE608A01012_2026-09-30/results_snapshot-f4f2842ce85704a9.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-17T13:45:08Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "PSB.NS: RuntimeError: latest statement does not match event quarter; 533295.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-17T13:45:10Z",
+      "lastSuccess": "2026-10-17T13:45:10Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE608A01012_2026-09-30/announcements-1060ad1d1b391fe4.json"
     }
   },
   "derived": {
     "score": 25,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -298,13 +369,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -348,8 +419,8 @@
         "stocks": 169,
         "momentum63dMedian": -5.94,
         "relativeToMarket": -1.04,
-        "declared": 30,
-        "strongResults": 18,
+        "declared": 31,
+        "strongResults": 19,
         "avgReaction": 0.0,
         "tailwind": "POSITIVE"
       },
@@ -398,7 +469,16 @@
         }
       },
       "deliveryPct": 41.34,
-      "concall": null,
+      "concall": {
+        "status": "SCHEDULED",
+        "callDate": null,
+        "noticeUrl": "https://nsearchives.nseindia.com/corporate/PSB_14102026183504_bsense14102026am.pdf",
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-17",
+        "pendingUntil": "2026-10-19",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/PSB/",
@@ -648,7 +728,7 @@
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-16T10:45:50Z",
+    "fetchedAt": "2026-10-17T13:45:04Z",
     "v": 2,
     "rows": [
       {
@@ -700,5 +780,36 @@
         "filedAt": "2025-04-29T22:31:15+05:30"
       }
     ]
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-17T18:45:19.487000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Reviewed / Unaudited Financial Results of the Bank for the Quarter (Q2) / Half Year ended September 30, 2026 Punjab & Sind Bank - 533295 - Reviewed / Unaudited Financial Results Of The Bank For The Quarter (Q2) / Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c8a029b483c87aca.json",
+      "seenAt": "2026-10-17T13:51:01Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-17T13:45:08Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "SCHEDULED",
+    "callDate": null,
+    "noticeUrl": "https://nsearchives.nseindia.com/corporate/PSB_14102026183504_bsense14102026am.pdf",
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-17",
+    "pendingUntil": "2026-10-19",
+    "source": "NSE_ANNOUNCEMENTS"
   }
 }
