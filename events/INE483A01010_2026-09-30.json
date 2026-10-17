@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE483A01010|2026-09-30",
   "createdAt": "2026-10-12T11:31:44Z",
-  "updatedAt": "2026-10-17T07:52:01Z",
+  "updatedAt": "2026-10-17T08:51:19Z",
   "security": {
     "symbol": "CENTRALBK",
     "nseSymbol": "CENTRALBK",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-12T16:34:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-17T08:38:57Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-17T08:51:19Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-17",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-17T07:44:30Z",
+      "fetchedAt": "2026-10-17T08:44:39Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-dd62698601210301.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-cb3e445033dd7f3f.json",
       "note": null
     },
     "reaction_session": {
@@ -226,6 +236,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE483A01010_2026-09-30/integrated_filings-491d98a76f40dd68.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-17T08:38:57Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-cb3e445033dd7f3f.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-17T13:28:27.350000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-17T08:38:57Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-cb3e445033dd7f3f.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-17T08:38:57Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-cb3e445033dd7f3f.json",
+      "note": null
     }
   },
   "fetch": {
@@ -251,15 +288,15 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-12T11:36:43Z",
-      "lastSuccess": "2026-10-12T11:36:43Z",
+      "lastAttempt": "2026-10-17T08:45:27Z",
+      "lastSuccess": "2026-10-17T08:45:27Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE483A01010_2026-09-30/integrated_filings-491d98a76f40dd68.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-12T11:36:43Z",
-      "lastSuccess": "2026-10-12T11:36:43Z",
+      "lastAttempt": "2026-10-17T08:45:27Z",
+      "lastSuccess": "2026-10-17T08:45:27Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE483A01010_2026-09-30/integrated_filings-491d98a76f40dd68.json"
@@ -284,27 +321,61 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-17T08:45:29Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE483A01010_2026-09-30/results_comparison-379d2f260502981c.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-17T08:45:31Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE483A01010_2026-09-30/results_snapshot-c708628350de0939.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-17T08:45:31Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "CENTRALBK.NS: RuntimeError: latest statement does not match event quarter; 532885.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-17T08:45:33Z",
+      "lastSuccess": "2026-10-17T08:45:33Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE483A01010_2026-09-30/announcements-7e5ff63b1e354e75.json"
     }
   },
   "derived": {
     "score": 28,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -312,13 +383,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -361,8 +432,8 @@
         "sector": "Financial Services",
         "stocks": 167,
         "momentum63dMedian": -5.91,
-        "relativeToMarket": -0.94,
-        "declared": 27,
+        "relativeToMarket": -0.98,
+        "declared": 28,
         "strongResults": 16,
         "avgReaction": 0.0,
         "tailwind": "NEUTRAL"
@@ -412,7 +483,15 @@
         }
       },
       "deliveryPct": 40.65,
-      "concall": null,
+      "concall": {
+        "status": "SCHEDULED",
+        "callDate": "2026-10-19",
+        "noticeUrl": "https://nsearchives.nseindia.com/corporate/CENTRALBK_14102026171347_SE_Intimation.pdf",
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-17",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/CENTRALBK/",
@@ -663,7 +742,7 @@
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-12T11:36:43Z",
+    "fetchedAt": "2026-10-17T08:45:27Z",
     "v": 2,
     "rows": [
       {
@@ -775,5 +854,35 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:CENTRALBK|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-17T13:28:27.350000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial Results of the Bank (Standalone & Consolidated) for the Second Quarter and Half Year ended 30th September, 2026 Central Bank of India - 532885 - Unaudited Financial Results Of The Bank (Standalone & Consolidated) For The Second Quarter And Half Year Ended 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-cb3e445033dd7f3f.json",
+      "seenAt": "2026-10-17T08:51:17Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-17T08:45:31Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "SCHEDULED",
+    "callDate": "2026-10-19",
+    "noticeUrl": "https://nsearchives.nseindia.com/corporate/CENTRALBK_14102026171347_SE_Intimation.pdf",
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-17",
+    "source": "NSE_ANNOUNCEMENTS"
+  }
 }
