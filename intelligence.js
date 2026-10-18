@@ -102,7 +102,9 @@
     const closes = (c?.close || []).map(num);
     if (closes.filter(v => v !== null).length < 5) return '<p class="meta">Price chart pending.</p>';
     const plan = P(it).plan || {};
-    const W = 340, H = h, pad = 6;
+    const vols = (c.volume || []).map(num);
+    const VB = vols.filter(v => v).length >= 5 ? 22 : 0;     // 2.9.23: volume strip under the price
+    const W = 340, H = h + VB, pad = 6;
     const ema = (c.ema21 || []).map(num);
     const levels = [num(plan.entry), num(plan.sl)].filter(v => v !== null);
     const all = closes.concat(ema).concat(levels).filter(v => v !== null);
@@ -110,10 +112,21 @@
     if (hi === lo) { hi += 1; lo -= 1; }
     const span = hi - lo; lo -= span * 0.06; hi += span * 0.06;
     const xs = i => pad + i * (W - 2 * pad) / Math.max(1, closes.length - 1);
-    const ys = v => H - pad - (v - lo) / (hi - lo) * (H - 2 * pad);
+    const ys = v => h - pad - (v - lo) / (hi - lo) * (h - 2 * pad);
     const path = arr => arr.map((v, i) => v === null ? null : `${xs(i).toFixed(1)},${ys(v).toFixed(1)}`).filter(Boolean).join(' ');
     let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(it.symbol)} price chart">`;
-    for (let k = 1; k < 4; k++) svg += `<line x1="0" x2="${W}" y1="${(H * k / 4).toFixed(1)}" y2="${(H * k / 4).toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`;
+    for (let k = 1; k < 4; k++) svg += `<line x1="0" x2="${W}" y1="${(h * k / 4).toFixed(1)}" y2="${(h * k / 4).toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`;
+    if (VB) {
+      const vmax = Math.max(...vols.filter(v => v)), bw = Math.max(1.5, (W - 2 * pad) / closes.length - 1);
+      vols.forEach((v, i) => {
+        if (!v) return;
+        const prior = vols.slice(Math.max(0, i - 20), i).filter(x => x);
+        const avg = prior.length >= 5 ? prior.reduce((a, b) => a + b, 0) / prior.length : null;
+        const hot = avg && v >= 2 * avg;
+        const vh = Math.max(1, v / vmax * (VB - 3));
+        svg += `<rect x="${(xs(i) - bw / 2).toFixed(1)}" y="${(H - vh).toFixed(1)}" width="${bw.toFixed(1)}" height="${vh.toFixed(1)}" fill="${hot ? 'var(--act)' : 'var(--ink-3)'}" opacity="${hot ? '.85' : '.35'}"/>`;
+      });
+    }
     if (num(plan.sl) !== null && num(plan.entry) !== null) {
       const y1 = ys(plan.entry), y2 = ys(plan.sl);
       svg += `<rect x="0" y="${Math.min(y1, y2).toFixed(1)}" width="${W}" height="${Math.abs(y2 - y1).toFixed(1)}" fill="var(--loss)" opacity=".07"/>`;
@@ -127,7 +140,7 @@
     const li = closes.length - 1;
     if (closes[li] !== null) svg += `<circle cx="${xs(li)}" cy="${ys(closes[li])}" r="3.2" fill="var(--price)"/>`;
     svg += '</svg>';
-    const legend = `<div class="legend"><span><i></i>Close</span><span><i class="lm"></i>21 EMA</span>${ri !== null ? '<span><i style="background:var(--watch)"></i>Result day</span>' : ''}${num(plan.entry) !== null ? '<span><i class="le"></i>Entry</span>' : ''}${num(plan.sl) !== null ? '<span><i class="ls"></i>Stop</span>' : ''}</div>`;
+    const legend = `<div class="legend"><span><i></i>Close</span><span><i class="lm"></i>21 EMA</span>${ri !== null ? '<span><i style="background:var(--watch)"></i>Result day</span>' : ''}${num(plan.entry) !== null ? '<span><i class="le"></i>Entry</span>' : ''}${num(plan.sl) !== null ? '<span><i class="ls"></i>Stop</span>' : ''}${VB ? '<span><i style="background:var(--act)"></i>Volume ≥2x avg</span>' : ''}</div>`;
     return svg + legend;
   }
 
@@ -179,6 +192,25 @@
     const sec = (S.data.sectors || []).find(r => r.sector === f.sector);
     return favourBlock(sec?.favour, `Sector favour: ${f.sector}`).replace('<ul class="td-notes">', '<details class="td-more"><summary>What each signal found</summary><ul class="td-notes">').replace(/<\/ul><p class="meta">/, '</ul></details><p class="meta">');
   }
+  // 2.9.23: one folded row for the sector-level blocks (they repeat across every
+  // stock of a sector); the company's own execution line stays visible.
+  function sectorCompact(it) {
+    const name = P(it).sectorKey, sec = (S.data.sectors || []).find(r => r.sector === name);
+    const cl = sec?.checklist, fav = P(it).favour, ex = P(it).execution, rs = P(it).rsSector;
+    if (!cl && !fav && !rs) return '';
+    const EX = { AHEAD: ['Ahead of sector', 'go'], BEHIND: ['Behind sector', 'bad'], MIXED: ['In line / mixed', 'watch'] };
+    const e = ex?.label ? EX[ex.label] : null;
+    const pills = [cl && cl.measured ? `<span class="tag">Checklist ${cl.score}/${cl.measured}</span>` : '',
+      fav && fav.status !== 'NOT_ENOUGH' ? favTag(fav) : '', e ? `<span class="tag ${e[1]}">${e[0]}</span>` : ''].filter(Boolean).join(' ');
+    return `${rsLine(it)}<details class="td sect-c"><summary><b>Sector</b> <span class="meta">${esc(name || '—')}</span> ${pills}</summary>
+      ${sectorFavourLine(it)}${sectorChecklist(it)}</details>`;
+  }
+  // 2.9.23: relative strength against the stock's own sector index (1 week / 1 month).
+  function rsLine(it, r = P(it).rsSector) {
+    if (!r) return '';
+    const cell = (st, ix, rs) => `<b class="${cls(rs)}">${rs === null || rs === undefined ? '—' : (num(rs) > 0 ? '+' : '') + num(rs).toFixed(1) + ' pp'}</b> <span class="meta">(stock ${pct(st)}, index ${pct(ix)})</span>`;
+    return `<p class="rsline"><b>Strength vs ${esc(r.index)}</b><br>1 week ${cell(r.stock1w, r.index1w, r.rs1w)} · 1 month ${cell(r.stock1m, r.index1m, r.rs1m)}</p>`;
+  }
   function sectorChecklist(it) {
     const sec = (S.data.sectors || []).find(r => r.sector === P(it).sectorKey), cl = sec?.checklist, ex = P(it).execution;
     if (!cl) return '';
@@ -205,7 +237,8 @@
     const pf = P(it).peerFundamentals || {};
     const ord = n => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : Math.min(n % 10, 4) % 4] || 'th');
     const fx = (k, label, unit = '%') => { const b = pf[k]; if (!b) return ''; return `<span class="pf"><b>${label}</b> ${k.endsWith('YoY') ? pct(b.value) : num(b.value).toFixed(1) + unit} <span class="meta">(${ord(b.rank)} of ${b.of}, median ${k.endsWith('YoY') ? pct(b.median) : num(b.median).toFixed(1) + unit})</span></span>`; };
-    const fund = [fx('revenueYoY', 'Revenue'), fx('patYoY', 'Profit'), fx('margin', 'Margin'), fx('roe', 'ROE')].filter(Boolean).join('');
+    const mnote = P(it).margins?.opmNote;   // 2.9.23: margin beyond 100% is not ranked
+    const fund = [fx('revenueYoY', 'Revenue'), fx('patYoY', 'Profit'), pf.margin ? fx('margin', 'Margin') : (mnote ? `<span class="pf"><b>Margin</b> n/m <span class="meta">(${esc(mnote.replace(/^n\/m /, ''))})</span></span>` : ''), fx('roe', 'ROE')].filter(Boolean).join('');
     return `<div class="peers"><b>Peers · ${esc(pe.sector)}</b>${role ? ` <span class="tag ${role[1]}">${role[0]}</span>` : ''}
       <span class="meta">${pe.rank ? `#${pe.rank} of ${pe.count} on 3-month move (${pct(pe.ret63)}; sector median ${pct(pe.sectorMedian63)}).` : ''}
       ${lead ? ` Leaders: ${lead}.` : ''}${rep ? ` Already reported: ${rep}${pe.reportedCount > (pe.reported || []).length ? '…' : ''} (avg reaction ${pct(pe.reportedAvgReaction)}).` : ' No peer has reported yet.'}</span>${fund ? `<div class="pfs"><b class="meta">Against sector peers</b>${fund}</div>` : ''}</div>`;
@@ -287,8 +320,7 @@
       ${facts}
       ${lensBlock(it)}
       ${topDownStrip(it)}
-      ${sectorChecklist(it)}
-      ${sectorFavourLine(it)}
+      ${sectorCompact(it)}
       ${peersLine(it)}
       <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}${plan.stage === 'STARTER' && num(plan.entry) !== null ? ' <span class="tag warn">Starter, 1/3 size</span>' : plan.stage === 'FULL' && num(plan.entry) !== null ? ' <span class="tag go">Full size</span>' : ''}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
         <p class="plan-why">${esc(plan.why || 'Plan not computed yet.')}</p>${levels}</div>
@@ -347,7 +379,9 @@
     const s = P(it).plan?.signal;
     return s in RADAR && liquidOk(it) && !px(it).base_broken;
   }).sort((a, b) => RADAR[P(a).plan.signal] - RADAR[P(b).plan.signal] || (num(b.convictionScore) ?? 0) - (num(a.convictionScore) ?? 0));
-  const bigEnough = it => num(it.marketCapCr) !== null && num(it.marketCapCr) >= MIN_MCAP();
+  // 2.9.23: a stock you hold is never moved to the "not trade candidates" table.
+  const heldPos = it => (S.data.positions || []).find(p => String(p.symbol).toUpperCase() === String(it.symbol).toUpperCase());
+  const bigEnough = it => !!heldPos(it) || (num(it.marketCapCr) !== null && num(it.marketCapCr) >= MIN_MCAP());
   const radar = () => radarAll().filter(bigEnough);
   const radarSmall = () => radarAll().filter(it => !bigEnough(it));
   function viewRadar() {
@@ -356,23 +390,25 @@
       <p class="note">Liquid, setup alive, but the market cap is under the screener's minimum (or not known). Shown so you don't miss them; the size rule is yours to apply.</p>
       <div class="ledger">${small.map(radarRow).join('')}</div>` : '';
     if (!list.length) return `<div class="empty">Nothing on the radar yet. A stock lands here once its reaction session has traded and the setup is still alive (base intact, earnings good enough, liquid, market cap at least ₹1,000 Cr).</div>${smallBlock}`;
-    return `<p class="note">Reaction done, setup alive: the screener is waiting for an entry pattern. Sorted by how close each is to an entry. A "Starter 1/3" tag means a third of the size is allowed before the concall. Tap a row for the full card.</p>
+    return copyBar(list.concat(small), 'radar') + `<p class="note">Reaction done, setup alive: the screener is waiting for an entry pattern. Sorted by how close each is to an entry. A "Starter 1/3" tag means a third of the size is allowed before the concall. Tap a row for the full card.</p>
       <div class="ledger">${list.map(radarRow).join('')}</div>${smallBlock}`;
   }
   function radarRow(it) {
         const pl = P(it).plan || {}, s = sig(it), pc = it.priceContext || {}, live = P(it).live;
         const last = num(live?.price) ?? num(pc.lastClose), low = num(it.resultDayLow);
         const toBase = last !== null && low ? (last / low - 1) * 100 : null;
-        const trig = num(pl.entry), toTrig = last !== null && trig ? (trig / last - 1) * 100 : null;
+        const hp = heldPos(it);
+        // 2.9.23: in a stock you hold, the levels are your fill's, not the theoretical trigger's.
+        const trig = hp ? num(hp.oneR) : num(pl.entry), toTrig = last !== null && trig ? (trig / last - 1) * 100 : null;
         const open = S.open.has(it.eventId);
         return `<div class="row radar-row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">
-          <div><div class="s">${esc(it.symbol)}</div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
+          <div><div class="s">${esc(it.symbol)}</div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${hp ? ' <span class="tag go">You hold</span>' : ''}${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
           <div><div class="k">Reaction</div><div class="v ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}${num(pc.relativeVolume) !== null ? ` <span class="meta">${num(pc.relativeVolume).toFixed(1)}x vol</span>` : ''}</div></div>
           <div><div class="k">${live?.price ? 'Live' : 'Last close'}</div><div class="v">${inr(last)}</div></div>
           <div class="opt"><div class="k">Base (result-day low)</div><div class="v">${inr(low)}${toBase !== null ? ` <span class="meta">${pct(toBase)}</span>` : ''}</div></div>
-          <div><div class="k">${trig ? 'Trigger' : 'Risk'}</div><div class="v">${trig ? `${inr(trig)}${toTrig !== null ? ` <span class="meta">${toTrig > 0 ? pct(toTrig) + ' away' : 'above'}</span>` : ''}` : (num(pl.riskPct) !== null ? `${num(pl.riskPct).toFixed(1)}%` : '—')}</div></div>
+          <div><div class="k">${hp ? 'Your +1R' : trig ? 'Trigger' : 'Risk'}</div><div class="v">${trig ? `${inr(trig)}${toTrig !== null ? ` <span class="meta">${toTrig > 0 ? pct(toTrig) + ' away' : 'above'}</span>` : ''}` : (num(pl.riskPct) !== null ? `${num(pl.riskPct).toFixed(1)}%` : '—')}</div></div>
           <div class="chev" aria-hidden="true">›</div></div>
-          <div class="radar-why">${esc(pl.why || '')}</div>${open ? `<div class="row-detail">${card(it)}</div>` : ''}`;
+          <div class="radar-why">${P(it).rsSector && num(P(it).rsSector.rs1m) !== null ? `<span class="${cls(P(it).rsSector.rs1m)}">RS 1M ${num(P(it).rsSector.rs1m) > 0 ? '+' : ''}${num(P(it).rsSector.rs1m).toFixed(1)} pp vs ${esc(P(it).rsSector.index)}</span>. ` : ''}${hp ? `<b>You hold</b> since ${dt(hp.entryDate)} at ${inr(hp.entryPrice)}: stop ${inr(num(hp.swingStop) ?? num(hp.initialStop))}, +1R ${inr(hp.oneR)}${num(hp.rNow) !== null ? ` (now ${num(hp.rNow).toFixed(2)}R)` : ''}.` : ''}${hp && pl.signal === 'ENTRY_TRIGGERED' ? '' : (hp ? ' Screener: ' : '') + esc(pl.why || '')}</div>${open ? `<div class="row-detail">${card(it)}</div>` : ''}`;
   }
   // 2.9.12: My trades. Entry/stop come from master/positions.json (public repo:
   // symbol, date, price only); quantity is kept in this browser only.
@@ -399,8 +435,13 @@
           <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 21 EMA ${inr(p.ema21)}, 63 EMA ${inr(p.ema63)}.</p>
           <div class="sizing"><label>Quantity <input type="number" min="0" step="1" inputmode="numeric" class="pos-qty" data-sym="${esc(p.symbol)}" value="${qty ?? ''}"></label>
             ${qty ? `<span class="meta">P&amp;L ${money(pnl)} · at the stop ${money(atRisk)}</span>` : '<span class="meta">enter quantity for rupee P&amp;L</span>'}</div>
-          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${p.sectorFavour && p.sectorFavour.status !== 'NOT_ENOUGH' ? `<p class="meta"><b>Sector:</b> ${esc(p.sectorFavour.sector)} ${favTag(p.sectorFavour)} ${esc(p.sectorFavour.note)}</p>` : ''}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
-      }).join('')}</div>${globalBlock()}`;
+          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${p.rsSector ? rsLine(null, p.rsSector) : ''}${p.sectorFavour && p.sectorFavour.status !== 'NOT_ENOUGH' ? `<p class="meta"><b>Sector:</b> ${esc(p.sectorFavour.sector)} ${favTag(p.sectorFavour)} ${esc(p.sectorFavour.note)}</p>` : ''}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
+      }).join('')}</div>
+      <details class="td qtx"><summary>Move quantities to another device</summary>
+        <p class="meta">Quantities stay in this browser only (the repo is public). Copy them here and paste them on your other phone or laptop.</p>
+        <button type="button" data-act="qty-copy">Copy my quantities</button>
+        <p><input id="qty-in" class="n" placeholder="HCLTECH=114;GROWW=750" autocomplete="off"> <button type="button" data-act="qty-apply">Apply</button></p>
+        <p class="meta" id="qty-msg"></p></details>${globalBlock()}`;
   }
   // 2.9.19: total rupee risk to the current stops over the trades with a quantity entered.
   function tradesRisk(list) {
@@ -415,7 +456,11 @@
     const cap = num(store.get('cap', 1000000));
     const of = v => cap ? ` (${(v / cap * 100).toFixed(1)}% of ₹${Math.round(cap).toLocaleString('en-IN')} capital)` : '';
     const rOff = (S.data.regime || {}).label === 'RISK-OFF';
-    return `<p class="note"><b>Open risk to stops</b> ₹${Math.round(risk).toLocaleString('en-IN')}${of(risk)} · <b>deployed</b> ₹${Math.round(used).toLocaleString('en-IN')}${of(used)} over ${n} trade${n > 1 ? 's' : ''} with a quantity entered.${rOff ? ' <span class="tag warn">Market risk-off</span>' : ''} <span class="meta">From the current price to each stop; capital is the Setups tab figure.</span></p>`;
+    const capPct = num(store.get('pcap', 15)) ?? 15, budget = cap * capPct / 100, usedPct = budget ? used / budget * 100 : 0;
+    const tone = usedPct > 100 ? 'bad' : usedPct > 80 ? 'watch' : 'go';
+    const bar = budget ? `<div class="capbar" role="img" aria-label="PEAD cap used ${usedPct.toFixed(0)}%"><i class="${tone}" style="width:${Math.min(100, usedPct).toFixed(1)}%"></i></div>
+      <p class="note ${usedPct > 100 ? 'warn-t' : ''}"><b>PEAD cap</b> ${usedPct.toFixed(0)}% used: ₹${Math.round(used).toLocaleString('en-IN')} deployed of ₹${Math.round(budget).toLocaleString('en-IN')} (${capPct}% of ₹${Math.round(cap).toLocaleString('en-IN')}).${usedPct > 100 ? ' Over the cap: no new PEAD trades until something exits, or raise the cap on purpose.' : ''} <span class="meta">Capital and cap are the Setups tab figures; change them there.</span></p>` : '';
+    return bar + `<p class="note"><b>Open risk to stops</b> ₹${Math.round(risk).toLocaleString('en-IN')}${of(risk)} · <b>deployed</b> ₹${Math.round(used).toLocaleString('en-IN')}${of(used)} over ${n} trade${n > 1 ? 's' : ''} with a quantity entered.${rOff ? ' <span class="tag warn">Market risk-off</span>' : ''} <span class="meta">From the current price to each stop; capital is the Setups tab figure.</span></p>`;
   }
   // 2.9.15: filings, deals, selling pressure, global peers and headlines for
   // open trades. Display only; the exit rules above do not read any of it.
@@ -473,13 +518,26 @@
     try { localStorage.setItem('qty:' + q.dataset.sym, q.value || ''); } catch (err) { /* storage blocked */ }
     render();
   });
+  // 2.9.23: copy the visible list to TradingView (watchlist import) or as a CSV of levels.
+  const tvSym = it => { const m = String(P(it).links?.tradingview || '').match(/symbol=([A-Z]+)%3A([^&]+)/); return m ? `${m[1]}:${decodeURIComponent(m[2])}` : `NSE:${String(it.symbol || '').toUpperCase()}`; };
+  const S_COPY = {};
+  function copyBar(list, key) {
+    S_COPY[key] = list;
+    return list.length ? `<div class="copybar"><button type="button" data-copy="tv" data-key="${key}">Copy TradingView watchlist (${list.length})</button><button type="button" data-copy="csv" data-key="${key}">Copy levels (CSV)</button><span class="meta" data-copy-msg="${key}"></span></div>` : '';
+  }
+  function copyText(kind, list) {
+    if (kind === 'tv') return list.map(tvSym).join(',');
+    const head = 'symbol,signal,last,entry,stop,risk_pct,stage,result_day_low';
+    return [head].concat(list.map(it => { const pl = P(it).plan || {}, pc = it.priceContext || {};
+      return [it.symbol, pl.signal || '', pc.lastClose ?? '', pl.entry ?? '', pl.sl ?? '', pl.riskPct ?? '', pl.stage || '', it.resultDayLow ?? ''].join(','); })).join('\n');
+  }
   function viewSetups() {
     let list = declared().filter(matches);
     if (S.bucket !== 'ALL') list = list.filter(it => (P(it).bucket?.code || 'NONE') === S.bucket);
     const all = list.length;
     if (S.liquid) list = list.filter(liquidOk);
     if (!list.length) return emptyHidden(all, 0, 'declared results');
-    return `<div class="grid">${sorted(list).map(card).join('')}</div>${all > list.length ? `<p class="foot">${all - list.length} illiquid results hidden.</p>` : ''}`;
+    return copyBar(sorted(list), 'setups') + `<div class="grid">${sorted(list).map(card).join('')}</div>${all > list.length ? `<p class="foot">${all - list.length} illiquid results hidden.</p>` : ''}`;
   }
 
   function ledgerRow(it) {
@@ -534,7 +592,7 @@
     const bar = v => { const n = num(v); if (n === null) return '—'; const w = Math.abs(n) / max * 50; return `<div class="bar" title="${pct(n)} vs market"><i style="left:${n >= 0 ? 50 : 50 - w}%;width:${w}%;background:${n >= 0 ? 'var(--gain)' : 'var(--loss)'}"></i><i style="left:50%;width:1px;background:var(--ink-3)"></i></div>`; };
     return `<p class="note">Tailwind combines how tracked peers moved over 3 months versus the whole universe, and how many peers that already reported had strong earnings. Checklist: five sector questions (demand, orders &amp; capex, earnings, peer confirmation, market strength), scored only where the data exists. Favour: five signs a sector is losing favour (relative weakness, poor reaction to good results, failed breakouts, shrinking participation, paying less for growth); "out of favour" with growing results is sentiment, "deteriorating" means results are weakening too. Tap a sector for details.</p>
       <div class="tscroll"><table class="sectbl"><thead><tr><th>Sector</th><th class="hide-sm">3-month vs market</th><th class="r">Relative</th><th>Favour</th><th class="r hide-sm">Reported</th><th class="r hide-sm">Strong</th><th class="r">Checklist</th><th class="hide-sm">Tailwind</th></tr></thead><tbody>
-      ${rows.map(r => `<tr class="srow" role="button" tabindex="0" data-sector="${esc(r.sector)}" aria-expanded="${S.open.has('sector:' + r.sector)}"><td><span class="chev-s" aria-hidden="true">${S.open.has('sector:' + r.sector) ? '▾' : '▸'}</span> ${esc(r.sector)} <span class="meta">(${r.stocks})</span></td><td class="hide-sm">${bar(r.relativeToMarket)}</td><td class="r n ${cls(r.relativeToMarket)}">${pct(r.relativeToMarket)}</td><td>${favTag(r.favour)}</td><td class="r n hide-sm">${r.declared}</td><td class="r n hide-sm">${r.strongResults}</td><td class="r n">${r.checklist && r.checklist.measured ? `${r.checklist.score}/${r.checklist.measured}` : '—'}</td><td class="hide-sm">${r.tailwind ? `<span class="tag ${TAIL_TONE[r.tailwind] || ''}">${r.tailwind.toLowerCase()}</span>` : '—'}</td></tr>${S.open.has('sector:' + r.sector) ? `<tr class="sdetail"><td colspan="8">${favourBlock(r.favour)}${r.checklist ? `<div class="td"><div class="td-h"><b>Sector checklist</b> <span class="meta">${r.checklist.score} of ${r.checklist.measured} measured pass</span></div>${checklistChips(r.checklist)}</div>` : ''}${sectorPeers(r.sector)}</td></tr>` : ''}`).join('')}
+      ${rows.map(r => `<tr class="srow" role="button" tabindex="0" data-sector="${esc(r.sector)}" aria-expanded="${S.open.has('sector:' + r.sector)}"><td><span class="chev-s" aria-hidden="true">${S.open.has('sector:' + r.sector) ? '▾' : '▸'}</span> ${esc(r.sector)} <span class="meta">(${r.stocks})</span></td><td class="hide-sm">${bar(r.relativeToMarket)}</td><td class="r n ${cls(r.relativeToMarket)}">${pct(r.relativeToMarket)}</td><td>${favTag(r.favour)}</td><td class="r n hide-sm">${r.declared}</td><td class="r n hide-sm">${r.strongResults}</td><td class="r n">${r.checklist && r.checklist.measured ? `${r.checklist.score}/${r.checklist.measured}` : '—'}</td><td class="hide-sm">${r.tailwind ? `<span class="tag ${TAIL_TONE[r.tailwind] || ''}">${r.tailwind.toLowerCase()}</span>` : '—'}</td></tr>${S.open.has('sector:' + r.sector) ? `<tr class="sdetail"><td colspan="8"><p class="meta">${r.index ? `<b>${esc(r.index.name)}</b> 1W ${pct(r.index.ret1w)} · 1M ${pct(r.index.ret1m)}${num((S.data.regime || {}).index1w) !== null ? ` (NIFTY 500 1W ${pct(S.data.regime.index1w)})` : ''}. ` : ''}<button type="button" data-act="sector-results" data-sector="${esc(r.sector)}">Show its ${r.declared} declared results</button></p>${favourBlock(r.favour)}${r.checklist ? `<div class="td"><div class="td-h"><b>Sector checklist</b> <span class="meta">${r.checklist.score} of ${r.checklist.measured} measured pass</span></div>${checklistChips(r.checklist)}</div>` : ''}${sectorPeers(r.sector)}</td></tr>` : ''}`).join('')}
       </tbody></table></div>`;
   }
 
@@ -566,8 +624,11 @@
     const box = (l, v) => `<div class="hbox"><span>${l}</span><b>${v ?? '—'}</b></div>`;
     const sa = h.selfAudit || {};
     const tone = { OK: 'good', WARN: 'warn', FAIL: 'bad' };
+    const nOk = (sa.checks || []).filter(c => c.status === 'OK').length, nIssue = (sa.checks || []).length - nOk;
+    const shown = (sa.checks || []).filter(c => !S.issuesOnly || c.status !== 'OK');
     const audit = (sa.checks || []).length ? `<div class="audit"><h3>Automatic data check <span class="tag ${tone[sa.status] || ''}">${esc(sa.status || '')}</span></h3>
-      ${(sa.checks || []).map(c => `<div class="arow"><span class="tag ${tone[c.status] || ''}">${esc(c.status)}</span>
+      ${nIssue ? `<button type="button" data-act="issues-only">${S.issuesOnly ? `Show all ${(sa.checks || []).length} checks` : `Show only the ${nIssue} to look at`}</button>` : ''}
+      ${shown.map(c => `<div class="arow"><span class="tag ${tone[c.status] || ''}">${esc(c.status)}</span>
         <div><b>${esc(c.check)}</b>${c.count ? ` <span class="muted">(${c.count})</span>` : ''}${(c.examples || []).length ? `<div class="muted">${esc(c.examples.join(', '))}</div>` : ''}${c.status !== 'OK' && c.note ? `<div class="muted">${esc(c.note)}</div>` : ''}</div></div>`).join('')}</div>` : '';
     return audit + `<div class="health">
       ${box('Companies tracked', `${h.activeDashboardEvents ?? '—'} / ${h.eventsTracked ?? '—'}`)}
@@ -582,7 +643,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.22';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.23';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -654,6 +715,29 @@
   ['cap', 'risk', 'pcap'].forEach(id => $(id).addEventListener('change', e => { store.set(id, num(e.target.value)); render(); }));
   $('view').addEventListener('click', e => {
     if (e.target.closest('[data-act="show-illiquid"]')) { S.liquid = false; $('liquid').checked = false; render(); return; }
+    if (e.target.closest('[data-act="issues-only"]')) { S.issuesOnly = !S.issuesOnly; render(); return; }
+    const sr = e.target.closest('[data-act="sector-results"]');
+    if (sr) { S.tab = 'setups'; S.q = sr.dataset.sector; $('q').value = S.q; S.bucket = 'ALL'; render(); window.scrollTo(0, 0); return; }
+    const cp = e.target.closest('[data-copy]');
+    if (cp) {
+      const txt = copyText(cp.dataset.copy, S_COPY[cp.dataset.key] || []), msg = document.querySelector(`[data-copy-msg="${cp.dataset.key}"]`);
+      const done = ok => { if (msg) msg.textContent = ok ? (cp.dataset.copy === 'tv' ? 'Copied: in TradingView, Watchlist → Import list / paste.' : 'Copied as CSV.') : 'Copy blocked by the browser.'; };
+      (navigator.clipboard ? navigator.clipboard.writeText(txt).then(() => done(true), () => done(false)) : done(false));
+      return;
+    }
+    const qx = e.target.closest('[data-act="qty-copy"]');
+    if (qx) {
+      const out = (S.data.positions || []).map(p => { let q = null; try { q = localStorage.getItem('qty:' + p.symbol); } catch (err) { /* blocked */ } return q ? `${p.symbol}=${q}` : null; }).filter(Boolean).join(';');
+      const m = $('qty-msg'); (navigator.clipboard ? navigator.clipboard.writeText(out).then(() => { if (m) m.textContent = out ? 'Copied. Paste it on your other device.' : 'No quantities entered yet.'; }, () => { if (m) m.textContent = out; }) : (m && (m.textContent = out)));
+      return;
+    }
+    if (e.target.closest('[data-act="qty-apply"]')) {
+      const v = ($('qty-in') || {}).value || '';
+      let n = 0;
+      v.split(/[;,\s]+/).forEach(pair => { const m = pair.match(/^([A-Za-z0-9&-]+)=(\d+)$/); if (m) { try { localStorage.setItem('qty:' + m[1].toUpperCase(), m[2]); n += 1; } catch (err) { /* blocked */ } } });
+      render(); const m = $('qty-msg'); if (m) m.textContent = n ? `Saved ${n} quantit${n > 1 ? 'ies' : 'y'} on this device.` : 'Nothing recognised (format HCLTECH=114;GROWW=750).';
+      return;
+    }
     const srow = e.target.closest('.srow'); if (srow) { const k = 'sector:' + srow.dataset.sector; S.open.has(k) ? S.open.delete(k) : S.open.add(k); render(); return; }
     const row = e.target.closest('.row'); if (row && !e.target.closest('a')) { const id = row.dataset.id; S.open.has(id) ? S.open.delete(id) : S.open.add(id); render(); }
   });

@@ -1476,3 +1476,74 @@ class TriggeredEntryTests(unittest.TestCase):
         plan = self._plan(x, 200.85, result_return=2.15, rvol=1.78, result_low=190.66, result_high=199.0, box_high=204.0)
         self.assertEqual(plan["signal"], "NEAR_ENTRY")
         self.assertIn("still forming", plan["why"])
+
+
+class SectorIndexRsAndMarginTests(unittest.TestCase):
+    """2.9.23: RS vs the stock's sector index (1W / 1M) and impossible margins."""
+
+    def test_index_mapping(self):
+        import pead_plus as pp
+        self.assertEqual(pp.sector_index_for({"sectorIndex": "NIFTY IT"}, "Information Technology"), "NIFTY IT")
+        self.assertEqual(pp.sector_index_for({"sectorIndex": "NIFTY 500", "industry": "Banks - Regional"}, "Financial Services"), "NIFTY BANK")
+        self.assertEqual(pp.sector_index_for({}, "Fast Moving Consumer Goods"), "NIFTY FMCG")
+        self.assertEqual(pp.sector_index_for(None, "Textiles"), "NIFTY 500")
+
+    def _series(self, start, n, step):
+        from datetime import date, timedelta
+        d0 = date(2026, 9, 1)
+        ds, cs, d = [], [], d0
+        while len(ds) < n:
+            if d.weekday() < 5:
+                ds.append(d.isoformat()); cs.append(round(start * (1 + step) ** len(cs), 4))
+            d += timedelta(days=1)
+        return {"dates": ds, "closes": cs}
+
+    def test_rs_same_dates(self):
+        import pead_plus as pp
+        ser = self._series(100.0, 40, 0.01)                 # index +1% a session
+        d = ser["dates"]
+        px = {"last_session": d[-1], "ret_5d_pct": 10.0, "ret_21d_pct": 30.0, "d5_from": d[-6], "d21_from": d[-22]}
+        r = pp.rs_vs_sector_index(px, "NIFTY IT", ser)
+        self.assertAlmostEqual(r["index1w"], 5.1, places=1)   # 1.01^5 - 1
+        self.assertAlmostEqual(r["rs1w"], 10.0 - r["index1w"], places=2)
+        self.assertAlmostEqual(r["index1m"], 23.24, places=1)
+        # stock data far newer than the index series: no RS
+        stale = dict(ser, dates=ser["dates"][:-10], closes=ser["closes"][:-10])
+        self.assertIsNone(pp.rs_vs_sector_index(px, "NIFTY IT", stale))
+        self.assertIsNone(pp.rs_vs_sector_index(px, "NIFTY IT", None))
+
+    def test_apply_falls_back_to_nifty500(self):
+        import pead_plus as pp
+        ser = self._series(100.0, 40, 0.0)
+        d = ser["dates"]
+        it = {"plus": {"sectorKey": "Capital Goods", "identity": {"sectorIndex": None},
+                       "price": {"last_session": d[-1], "ret_5d_pct": 2.0, "ret_21d_pct": 4.0, "d5_from": d[-6], "d21_from": d[-22]}}}
+        sectors = {"Capital Goods": {}}
+        pp.apply_sector_index_rs([it], sectors, {"NIFTY 500": ser})     # NIFTY INDIA MANUFACTURING not fetched
+        self.assertEqual(it["plus"]["rsSector"]["index"], "NIFTY 500")
+        self.assertEqual(it["plus"]["rsSector"]["rs1m"], 4.0)
+        self.assertEqual(sectors["Capital Goods"]["index"]["name"], "NIFTY 500")
+
+    def test_impossible_margin_is_nm(self):
+        import pead_plus as pp
+        self.assertEqual(pp.plausible_margin(8150.0)[0], None)          # AURUM exchange OPM
+        self.assertIn("n/m", pp.plausible_margin(193.17)[1])           # DLF
+        self.assertEqual(pp.plausible_margin(13.4), (13.4, None))
+        self.assertEqual(pp.plausible_margin(None), (None, None))
+
+    def test_audit_flags_published_margin_beyond_100(self):
+        import pead_plus as pp
+        from datetime import date
+        items = [{"symbol": "AURUM", "resultsReleased": False, "plus": {"margins": {"opmTtm": 8150.0}}, "priceContext": {}}]
+        a = pp.self_audit(items, {}, {}, date(2026, 10, 18))
+        chk = [c for c in a["checks"] if c["check"].startswith("No implausible values")][0]
+        self.assertIn("AURUM", chk.get("examples") or [])
+
+    def test_chart_carries_volume(self):
+        import pandas as pd
+        import pead_plus as pp
+        f = pd.DataFrame({"Date": pd.bdate_range("2026-08-03", periods=30), "Open": [10.0] * 30, "High": [10.5] * 30,
+                          "Low": [9.5] * 30, "Close": [10.0] * 30, "Volume": [1000] * 29 + [5000]})
+        ch = pp._chart(pp._clean(f), None)
+        self.assertEqual(ch["volume"][-1], 5000)
+        self.assertEqual(len(ch["volume"]), len(ch["close"]))

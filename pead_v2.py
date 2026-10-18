@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.22"
+ENGINE_VERSION = "2.9.23"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5078,6 +5078,7 @@ def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, A
             print(f"Holdings watch view {p_['symbol']} failed: {type(exc).__name__}: {exc}")
         view["notes"] = (notes.get("symbols") or {}).get(str(p_["symbol"]).upper())
         view["sectorFavour"] = ((it or {}).get("plus") or {}).get("favour")   # 2.9.20
+        view["rsSector"] = ((it or {}).get("plus") or {}).get("rsSector")     # 2.9.23
         views.append(view)
     json_dump_atomic(POSITIONS_STATE_PATH, state)
     return views
@@ -5431,6 +5432,80 @@ def refresh_index_cache(ctx: SourceContext) -> dict[str, Any]:
             json_dump_atomic(INDEX_CACHE_PATH, cache)
     except Exception as exc:
         print(f"Index history fetch failed (cache kept): {type(exc).__name__}: {exc}")
+    return cache
+
+
+SECTOR_INDEX_PATH = MASTER_DIR / "index_sectors.json"   # 2.9.23: sector index closes for RS vs sector index
+SECTOR_INDEX_MAX = 20
+
+
+def load_sector_indices() -> dict[str, Any]:
+    try:
+        return json.loads(SECTOR_INDEX_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def sector_index_names(store: EventStore) -> list[str]:
+    names: dict[str, int] = {}
+    for e in store.all():
+        if not dashboard_activity(e):
+            continue
+        sec = e.get("security") or {}
+        plus = (e.get("derived") or {}).get("plus") or {}
+        n = pead_plus.sector_index_for(sec, plus.get("sectorKey") or sector_key(sec))
+        names[n] = names.get(n, 0) + 1
+    return [n for n, _ in sorted(names.items(), key=lambda kv: -kv[1]) if n != "NIFTY 500"][:SECTOR_INDEX_MAX]
+
+
+def refresh_sector_indices(store: EventStore, ctx: SourceContext) -> dict[str, Any]:
+    """Last ~60 days of closes for each sector index the tracked stocks use,
+    refreshed once a day (and after 15:45 IST until the day's close is in).
+    A failed index keeps its old series; names NSE rejects are remembered for
+    a day (cache['failed'])."""
+    cache = load_sector_indices()
+    series = cache.setdefault("series", {})
+    failed = cache.setdefault("failed", {})
+    today = now_ist().date()
+    after_close = today.weekday() < 5 and (now_ist().hour, now_ist().minute) >= (15, 45)
+    todo = []
+    for name in sector_index_names(store):
+        s_ = series.get(name) or {}
+        last = (s_.get("dates") or [None])[-1]
+        if failed.get(name) == today.isoformat():
+            continue
+        fresh = s_.get("fetchedOn") == today.isoformat() and not (after_close and last and last < today.isoformat()
+                                                                      and _due(s_.get("attemptedAt"), 120))
+        if not fresh:
+            todo.append(name)
+    if not todo:
+        return cache
+    try:
+        with NSEAdapter(ctx) as nse:
+            for name in todo:
+                s_ = series.setdefault(name, {})
+                s_["attemptedAt"] = iso_now()
+                try:
+                    rows, _ = nse.index_history(name, today - timedelta(days=60), today)
+                    found = {}
+                    for r in rows or []:
+                        d = parse_date(first(r, "EOD_TIMESTAMP", "HistoricalDate", "date"))
+                        c = safe_num(first(r, "EOD_CLOSE_INDEX_VAL", "CLOSE", "close"))
+                        if d and c:
+                            found[d.isoformat()] = c
+                    if len(found) < 10:
+                        raise RuntimeError(f"only {len(found)} sessions")
+                    old = dict(zip(s_.get("dates") or [], s_.get("closes") or []))
+                    old.update(found)
+                    pts = sorted(old.items())[-90:]
+                    s_.update({"dates": [p_[0] for p_ in pts], "closes": [p_[1] for p_ in pts], "fetchedOn": today.isoformat()})
+                    failed.pop(name, None)
+                except Exception as exc:
+                    failed[name] = today.isoformat()
+                    print(f"Sector index {name} failed: {type(exc).__name__}: {exc}")
+    except Exception as exc:
+        print(f"Sector indices skipped: {type(exc).__name__}: {exc}")
+    json_dump_atomic(SECTOR_INDEX_PATH, cache)
     return cache
 
 
@@ -6201,9 +6276,15 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
         "valuation": pead_plus.valuation_view(store.value(event, "trailing_pe"), store.value(event, "sector_pe"),
                                               store.value(event, "roe_pct"), pat_yoy, store.value(event, "pb")),
         "margins": {
-            "opm": store.value(event, "opm_pct"), "opmPrevQ": store.value(event, "opm_prev_q_pct"),
-            "opmPriorYear": store.value(event, "opm_prior_year_pct"), "changeBps": margin,
-            "opmTtm": nonzero(store.value(event, "exchange_opm_ttm_pct")),
+            "opm": pead_plus.plausible_margin(store.value(event, "opm_pct"))[0],
+            "opmPrevQ": pead_plus.plausible_margin(store.value(event, "opm_prev_q_pct"))[0],
+            "opmPriorYear": pead_plus.plausible_margin(store.value(event, "opm_prior_year_pct"))[0],
+            "changeBps": margin if all(pead_plus.plausible_margin(store.value(event, k))[1] is None
+                                       for k in ("opm_pct", "opm_prior_year_pct", "opm_prev_q_pct")) else None,
+            # 2.9.23: AURUM's exchange OPM 8150% / DLF 193% ranked 1st / 2nd among peers
+            "opmTtm": pead_plus.plausible_margin(nonzero(store.value(event, "exchange_opm_ttm_pct")))[0],
+            "opmNote": pead_plus.plausible_margin(nonzero(store.value(event, "exchange_opm_ttm_pct")))[1]
+                       or pead_plus.plausible_margin(store.value(event, "opm_pct"))[1],
             # 2.5.3: margin change falls back to last quarter when the filing
             # has no prior-year column; say which one it is.
             "basis": ("YoY" if store.value(event, "opm_prior_year_pct") is not None
@@ -6652,7 +6733,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
-PLUS_VERSION = "2.9.22"   # bump to rebuild every stored chart/price analytic once
+PLUS_VERSION = "2.9.23"   # bump to rebuild every stored chart/price analytic once
 
 
 def replay_plus(store: EventStore) -> int:
@@ -7227,6 +7308,13 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
     regime.update(pead_plus.market_internals(items, internals, now_ist().date()))
     pead_plus.peer_context(items, regime)
     pead_plus.sector_checklists(items, sectors, now_ist().date())   # 2.9.8
+    try:                                                              # 2.9.23 RS vs sector index
+        sidx = {k: v for k, v in (load_sector_indices().get("series") or {}).items() if v.get("dates")}
+        sidx["NIFTY 500"] = {"dates": index_cache.get("dates") or [], "closes": index_cache.get("closes") or []}
+        pead_plus.apply_sector_index_rs(items, sectors, sidx)
+        regime["index1w"] = (pead_plus.index_returns(sidx["NIFTY 500"]) or {}).get("ret1w")
+    except Exception as exc:
+        print(f"Sector index RS skipped: {type(exc).__name__}: {exc}")
     pead_plus.sector_favour(items, sectors, regime, now_ist().date())   # 2.9.20
     try:
         positions = position_views(items, now_ist().date())         # 2.9.12
@@ -7644,6 +7732,10 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         enrichment_stats = enrich_events(store, master, ctx)
         print("Enrichment:", json.dumps(enrichment_stats, default=str))
         refresh_index_cache(ctx)
+        try:
+            refresh_sector_indices(store, ctx)                            # 2.9.23
+        except Exception as exc:
+            print(f"Sector indices skipped: {type(exc).__name__}: {exc}")
         _INDEX_CACHE_MEMO.clear()
         refresh_market_internals(ctx)
         print(f"Live quotes refreshed: {refresh_live_quotes(store, ctx)}")

@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.22"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.23"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -134,8 +134,10 @@ def _chart(f, reaction_idx: int | None, points: int = 75) -> dict[str, Any]:
     marker = None
     if reaction_idx is not None and reaction_idx >= len(f) - points:
         marker = reaction_idx - (len(f) - len(tail))
+    vol = tail["Volume"].tolist() if "Volume" in tail else []
+    vols = [int(v) if v is not None and v == v else None for v in vol]      # 2.9.23: volume bars
     return {"from": tail["Date"].iloc[0].date().isoformat(), "to": tail["Date"].iloc[-1].date().isoformat(),
-            "close": closes, "ema21": ema21, "reactionIndex": marker}
+            "close": closes, "ema21": ema21, "reactionIndex": marker, "volume": vols}
 
 
 def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
@@ -155,6 +157,9 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
         "prev_close": _r2(close.iloc[-2]) if len(close) >= 2 else None,
         "prev_ema10": _ema(close.iloc[:-1], 10) if len(close) > 11 else None,
         "prev_ema21": _ema(close.iloc[:-1], 21) if len(close) > 22 else None,
+        "ret_5d_pct": _r2(_pct(last, close.iloc[-6])) if len(f) > 6 else None,          # 2.9.23
+        "d5_from": f["Date"].iloc[-6].date().isoformat() if len(f) > 6 else None,
+        "d21_from": f["Date"].iloc[-22].date().isoformat() if len(f) > 22 else None,
         "ret_21d_pct": _r2(_pct(last, close.iloc[-22])) if len(f) > 22 else None,
         "ret_63d_pct": _r2(_pct(last, close.iloc[-64])) if len(f) > 64 else None,
         "ret_126d_pct": _r2(_pct(last, close.iloc[-127])) if len(f) > 127 else None,
@@ -1121,11 +1126,29 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
 
     odd = [it["symbol"] for it in items if (_num((it.get("priceContext") or {}).get("resultDayPct")) or 0) and abs(_num(it["priceContext"]["resultDayPct"])) > 40]
     odd += [it["symbol"] for it in declared if (_num(it.get("revenueYoY")) or 0) > 1000]
-    add("No implausible values (>40% reaction, >1000% revenue growth)", odd, note="Usually a split or a unit error in the filing.")
+    # 2.9.23: an operating margin outside +/-100% (AURUM 8150%, DLF 193%) is a unit
+    # or other-income artefact; it must be hidden (n/m), never ranked.
+    odd += [it["symbol"] for it in items if any(abs(_num(((it.get("plus") or {}).get("margins") or {}).get(k)) or 0) > MARGIN_LIMIT_PCT
+                                                for k in ("opm", "opmTtm"))]
+    add("No implausible values (>40% reaction, >1000% revenue growth, margin beyond 100%)", odd, note="Usually a split or a unit error in the filing.")
 
     status = "FAIL" if any(c["status"] == "FAIL" for c in checks) else ("WARN" if any(c["status"] == "WARN" for c in checks) else "OK")
     return {"status": status, "checkedOn": today.isoformat(), "checks": checks}
 
+
+
+MARGIN_LIMIT_PCT = 100.0
+
+
+def plausible_margin(value: Any) -> tuple[float | None, str | None]:
+    """2.9.23: (margin, note). Beyond +/-100% the figure is not meaningful
+    (other income, unit or denominator mismatch): returns (None, 'n/m ...')."""
+    v = _num(value)
+    if v is None:
+        return None, None
+    if abs(v) > MARGIN_LIMIT_PCT:
+        return None, f"n/m (exchange figure {v:,.1f}%: other income or a unit mismatch)"
+    return v, None
 
 
 # ---------------------------------------------------------------------------
@@ -2157,3 +2180,94 @@ def holding_watch_view(symbol: str, watch: dict[str, Any] | None, deals: list[di
             "deliveryPct": _r2(_num(delivery_pct)), "peers": peers, "peerAvg1dPct": peer_avg,
             "news": w.get("news") or [], "sectorNews": w.get("sectorNews") or [], "newsAt": w.get("newsAt"),
             "flags": flags}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.23 Relative strength vs the stock's sector index (1 week / 1 month),
+# the "RS vs sector index" table. Display only.
+# ---------------------------------------------------------------------------
+
+SECTOR_INDEX_FOR = {   # canonical sector -> NSE index when the quote gives none (or only NIFTY 500)
+    "Information Technology": "NIFTY IT", "Financial Services": "NIFTY FINANCIAL SERVICES",
+    "Automobile and Auto Components": "NIFTY AUTO", "Fast Moving Consumer Goods": "NIFTY FMCG",
+    "Healthcare": "NIFTY PHARMA", "Metals & Mining": "NIFTY METAL", "Realty": "NIFTY REALTY",
+    "Media, Entertainment & Publication": "NIFTY MEDIA", "Oil, Gas & Consumable Fuels": "NIFTY OIL & GAS",
+    "Power": "NIFTY ENERGY", "Construction": "NIFTY INFRASTRUCTURE", "Construction Materials": "NIFTY INFRASTRUCTURE",
+    "Consumer Durables": "NIFTY CONSUMER DURABLES", "Chemicals": "NIFTY CHEMICALS", "Capital Goods": "NIFTY INDIA MANUFACTURING",
+    "Consumer Services": "NIFTY INDIA CONSUMPTION", "Services": "NIFTY SERVICES SECTOR",
+    "Telecommunication": "NIFTY 500",      # no telecom index: compare with the market
+}
+
+
+def sector_index_for(identity: dict[str, Any] | None, sector: str | None) -> str:
+    ident = identity or {}
+    si = str(ident.get("sectorIndex") or "").strip().upper()
+    if si and si != "NIFTY 500":
+        return si
+    ind = f"{ident.get('industry') or ''} {ident.get('basicIndustry') or ''}".lower()
+    if "bank" in ind:
+        return "NIFTY BANK"
+    return SECTOR_INDEX_FOR.get(sector or "", "NIFTY 500")
+
+
+def _index_close_on_or_before(series: dict[str, Any], day: str | None) -> float | None:
+    dates, closes = series.get("dates") or [], series.get("closes") or []
+    best = None
+    for d, c in zip(dates, closes):
+        if day and d <= day:
+            best = c
+    return _num(best)
+
+
+def rs_vs_sector_index(px: dict[str, Any], index: str, series: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Stock return over its last 5 / 21 sessions minus the sector index's
+    return over the same dates (close-to-close)."""
+    if not series or not series.get("dates"):
+        return None
+    end = str(px.get("last_session") or "")[:10]
+    s1, s21 = _num(px.get("ret_5d_pct")), _num(px.get("ret_21d_pct"))
+    i_end = _index_close_on_or_before(series, end)
+    if not end or i_end is None or end > series["dates"][-1] and (date.fromisoformat(end) - date.fromisoformat(series["dates"][-1])).days > 4:
+        return None
+    out = {"index": index, "asOf": min(end, series["dates"][-1])}
+    for key, sret, frm in (("1w", s1, px.get("d5_from")), ("1m", s21, px.get("d21_from"))):
+        i0 = _index_close_on_or_before(series, frm)
+        ir = _pct(i_end, i0) if i0 else None
+        out[f"stock{key}"] = sret
+        out[f"index{key}"] = _r2(ir)
+        out[f"rs{key}"] = _r2(sret - ir) if sret is not None and ir is not None else None
+    if out["rs1w"] is None and out["rs1m"] is None:
+        return None
+    return out
+
+
+def index_returns(series: dict[str, Any] | None) -> dict[str, Any] | None:
+    closes = [c for c in ((series or {}).get("closes") or []) if _num(c) is not None]
+    if len(closes) < 6:
+        return None
+    return {"ret1w": _r2(_pct(closes[-1], closes[-6])), "ret1m": _r2(_pct(closes[-1], closes[-22])) if len(closes) >= 22 else None,
+            "asOf": (series.get("dates") or [None])[-1]}
+
+
+def apply_sector_index_rs(items: list[dict[str, Any]], sectors: dict[str, dict[str, Any]],
+                          series_by_index: dict[str, dict[str, Any]]) -> None:
+    """plus.rsSector per company; sectors[name]['index'] = the index most of
+    its members use, with that index's 1W / 1M return."""
+    use: dict[str, dict[str, int]] = {}
+    for it in items:
+        pl = it.get("plus") or {}
+        idx = sector_index_for(pl.get("identity"), pl.get("sectorKey"))
+        ser = series_by_index.get(idx)
+        if ser is None and idx != "NIFTY 500":
+            idx, ser = "NIFTY 500", series_by_index.get("NIFTY 500")
+        rs = rs_vs_sector_index(pl.get("price") or {}, idx, ser)
+        if rs:
+            pl["rsSector"] = rs
+        if pl.get("sectorKey") and ser is not None:
+            use.setdefault(pl["sectorKey"], {}).setdefault(idx, 0)
+            use[pl["sectorKey"]][idx] += 1
+    for name, counts in use.items():
+        idx = max(counts, key=counts.get)
+        r = index_returns(series_by_index.get(idx))
+        if name in sectors and r:
+            sectors[name]["index"] = {"name": idx, **r}
