@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE994N01019|2026-09-30",
   "createdAt": "2026-10-15T02:44:01Z",
-  "updatedAt": "2026-10-19T11:59:27Z",
+  "updatedAt": "2026-10-19T13:13:45Z",
   "security": {
     "symbol": "MALTLAND",
     "bseSymbol": "MALTLAND",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-15T02:44:01Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-19T12:50:39Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-19T13:13:45Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-19",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-19T11:48:59Z",
+      "fetchedAt": "2026-10-19T12:57:21Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-5d6dc7cede75776c.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-fd6ce82a4a069f79.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-20",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-19T08:57:08Z",
+      "fetchedAt": "2026-10-19T12:57:45Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-19T08:57:08Z",
+      "fetchedAt": "2026-10-19T12:57:45Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -78,6 +88,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE994N01019_2026-09-30/scrip_results-12a1bdac63fab9c0.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-19T12:50:39Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-fd6ce82a4a069f79.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-19T17:58:49.240000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-19T12:50:39Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-fd6ce82a4a069f79.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-19T12:50:39Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-fd6ce82a4a069f79.json",
+      "note": null
     }
   },
   "fetch": {
@@ -89,10 +126,10 @@
       "rawRef": "raw/bse/NSE_MALTLAND_2026-09-30/lookup-84daa38bc9e36c7e.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-19T08:57:10Z",
+      "lastAttempt": "2026-10-19T12:57:49Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "error": "539560.BO: RuntimeError: empty history",
       "rawRef": null
     },
     "EXCHANGE_META": {
@@ -110,42 +147,73 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-19T08:57:10Z",
+      "lastAttempt": "2026-10-19T12:57:50Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-19T12:57:45Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE994N01019_2026-09-30/results_snapshot-8ad0f8c087198876.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-19T12:57:45Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "539560.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-19T12:57:50Z",
+      "lastSuccess": "2026-10-19T12:57:50Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE994N01019_2026-09-30/scrip_announcements-ae2ac8f7bc2db304.json"
     }
   },
   "derived": {
-    "score": 2,
-    "completenessPct": 33.3,
+    "score": 0,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -189,11 +257,11 @@
         "sector": "Fast Moving Consumer Goods",
         "stocks": 49,
         "momentum63dMedian": -7.32,
-        "relativeToMarket": -2.35,
+        "relativeToMarket": -2.13,
         "declared": 5,
-        "strongResults": 3,
-        "avgReaction": -8.44,
-        "tailwind": "POSITIVE"
+        "strongResults": 2,
+        "avgReaction": -8.8,
+        "tailwind": "NEUTRAL"
       },
       "identity": {
         "macroSector": "Fast Moving Consumer Goods",
@@ -205,7 +273,15 @@
       },
       "price": {},
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-19",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/539560/",
@@ -220,5 +296,35 @@
     "reasons": [],
     "risks": []
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-19T17:58:49.240000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Submission of Un-Audited Financial Results (Standalone and consolidated) of Malt Land Distilleries Limited for the Quarter and Half Year Ended on September 30th 2026 and along with limited .... Malt Land Distilleries Ltd - 539560 - Submission Of Un-Audited Financial Results (Standalone And Consolida",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-fd6ce82a4a069f79.json",
+      "seenAt": "2026-10-19T13:13:43Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-19T12:57:45Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-19",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }
