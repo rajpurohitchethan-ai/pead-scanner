@@ -1650,3 +1650,53 @@ class ExchangeHolidayTests(_StoreCase):
                 self.assertFalse(p.market_open_now())
             with mock.patch.object(p, "now_ist", return_value=datetime(2026, 10, 21, 11, 0, tzinfo=p.IST)):
                 self.assertTrue(p.market_open_now())
+
+
+class RadarGradeTests(unittest.TestCase):
+    """2.9.25: best-to-worst Radar for an owner who takes only a few trades."""
+
+    def _it(self, **kw):
+        it = {"symbol": "X", "marketCapCr": 26266.0, "priceContext": {"lastClose": 615.4, "resultDayPct": 2.89, "relativeVolume": 3.81},
+              "plus": {"strength": "STRONG", "bucket": {"code": "CONFIRMATION"},
+                       "plan": {"signal": "ENTRY_PULLBACK", "entry": 607.05, "sl": 584.6, "stage": "FULL", "redFlags": []},
+                       "price": {"pressure": {"label": "ACCUMULATION"}}, "rsSector": {"rs1m": 4.58},
+                       "favour": {"status": "OUT_OF_FAVOUR"}}}
+        for k, v in kw.items():
+            if k in it["plus"]:
+                it["plus"][k] = v
+            else:
+                it[k] = v
+        return it
+
+    def test_iifl_like_setup_is_top(self):
+        import pead_plus as pp
+        g = pp.radar_grade(self._it())
+        self.assertEqual(g["tier"], "A")
+        self.assertIn("strong earnings", g["pros"])
+        self.assertIn("sector out of favour", g["cons"])
+        self.assertAlmostEqual(g["riskNowPct"], 5.0, places=1)       # from 615.40, not the 607 trigger
+
+    def test_red_flags_and_small_caps_never_top(self):
+        import pead_plus as pp
+        flagged = self._it(plan={"signal": "PULLBACK_ZONE", "entry": 2989.9, "sl": 2806.65, "stage": "FULL",
+                                 "redFlags": ["turnaround from a loss", "figures flagged for review"]})
+        self.assertNotEqual(pp.radar_grade(flagged)["tier"], "A")
+        small = self._it(marketCapCr=832.0)
+        g = pp.radar_grade(small)
+        self.assertIn(g["tier"], ("C", "D"))
+        self.assertIn("below the market-cap minimum", g["cons"])
+
+    def test_wide_stop_and_selling_rank_low(self):
+        import pead_plus as pp
+        wide = self._it(plan={"signal": "RISK_TOO_WIDE", "entry": None, "sl": None, "stage": "FULL", "redFlags": []},
+                        price={"pressure": {"label": "SELLING"}}, strength="AVERAGE+", bucket={"code": "NO_CONFIRMATION"})
+        g = pp.radar_grade(wide)
+        self.assertEqual(g["tier"], "D")
+        self.assertLess(g["score"], pp.radar_grade(self._it())["score"])
+
+    def test_late_buy_after_trigger_is_not_top(self):
+        import pead_plus as pp
+        g = pp.radar_grade(self._it(plan={"signal": "ENTRY_TRIGGERED", "entry": 1326.0, "sl": 1225.82, "stage": "FULL", "redFlags": []},
+                                    priceContext={"lastClose": 1380.0, "resultDayPct": 8.42, "relativeVolume": 7.8}))
+        self.assertNotEqual(g["tier"], "A")
+        self.assertIn("entry triggered earlier: buying now is late", g["cons"])

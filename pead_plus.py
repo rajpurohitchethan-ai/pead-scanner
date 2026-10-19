@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.24"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.25"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2271,3 +2271,128 @@ def apply_sector_index_rs(items: list[dict[str, Any]], sectors: dict[str, dict[s
         r = index_returns(series_by_index.get(idx))
         if name in sectors and r:
             sectors[name]["index"] = {"name": idx, **r}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.25 Radar grade: best to worst for the owner who takes only a few PEAD
+# trades. Display only: it orders the Radar and explains why; no entry or
+# exit rule reads it.
+# ---------------------------------------------------------------------------
+
+RADAR_TIERS = (("A", "Best: take on the trigger"), ("B", "Good: wait for the trigger"),
+               ("C", "Watch only"), ("D", "Weak: skip for now"))
+FRESH_ENTRY = {"ENTRY_EARLY", "ENTRY_PULLBACK", "ENTRY_BREAKOUT"}
+READY = {"NEAR_ENTRY", "PULLBACK_ZONE"}
+
+
+def radar_grade(item: dict[str, Any], *, min_mcap_cr: float = 1000.0, last_price: Any = None) -> dict[str, Any]:
+    """Score 0-100 and tier A-D with the reasons for and against."""
+    pl = item.get("plus") or {}
+    plan = pl.get("plan") or {}
+    px = pl.get("price") or {}
+    pc = item.get("priceContext") or {}
+    sig = str(plan.get("signal") or "")
+    last = _num(last_price) or _num(pc.get("lastClose"))
+    entry, sl = _num(plan.get("entry")), _num(plan.get("sl"))
+    pros: list[str] = []
+    cons: list[str] = []
+    score = 0.0
+
+    # 1 How ready the setup is
+    if sig in FRESH_ENTRY:
+        score += 30; pros.append("entry triggered")
+    elif sig in READY:
+        score += 22; pros.append("close to its trigger")
+    elif sig == "ENTRY_TRIGGERED":
+        score += 12; cons.append("entry triggered earlier: buying now is late")
+    elif sig == "WATCH":
+        score += 8; cons.append("no entry pattern yet")
+    elif sig == "WAIT_CONCALL":
+        score += 6; cons.append("waiting for the concall")
+    elif sig == "EXTENDED":
+        score += 4; cons.append("extended above the 21 EMA")
+    elif sig == "RISK_TOO_WIDE":
+        cons.append("stop too far away")
+
+    # 2 Earnings quality
+    st = pl.get("strength")
+    if st == "STRONG":
+        score += 20; pros.append("strong earnings")
+    elif st == "AVERAGE+":
+        score += 8; cons.append("earnings only average")
+    bucket = (pl.get("bucket") or {}).get("code")
+    if bucket in ("CONFIRMATION", "RE_PEAD"):
+        score += 8; pros.append("second strong quarter")
+    elif bucket == "FRESH_PEAD":
+        score += 4
+
+    # 3 Risk from today's price to the stop
+    risk_now = None
+    if sl is not None and last is not None and last > sl:
+        basis = max(last, entry) if entry is not None else last
+        risk_now = (basis - sl) / basis * 100
+        if risk_now <= 5:
+            score += 15; pros.append(f"tight risk {risk_now:.1f}%")
+        elif risk_now <= 8:
+            score += 8
+        elif risk_now <= 10:
+            score += 2; cons.append(f"risk {risk_now:.1f}%")
+        else:
+            score -= 5; cons.append(f"risk {risk_now:.1f}% from here")
+
+    # 4 Reaction on the result
+    ret, vol = _num(pc.get("resultDayPct")), _num(pc.get("relativeVolume"))
+    if ret is not None and vol is not None and ret >= 4 and vol >= 2:
+        score += 5; pros.append(f"reaction {ret:+.1f}% on {vol:.1f}x volume")
+    elif ret is not None and ret < 0:
+        score -= 5; cons.append(f"fell {abs(ret):.1f}% on the result")
+
+    # 5 Volume behaviour since
+    pr = (px.get("pressure") or {}).get("label")
+    if pr == "ACCUMULATION":
+        score += 6; pros.append("accumulation")
+    elif pr == "SELLING":
+        score -= 8; cons.append("selling pressure")
+    elif pr == "HEAVY_SELLING":
+        score -= 15; cons.append("heavy selling")
+
+    # 6 Strength vs its own sector index
+    rs = _num((pl.get("rsSector") or {}).get("rs1m"))
+    if rs is not None:
+        if rs >= 3:
+            score += 6; pros.append(f"beats its sector index by {rs:.1f} pp")
+        elif rs <= -3:
+            score -= 6; cons.append(f"lags its sector index by {abs(rs):.1f} pp")
+
+    # 7 Sector favour
+    fav = (pl.get("favour") or {}).get("status")
+    if fav == "IN_FAVOUR":
+        score += 6; pros.append("sector in favour")
+    elif fav == "OUT_OF_FAVOUR":
+        score -= 4; cons.append("sector out of favour")
+    elif fav == "DETERIORATING":
+        score -= 10; cons.append("sector deteriorating")
+
+    # 8 Red flags, concall, size
+    flags = plan.get("redFlags") or []
+    if flags:
+        score -= min(20, 10 * len(flags)); cons.append("; ".join(flags))
+    if plan.get("stage") == "STARTER":
+        score -= 3; cons.append("concall pending: 1/3 size only")
+    mcap = _num(item.get("marketCapCr"))
+    small = mcap is None or mcap < min_mcap_cr
+    if small:
+        score -= 15; cons.append("below the market-cap minimum" if mcap is not None else "market cap unknown")
+
+    score = max(0.0, min(100.0, score))
+    actionable = sig in FRESH_ENTRY or sig in READY
+    if actionable and score >= 70 and not flags and not small and (risk_now is None or risk_now <= 8):
+        tier = "A"
+    elif score >= 55 and not small:
+        tier = "B"
+    elif score >= 40:
+        tier = "C"
+    else:
+        tier = "D"
+    return {"score": round(score), "tier": tier, "label": dict(RADAR_TIERS)[tier], "riskNowPct": _r2(risk_now),
+            "pros": pros[:5], "cons": cons[:5]}

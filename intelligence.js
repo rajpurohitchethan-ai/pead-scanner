@@ -384,14 +384,21 @@
   const bigEnough = it => !!heldPos(it) || (num(it.marketCapCr) !== null && num(it.marketCapCr) >= MIN_MCAP());
   const radar = () => radarAll().filter(bigEnough);
   const radarSmall = () => radarAll().filter(it => !bigEnough(it));
+  // 2.9.25: best to worst. Grade from the engine (pead_plus.radar_grade); stocks you
+  // hold sit in their own section at the end.
+  const TIER = { A: ['Best: take on the trigger', 'go'], B: ['Good: wait for the trigger', 'act'],
+    C: ['Watch only', 'watch'], D: ['Weak: skip for now', 'pending'] };
+  const grade = it => P(it).grade || { score: 0, tier: 'D', pros: [], cons: [] };
   function viewRadar() {
-    const list = radar().filter(matches), small = radarSmall().filter(matches);
-    const smallBlock = small.length ? `<h3 class="radar-sub">Below the ₹${MIN_MCAP().toLocaleString('en-IN')} Cr minimum: not trade candidates</h3>
-      <p class="note">Liquid, setup alive, but the market cap is under the screener's minimum (or not known). Shown so you don't miss them; the size rule is yours to apply.</p>
-      <div class="ledger">${small.map(radarRow).join('')}</div>` : '';
-    if (!list.length) return `<div class="empty">Nothing on the radar yet. A stock lands here once its reaction session has traded and the setup is still alive (base intact, earnings good enough, liquid, market cap at least ₹1,000 Cr).</div>${smallBlock}`;
-    return copyBar(list.concat(small), 'radar') + `<p class="note">Reaction done, setup alive: the screener is waiting for an entry pattern. Sorted by how close each is to an entry. A "Starter 1/3" tag means a third of the size is allowed before the concall. Tap a row for the full card.</p>
-      <div class="ledger">${list.map(radarRow).join('')}</div>${smallBlock}`;
+    const all = radarAll().filter(matches);
+    const held = all.filter(it => heldPos(it)), rest = all.filter(it => !heldPos(it));
+    if (!all.length) return `<div class="empty">Nothing on the radar yet. A stock lands here once its reaction session has traded and the setup is still alive (base intact, earnings good enough, liquid).</div>`;
+    const byTier = t => rest.filter(it => grade(it).tier === t).sort((x, y) => grade(y).score - grade(x).score);
+    const sect = t => { const l = byTier(t); return l.length ? `<h3 class="radar-sub"><span class="tag ${TIER[t][1]}">${t}</span> ${esc(TIER[t][0])} <span class="meta">(${l.length})</span></h3><div class="ledger">${l.map(radarRow).join('')}</div>` : ''; };
+    const nA = byTier('A').length;
+    return copyBar(rest, 'radar') + `<p class="note">Ranked best to worst for taking only a few trades: how ready the setup is, earnings quality, risk from today's price to the stop, the reaction, volume since, strength against its sector index, sector favour and red flags. ${nA ? `<b>${nA} in the top group.</b>` : '<b>Nothing in the top group right now: waiting is fine.</b>'} Tap a row for the full card. A ranking to help you choose, not a rule.</p>
+      ${['A', 'B', 'C', 'D'].map(sect).join('')}
+      ${held.length ? `<h3 class="radar-sub">Already in your trades <span class="meta">(${held.length})</span></h3><div class="ledger">${held.map(radarRow).join('')}</div>` : ''}`;
   }
   function radarRow(it) {
         const pl = P(it).plan || {}, s = sig(it), pc = it.priceContext || {}, live = P(it).live;
@@ -402,12 +409,13 @@
         const trig = hp ? num(hp.oneR) : num(pl.entry), toTrig = last !== null && trig ? (trig / last - 1) * 100 : null;
         const open = S.open.has(it.eventId);
         return `<div class="row radar-row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">
-          <div><div class="s">${esc(it.symbol)}</div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${hp ? ' <span class="tag go">You hold</span>' : ''}${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
+          <div><div class="s">${esc(it.symbol)} <span class="gpill g${grade(it).tier}" title="Radar grade">${grade(it).tier} ${grade(it).score}</span></div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${hp ? ' <span class="tag go">You hold</span>' : ''}${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
           <div><div class="k">Reaction</div><div class="v ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}${num(pc.relativeVolume) !== null ? ` <span class="meta">${num(pc.relativeVolume).toFixed(1)}x vol</span>` : ''}</div></div>
           <div><div class="k">${live?.price ? 'Live' : 'Last close'}</div><div class="v">${inr(last)}</div></div>
           <div class="opt"><div class="k">Base (result-day low)</div><div class="v">${inr(low)}${toBase !== null ? ` <span class="meta">${pct(toBase)}</span>` : ''}</div></div>
           <div><div class="k">${hp ? 'Your +1R' : trig ? 'Trigger' : 'Risk'}</div><div class="v">${trig ? `${inr(trig)}${toTrig !== null ? ` <span class="meta">${toTrig > 0 ? pct(toTrig) + ' away' : 'above'}</span>` : ''}` : (num(pl.riskPct) !== null ? `${num(pl.riskPct).toFixed(1)}%` : '—')}</div></div>
           <div class="chev" aria-hidden="true">›</div></div>
+          ${(grade(it).pros.length || grade(it).cons.length) && !hp ? `<div class="radar-why grade-why">${grade(it).pros.length ? `<span class="up">+ ${esc(grade(it).pros.join(', '))}</span>` : ''}${grade(it).cons.length ? `${grade(it).pros.length ? '<br>' : ''}<span class="down">− ${esc(grade(it).cons.join(', '))}</span>` : ''}</div>` : ''}
           <div class="radar-why">${P(it).rsSector && num(P(it).rsSector.rs1m) !== null ? `<span class="${cls(P(it).rsSector.rs1m)}">RS 1M ${num(P(it).rsSector.rs1m) > 0 ? '+' : ''}${num(P(it).rsSector.rs1m).toFixed(1)} pp vs ${esc(P(it).rsSector.index)}</span>. ` : ''}${hp ? `<b>You hold</b> since ${dt(hp.entryDate)} at ${inr(hp.entryPrice)}: stop ${inr(num(hp.swingStop) ?? num(hp.initialStop))}, +1R ${inr(hp.oneR)}${num(hp.rNow) !== null ? ` (now ${num(hp.rNow).toFixed(2)}R)` : ''}.` : ''}${hp && pl.signal === 'ENTRY_TRIGGERED' ? '' : (hp ? ' Screener: ' : '') + esc(pl.why || '')}</div>${open ? `<div class="row-detail">${card(it)}</div>` : ''}`;
   }
   // 2.9.12: My trades. Entry/stop come from master/positions.json (public repo:
@@ -496,10 +504,12 @@
   // 2.9.18: Claude's evening read: what the news says and what it means for the stock.
   const IMPACT = { POSITIVE: ['Positive for the stock', 'go'], NEGATIVE: ['Negative for the stock', 'bad'],
     MIXED: ['Mixed', 'watch'], NEUTRAL: ['No real impact', ''] };
-  function noteBlock(n, title = "Tonight's read") {
+  function noteBlock(n, title = "News read") {
     if (!n) return '';
     const im = IMPACT[n.impact] || IMPACT.NEUTRAL;
-    return `<div class="tnote"><div class="tnote-h"><b>${esc(title)}</b> <span class="tag ${im[1]}">${esc(im[0])}</span> <span class="meta">${dt(n.date)}</span></div>
+    const todayIst = new Date(Date.now() + 5.5 * 36e5).toISOString().slice(0, 10);
+    const stale = n.date && n.date < todayIst;
+    return `<div class="tnote"><div class="tnote-h"><b>${esc(title)}</b> <span class="tag ${im[1]}">${esc(im[0])}</span> <span class="meta">${dt(n.date)}${stale ? ' · from an earlier day; refreshed each trading morning and evening' : ''}</span></div>
       <p>${esc(n.summary)}</p>
       ${(n.points || []).length ? `<ul class="wl">${n.points.map(x => `<li>${esc(x.text)}${x.source || x.url ? ` <span class="meta">${ext(x.url, esc(x.source || 'source'))}</span>` : ''}</li>`).join('')}</ul>` : ''}
       ${n.watch ? `<p class="meta"><b>Watch:</b> ${esc(n.watch)}</p>` : ''}
@@ -643,7 +653,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.24';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.25';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -671,7 +681,7 @@
     const fails = (sa.checks || []).filter(c => c.status === 'FAIL');
     const auditBanner = fails.length ? `<div class="install-bad"><b>Data check found ${fails.length} problem${fails.length > 1 ? 's' : ''}:</b> ${esc(fails.map(c => c.check).join('; '))}. Details in Data health.</div>` : '';
     $('season').innerHTML = installBanner() + auditBanner + `<strong>${decl.length}</strong> results declared, <strong>${act}</strong> with an actionable setup, <strong>${soon}</strong> companies reporting in the next 7 days.`;
-    $('c-setups').textContent = decl.length; $('c-radar').textContent = radar().length + (radarSmall().length ? `+${radarSmall().length}` : ''); $('c-trades').textContent = (d.positions || []).length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
+    $('c-setups').textContent = decl.length; $('c-radar').textContent = (() => { const r = radarAll().filter(it => !heldPos(it)); const a = r.filter(it => (P(it).grade || {}).tier === 'A').length; return a ? `${a} best · ${r.length}` : `${r.length}`; })(); $('c-trades').textContent = (d.positions || []).length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
   }
 
   function chips() {
