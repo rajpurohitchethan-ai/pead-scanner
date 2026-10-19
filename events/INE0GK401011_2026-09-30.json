@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0GK401011|2026-09-30",
   "createdAt": "2026-10-12T06:38:58Z",
-  "updatedAt": "2026-10-19T10:02:30Z",
+  "updatedAt": "2026-10-19T10:58:59Z",
   "security": {
     "symbol": "TATVA",
     "nseSymbol": "TATVA",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,31 +43,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-12T16:34:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-19T10:41:22Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-19T10:47:59Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-19",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-19T09:55:34Z",
+      "fetchedAt": "2026-10-19T10:47:36Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-8c65db2dbb927449.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d5b69b72390d2817.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-20",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-19T07:03:06Z",
+      "fetchedAt": "2026-10-19T10:47:56Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-19T07:03:06Z",
+      "fetchedAt": "2026-10-19T10:47:56Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -76,7 +86,7 @@
     "pre_result_5d_pct": {
       "value": 7.71,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T07:03:10Z",
+      "fetchedAt": "2026-10-19T10:47:59Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE0GK401011_2026-09-30/equity_history-798393a868d2f4df.json",
@@ -85,7 +95,7 @@
     "pre_result_10d_pct": {
       "value": 11.52,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T07:03:10Z",
+      "fetchedAt": "2026-10-19T10:47:59Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE0GK401011_2026-09-30/equity_history-798393a868d2f4df.json",
@@ -94,7 +104,7 @@
     "pre_result_20d_pct": {
       "value": 13.71,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T07:03:10Z",
+      "fetchedAt": "2026-10-19T10:47:59Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE0GK401011_2026-09-30/equity_history-798393a868d2f4df.json",
@@ -103,7 +113,7 @@
     "distance_52w_high_pct": {
       "value": -2.37,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T07:03:10Z",
+      "fetchedAt": "2026-10-19T10:47:59Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE0GK401011_2026-09-30/equity_history-798393a868d2f4df.json",
@@ -112,7 +122,7 @@
     "last_price": {
       "value": 1944.0,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T07:03:10Z",
+      "fetchedAt": "2026-10-19T10:47:59Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE0GK401011_2026-09-30/equity_history-798393a868d2f4df.json",
@@ -121,7 +131,7 @@
     "avg_turnover_20d_cr": {
       "value": 17.7435,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T07:03:10Z",
+      "fetchedAt": "2026-10-19T10:47:59Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE0GK401011_2026-09-30/equity_history-798393a868d2f4df.json",
@@ -243,12 +253,39 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-19T10:41:22Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d5b69b72390d2817.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-19T15:55:32.640000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-19T10:41:22Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d5b69b72390d2817.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-19T10:41:22Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d5b69b72390d2817.json",
+      "note": null
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-19T07:03:10Z",
-      "lastSuccess": "2026-10-19T07:03:10Z",
+      "lastAttempt": "2026-10-19T10:47:59Z",
+      "lastSuccess": "2026-10-19T10:47:59Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse_price/INE0GK401011_2026-09-30/equity_history-798393a868d2f4df.json"
@@ -261,18 +298,18 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-12T16:44:22Z",
-      "lastSuccess": "2026-10-12T16:44:22Z",
+      "lastAttempt": "2026-10-19T10:47:51Z",
+      "lastSuccess": "2026-10-19T10:47:51Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/NSE_TATVA_2026-09-30/integrated_filings-982ae7d2d2423192.json"
+      "rawRef": "raw/nse/INE0GK401011_2026-09-30/integrated_filings-982ae7d2d2423192.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-12T16:44:22Z",
-      "lastSuccess": "2026-10-12T16:44:22Z",
+      "lastAttempt": "2026-10-19T10:47:51Z",
+      "lastSuccess": "2026-10-19T10:47:51Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/NSE_TATVA_2026-09-30/integrated_filings-982ae7d2d2423192.json"
+      "rawRef": "raw/nse/INE0GK401011_2026-09-30/integrated_filings-982ae7d2d2423192.json"
     },
     "PREV_QUARTER": {
       "lastAttempt": "2026-10-12T16:44:22Z",
@@ -294,27 +331,61 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-19T10:47:54Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE0GK401011_2026-09-30/results_comparison-eb9d9344496569ed.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-19T10:47:55Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE0GK401011_2026-09-30/results_snapshot-7dfa76c6b34ac92f.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-19T10:47:56Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "TATVA.NS: RuntimeError: latest statement does not match event quarter; 543321.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-19T10:48:01Z",
+      "lastSuccess": "2026-10-19T10:48:01Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE0GK401011_2026-09-30/announcements-a02514568400c8b1.json"
     }
   },
   "derived": {
-    "score": 23,
-    "completenessPct": 100.0,
+    "score": 20,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "EXCESSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -322,13 +393,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_CONFIRM",
-        "label": "Watch: Q1 held",
-        "why": "Q1 setup sustained. Needs Q2 confirmation."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -370,13 +441,13 @@
       "sectorKey": "Chemicals",
       "sector": {
         "sector": "Chemicals",
-        "stocks": 59,
-        "momentum63dMedian": 0.38,
-        "relativeToMarket": 5.29,
-        "declared": 5,
+        "stocks": 62,
+        "momentum63dMedian": -0.01,
+        "relativeToMarket": 4.64,
+        "declared": 6,
         "strongResults": 3,
         "avgReaction": -8.93,
-        "tailwind": "STRONG"
+        "tailwind": "POSITIVE"
       },
       "identity": {
         "macroSector": "Commodities",
@@ -426,7 +497,15 @@
         }
       },
       "deliveryPct": 45.23,
-      "concall": null,
+      "concall": {
+        "status": "SCHEDULED",
+        "callDate": "2026-10-19",
+        "noticeUrl": "https://nsearchives.nseindia.com/corporate/TATVA_19102026161634_CN.pdf",
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-19",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/TATVA/",
@@ -438,9 +517,7 @@
     },
     "valuationInputCount": 3,
     "expectationFullWindow": true,
-    "reasons": [
-      "Sector tailwind: Chemicals peers are outperforming."
-    ],
+    "reasons": [],
     "risks": [
       "Trailing P/E 88.5x is elevated."
     ]
@@ -473,6 +550,11 @@
     },
     {
       "timestamp": "2026-10-19T07:03:10Z",
+      "price": 1944.0,
+      "source": "NSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-19T10:47:59Z",
       "price": 1944.0,
       "source": "NSE_PRICE"
     }
@@ -754,12 +836,12 @@
       ]
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-10-19T07:03:10Z",
+    "computedAt": "2026-10-19T10:47:59Z",
     "plusVersion": "2.9.23",
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-12T06:44:29Z",
+    "fetchedAt": "2026-10-19T10:47:51Z",
     "v": 2,
     "rows": [
       {
@@ -863,5 +945,35 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:TATVA|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-19T15:55:32.640000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Enclosed Tatva Chintan Pharma Chem Ltd - 543321 - Unaudited Financial Results (Standalone And Consolidated) Of The Company For The Quarter And Half Year Ended 30 September2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d5b69b72390d2817.json",
+      "seenAt": "2026-10-19T10:58:57Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-19T10:47:56Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "SCHEDULED",
+    "callDate": "2026-10-19",
+    "noticeUrl": "https://nsearchives.nseindia.com/corporate/TATVA_19102026161634_CN.pdf",
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-19",
+    "source": "NSE_ANNOUNCEMENTS"
+  }
 }
