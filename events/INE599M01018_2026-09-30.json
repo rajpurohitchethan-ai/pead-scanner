@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE599M01018|2026-09-30",
   "createdAt": "2026-10-12T17:30:26Z",
-  "updatedAt": "2026-10-19T15:01:33Z",
+  "updatedAt": "2026-10-19T16:11:17Z",
   "security": {
     "symbol": "JUSTDIAL",
     "nseSymbol": "JUSTDIAL",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,31 +44,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-13T16:35:51Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-19T15:50:44Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-19T15:58:55Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-19",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-19T14:52:27Z",
+      "fetchedAt": "2026-10-19T15:58:29Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-823dacdff963c486.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ab04d7bcb262fef6.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-20",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-19T11:51:58Z",
+      "fetchedAt": "2026-10-19T15:58:49Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-19T11:51:58Z",
+      "fetchedAt": "2026-10-19T15:58:49Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -77,7 +87,7 @@
     "pre_result_5d_pct": {
       "value": 11.73,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T11:52:01Z",
+      "fetchedAt": "2026-10-19T15:58:55Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE599M01018_2026-09-30/equity_history-cc8eb1ae36c800e9.json",
@@ -86,7 +96,7 @@
     "pre_result_10d_pct": {
       "value": 12.34,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T11:52:01Z",
+      "fetchedAt": "2026-10-19T15:58:55Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE599M01018_2026-09-30/equity_history-cc8eb1ae36c800e9.json",
@@ -95,7 +105,7 @@
     "pre_result_20d_pct": {
       "value": 9.38,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T11:52:01Z",
+      "fetchedAt": "2026-10-19T15:58:55Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE599M01018_2026-09-30/equity_history-cc8eb1ae36c800e9.json",
@@ -104,7 +114,7 @@
     "distance_52w_high_pct": {
       "value": -15.01,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T11:52:01Z",
+      "fetchedAt": "2026-10-19T15:58:55Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE599M01018_2026-09-30/equity_history-cc8eb1ae36c800e9.json",
@@ -113,7 +123,7 @@
     "last_price": {
       "value": 731.75,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T11:52:01Z",
+      "fetchedAt": "2026-10-19T15:58:55Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE599M01018_2026-09-30/equity_history-cc8eb1ae36c800e9.json",
@@ -122,7 +132,7 @@
     "avg_turnover_20d_cr": {
       "value": 72.3453,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-19T11:52:01Z",
+      "fetchedAt": "2026-10-19T15:58:55Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE599M01018_2026-09-30/equity_history-cc8eb1ae36c800e9.json",
@@ -244,12 +254,39 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-19T15:50:44Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ab04d7bcb262fef6.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-19T21:08:46.733000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-19T15:50:44Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ab04d7bcb262fef6.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-19T15:50:44Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ab04d7bcb262fef6.json",
+      "note": null
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-19T11:52:01Z",
-      "lastSuccess": "2026-10-19T11:52:01Z",
+      "lastAttempt": "2026-10-19T15:58:55Z",
+      "lastSuccess": "2026-10-19T15:58:55Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse_price/INE599M01018_2026-09-30/equity_history-cc8eb1ae36c800e9.json"
@@ -262,18 +299,18 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-13T16:39:49Z",
-      "lastSuccess": "2026-10-13T16:39:49Z",
+      "lastAttempt": "2026-10-19T15:58:44Z",
+      "lastSuccess": "2026-10-19T15:58:44Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/NSE_JUSTDIAL_2026-09-30/integrated_filings-28ca6fca95144ee2.json"
+      "rawRef": "raw/nse/INE599M01018_2026-09-30/integrated_filings-28ca6fca95144ee2.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-13T16:39:49Z",
-      "lastSuccess": "2026-10-13T16:39:49Z",
+      "lastAttempt": "2026-10-19T15:58:44Z",
+      "lastSuccess": "2026-10-19T15:58:44Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/NSE_JUSTDIAL_2026-09-30/integrated_filings-28ca6fca95144ee2.json"
+      "rawRef": "raw/nse/INE599M01018_2026-09-30/integrated_filings-28ca6fca95144ee2.json"
     },
     "PREV_QUARTER": {
       "lastAttempt": "2026-10-13T16:39:49Z",
@@ -295,27 +332,61 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-19T15:58:47Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE599M01018_2026-09-30/results_comparison-f3af146de6932982.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-19T15:58:48Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE599M01018_2026-09-30/results_snapshot-c4f061bdf078f03b.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-19T15:58:49Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "JUSTDIAL.NS: RuntimeError: latest statement does not match event quarter; 535648.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-19T15:58:57Z",
+      "lastSuccess": "2026-10-19T15:58:57Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE599M01018_2026-09-30/announcements-d161eb6ff149209b.json"
     }
   },
   "derived": {
     "score": 23,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -323,13 +394,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_CONFIRM",
-        "label": "Watch: Q1 held",
-        "why": "Q1 setup sustained. Needs Q2 confirmation."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -373,8 +444,8 @@
         "sector": "Consumer Services",
         "stocks": 45,
         "momentum63dMedian": -1.64,
-        "relativeToMarket": 3.44,
-        "declared": 7,
+        "relativeToMarket": 3.55,
+        "declared": 9,
         "strongResults": 4,
         "avgReaction": -1.11,
         "tailwind": "POSITIVE"
@@ -427,7 +498,15 @@
         }
       },
       "deliveryPct": 31.16,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-19",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/JUSTDIAL/",
@@ -470,6 +549,11 @@
     },
     {
       "timestamp": "2026-10-19T11:52:01Z",
+      "price": 731.75,
+      "source": "NSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-19T15:58:55Z",
       "price": 731.75,
       "source": "NSE_PRICE"
     }
@@ -751,12 +835,12 @@
       ]
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-10-19T11:52:01Z",
+    "computedAt": "2026-10-19T15:58:55Z",
     "plusVersion": "2.9.23",
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-12T17:35:24Z",
+    "fetchedAt": "2026-10-19T15:58:44Z",
     "v": 2,
     "rows": [
       {
@@ -812,5 +896,35 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:JUSTDIAL|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-19T21:08:46.733000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial Results for the second quarter and half year ended September 30, 2026 Just Dial Ltd - 535648 - Unaudited Financial Results For The Second Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ab04d7bcb262fef6.json",
+      "seenAt": "2026-10-19T16:11:14Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-19T15:58:49Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-19",
+    "source": "NSE_ANNOUNCEMENTS"
+  }
 }
