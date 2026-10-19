@@ -1547,3 +1547,106 @@ class SectorIndexRsAndMarginTests(unittest.TestCase):
         ch = pp._chart(pp._clean(f), None)
         self.assertEqual(ch["volume"][-1], 5000)
         self.assertEqual(len(ch["volume"]), len(ch["close"]))
+
+
+class SectorIndexOutageTests(unittest.TestCase):
+    """2.9.24: a run-guard outage (SourceSkipped) on 19 Oct marked every sector
+    index 'rejected for the day', so the evening close never loaded and RS vs
+    sector stayed on 16 Oct. Only a name NSE rejects (no series at all) is
+    skipped for the day; an outage is retried on the next run."""
+
+    def _run(self, cache, history):
+        from datetime import datetime
+        saved = {}
+
+        class FakeNSE:
+            def __init__(self, ctx): pass
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def index_history(self, name, start, end):
+                return history(name)
+
+        now = datetime(2026, 10, 19, 20, 30, tzinfo=p.IST)
+        with mock.patch.object(p, "load_sector_indices", return_value=cache), \
+             mock.patch.object(p, "sector_index_names", return_value=["NIFTY IT", "NIFTY FOO"]), \
+             mock.patch.object(p, "NSEAdapter", FakeNSE), \
+             mock.patch.object(p, "now_ist", return_value=now), \
+             mock.patch.object(p, "json_dump_atomic", side_effect=lambda path, obj: saved.update(obj)):
+            return p.refresh_sector_indices(None, None)
+
+    def _rows(self, last_day):
+        from datetime import date, timedelta
+        d0 = date.fromisoformat(last_day)
+        return [{"EOD_TIMESTAMP": (d0 - timedelta(days=i)).isoformat(), "EOD_CLOSE_INDEX_VAL": 100 + i} for i in range(20)], None
+
+    def test_outage_does_not_mark_rejected(self):
+        cache = {"series": {"NIFTY IT": {"dates": ["2026-10-16"], "closes": [1.0], "fetchedOn": "2026-10-19",
+                                         "attemptedAt": "2026-10-19T08:00:00Z"}}, "failed": {}}
+
+        def boom(name):
+            raise p.SourceSkipped("NSE switched off for this run")
+        out = self._run(cache, boom)
+        self.assertNotIn("NIFTY IT", out["failed"])
+
+    def test_old_outage_mark_on_known_series_is_retried(self):
+        cache = {"series": {"NIFTY IT": {"dates": ["2026-10-16"], "closes": [1.0], "fetchedOn": "2026-10-19",
+                                         "attemptedAt": "2026-10-19T08:00:00Z"}},
+                 "failed": {"NIFTY IT": "2026-10-19", "NIFTY FOO": "2026-10-19"}}
+        called = []
+
+        def hist(name):
+            called.append(name)
+            return self._rows("2026-10-19")
+        out = self._run(cache, hist)
+        self.assertEqual(called, ["NIFTY IT"])            # FOO (never had a series) stays skipped today
+        self.assertEqual(out["series"]["NIFTY IT"]["dates"][-1], "2026-10-19")
+        self.assertNotIn("NIFTY IT", out["failed"])
+
+
+class ExchangeHolidayTests(_StoreCase):
+    """2.9.24: master/nse_holidays.json was empty, so 20 Oct 2026 (Dussehra,
+    markets shut) was the reaction session of every result filed on 19 Oct;
+    after 15:45 on the 20th the session would count as closed with no bar
+    (reactions 'missing', every price 'behind'). Holidays now come from the
+    exchange calendar; a session moved off a holiday is only relabelled
+    (the first bar on or after the holiday was already the one measured)."""
+    HOL = {date(2026, 9, 14), date(2026, 10, 2), date(2026, 10, 20), date(2026, 11, 10)}
+
+    def rows(self):
+        return [bse_row(500111, "2026-09-11T19:06:04.000", "Unaudited Financial Results for the quarter ended 30th June 2026")]
+
+    def test_calendar_file_lists_dussehra(self):
+        self.assertIn(date(2026, 10, 20), p.load_holidays())
+        self.assertIn(date(2026, 11, 10), p.load_holidays())
+
+    def test_reaction_session_skips_holiday(self):
+        from datetime import datetime
+        with mock.patch.object(p, "load_holidays", return_value=self.HOL):
+            after = datetime(2026, 10, 19, 17, 39, tzinfo=p.IST)
+            self.assertEqual(p.reaction_session(after, None)[0], date(2026, 10, 21))
+            intraday = datetime(2026, 10, 19, 13, 47, tzinfo=p.IST)
+            self.assertEqual(p.reaction_session(intraday, None), (date(2026, 10, 21), "INTRADAY"))
+            with mock.patch.object(p, "now_ist", return_value=datetime(2026, 10, 20, 20, 0, tzinfo=p.IST)):
+                self.assertEqual(p.last_completed_session(), date(2026, 10, 19))
+
+    def test_holiday_relabel_keeps_measured_reaction(self):
+        e = self.store.ensure_event(security={"symbol": "S500111", "bseCode": "500111"}, period_end=date(2026, 6, 30))
+        for f, v in (("results_released", True), ("filing_timestamp", "2026-09-11T19:06:04+05:30"),
+                     ("reaction_session", "2026-09-14"), ("result_day_return_pct", -3.85), ("result_day_low", 101.5)):
+            self.store.merge_field(e, f, v, source="BSE_RESULT_ANNOUNCEMENT" if f != "reaction_session" else "DERIVED")
+        e["state"] = "REACTION_READY"
+        self.store.save(e)
+        with mock.patch.object(p, "load_holidays", return_value=self.HOL):
+            p.integrity_pass(self.store, today=date(2026, 10, 19), raw_root=self.raw)
+        e = self.store.load(e["eventId"])
+        self.assertEqual(self.store.value(e, "reaction_session"), "2026-09-15")
+        self.assertEqual(self.store.value(e, "result_day_return_pct"), -3.85)
+        self.assertEqual(self.store.value(e, "result_day_low"), 101.5)
+
+    def test_no_live_quotes_on_a_holiday(self):
+        from datetime import datetime
+        with mock.patch.object(p, "load_holidays", return_value=self.HOL):
+            with mock.patch.object(p, "now_ist", return_value=datetime(2026, 10, 20, 11, 0, tzinfo=p.IST)):
+                self.assertFalse(p.market_open_now())
+            with mock.patch.object(p, "now_ist", return_value=datetime(2026, 10, 21, 11, 0, tzinfo=p.IST)):
+                self.assertTrue(p.market_open_now())

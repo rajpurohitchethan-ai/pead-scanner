@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.23"
+ENGINE_VERSION = "2.9.24"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -3913,9 +3913,19 @@ def integrity_pass(store: EventStore, *, today: date | None = None, raw_root: Pa
                     ws = reaction_window_start(ts, timing, new_session)
                     if ws and ws != new_session:
                         store.force_field(event, "reaction_window_start", ws.isoformat(), source="DERIVED", note="intraday filing")
-                    for f in POST_RESULT_FIELDS:
+                    old_d = parse_date(old_session)
+                    if old_d and not is_trading_day(old_d) and next_trading_day(old_d) == new_session:
+                        # 2.9.24: the old session was an exchange holiday; the
+                        # first bar on/after it (the one measured) is the new
+                        # session, so the reaction stays valid: relabel only.
+                        stats["holidayRelabelled"] = stats.get("holidayRelabelled", 0) + 1
+                        recompute = False
+                    else:
+                        recompute = True
+                    for f in (POST_RESULT_FIELDS if recompute else ()):
                         store.revoke_field(event, f, f"reaction session corrected {old_session} -> {new_session}; recompute")
-                    (event.setdefault("fetch", {}).get("PRICE_HISTORY") or {}).pop("lastSuccess", None)
+                    if recompute:
+                        (event.setdefault("fetch", {}).get("PRICE_HISTORY") or {}).pop("lastSuccess", None)
                 stats["reverified"] += 1
                 changed = True
             else:
@@ -4977,7 +4987,7 @@ LIVE_SIGNALS = {"NEAR_ENTRY", "WATCH_BREAKOUT", "WAIT_RECLAIM", "ENTRY_EARLY", "
 
 def market_open_now() -> bool:
     now = now_ist()
-    return now.weekday() < 5 and (9, 15) <= (now.hour, now.minute) <= (15, 35)
+    return is_trading_day(now.date()) and (9, 15) <= (now.hour, now.minute) <= (15, 35)   # 2.9.24: holidays
 
 
 def quote_last_price(payload: Any) -> float | None:
@@ -5400,7 +5410,7 @@ def refresh_index_cache(ctx: SourceContext) -> dict[str, Any]:
     cache = load_index_cache()
     last = (cache.get("dates") or [None])[-1]
     recent = bool(last) and (now_ist().date() - date.fromisoformat(last)).days <= 4
-    after_close = now_ist().weekday() < 5 and (now_ist().hour, now_ist().minute) >= (15, 45)
+    after_close = is_trading_day(now_ist().date()) and (now_ist().hour, now_ist().minute) >= (15, 45)
     todays_close_missing = after_close and last and last < now_ist().date().isoformat()
     tried = parse_datetime(cache.get("attemptedAt"))
     if (cache.get("fetchedOn") == now_ist().date().isoformat() and cache.get("closes") and recent
@@ -5467,12 +5477,14 @@ def refresh_sector_indices(store: EventStore, ctx: SourceContext) -> dict[str, A
     series = cache.setdefault("series", {})
     failed = cache.setdefault("failed", {})
     today = now_ist().date()
-    after_close = today.weekday() < 5 and (now_ist().hour, now_ist().minute) >= (15, 45)
+    after_close = is_trading_day(today) and (now_ist().hour, now_ist().minute) >= (15, 45)
     todo = []
     for name in sector_index_names(store):
         s_ = series.get(name) or {}
         last = (s_.get("dates") or [None])[-1]
-        if failed.get(name) == today.isoformat():
+        # 2.9.24: skip for the day only a name NSE rejected (it never had a
+        # series); an index we already hold was marked by an outage: retry it.
+        if failed.get(name) == today.isoformat() and not s_.get("dates"):
             continue
         fresh = s_.get("fetchedOn") == today.isoformat() and not (after_close and last and last < today.isoformat()
                                                                       and _due(s_.get("attemptedAt"), 120))
@@ -5500,6 +5512,9 @@ def refresh_sector_indices(store: EventStore, ctx: SourceContext) -> dict[str, A
                     pts = sorted(old.items())[-90:]
                     s_.update({"dates": [p_[0] for p_ in pts], "closes": [p_[1] for p_ in pts], "fetchedOn": today.isoformat()})
                     failed.pop(name, None)
+                except SourceSkipped as exc:            # 2.9.24: outage, not a rejection
+                    print(f"Sector indices deferred (NSE switched off): {exc}")
+                    break
                 except Exception as exc:
                     failed[name] = today.isoformat()
                     print(f"Sector index {name} failed: {type(exc).__name__}: {exc}")
