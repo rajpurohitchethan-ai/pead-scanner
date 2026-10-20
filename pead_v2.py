@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.25"
+ENGINE_VERSION = "2.9.26"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -4077,6 +4077,10 @@ def pick_lookup_row(rows: Any, symbol: str | None, name: Any = None) -> dict[str
     want = normalize_symbol(symbol)
     for r in rows:
         if want and normalize_symbol(r.get("symbol")) == want:
+            # 2.9.26: an exact symbol can still be another company (BSE 'SEL'
+            # = Sanathnagar Enterprises, NSE 'SEL' = Sungarner Energies).
+            if name and r.get("companyName") and not same_company({"name": name}, {"name": r.get("companyName")}):
+                return None
             return r
     if name:
         for r in rows[:3]:
@@ -4204,7 +4208,14 @@ def _repair_bse_lookup_mismatches(store: EventStore, raw_root: Path = RAW_DIR,
             continue
         prefix = safe_filename(e["eventId"]).rsplit("_", 1)[0]
         wrong = None
-        for f in base.glob(f"{prefix}_*/lookup-*.json"):
+        # 2.9.26: the code belongs to another event of this period that has
+        # an ISIN and another company's name (NSE:SEL Sungarner Energies vs
+        # BSE 509423 Sanathnagar Enterprises; the BSE lookup payload was null).
+        if not sec.get("isin"):
+            owner = _bse_code_owner(store, e, code)
+            if owner is not None and not same_company({"name": name}, {"name": (owner.get("security") or {}).get("name")}):
+                wrong = (owner.get("security") or {}).get("name")
+        for f in ([] if wrong else base.glob(f"{prefix}_*/lookup-*.json")):
             try:
                 pl = json.loads(f.read_text(encoding="utf-8"))
             except Exception:
@@ -4238,6 +4249,15 @@ def _repair_bse_lookup_mismatches(store: EventStore, raw_root: Path = RAW_DIR,
     return fixed
 
 
+def _bse_code_owner(store: EventStore, e: dict[str, Any], code: str) -> dict[str, Any] | None:
+    """Another event of the same period that carries BSE code `code` and an ISIN."""
+    end = (e.get("period") or {}).get("end")
+    return next((o for o in store.all() if o["eventId"] != e["eventId"]
+                 and str((o.get("security") or {}).get("bseCode") or "") == code
+                 and (o.get("security") or {}).get("isin")
+                 and (o.get("period") or {}).get("end") == end), None)
+
+
 def _clean_wrong_bse_traces(store: EventStore, e: dict[str, Any], code: str, raw_root: Path,
                             master: "SymbolMaster | None", save: bool = True) -> bool:
     """Remove what the wrong BSE code left behind (2.9.1): sector labels and
@@ -4256,6 +4276,9 @@ def _clean_wrong_bse_traces(store: EventStore, e: dict[str, Any], code: str, raw
             continue
         if isinstance(pl, dict) and str(pl.get("bse_code") or "") == code and pl.get("isin"):
             wrong_isins.add(str(pl["isin"]).upper())
+    code_owner = _bse_code_owner(store, e, code)
+    if code_owner is not None:
+        wrong_isins.add(str(code_owner["security"]["isin"]).upper())
     wrong_ident: dict[str, set] = {}
     wrong_pe: set = set()
     for f in (raw_root / "bse").glob(f"{prefix}_*/equity_meta-*.json"):
@@ -4306,7 +4329,7 @@ def _clean_wrong_bse_traces(store: EventStore, e: dict[str, Any], code: str, raw
         for k, v in (master.data.get("securities") or {}).items():
             if isinstance(v, dict) and str(v.get("bseCode") or "") == code and \
                     normalize_symbol(v.get("nseSymbol")) == normalize_symbol(sec.get("nseSymbol")) and \
-                    v.get("name") == sec.get("name"):
+                    (v.get("name") == sec.get("name") or k == f"NSE:{normalize_symbol(sec.get('nseSymbol'))}"):
                 for kk in ("bseCode", "bseSymbol", "bseGroup"):
                     v.pop(kk, None)
                 for kk in _BSE_IDENTITY_KEYS:

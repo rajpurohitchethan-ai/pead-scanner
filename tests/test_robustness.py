@@ -1700,3 +1700,84 @@ class RadarGradeTests(unittest.TestCase):
                                     priceContext={"lastClose": 1380.0, "resultDayPct": 8.42, "relativeVolume": 7.8}))
         self.assertNotEqual(g["tier"], "A")
         self.assertIn("entry triggered earlier: buying now is late", g["cons"])
+
+
+class ExactSymbolOtherCompanyTests(unittest.TestCase):
+    """2.9.26 (20 Oct 2026): BSE's calendar row 509423 'SEL' (Sanathnagar
+    Enterprises) was looked up on NSE; NSE lists 'SEL' exactly, but for
+    Sungarner Energies (SME). pick_lookup_row took the exact symbol without
+    checking the name, so the NSE:SEL event mixed Sungarner's prices / quote
+    with Sanathnagar's BSE code, Realty sector, P/B, ROE and result date."""
+    import json as _json
+    import tempfile as _tempfile
+    P = date(2026, 9, 30)
+    META = {"ISIN": "INE367E01033", "PE": "138.38", "PB": "-0.89", "ROE": "-0.65", "OPM": "-", "Group": "X",
+            "Sector": "Consumer Discretionary", "IndustryNew": "Realty", "IGroup": "Realty",
+            "ISubGroup": "Residential, Commercial Projects"}
+
+    def test_exact_symbol_of_another_company_is_rejected(self):
+        rows = [{"symbol": "ROSSTECH", "companyName": "Rossell Techsys Limited"},
+                {"symbol": "SEL", "companyName": "Sungarner Energies Limited"}]
+        self.assertIsNone(p.pick_lookup_row(rows, "SEL", "Sanathnagar Enterprises Ltd"))
+        self.assertEqual(p.pick_lookup_row(rows, "SEL", "Sungarner Energies Ltd")["symbol"], "SEL")
+        self.assertEqual(p.pick_lookup_row(rows, "SEL")["symbol"], "SEL")          # no name: exact symbol
+
+    def _setup(self):
+        root = Path(self._tempfile.mkdtemp())
+        st = p.EventStore(root / "events")
+        raw = root / "raw"
+        folder = raw / "bse" / "NSE_SEL_2026-09-30"
+        folder.mkdir(parents=True)
+        (folder / "lookup-1.json").write_text("null")                 # BSE lookup by the NSE name found nothing
+        (folder / "equity_meta-1.json").write_text(self._json.dumps(self.META))
+        master = p.SymbolMaster(root / "master" / "symbols.json")
+        owner = st.ensure_event(security={"isin": "INE367E01033", "symbol": "SEL", "bseSymbol": "SEL",
+                                          "bseCode": "509423", "name": "Sanathnagar Enterprises Ltd"}, period_end=self.P)
+        st.save(owner)
+        sel = st.ensure_event(security={"symbol": "SEL", "nseSymbol": "SEL", "name": "Sungarner Energies Limited"},
+                              period_end=self.P)
+        sec = sel["security"]
+        sec.update({"bseSymbol": "SEL", "bseCode": "509423", "bseGroup": "X", "nseSeries": "SM",
+                    "basicIndustry": "Other Electrical Equipment", "macroSector": "Consumer Discretionary",
+                    "exchangeSector": "Realty", "industry": "Realty"})
+        st.merge_field(sel, "market_cap_cr", 71.88, source="NSE_QUOTE")
+        st.merge_field(sel, "last_price", 310.0, source="NSE_PRICE")
+        st.merge_field(sel, "pb", -0.89, source="BSE_META")
+        st.merge_field(sel, "roe_pct", -0.65, source="BSE_META")
+        st.merge_field(sel, "result_date", "2026-10-21", source="BSE_RESULT_ANNOUNCEMENT")
+        sel["mergedFrom"] = ["BSE:509423|2026-09-30"]
+        st.save(sel)
+        st.add_alias("BSE:509423|2026-09-30", owner["eventId"])
+        master.data["securities"]["NSE:SEL"] = dict(sec, name="Sanathnagar Enterprises Ltd", securityKey="NSE:SEL")
+        return st, raw, master, sel["eventId"], owner["eventId"]
+
+    def test_repair_detaches_code_owned_by_another_company(self):
+        st, raw, master, sel_id, owner_id = self._setup()
+        fixed = p.repair_lookup_mismatches(st, master, raw)
+        self.assertTrue(any(f["eventId"] == sel_id for f in fixed))
+        ev = st.load(sel_id)
+        sec = ev["security"]
+        for k in ("bseCode", "bseSymbol", "bseGroup", "macroSector", "exchangeSector", "industry"):
+            self.assertNotIn(k, sec, k)
+        self.assertEqual(sec.get("basicIndustry"), "Other Electrical Equipment")   # NSE's own label kept
+        self.assertEqual(sec.get("nseSymbol"), "SEL")
+        self.assertIsNone(st.value(ev, "pb"))
+        self.assertIsNone(st.value(ev, "roe_pct"))
+        self.assertIsNone(st.value(ev, "result_date"))                # the other company's date
+        self.assertEqual(st.value(ev, "market_cap_cr"), 71.88)        # own values kept
+        self.assertEqual(st.value(ev, "last_price"), 310.0)
+        self.assertFalse(ev.get("mergedFrom"))
+        self.assertEqual(st.resolve("BSE:509423|2026-09-30"), owner_id)
+        own = st.load(owner_id)
+        self.assertEqual(own["security"]["bseCode"], "509423")        # owner untouched
+        self.assertNotIn("bseCode", master.data["securities"]["NSE:SEL"])
+        # Idempotent: a second pass changes nothing.
+        self.assertFalse([f for f in p.repair_lookup_mismatches(st, master, raw) if f["eventId"] == sel_id])
+
+    def test_shared_code_of_the_same_company_is_left_alone(self):
+        st, raw, master, sel_id, owner_id = self._setup()
+        ev = st.load(sel_id)
+        ev["security"]["name"] = "Sanathnagar Enterprises Limited"
+        st.save(ev)
+        p.repair_lookup_mismatches(st, master, raw)
+        self.assertEqual(st.load(sel_id)["security"].get("bseCode"), "509423")
