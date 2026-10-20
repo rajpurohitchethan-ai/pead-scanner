@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:SHARDUL|2026-09-30",
   "createdAt": "2026-10-16T02:44:46Z",
-  "updatedAt": "2026-10-20T08:59:07Z",
+  "updatedAt": "2026-10-20T09:53:01Z",
   "security": {
     "symbol": "SHARDUL",
     "bseSymbol": "SHARDUL",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -33,31 +33,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T02:44:46Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-20T09:40:46Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-20T09:48:03Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-20",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-20T08:50:23Z",
+      "fetchedAt": "2026-10-20T09:47:36Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-5c0f3fc17ad8b4dd.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7e2b5a86aea74f67.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-21",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-20T06:59:32Z",
+      "fetchedAt": "2026-10-20T09:47:58Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "NON_TRADING_DAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "NON_TRADING_DAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-20T06:59:32Z",
+      "fetchedAt": "2026-10-20T09:47:58Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -66,7 +76,7 @@
     "pre_result_5d_pct": {
       "value": 3.44,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-20T06:59:37Z",
+      "fetchedAt": "2026-10-20T09:48:03Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/NSE_SHARDUL_2026-09-30/equity_history-333f879d51d563f1.json",
@@ -75,7 +85,7 @@
     "pre_result_10d_pct": {
       "value": 1.33,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-20T06:59:37Z",
+      "fetchedAt": "2026-10-20T09:48:03Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/NSE_SHARDUL_2026-09-30/equity_history-333f879d51d563f1.json",
@@ -84,7 +94,7 @@
     "pre_result_20d_pct": {
       "value": 7.05,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-20T06:59:37Z",
+      "fetchedAt": "2026-10-20T09:48:03Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/NSE_SHARDUL_2026-09-30/equity_history-333f879d51d563f1.json",
@@ -93,7 +103,7 @@
     "distance_52w_high_pct": {
       "value": -0.86,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-20T06:59:37Z",
+      "fetchedAt": "2026-10-20T09:48:03Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/NSE_SHARDUL_2026-09-30/equity_history-333f879d51d563f1.json",
@@ -102,7 +112,7 @@
     "last_price": {
       "value": 58.88,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-20T06:59:37Z",
+      "fetchedAt": "2026-10-20T09:48:03Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/NSE_SHARDUL_2026-09-30/equity_history-333f879d51d563f1.json",
@@ -111,7 +121,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.1008,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-20T06:59:37Z",
+      "fetchedAt": "2026-10-20T09:48:03Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/NSE_SHARDUL_2026-09-30/equity_history-333f879d51d563f1.json",
@@ -197,19 +207,46 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_SHARDUL_2026-09-30/scrip_results-904d50c79048539b.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-20T09:40:46Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7e2b5a86aea74f67.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-20T14:14:15.120000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-20T09:40:46Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7e2b5a86aea74f67.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-20T09:40:46Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7e2b5a86aea74f67.json",
+      "note": null
     }
   },
   "fetch": {
     "NSE_LOOKUP": {
-      "lastAttempt": "2026-10-20T08:54:33Z",
-      "lastSuccess": "2026-10-20T08:54:33Z",
+      "lastAttempt": "2026-10-20T09:47:48Z",
+      "lastSuccess": "2026-10-20T09:47:48Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/NSE_SHARDUL_2026-09-30/lookup-21345e8d19a72cc9.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-20T06:59:37Z",
-      "lastSuccess": "2026-10-20T06:59:37Z",
+      "lastAttempt": "2026-10-20T09:48:03Z",
+      "lastSuccess": "2026-10-20T09:48:03Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse_price/NSE_SHARDUL_2026-09-30/equity_history-333f879d51d563f1.json"
@@ -222,15 +259,15 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-19T10:51:37Z",
-      "lastSuccess": "2026-10-19T10:51:37Z",
+      "lastAttempt": "2026-10-20T09:47:52Z",
+      "lastSuccess": "2026-10-20T09:47:52Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/NSE_SHARDUL_2026-09-30/integrated_filings-4f53cda18c2baa0c.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-19T10:51:39Z",
-      "lastSuccess": "2026-10-19T10:51:39Z",
+      "lastAttempt": "2026-10-20T09:47:54Z",
+      "lastSuccess": "2026-10-20T09:47:54Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/NSE_SHARDUL_2026-09-30/financial_results-4f53cda18c2baa0c.json"
@@ -248,27 +285,61 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-20T09:47:56Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/NSE_SHARDUL_2026-09-30/results_comparison-8b2ed4085b353058.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-20T09:47:58Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/NSE_SHARDUL_2026-09-30/results_snapshot-aae2059979e92fe7.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-20T09:47:58Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SHARDUL.NS: RuntimeError: latest statement does not match event quarter; 512393.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-20T09:48:05Z",
+      "lastSuccess": "2026-10-20T09:48:05Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/NSE_SHARDUL_2026-09-30/announcements-4f53cda18c2baa0c.json"
     }
   },
   "derived": {
     "score": 2,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -276,13 +347,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_CONFIRM",
-        "label": "Watch: Q1 held",
-        "why": "Q1 setup sustained. Needs Q2 confirmation."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -326,7 +397,7 @@
         "sector": "Financial Services",
         "stocks": 185,
         "momentum63dMedian": -6.5,
-        "relativeToMarket": -1.57,
+        "relativeToMarket": -1.58,
         "declared": 34,
         "strongResults": 22,
         "avgReaction": -0.37,
@@ -380,7 +451,15 @@
         }
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-20",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/SHARDUL/",
@@ -423,6 +502,11 @@
     },
     {
       "timestamp": "2026-10-20T06:59:37Z",
+      "price": 58.88,
+      "source": "NSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-20T09:48:03Z",
       "price": 58.88,
       "source": "NSE_PRICE"
     }
@@ -704,13 +788,43 @@
       ]
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-10-20T06:59:37Z",
+    "computedAt": "2026-10-20T09:48:03Z",
     "plusVersion": "2.9.23",
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-19T10:51:39Z",
+    "fetchedAt": "2026-10-20T09:47:54Z",
     "v": 2,
     "rows": []
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-20T14:14:15.120000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Approval of Un-audited Financial Results for the quarter and half year ended 30th September 2026 Shardul Securities Ltd - 512393 - Approval Of Un-Audited Financial Results For The Quarter And Half Year Ended 30Th September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7e2b5a86aea74f67.json",
+      "seenAt": "2026-10-20T09:52:59Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-20T09:47:58Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-20",
+    "source": "NSE_ANNOUNCEMENTS"
   }
 }
