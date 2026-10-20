@@ -653,14 +653,24 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.26';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.27';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
     const bad = [];
-    if (engine && engine !== PAGE_VERSION) bad.push(`page files are ${PAGE_VERSION} but the engine (pead_v2.py) is ${engine}`);
+    // 2.9.27: a code push publishes the page at once while the data follows with
+    // the next engine run (15-20 min). Newer page + recent data = "updating", not an error.
+    const ver = v => String(v || '').split('.').map(Number);
+    const newer = (a, b) => { const x = ver(a), y = ver(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+    const ageMin = d.generatedAt ? (Date.now() - new Date(d.generatedAt).getTime()) / 6e4 : Infinity;
+    if (engine && engine !== PAGE_VERSION) {
+      if (newer(PAGE_VERSION, engine) && ageMin < 90 && ic.ok !== false)
+        return `<div class="install-wait"><b>Update in progress.</b> Version ${esc(PAGE_VERSION)} was just published; the data refreshes with the next run (usually within 20 minutes). Figures below are from ${esc(engine)} and still valid.</div>`;
+      if (newer(engine, PAGE_VERSION)) bad.push(`this page (${PAGE_VERSION}) is older than the data (${engine}): reload the page`);
+      else bad.push(`page files are ${PAGE_VERSION} but the engine (pead_v2.py) is ${engine} and no new run has published for ${Math.round(ageMin)} minutes`);
+    }
     if (ic.ok === false) bad.push(`pead_plus.py is ${ic.pead_plus} but pead_v2.py is ${ic.engine}`);
-    return bad.length ? `<div class="install-bad"><b>Files out of sync.</b> ${esc(bad.join('; '))}. Re-upload all files from the same update.</div>` : '';
+    return bad.length ? `<div class="install-bad"><b>Files out of sync.</b> ${esc(bad.join('; '))}.</div>` : '';
   }
   function header() {
     const d = S.data, r = d.regime || {}, c = d.counts || {};
