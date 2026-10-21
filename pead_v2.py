@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.27"
+ENGINE_VERSION = "2.9.28"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5077,6 +5077,18 @@ def open_positions() -> list[dict[str, Any]]:
             and str(r.get("status") or "OPEN").upper() == "OPEN"]
 
 
+def closed_positions() -> list[dict[str, Any]]:
+    """2.9.28: trades marked CLOSED in positions.json, newest exit first."""
+    try:
+        data = json.loads(POSITIONS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    rows = data.get("positions") if isinstance(data, dict) else data
+    out = [pead_plus.closed_trade_view(r) for r in (rows or []) if isinstance(r, dict)
+           and str(r.get("status") or "").upper() == "CLOSED"]
+    return sorted([r for r in out if r], key=lambda r: str(r.get("exitDate") or ""), reverse=True)
+
+
 def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, Any]]:
     pos = open_positions()
     if not pos:
@@ -5106,7 +5118,8 @@ def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, A
                 sym, (watch.get("symbols") or {}).get(sym), watch.get("deals") or [],
                 (pl.get("price") or {}).get("pressure"), pl.get("deliveryPct"),
                 (watch.get("global") or {}).get("rows") or {}, _plus_sector(pl), today,
-                industry=(it or {}).get("industry"))
+                industry=(it or {}).get("industry"),
+                rsi_weekly_local=(pl.get("price") or {}).get("rsi_weekly"))
         except Exception as exc:
             print(f"Holdings watch view {p_['symbol']} failed: {type(exc).__name__}: {exc}")
         view["notes"] = (notes.get("symbols") or {}).get(str(p_["symbol"]).upper())
@@ -5179,6 +5192,26 @@ def _yahoo_closes(tickers: list[str]) -> dict[str, list[tuple[str, float]]]:
             out[t] = [(idx.date().isoformat(), float(v)) for idx, v in col.items()]
         except Exception:
             continue
+    return out
+
+
+def _yahoo_bars(ticker: str, interval: str, period: str) -> list[tuple[str, float, float, float]]:
+    """2.9.28: (date, high, low, close) bars from Yahoo for the RSI check (long
+    history the NSE daily store does not keep). The last bar is the period in progress."""
+    if yf is None or not ticker:
+        return []
+    frame = yf.download(ticker, period=period, interval=interval, auto_adjust=False, progress=False,
+                        threads=False, timeout=YAHOO_TIMEOUT_SEC)
+    if frame is None or getattr(frame, "empty", True):
+        return []
+    if pd is not None and isinstance(frame.columns, pd.MultiIndex):
+        frame.columns = frame.columns.get_level_values(0)
+    out = []
+    for idx, r in frame.iterrows():
+        c = safe_num(r.get("Close"))
+        if c is None:
+            continue
+        out.append((idx.date().isoformat(), safe_num(r.get("High")), safe_num(r.get("Low")), c))
     return out
 
 
@@ -5264,6 +5297,18 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
                 w["filingsAt"] = iso_now()
             except Exception as exc:
                 print(f"Holdings filings {sym} failed: {type(exc).__name__}: {exc}")
+        if _due(w.get("rsiAt"), 12 * 60):                              # 2.9.28 weekly / monthly RSI
+            try:
+                tick = f"{sym}.NS" if normalize_symbol(sec.get("nseSymbol")) else (f"{sec.get('bseCode')}.BO" if sec.get("bseCode") else None)
+                res = {"source": f"Yahoo {tick}"}
+                for tf, interval, period in (("weekly", "1wk", "5y"), ("monthly", "1mo", "10y")):
+                    bars = _yahoo_bars(tick, interval, period) if tick else []
+                    res[tf] = pead_plus.rsi_divergence(bars, tf) if bars else None
+                if res.get("weekly") or res.get("monthly"):
+                    w["rsi"] = res
+                w["rsiAt"] = iso_now()
+            except Exception as exc:
+                print(f"Holdings RSI {sym} failed: {type(exc).__name__}: {exc}")
         if _due(w.get("newsAt"), HOLDINGS_WATCH_EVERY_MIN):
             try:
                 name = re.sub(r"\b(ltd|limited)\.?$", "", str(sec.get("name") or sym), flags=re.I).strip()
@@ -6771,7 +6816,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
-PLUS_VERSION = "2.9.23"   # bump to rebuild every stored chart/price analytic once
+PLUS_VERSION = "2.9.28"   # bump to rebuild every stored chart/price analytic once
 
 
 def replay_plus(store: EventStore) -> int:
@@ -7384,6 +7429,8 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "sectors": sorted(sectors.values(), key=lambda r: (-(r.get("relativeToMarket") or -999), r["sector"])),
         "scorecard": card | {"timing": timing, "runup": runup},
         "positions": positions,
+        "closedPositions": closed_positions(),                         # 2.9.28
+        "closedSummary": pead_plus.closed_summary(closed_positions()),
         "globalMarkets": global_markets_view(),                       # 2.9.15
         "marketNote": holdings_notes(now_ist().date()).get("market"),   # 2.9.18
         "thresholds": {

@@ -1781,3 +1781,65 @@ class ExactSymbolOtherCompanyTests(unittest.TestCase):
         st.save(ev)
         p.repair_lookup_mismatches(st, master, raw)
         self.assertEqual(st.load(sel_id)["security"].get("bseCode"), "509423")
+
+
+class RsiDivergenceAndClosedTradeTests(unittest.TestCase):
+    """2.9.28: PREMIERPOL was sold at 99.96 (entry 109.49, stop 105.14) on 21 Oct;
+    the owner saw a weekly / monthly RSI bearish divergence before it failed."""
+
+    def test_closed_trade_r_multiple(self):
+        import pead_plus as pp
+        c = pp.closed_trade_view({"symbol": "PREMIERPOL", "entryDate": "2026-10-16", "entryPrice": 109.49, "stop": 105.14,
+                                  "exitDate": "2026-10-21", "exitPrice": 99.96, "status": "CLOSED"})
+        self.assertEqual((c["r"], c["pnlPct"], c["days"]), (-2.19, -8.7, 5))
+        s = pp.closed_summary([c, dict(c, r=1.5)])
+        self.assertEqual((s["trades"], s["wins"], s["totalR"]), (2, 1, -0.69))
+        self.assertIsNone(pp.closed_trade_view({"symbol": "X", "entryPrice": 10}))
+
+    def test_rsi_wilder_bounds(self):
+        import pead_plus as pp
+        up = pp.rsi_series([float(i) for i in range(1, 40)])
+        self.assertEqual(up[-1], 100.0)
+        self.assertIsNone(up[5])
+        mixed = pp.rsi_series([10, 11, 10.5, 11.5, 11, 12, 11.4, 12.4, 12, 13, 12.5, 13.5, 13, 14, 13.4, 14.4, 14.0])
+        self.assertTrue(0 < mixed[-1] < 100)
+
+    def _bars(self, closes):
+        from datetime import date, timedelta
+        d0 = date(2025, 1, 6)
+        return [((d0 + timedelta(weeks=i)).isoformat(), c * 1.01, c * 0.99, c) for i, c in enumerate(closes)]
+
+    def test_bearish_divergence_found(self):
+        import pead_plus as pp
+        # strong rally to a first high, a pullback, then a slow grind to a slightly higher high
+        closes = [100 + i * 0.2 for i in range(20)]                      # base
+        closes += [104 + i * 3 for i in range(8)]                          # sharp rally -> high ~125 (RSI high)
+        closes += [124, 121, 118, 116, 117]                                 # pullback
+        closes += [118, 119.5, 121, 122.5, 124, 125.5, 126.5]               # weaker grind to a higher high
+        g = pp.rsi_divergence(self._bars(closes), "weekly")
+        self.assertEqual(g["divergence"], "BEARISH", g)
+        self.assertIn("lower high", g["note"])
+
+    def test_no_divergence_on_steady_trend_and_short_history(self):
+        import pead_plus as pp
+        g = pp.rsi_divergence(self._bars([100 + (i % 4) for i in range(40)]), "weekly")
+        self.assertIsNone(g["divergence"])
+        short = pp.rsi_divergence(self._bars([100.0] * 12), "monthly")
+        self.assertIsNone(short["rsi"])
+        self.assertIn("Not enough monthly history", short["note"])
+
+    def test_resample_weekly_monthly(self):
+        import pead_plus as pp
+        daily = [("2026-10-12", 11, 9, 10), ("2026-10-13", 12, 10, 11), ("2026-10-19", 13, 11, 12)]
+        wk = pp.resample_bars(daily, "weekly")
+        self.assertEqual(wk[0], ("2026-10-13", 12, 9, 11))
+        self.assertEqual(len(pp.resample_bars(daily, "monthly")), 1)
+
+    def test_divergence_raises_a_holding_flag(self):
+        import pead_plus as pp
+        from datetime import date
+        v = pp.holding_watch_view("X", {"rsi": {"monthly": {"rsi": 66, "divergence": "BEARISH", "note": "n"}, "source": "Yahoo X.NS"}},
+                                  [], None, None, {}, None, date(2026, 10, 21),
+                                  rsi_weekly_local={"rsi": 58, "divergence": None, "note": "No divergence."})
+        self.assertIn("monthly RSI bearish divergence", v["flags"])
+        self.assertEqual(v["rsi"]["weekly"]["rsi"], 58)

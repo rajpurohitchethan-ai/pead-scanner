@@ -424,7 +424,7 @@
     EXIT_SWING: ['Exit swing part', 'bad'], EXIT: ['Exit: closed below stop', 'bad'], NO_DATA: ['Waiting for data', 'pending'] };
   function viewTrades() {
     const list = S.data.positions || [];
-    if (!list.length) return `<div class="empty">No open trades. Tell Claude when you buy, and the trade is tracked here against the screener's plan.</div>`;
+    if (!list.length) return closedBlock() + `<div class="empty">No open trades. Tell Claude when you buy, and the trade is tracked here against the screener's plan.</div>`;
     return `<p class="note">Your open trades, checked every hour against the screener's plan: stop 1% under the result-day low until +1R, then stop to cost and trail the 21 EMA (swing) or 63 EMA (position). Stops are judged on closing prices and never move down. Quantity stays on this device only.</p>
       ${tradesRisk(list)}<div class="grid">${list.map(p => {
         const st = POS[p.status] || [p.status, ''];
@@ -443,13 +443,13 @@
           <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 21 EMA ${inr(p.ema21)}, 63 EMA ${inr(p.ema63)}.</p>
           <div class="sizing"><label>Quantity <input type="number" min="0" step="1" inputmode="numeric" class="pos-qty" data-sym="${esc(p.symbol)}" value="${qty ?? ''}"></label>
             ${qty ? `<span class="meta">P&amp;L ${money(pnl)} · at the stop ${money(atRisk)}</span>` : '<span class="meta">enter quantity for rupee P&amp;L</span>'}</div>
-          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${p.rsSector ? rsLine(null, p.rsSector) : ''}${p.sectorFavour && p.sectorFavour.status !== 'NOT_ENOUGH' ? `<p class="meta"><b>Sector:</b> ${esc(p.sectorFavour.sector)} ${favTag(p.sectorFavour)} ${esc(p.sectorFavour.note)}</p>` : ''}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
+          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${p.rsSector ? rsLine(null, p.rsSector) : ''}${p.sectorFavour && p.sectorFavour.status !== 'NOT_ENOUGH' ? `<p class="meta"><b>Sector:</b> ${esc(p.sectorFavour.sector)} ${favTag(p.sectorFavour)} ${esc(p.sectorFavour.note)}</p>` : ''}${rsiBlock(p.watch && p.watch.rsi)}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
       }).join('')}</div>
       <details class="td qtx"><summary>Move quantities to another device</summary>
         <p class="meta">Quantities stay in this browser only (the repo is public). Copy them here and paste them on your other phone or laptop.</p>
         <button type="button" data-act="qty-copy">Copy my quantities</button>
         <p><input id="qty-in" class="n" placeholder="HCLTECH=114;GROWW=750" autocomplete="off"> <button type="button" data-act="qty-apply">Apply</button></p>
-        <p class="meta" id="qty-msg"></p></details>${globalBlock()}`;
+        <p class="meta" id="qty-msg"></p></details>${closedBlock()}${globalBlock()}`;
   }
   // 2.9.19: total rupee risk to the current stops over the trades with a quantity entered.
   function tradesRisk(list) {
@@ -514,6 +514,40 @@
       ${(n.points || []).length ? `<ul class="wl">${n.points.map(x => `<li>${esc(x.text)}${x.source || x.url ? ` <span class="meta">${ext(x.url, esc(x.source || 'source'))}</span>` : ''}</li>`).join('')}</ul>` : ''}
       ${n.watch ? `<p class="meta"><b>Watch:</b> ${esc(n.watch)}</p>` : ''}
       <p class="meta">Written by Claude from exchange filings and news; check the sources before acting.</p></div>`;
+  }
+  // 2.9.28: RSI(14) on the weekly and monthly charts; bearish divergence = price
+  // higher high with RSI lower high (momentum fading).
+  function rsiBlock(r) {
+    if (!r || (!r.weekly && !r.monthly)) return '';
+    const DIV = { BEARISH: ['Bearish divergence', 'bad'], BULLISH: ['Bullish divergence', 'go'] };
+    const one = (label, x) => {
+      if (!x) return `<li><b>${label}:</b> <span class="meta">not available</span></li>`;
+      if (x.rsi === null || x.rsi === undefined) return `<li><b>${label}:</b> <span class="meta">${esc(x.note || 'not enough history')}</span></li>`;
+      const d = DIV[x.divergence];
+      return `<li><b>${label} RSI ${num(x.rsi).toFixed(0)}</b> ${d ? `<span class="tag ${d[1]}">${d[0]}</span> ` : ''}<span class="meta">${esc(x.note || '')}</span></li>`;
+    };
+    const warn = [r.weekly, r.monthly].some(x => x && x.divergence === 'BEARISH');
+    return `<div class="td rsib"><div class="td-h"><b>Momentum check</b> <span class="meta">RSI 14${r.source ? ' · ' + esc(r.source) : ''}</span></div>
+      <ul class="wl">${one('Weekly', r.weekly)}${one('Monthly', r.monthly)}</ul>
+      ${warn ? '<p class="meta"><b>What it means:</b> the trend is still up but each push is weaker. It is a warning, not an exit signal: keep the stop, do not add, and take it seriously if the price also loses the 21 EMA.</p>' : ''}</div>`;
+  }
+  // 2.9.28: closed trades (R and % from positions.json; rupees only from quantities on this device).
+  function closedBlock() {
+    const rows = S.data.closedPositions || [], sm = S.data.closedSummary;
+    if (!rows.length) return '';
+    let rupees = 0, haveQ = false;
+    const body = rows.map(c => {
+      let q = null; try { q = num(localStorage.getItem('qty:' + c.symbol)); } catch (e) { /* blocked */ }
+      const rs = q ? (num(c.exitPrice) - num(c.entryPrice)) * q : null;
+      if (rs !== null) { rupees += rs; haveQ = true; }
+      return `<tr><td><b>${esc(c.symbol)}</b><div class="meta">${dt(c.entryDate)} → ${dt(c.exitDate)}${c.days !== null ? ` · ${c.days}d` : ''}</div></td>
+        <td class="r n">${inr(c.entryPrice)}<div class="meta">${inr(c.exitPrice)}</div></td>
+        <td class="r n ${cls(c.r)}">${num(c.r) !== null ? (num(c.r) > 0 ? '+' : '') + num(c.r).toFixed(2) + 'R' : '—'}<div class="meta ${cls(c.pnlPct)}">${pct(c.pnlPct)}</div></td>
+        <td class="r n ${cls(rs)}">${rs !== null ? `${rs >= 0 ? '+' : '−'}₹${Math.abs(Math.round(rs)).toLocaleString('en-IN')}` : '—'}</td></tr>`;
+    }).join('');
+    return `<section class="card gm"><h3>Closed trades ${sm ? `<span class="meta">${sm.trades} trade${sm.trades > 1 ? 's' : ''} · ${sm.wins} win${sm.wins === 1 ? '' : 's'} · total ${num(sm.totalR) !== null ? (num(sm.totalR) > 0 ? '+' : '') + num(sm.totalR).toFixed(2) + 'R' : '—'}</span>` : ''}</h3>
+      <div class="tscroll"><table class="sectbl"><thead><tr><th>Trade</th><th class="r">Entry / exit</th><th class="r">Result</th><th class="r">₹ (this device)</th></tr></thead><tbody>${body}</tbody></table></div>
+      ${haveQ ? `<p class="meta">Rupee total on this device: <b class="${cls(rupees)}">${rupees >= 0 ? '+' : '−'}₹${Math.abs(Math.round(rupees)).toLocaleString('en-IN')}</b>. R = result divided by the planned risk (entry to stop).</p>` : '<p class="meta">R = result divided by the planned risk (entry to stop). Rupees appear when the quantity is entered on this device.</p>'}</section>`;
   }
   function globalBlock() {
     const g = S.data.globalMarkets;
@@ -653,7 +687,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.27';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.28';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

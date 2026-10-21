@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.27"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.28"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -259,6 +259,12 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
             "q1_sustained": bool(_num(close.iloc[end_i]) >= (q_close or 0)) if q_close else None,
         })
     out.update(favour_signals(f))                  # 2.9.20
+    try:                                           # 2.9.28 weekly RSI divergence from the stored daily bars
+        daily = [(d.date().isoformat(), _num(h), _num(l), _num(c)) for d, h, l, c in
+                 zip(f["Date"], f["High"], f["Low"], f["Close"]) if _num(c) is not None]
+        out["rsi_weekly"] = rsi_divergence(resample_bars(daily, "weekly"), "weekly")
+    except Exception:
+        out["rsi_weekly"] = None
     out["pressure"] = selling_pressure(f)          # 2.9.15
     out["chart"] = _chart(f, chart_marker)
     return out
@@ -2143,7 +2149,8 @@ def balanced_news(per_source: list[list[dict[str, Any]]], limit: int = 6) -> lis
 
 def holding_watch_view(symbol: str, watch: dict[str, Any] | None, deals: list[dict[str, Any]],
                        pressure: dict[str, Any] | None, delivery_pct: Any, global_rows: dict[str, Any],
-                       sector: str | None, today: date, industry: str | None = None) -> dict[str, Any]:
+                       sector: str | None, today: date, industry: str | None = None,
+                       rsi_weekly_local: dict[str, Any] | None = None) -> dict[str, Any]:
     """What the My trades card shows under 'News & pressure'."""
     w = watch or {}
     mine = [d for d in deals or [] if d.get("symbol") == symbol]
@@ -2162,6 +2169,14 @@ def holding_watch_view(symbol: str, watch: dict[str, Any] | None, deals: list[di
         flags.append(f"last session fell on {pressure['lastRvol']}x volume")
     if any(d.get("kind") in ("BULK", "BLOCK") and d.get("side") == "SELL" for d in mine):
         flags.append("bulk/block selling filed")
+    # 2.9.28: RSI(14) divergence, weekly (longer Yahoo history first, else the stored
+    # NSE daily bars) and monthly (Yahoo only: needs years of history)
+    yr = w.get("rsi") or {}
+    rsi_view = {"weekly": yr.get("weekly") if (yr.get("weekly") or {}).get("rsi") is not None else rsi_weekly_local,
+                "monthly": yr.get("monthly"), "source": yr.get("source")}
+    for tf in ("monthly", "weekly"):
+        if (rsi_view.get(tf) or {}).get("divergence") == "BEARISH":
+            flags.append(f"{tf} RSI bearish divergence")
     neg = [f for f in w.get("filings") or [] if classify_announcement(f.get("text") or "")[1] == "neg"]
     if neg:
         flags.append(f"{len(neg)} negative-sounding filing(s)")
@@ -2179,7 +2194,7 @@ def holding_watch_view(symbol: str, watch: dict[str, Any] | None, deals: list[di
             "deals": mine[:8], "dealsSelling": len(sells), "pressure": pressure,
             "deliveryPct": _r2(_num(delivery_pct)), "peers": peers, "peerAvg1dPct": peer_avg,
             "news": w.get("news") or [], "sectorNews": w.get("sectorNews") or [], "newsAt": w.get("newsAt"),
-            "flags": flags}
+            "rsi": rsi_view, "flags": flags}
 
 
 # ---------------------------------------------------------------------------
@@ -2396,3 +2411,134 @@ def radar_grade(item: dict[str, Any], *, min_mcap_cr: float = 1000.0, last_price
         tier = "D"
     return {"score": round(score), "tier": tier, "label": dict(RADAR_TIERS)[tier], "riskNowPct": _r2(risk_now),
             "pros": pros[:5], "cons": cons[:5]}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.28 Closed trades and RSI divergence (weekly / monthly) for open trades.
+# Display only.
+# ---------------------------------------------------------------------------
+
+def closed_trade_view(pos: dict[str, Any]) -> dict[str, Any] | None:
+    """R multiple, % and days held of a closed trade (no quantities: public repo)."""
+    e, x, s = _num(pos.get("entryPrice")), _num(pos.get("exitPrice")), _num(pos.get("stop"))
+    if e is None or x is None:
+        return None
+    r = (x - e) / (e - s) if s is not None and e > s else None
+    try:
+        days = (date.fromisoformat(str(pos.get("exitDate"))[:10]) - date.fromisoformat(str(pos.get("entryDate"))[:10])).days
+    except ValueError:
+        days = None
+    return {"symbol": pos.get("symbol"), "entryDate": pos.get("entryDate"), "entryPrice": e, "exitDate": pos.get("exitDate"),
+            "exitPrice": x, "stop": s, "r": _r2(r), "pnlPct": _r2(_pct(x, e)), "days": days,
+            "setup": pos.get("setup"), "exitNote": pos.get("exitNote")}
+
+
+def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    rs = [_num(r.get("r")) for r in rows if _num(r.get("r")) is not None]
+    if not rows:
+        return None
+    wins = [r for r in rs if r > 0]
+    return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
+            "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+def rsi_series(closes: list[float], n: int = 14) -> list[float | None]:
+    """Wilder RSI; None until n changes are available."""
+    out: list[float | None] = [None] * len(closes)
+    if len(closes) <= n:
+        return out
+    gains = losses = 0.0
+    for i in range(1, n + 1):
+        d = closes[i] - closes[i - 1]
+        gains += max(d, 0); losses += max(-d, 0)
+    ag, al = gains / n, losses / n
+    out[n] = 100.0 if al == 0 else 100 - 100 / (1 + ag / al)
+    for i in range(n + 1, len(closes)):
+        d = closes[i] - closes[i - 1]
+        ag = (ag * (n - 1) + max(d, 0)) / n
+        al = (al * (n - 1) + max(-d, 0)) / n
+        out[i] = 100.0 if al == 0 else 100 - 100 / (1 + ag / al)
+    return out
+
+
+def _pivots(vals: list[float], kind: str, w: int = 2) -> list[int]:
+    idx = []
+    for i in range(w, len(vals)):
+        left = vals[i - w:i]
+        right = vals[i + 1:i + 1 + w]
+        v = vals[i]
+        if kind == "high":
+            if all(v >= x for x in left) and all(v > x for x in right):
+                idx.append(i)
+        else:
+            if all(v <= x for x in left) and all(v < x for x in right):
+                idx.append(i)
+    return idx
+
+
+def rsi_divergence(bars: list[tuple[str, float, float, float]], timeframe: str, n: int = 14,
+                   lookback: int = 40, recent: int = 4) -> dict[str, Any]:
+    """bars: [(date, high, low, close)] oldest first (weekly or monthly).
+    Bearish divergence: the latest swing high (within the last `recent` bars,
+    the current bar counts) is a higher price high than the previous swing high
+    in the lookback window while RSI(14) at it is lower by >= 2 points. Bullish:
+    the mirror on swing lows. Returns {timeframe, rsi, divergence, note}."""
+    closes = [_num(b[3]) for b in bars]
+    if len(bars) < n + 6 or any(c is None for c in closes):
+        return {"timeframe": timeframe, "rsi": None, "divergence": None,
+                "note": f"Not enough {timeframe} history ({len(bars)} bars; needs {n + 6})."}
+    rsi = rsi_series(closes, n)
+    highs = [_num(b[1]) or closes[i] for i, b in enumerate(bars)]
+    lows = [_num(b[2]) or closes[i] for i, b in enumerate(bars)]
+    start = max(n, len(bars) - lookback)
+    out = {"timeframe": timeframe, "rsi": _r2(rsi[-1]), "divergence": None, "note": None, "asOf": bars[-1][0]}
+
+    def check(vals, kind):
+        piv = [i for i in _pivots(vals, kind) if i >= start and rsi[i] is not None]
+        last = len(vals) - 1
+        # the current bar counts as a pending swing point when it is the extreme of the last 3 bars
+        if rsi[last] is not None and (vals[last] >= max(vals[-3:]) if kind == "high" else vals[last] <= min(vals[-3:])):
+            if not piv or piv[-1] != last:
+                piv.append(last)
+        if len(piv) < 2 or piv[-1] < last - recent:
+            return None
+        b, a = piv[-1], None
+        for j in reversed(piv[:-1]):
+            if b - j >= 3:
+                a = j
+                break
+        if a is None:
+            return None
+        if kind == "high" and vals[b] > vals[a] and rsi[b] <= rsi[a] - 2:
+            return ("BEARISH", f"price made a higher high ({vals[b]:,.2f} on {bars[b][0][:7]} vs {vals[a]:,.2f} on {bars[a][0][:7]}) "
+                               f"but RSI made a lower high ({rsi[b]:.0f} vs {rsi[a]:.0f}): momentum is fading")
+        if kind == "low" and vals[b] < vals[a] and rsi[b] >= rsi[a] + 2:
+            return ("BULLISH", f"price made a lower low ({vals[b]:,.2f} vs {vals[a]:,.2f}) but RSI a higher low "
+                               f"({rsi[b]:.0f} vs {rsi[a]:.0f}): selling is losing force")
+        return None
+
+    hit = check(highs, "high") or check(lows, "low")
+    if hit:
+        out["divergence"], out["note"] = hit
+    else:
+        r = rsi[-1]
+        out["note"] = ("Overbought (RSI above 70)." if r >= 70 else "Oversold (RSI below 30)." if r <= 30
+                       else "No divergence.")
+    return out
+
+
+def resample_bars(daily: list[tuple[str, float, float, float]], period: str) -> list[tuple[str, float, float, float]]:
+    """Daily (date, high, low, close) -> weekly (ISO week) or monthly bars."""
+    out: dict[str, list] = {}
+    for d, h, l, c in daily:
+        dt = date.fromisoformat(d[:10])
+        key = f"{dt.isocalendar()[0]}-W{dt.isocalendar()[1]:02d}" if period == "weekly" else d[:7]
+        b = out.get(key)
+        if b is None:
+            out[key] = [d[:10], h, l, c]
+        else:
+            b[0] = d[:10]
+            b[1] = max(x for x in (b[1], h) if x is not None) if (b[1] is not None or h is not None) else None
+            b[2] = min(x for x in (b[2], l) if x is not None) if (b[2] is not None or l is not None) else None
+            b[3] = c
+    return [tuple(v) for v in out.values()]
