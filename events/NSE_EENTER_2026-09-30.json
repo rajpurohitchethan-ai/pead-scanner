@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:EENTER|2026-09-30",
   "createdAt": "2026-10-16T16:08:06Z",
-  "updatedAt": "2026-10-21T10:10:09Z",
+  "updatedAt": "2026-10-21T11:01:22Z",
   "security": {
     "symbol": "EENTER",
     "bseSymbol": "EENTER",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,31 +30,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-21T10:42:10Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-21T10:50:27Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-21",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-21T10:01:10Z",
+      "fetchedAt": "2026-10-21T10:49:44Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-386798ff196de69a.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-105ed608929df8d4.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-22",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-21T08:02:30Z",
+      "fetchedAt": "2026-10-21T10:50:25Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-21T08:02:30Z",
+      "fetchedAt": "2026-10-21T10:50:25Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -63,7 +73,7 @@
     "distance_52w_high_pct": {
       "value": 0.0,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-21T08:02:31Z",
+      "fetchedAt": "2026-10-21T10:50:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_EENTER_2026-09-30/price_volume_12m-37222d657b6cb5a1.json",
@@ -72,7 +82,7 @@
     "last_price": {
       "value": 25.89,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-21T08:02:31Z",
+      "fetchedAt": "2026-10-21T10:50:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_EENTER_2026-09-30/price_volume_12m-37222d657b6cb5a1.json",
@@ -81,7 +91,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0077,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-21T08:02:31Z",
+      "fetchedAt": "2026-10-21T10:50:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_EENTER_2026-09-30/price_volume_12m-37222d657b6cb5a1.json",
@@ -122,12 +132,39 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_EENTER_2026-09-30/scrip_results-23009cab73efaa15.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-21T10:42:10Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-105ed608929df8d4.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-21T16:08:43.617000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-21T10:42:10Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-105ed608929df8d4.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-21T10:42:10Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-105ed608929df8d4.json",
+      "note": null
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-21T08:02:31Z",
-      "lastSuccess": "2026-10-21T08:02:31Z",
+      "lastAttempt": "2026-10-21T10:50:27Z",
+      "lastSuccess": "2026-10-21T10:50:27Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/NSE_EENTER_2026-09-30/price_volume_12m-37222d657b6cb5a1.json"
@@ -152,37 +189,68 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-21T10:50:25Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/NSE_EENTER_2026-09-30/results_snapshot-f66499b86132abcc.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-21T10:50:25Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "501386.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-21T10:50:29Z",
+      "lastSuccess": "2026-10-21T10:50:29Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/NSE_EENTER_2026-09-30/scrip_announcements-fc6646607cf4fa40.json"
     }
   },
   "derived": {
     "score": 2,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -224,9 +292,9 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 188,
-        "momentum63dMedian": -6.57,
-        "relativeToMarket": -1.69,
+        "stocks": 189,
+        "momentum63dMedian": -6.53,
+        "relativeToMarket": -1.6,
         "declared": 36,
         "strongResults": 22,
         "avgReaction": -0.37,
@@ -269,7 +337,15 @@
         "pressure": null
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-21",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/501386/",
@@ -325,6 +401,11 @@
     },
     {
       "timestamp": "2026-10-21T08:02:31Z",
+      "price": 25.89,
+      "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-21T10:50:27Z",
       "price": 25.89,
       "source": "BSE_PRICE"
     }
@@ -415,9 +496,39 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-21T08:02:31Z",
+    "computedAt": "2026-10-21T10:50:27Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-21T16:08:43.617000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please refer attached Unaudited Financial Results of the Company for the quarter ended 30th September, 2026 E & E Enterprises Ltd - 501386 - Unaudited Financial Results For The Quarter Ended 30TH September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-105ed608929df8d4.json",
+      "seenAt": "2026-10-21T11:01:20Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-21T10:50:25Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-21",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }
