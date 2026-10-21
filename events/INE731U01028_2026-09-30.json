@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE731U01028|2026-09-30",
   "createdAt": "2026-10-16T06:49:13Z",
-  "updatedAt": "2026-10-21T14:10:13Z",
+  "updatedAt": "2026-10-21T15:04:45Z",
   "security": {
     "symbol": "DIGJAMLMTD",
     "nseSymbol": "DIGJAMLMTD",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,31 +44,46 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-21T14:44:02Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "FINANCIALS_PARSED",
+      "at": "2026-10-21T14:53:05Z",
+      "reason": "verified NSE_XBRL snapshot applied"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-21T14:53:10Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-21",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-21T13:57:11Z",
+      "fetchedAt": "2026-10-21T14:52:57Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-5f45e6a26f5503d7.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01a9f59efe12700f.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-22",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-21T11:53:05Z",
+      "fetchedAt": "2026-10-21T14:53:05Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-21T11:53:05Z",
+      "fetchedAt": "2026-10-21T14:53:05Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -77,7 +92,7 @@
     "pre_result_5d_pct": {
       "value": -2.58,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-21T11:53:10Z",
+      "fetchedAt": "2026-10-21T14:53:10Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE731U01028_2026-09-30/equity_history-acd3e9caffefdb26.json",
@@ -86,7 +101,7 @@
     "pre_result_10d_pct": {
       "value": 7.45,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-21T11:53:10Z",
+      "fetchedAt": "2026-10-21T14:53:10Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE731U01028_2026-09-30/equity_history-acd3e9caffefdb26.json",
@@ -95,7 +110,7 @@
     "pre_result_20d_pct": {
       "value": -14.08,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-21T11:53:10Z",
+      "fetchedAt": "2026-10-21T14:53:10Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE731U01028_2026-09-30/equity_history-acd3e9caffefdb26.json",
@@ -104,7 +119,7 @@
     "distance_52w_high_pct": {
       "value": -25.37,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-21T11:53:10Z",
+      "fetchedAt": "2026-10-21T14:53:10Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE731U01028_2026-09-30/equity_history-acd3e9caffefdb26.json",
@@ -113,7 +128,7 @@
     "last_price": {
       "value": 51.06,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-21T11:53:10Z",
+      "fetchedAt": "2026-10-21T14:53:10Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE731U01028_2026-09-30/equity_history-acd3e9caffefdb26.json",
@@ -122,7 +137,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.029,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-21T11:53:10Z",
+      "fetchedAt": "2026-10-21T14:53:10Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE731U01028_2026-09-30/equity_history-acd3e9caffefdb26.json",
@@ -217,12 +232,210 @@
       "rank": 88,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-21T14:44:02Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01a9f59efe12700f.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-21T20:04:47.527000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-21T14:44:02Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01a9f59efe12700f.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-21T14:44:02Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01a9f59efe12700f.json",
+      "note": null
+    },
+    "prev_q_revenue_yoy_pct": {
+      "value": 88.67,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "revenue_yoy_pct": {
+      "value": -29.8,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "eps": {
+      "value": 0.68,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "revenue_cr": {
+      "value": 9.93,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "pat_qoq_pct": {
+      "value": 64.58,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "pat_trend": {
+      "value": "TURNAROUND",
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "ytd_revenue_cr": {
+      "value": 17.38,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "prior_year_pat_cr": {
+      "value": -1.7429,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "ytd_pat_trend": {
+      "value": "TURNAROUND",
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "prior_year_revenue_cr": {
+      "value": 14.1399,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "revenue_qoq_pct": {
+      "value": 33.1,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "basis": {
+      "value": "STANDALONE",
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "prev_q_pat_yoy_pct": {
+      "value": -14.18,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "prior_ytd_pat_cr": {
+      "value": -0.78,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "ytd_revenue_yoy_pct": {
+      "value": -3.91,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "prior_ytd_revenue_cr": {
+      "value": 18.09,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "ytd_pat_cr": {
+      "value": 2.18,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "pat_qoq_trend": {
+      "value": "PROFIT_GROWTH",
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
+    },
+    "pat_cr": {
+      "value": 1.36,
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "note": "snapshot NSE_XBRL basis=STANDALONE"
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-21T11:53:10Z",
-      "lastSuccess": "2026-10-21T11:53:10Z",
+      "lastAttempt": "2026-10-21T14:53:10Z",
+      "lastSuccess": "2026-10-21T14:53:10Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse_price/INE731U01028_2026-09-30/equity_history-acd3e9caffefdb26.json"
@@ -235,18 +448,18 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-16T16:12:25Z",
-      "lastSuccess": "2026-10-16T16:12:25Z",
+      "lastAttempt": "2026-10-21T14:53:00Z",
+      "lastSuccess": "2026-10-21T14:53:00Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/NSE_DIGJAMLMTD_2026-09-30/integrated_filings-f30c64d817823c9f.json"
+      "rawRef": "raw/nse/INE731U01028_2026-09-30/integrated_filings-7f93ba3557641e5d.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-16T16:12:25Z",
-      "lastSuccess": "2026-10-16T16:12:25Z",
+      "lastAttempt": "2026-10-21T14:53:00Z",
+      "lastSuccess": "2026-10-21T14:53:00Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/NSE_DIGJAMLMTD_2026-09-30/integrated_filings-f30c64d817823c9f.json"
+      "rawRef": "raw/nse/INE731U01028_2026-09-30/integrated_filings-7f93ba3557641e5d.json"
     },
     "PREV_QUARTER": {
       "lastAttempt": "2026-10-16T16:12:25Z",
@@ -268,41 +481,84 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_XBRL": {
+      "lastAttempt": "2026-10-21T14:53:03Z",
+      "lastSuccess": "2026-10-21T14:53:03Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml"
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-21T14:53:05Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE731U01028_2026-09-30/results_comparison-8b2ed4085b353058.json"
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-21T14:53:12Z",
+      "lastSuccess": "2026-10-21T14:53:12Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE731U01028_2026-09-30/announcements-cc006d52cc2d6bd0.json"
     }
   },
   "derived": {
-    "score": 5,
-    "completenessPct": 100.0,
+    "score": 12,
+    "completenessPct": 75.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 6,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "MIXED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "IN REVIEW — NOT ENOUGH EDGE YET",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
-      "lens": null,
+      "growth": {
+        "label": "DECELERATING",
+        "revenueDeltaPp": -118.47,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": 88.67,
+        "prevProfitYoY": -14.18
+      },
+      "lens": {
+        "revenue": {
+          "qoq": 33.1,
+          "yoy": -29.8,
+          "ytd": -3.91
+        },
+        "profit": {
+          "qoq": 64.58,
+          "yoy": null,
+          "ytd": null
+        },
+        "profitStatus": "TURNAROUND",
+        "notes": [
+          "Revenue growth is slowing: this quarter -29.8% vs -3.9% for the year so far.",
+          "Improving now: revenue and profit both up on last quarter."
+        ]
+      },
       "relativeStrength": null,
       "live": null,
-      "strength": null,
-      "q1Strength": null,
+      "strength": "WEAK",
+      "q1Strength": "AVERAGE+",
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "NO_CONFIRMATION",
+        "label": "Not confirmed",
+        "why": "Q2 numbers did not confirm."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -312,7 +568,9 @@
         "style": null,
         "stage": null,
         "sizeFraction": null,
-        "redFlags": []
+        "redFlags": [
+          "turnaround from a loss"
+        ]
       },
       "liquidity": {
         "pass": false,
@@ -337,16 +595,16 @@
         "opmTtm": 11.89,
         "opmNote": null,
         "basis": null,
-        "revenueQoQ": null,
-        "patQoQ": null,
-        "patQoQStatus": null
+        "revenueQoQ": 33.1,
+        "patQoQ": 64.58,
+        "patQoQStatus": "PROFIT_GROWTH"
       },
       "sectorKey": "Textiles",
       "sector": {
         "sector": "Textiles",
         "stocks": 47,
         "momentum63dMedian": -0.02,
-        "relativeToMarket": 5.28,
+        "relativeToMarket": 5.42,
         "declared": 3,
         "strongResults": 2,
         "avgReaction": -1.91,
@@ -407,7 +665,15 @@
         }
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-21",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/DIGJAMLMTD/",
@@ -420,10 +686,12 @@
     "valuationInputCount": 2,
     "expectationFullWindow": true,
     "reasons": [
+      "PAT turned profitable versus a loss/zero base.",
       "Low pre-result expectation: 20D move -14.1%.",
       "Sector tailwind: Textiles peers are outperforming."
     ],
     "risks": [
+      "Revenue YoY -29.8%.",
       "Market cap ₹107 Cr is below ₹1,000 Cr rule.",
       "20D average turnover ₹2.9 lakh/day is thin.",
       "Illiquid: ₹0.03 Cr/day."
@@ -458,6 +726,11 @@
     },
     {
       "timestamp": "2026-10-21T11:53:10Z",
+      "price": 51.06,
+      "source": "NSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-21T14:53:10Z",
       "price": 51.06,
       "source": "NSE_PRICE"
     }
@@ -746,14 +1019,22 @@
       ]
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-10-21T11:53:10Z",
+    "computedAt": "2026-10-21T14:53:10Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-16T11:53:54Z",
+    "fetchedAt": "2026-10-21T14:53:00Z",
     "v": 2,
     "rows": [
+      {
+        "periodEnd": "2026-09-30",
+        "fromDate": "2026-07-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1743536_21102026080809_WEB.xml",
+        "filedAt": "2026-10-21T20:05:34+05:30"
+      },
       {
         "periodEnd": "2026-06-30",
         "fromDate": "2026-04-01",
@@ -814,5 +1095,99 @@
   },
   "mergedFrom": [
     "NSE:DIGJAMLMTD|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-21T20:04:47.527000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "This is to inform you that pursuant to Regulation 30 of the SEBI (Listing Obligations and Disclosure Requirements) Regulations, 2015 read with SEBI Master Circular number HO/49/14/14(7)2025-CFD-POD2/I/3762/2026 .... Digjam Ltd - 539979 - Digjam Limited Has Submitted To The Exchange, The Financial Re",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01a9f59efe12700f.json",
+      "seenAt": "2026-10-21T15:04:42Z"
+    },
+    {
+      "source": "NSE_INTEGRATED_FILING",
+      "filedAt": "2026-10-21T20:05:34+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "EXCHANGE_PERIOD_FIELD",
+      "basis": "STANDALONE",
+      "cumulative": false,
+      "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1743536_21102026080809_WEB.xml",
+      "headline": "Integrated Filing - Financials Standalone Original",
+      "rawRef": "raw/nse/INE731U01028_2026-09-30/integrated_filings-7f93ba3557641e5d.json",
+      "seenAt": "2026-10-21T15:04:42Z"
+    }
+  ],
+  "financialSnapshots": {
+    "NSE_XBRL": {
+      "source": "NSE_XBRL",
+      "fetchedAt": "2026-10-21T14:53:03Z",
+      "rawRef": "raw/nse_xbrl/INE731U01028_2026-09-30/xbrl-b49c7c664d838b9a.xml",
+      "documentUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1743536_21102026080809_WEB.xml",
+      "periodEnd": "2026-09-30",
+      "basis": "STANDALONE",
+      "revenueDefinition": "REVENUE_FROM_OPERATIONS",
+      "concepts": {
+        "revenue": "revenuefromoperations",
+        "pat": "profitlossforperiod",
+        "eps": "basicearningslosspersharefromcontinuinganddiscontinuedoperations"
+      },
+      "reference": null,
+      "values": {
+        "prev_q_revenue_yoy_pct": 88.67,
+        "revenue_yoy_pct": -29.8,
+        "eps": 0.68,
+        "revenue_cr": 9.93,
+        "pat_qoq_pct": 64.58,
+        "pat_trend": "TURNAROUND",
+        "ytd_revenue_cr": 17.38,
+        "prior_year_pat_cr": -1.7429,
+        "ytd_pat_trend": "TURNAROUND",
+        "prior_year_revenue_cr": 14.1399,
+        "revenue_qoq_pct": 33.1,
+        "prev_q_pat_yoy_pct": -14.18,
+        "prior_ytd_pat_cr": -0.78,
+        "ytd_revenue_yoy_pct": -3.91,
+        "prior_ytd_revenue_cr": 18.09,
+        "ytd_pat_cr": 2.18,
+        "pat_qoq_trend": "PROFIT_GROWTH",
+        "pat_cr": 1.36
+      },
+      "validation": {
+        "status": "VERIFIED",
+        "issues": []
+      },
+      "parserVersion": 8
+    }
+  },
+  "financialIntegrity": {
+    "checkedAt": "2026-10-21T15:04:42Z",
+    "snapshotsConsidered": 1,
+    "status": "VERIFIED",
+    "issues": [],
+    "selectedSource": "NSE_XBRL",
+    "documentUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1743536_21102026080809_WEB.xml",
+    "basis": "STANDALONE",
+    "revenueDefinition": "REVENUE_FROM_OPERATIONS",
+    "concepts": {
+      "revenue": "revenuefromoperations",
+      "pat": "profitlossforperiod",
+      "eps": "basicearningslosspersharefromcontinuinganddiscontinuedoperations"
+    },
+    "periodEnd": "2026-09-30",
+    "crossCheck": []
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-21",
+    "source": "NSE_ANNOUNCEMENTS"
+  }
 }
