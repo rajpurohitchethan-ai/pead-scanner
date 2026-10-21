@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.28"
+ENGINE_VERSION = "2.9.29"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -2166,7 +2166,8 @@ XBRL_EPS_CONCEPTS = [
 ]
 QUARTER_DAYS = (80, 100)
 SNAPSHOT_PARSER_VERSION = 2   # 2.9.4: re-parse saved BSE/NSE result tables once (PAT model on QoQ)
-XBRL_PARSER_VERSION = 8   # bump to re-read every stored XBRL snapshot once
+XBRL_DISCONTINUED_CONCEPTS = ["profitlossfromdiscontinuedoperationsaftertax", "profitlossfromdiscontinuedoperations"]
+XBRL_PARSER_VERSION = 9   # bump to re-read every stored XBRL snapshot once
 
 
 def _xbrl_local(tag: str) -> str:
@@ -2360,6 +2361,15 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
     ytd_prior_rev, ytd_prior_pat = quiet(rev_concept, ytd_prior), quiet(pat_concept, ytd_prior)
     ytd_trend, ytd_pat_pct = pat_trend(ytd_pat, ytd_prior_pat)
 
+    # 2.9.29: profit from discontinued operations in the quarter (None = no
+    # such line). A filing with a non-zero figure reports revenue for the
+    # continuing perimeter only (LTTS Q2 FY27 after selling a unit).
+    discontinued = None
+    for c_ in XBRL_DISCONTINUED_CONCEPTS:
+        discontinued = quiet(c_, current_ctx)
+        if discontinued is not None:
+            break
+
     trend, pat_yoy = pat_trend(pat, prior_pat)
     return {
         "ytd_revenue_cr": round2(ytd_rev),
@@ -2394,6 +2404,7 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
             # SAME element in last year's filing.
             "patTotalConcept": pat_total_concept if pat_total is not None else None,
             "patQoQRawPct": round2(pct_change(pat, prev_pat)),
+            "discontinuedCr": round2(discontinued),
             "issues": issues,
             "comparativesFromSameDocument": True,
         },
@@ -4694,6 +4705,16 @@ def comparatives_missing(vals: dict[str, Any]) -> bool:
     return vals.get("revenue_yoy_pct") is None or (vals.get("pat_yoy_pct") is None and not vals.get("pat_trend"))
 
 
+def revenue_perimeter_changed(cur: dict[str, Any], other: dict[str, Any]) -> bool:
+    """2.9.29: True when `cur` reports a discontinued operation (non-zero) and
+    the older filing `other` reports none (0 or no line): cur's revenue is the
+    continuing perimeter, other's still includes the unit. The reverse (an
+    older filing with a unit since sold) is comparable."""
+    d_cur = (cur.get("_meta") or {}).get("discontinuedCr")
+    d_oth = (other.get("_meta") or {}).get("discontinuedCr")
+    return d_cur not in (None, 0) and d_oth in (None, 0)
+
+
 def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[str, Any]], period_end: date,
                                    basis: str | None, fetch_parse) -> dict[str, Any]:
     """NSE's quarterly XBRL often carries only the current period. When the
@@ -4723,6 +4744,11 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
         oc = (other.get("_meta") or {}).get("concepts") or {}
         other = {**other, **{k: v for k, v in ((other.get("_meta") or {}).get("exact") or {}).items() if v is not None}}
         same_rev = oc.get("revenue") == concepts.get("revenue")
+        if same_rev and revenue_perimeter_changed(parsed, other):
+            # 2.9.29: this filing's revenue excludes a discontinued unit that
+            # the older filing still included (LTTS): not comparable.
+            same_rev = False
+            meta.setdefault("issues", []).append(f"DISCONTINUED_OPS_NOT_RESTATED:{target.isoformat()}")
         same_pat = same_pat_concept(parsed, other)
         rev_o = other.get("revenue_cr") if same_rev else None
         pat_o = comparable_pat(parsed, other)
@@ -4753,7 +4779,8 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
                 parsed["pat_qoq_trend"], qoq = pat_trend(pat_n, pat_o)
                 parsed["pat_qoq_pct"] = round2(qoq)
                 meta["patQoQRawPct"] = round2(pct_change(pat_n, pat_o))
-            meta["prevQuarter"] = {"revenue_cr": rev_o, "pat_cr": pat_o}
+            meta["prevQuarter"] = {"revenue_cr": rev_o, "pat_cr": pat_o,
+                                   "discontinuedCr": (other.get("_meta") or {}).get("discontinuedCr")}
         if rev_o is not None or pat_o is not None:
             meta["comparativesFromSameDocument"] = False
             meta.setdefault("comparativeSources", {})[target.isoformat()] = row["xbrlUrl"]
@@ -4772,7 +4799,9 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
             oc = (other.get("_meta") or {}).get("concepts") or {}
             o_rev = _exact(other, "revenue_cr")
             o_pat = _exact(other, "pat_cr") if same_pat_concept(parsed, other) else comparable_pat(parsed, other)
-            if oc.get("revenue") == concepts.get("revenue") and o_rev is not None and prev.get("revenue_cr") is not None:
+            prev_perimeter = {"_meta": {"discontinuedCr": prev.get("discontinuedCr")}}
+            if (oc.get("revenue") == concepts.get("revenue") and o_rev is not None and prev.get("revenue_cr") is not None
+                    and not revenue_perimeter_changed(prev_perimeter, other)):
                 parsed["prev_q_revenue_yoy_pct"] = round2(pct_change(prev["revenue_cr"], o_rev))
             if o_pat is not None and prev.get("pat_cr") is not None:
                 parsed["prev_q_pat_yoy_pct"] = round2(pat_change_pct(prev["pat_cr"], o_pat))
@@ -5564,6 +5593,7 @@ def refresh_sector_indices(store: EventStore, ctx: SourceContext) -> dict[str, A
         with NSEAdapter(ctx) as nse:
             for name in todo:
                 s_ = series.setdefault(name, {})
+                prev_attempt = s_.get("attemptedAt")
                 s_["attemptedAt"] = iso_now()
                 try:
                     rows, _ = nse.index_history(name, today - timedelta(days=60), today)
@@ -5581,6 +5611,11 @@ def refresh_sector_indices(store: EventStore, ctx: SourceContext) -> dict[str, A
                     s_.update({"dates": [p_[0] for p_ in pts], "closes": [p_[1] for p_ in pts], "fetchedOn": today.isoformat()})
                     failed.pop(name, None)
                 except SourceSkipped as exc:            # 2.9.24: outage, not a rejection
+                    # 2.9.29: a skipped call is not an attempt (keeps the 2 h retry clock unstarted)
+                    if prev_attempt:
+                        s_["attemptedAt"] = prev_attempt
+                    else:
+                        s_.pop("attemptedAt", None)
                     print(f"Sector indices deferred (NSE switched off): {exc}")
                     break
                 except Exception as exc:

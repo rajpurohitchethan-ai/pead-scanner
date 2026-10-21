@@ -1602,6 +1602,30 @@ class SectorIndexOutageTests(unittest.TestCase):
         self.assertEqual(out["series"]["NIFTY IT"]["dates"][-1], "2026-10-19")
         self.assertNotIn("NIFTY IT", out["failed"])
 
+    def test_outage_does_not_start_retry_clock(self):
+        """2.9.29: on 21 Oct the 18:44 IST run hit the NSE run guard while
+        fetching NIFTY FINANCIAL SERVICES; attemptedAt was stamped anyway, so
+        the 19:39 run thought it had tried < 2 h ago and skipped it: GROWW's
+        RS vs sector stayed on 19 Oct all evening. A skipped call is not an
+        attempt."""
+        before = "2026-10-19T08:00:00Z"
+        cache = {"series": {"NIFTY IT": {"dates": ["2026-10-16"], "closes": [1.0], "fetchedOn": "2026-10-19",
+                                         "attemptedAt": before}}, "failed": {}}
+
+        def boom(name):
+            raise p.SourceSkipped("NSE switched off for this run")
+        out = self._run(cache, boom)
+        self.assertEqual(out["series"]["NIFTY IT"].get("attemptedAt"), before)
+        # and the next run (same evening) retries it
+        called = []
+
+        def hist(name):
+            called.append(name)
+            return self._rows("2026-10-19")
+        out = self._run(out, hist)
+        self.assertIn("NIFTY IT", called)
+        self.assertEqual(out["series"]["NIFTY IT"]["dates"][-1], "2026-10-19")
+
 
 class ExchangeHolidayTests(_StoreCase):
     """2.9.24: master/nse_holidays.json was empty, so 20 Oct 2026 (Dussehra,
@@ -1843,3 +1867,63 @@ class RsiDivergenceAndClosedTradeTests(unittest.TestCase):
                                   rsi_weekly_local={"rsi": 58, "divergence": None, "note": "No divergence."})
         self.assertIn("monthly RSI bearish divergence", v["flags"])
         self.assertEqual(v["rsi"]["weekly"]["rsi"], 58)
+
+
+class DiscontinuedOpsComparativeTests(unittest.TestCase):
+    """2.9.29 (21 Oct 2026): LTTS sold its Smart World & Communication unit.
+    The Q2 FY27 XBRL shows revenue from CONTINUING operations (Rs 3,040.4 Cr)
+    and a discontinued-operations profit (Rs 168.6 Cr); last year's Sep-2025
+    filing, read by fill_comparatives_from_listing because this document has
+    no comparatives, still included the unit (Rs 2,979.5 Cr, discontinued 0).
+    The card showed revenue +2.0% YoY; the company's restated growth is +12.1%.
+    Revenue from a filing with discontinued operations is never compared with
+    an older filing that had none (different perimeter): it stays blank.
+    Profit (owners' line includes discontinued in both) is still compared;
+    the Jun-2026 filing already split the unit, so QoQ stays."""
+
+    def _parse(self, name, pe):
+        blob = (Path(__file__).parent / "fixtures" / "nse" / name).read_bytes()
+        return p.parse_xbrl_financials([blob], pe)
+
+    def _listing(self):
+        return [{"periodEnd": pe, "fromDate": fd, "basis": "CONSOLIDATED", "cumulative": False, "xbrlUrl": pe}
+                for pe, fd in (("2026-06-30", "2026-04-01"), ("2025-09-30", "2025-07-01"), ("2025-06-30", "2025-04-01"))]
+
+    def _docs(self):
+        return {"2025-09-30": self._parse("LTTS_CONS_2025-09-30.xml", date(2025, 9, 30)),
+                "2026-06-30": self._parse("LTTS_CONS_2026-06-30.xml", date(2026, 6, 30)),
+                "2025-06-30": self._parse("LTTS_CONS_2025-06-30.xml", date(2025, 6, 30))}
+
+    def test_parser_records_discontinued_operations(self):
+        cur = self._parse("LTTS_CONS_2026-09-30.xml", date(2026, 9, 30))
+        self.assertAlmostEqual(cur["_meta"]["discontinuedCr"], 168.6, places=1)
+        ya = self._parse("LTTS_CONS_2025-09-30.xml", date(2025, 9, 30))
+        self.assertEqual(ya["_meta"]["discontinuedCr"], 0)
+
+    def test_ltts_revenue_yoy_withheld_profit_kept(self):
+        cur = self._parse("LTTS_CONS_2026-09-30.xml", date(2026, 9, 30))
+        p.fill_comparatives_from_listing(cur, self._listing(), date(2026, 9, 30), "CONSOLIDATED",
+                                         lambda url, pe: self._docs()[url])
+        self.assertIsNone(cur.get("revenue_yoy_pct"))          # was 2.04 (wrong perimeter)
+        self.assertIsNone(cur.get("prior_year_revenue_cr"))
+        self.assertIsNone(cur.get("ytd_revenue_yoy_pct"))       # was 2.31
+        self.assertAlmostEqual(cur["pat_yoy_pct"], 66.78, places=1)   # owners' PAT both years
+        self.assertAlmostEqual(cur["revenue_qoq_pct"], 3.41, places=1)  # Jun-26 already split the unit
+        self.assertIsNone(cur.get("prev_q_revenue_yoy_pct"))    # Jun-26 (split) vs Jun-25 (not)
+        self.assertTrue(any(i.startswith("DISCONTINUED_OPS_NOT_RESTATED") for i in cur["_meta"]["issues"]))
+
+    def test_no_discontinued_ops_unchanged(self):
+        concepts = {"revenue": "revenuefromoperations", "pat": "profitlossforperiod"}
+        mk = lambda rev, pat, disc: {"revenue_cr": rev, "pat_cr": pat, "_meta": {"concepts": concepts, "discontinuedCr": disc,
+                                                                            "patTotalCr": pat, "patTotalConcept": "profitlossforperiod"}}
+        cur = mk(110.0, 11.0, None)
+        cur["revenue_qoq_pct"] = 1.0
+        p.fill_comparatives_from_listing(cur, self._listing()[1:2], date(2026, 9, 30), "CONSOLIDATED",
+                                         lambda u, pe: mk(100.0, 10.0, 0))
+        self.assertAlmostEqual(cur["revenue_yoy_pct"], 10.0)
+        # an older filing that had discontinued ops (unit since gone) vs a current one without: comparable
+        cur = mk(110.0, 11.0, 0)
+        cur["revenue_qoq_pct"] = 1.0
+        p.fill_comparatives_from_listing(cur, self._listing()[1:2], date(2026, 9, 30), "CONSOLIDATED",
+                                         lambda u, pe: mk(100.0, 10.0, 5.0))
+        self.assertAlmostEqual(cur["revenue_yoy_pct"], 10.0)
