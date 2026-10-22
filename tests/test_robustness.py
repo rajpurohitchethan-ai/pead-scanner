@@ -1942,3 +1942,64 @@ class ThemeTagTests(unittest.TestCase):
         self.assertEqual(items[1]["plus"]["themes"], ["Pharma CDMO"])
         self.assertNotIn("themes", items[2]["plus"])
         self.assertEqual(pp.theme_tags(items, None), 0)
+
+
+class ComparativeUnitErrorTests(unittest.TestCase):
+    """2.9.31 (22 Oct 2026): METROBRAND's Q2 FY27 consolidated XBRL is correct
+    (revenue Rs 730.27 Cr, +1.4% QoQ against the Jun-2026 filing), but its
+    year-ago Sep-2025 filing was filed 100x too small (Rs 6.51 Cr revenue,
+    Rs 0.68 Cr profit). fill_comparatives_from_listing took that as last year,
+    the snapshot showed revenue +11,115% YoY and was REJECTED as UNIT_SUSPECT,
+    so the exchange XBRL lost to the BSE table and the card had no YoY at all.
+    When a comparative read from ANOTHER filing is unit-like (> 20x off) while
+    the other comparative agrees with this filing, that other filing is the
+    suspect one: its figures are dropped (missing, not invented, never
+    rescaled) and the current filing stays VERIFIED."""
+
+    def _parse(self, name, pe):
+        blob = (Path(__file__).parent / "fixtures" / "nse" / name).read_bytes()
+        return p.parse_xbrl_financials([blob], pe)
+
+    def _listing(self):
+        return [{"periodEnd": pe, "fromDate": fd, "basis": "CONSOLIDATED", "cumulative": False, "xbrlUrl": pe}
+                for pe, fd in (("2026-06-30", "2026-04-01"), ("2025-09-30", "2025-07-01"), ("2025-06-30", "2025-04-01"))]
+
+    def _docs(self):
+        return {pe: self._parse(f"METROBRAND_CONS_{pe}.xml", date.fromisoformat(pe))
+                for pe in ("2025-09-30", "2026-06-30", "2025-06-30")}
+
+    def test_mis_scaled_year_ago_filing_is_dropped(self):
+        cur = self._parse("METROBRAND_CONS_2026-09-30.xml", date(2026, 9, 30))
+        p.fill_comparatives_from_listing(cur, self._listing(), date(2026, 9, 30), "CONSOLIDATED",
+                                         lambda url, pe: self._docs()[url])
+        self.assertIsNone(cur.get("revenue_yoy_pct"))          # was 11115.25
+        self.assertIsNone(cur.get("prior_year_revenue_cr"))
+        self.assertIsNone(cur.get("pat_yoy_pct"))
+        self.assertIsNone(cur.get("pat_trend"))
+        self.assertIsNone(cur.get("prior_ytd_revenue_cr"))
+        self.assertIsNone(cur.get("ytd_revenue_yoy_pct"))
+        self.assertIsNone(cur.get("ytd_pat_yoy_pct"))
+        self.assertAlmostEqual(cur["revenue_qoq_pct"], 1.38, places=1)   # Jun-2026 filing agrees
+        self.assertAlmostEqual(cur["prev_q_revenue_yoy_pct"], 14.66, places=1)
+        self.assertTrue(any(i.startswith("COMPARATIVE_UNIT_SUSPECT:2025-09-30") for i in cur["_meta"]["issues"]))
+        self.assertNotIn("2025-09-30", cur["_meta"].get("comparativeSources", {}))
+        v = p.validate_financial_snapshot(cur, "NSE_XBRL", date(2026, 9, 30))
+        self.assertEqual(v["status"], "VERIFIED")              # was REJECTED (EXTREME_REVENUE_YOY, UNIT_SUSPECT)
+
+    def test_lone_wild_comparative_still_rejects(self):
+        # Only one comparative and it is 100x off: we cannot tell which filing is wrong.
+        cur = self._parse("METROBRAND_CONS_2026-09-30.xml", date(2026, 9, 30))
+        p.fill_comparatives_from_listing(cur, self._listing()[1:2], date(2026, 9, 30), "CONSOLIDATED",
+                                         lambda url, pe: self._docs()[url])
+        self.assertAlmostEqual(cur["revenue_yoy_pct"], 11115.25, delta=1)
+        self.assertEqual(p.validate_financial_snapshot(cur, "NSE_XBRL", date(2026, 9, 30))["status"], "REJECTED")
+
+    def test_real_jump_kept(self):
+        concepts = {"revenue": "revenuefromoperations", "pat": "profitlossforperiod"}
+        mk = lambda rev, pat: {"revenue_cr": rev, "pat_cr": pat, "_meta": {"concepts": concepts,
+                                                                          "patTotalCr": pat, "patTotalConcept": "profitlossforperiod"}}
+        cur = mk(300.0, 30.0)
+        docs = {"2025-09-30": mk(100.0, 10.0), "2026-06-30": mk(250.0, 25.0), "2025-06-30": mk(90.0, 9.0)}
+        p.fill_comparatives_from_listing(cur, self._listing(), date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: docs[u])
+        self.assertAlmostEqual(cur["revenue_yoy_pct"], 200.0)   # 3x is a real jump, not a unit error
+        self.assertAlmostEqual(cur["revenue_qoq_pct"], 20.0)

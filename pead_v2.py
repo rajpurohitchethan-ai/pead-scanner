@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.30"
+ENGINE_VERSION = "2.9.31"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -2167,7 +2167,7 @@ XBRL_EPS_CONCEPTS = [
 QUARTER_DAYS = (80, 100)
 SNAPSHOT_PARSER_VERSION = 2   # 2.9.4: re-parse saved BSE/NSE result tables once (PAT model on QoQ)
 XBRL_DISCONTINUED_CONCEPTS = ["profitlossfromdiscontinuedoperationsaftertax", "profitlossfromdiscontinuedoperations"]
-XBRL_PARSER_VERSION = 9   # bump to re-read every stored XBRL snapshot once
+XBRL_PARSER_VERSION = 10  # bump to re-read every stored XBRL snapshot once
 
 
 def _xbrl_local(tag: str) -> str:
@@ -4715,6 +4715,56 @@ def revenue_perimeter_changed(cur: dict[str, Any], other: dict[str, Any]) -> boo
     return d_cur not in (None, 0) and d_oth in (None, 0)
 
 
+# Fields fill_comparatives_from_listing writes from the year-ago (-4) and the
+# previous-quarter (-1) filing.
+COMPARATIVE_FIELDS = {
+    -4: ("prior_year_revenue_cr", "revenue_yoy_pct", "prior_year_pat_cr", "pat_trend", "pat_yoy_pct",
+         "prior_ytd_revenue_cr", "ytd_revenue_yoy_pct", "prior_ytd_pat_cr", "ytd_pat_trend", "ytd_pat_yoy_pct"),
+    -1: ("revenue_qoq_pct", "pat_qoq_trend", "pat_qoq_pct"),
+}
+COMPARATIVE_UNIT_RATIO = 20.0
+
+
+def _unit_like(cur: Any, other: Any) -> bool:
+    cur, other = safe_num(cur), safe_num(other)
+    if cur is None or other is None or cur <= 0 or other <= 0:
+        return False
+    ratio = cur / other
+    return ratio > COMPARATIVE_UNIT_RATIO or ratio < 1 / COMPARATIVE_UNIT_RATIO
+
+
+def _drop_unit_suspect_comparatives(parsed: dict[str, Any], filled: dict[int, tuple]) -> None:
+    """2.9.31: a comparative filing filed in the wrong unit (METROBRAND's
+    Sep-2025 consolidated XBRL: revenue Rs 6.51 Cr instead of ~Rs 651 Cr) made
+    this quarter's correct filing look like a unit error and REJECTED it. When
+    the revenue read from another filing is > 20x off this filing's while the
+    other comparison (QoQ for the year-ago filing, YoY for the previous
+    quarter's) is ordinary, the other filing is the suspect: its figures are
+    dropped (missing, never rescaled). One lone wild comparative is kept, so
+    the validator still decides which filing is wrong."""
+    meta = parsed.setdefault("_meta", {})
+    rev = _exact(parsed, "revenue_cr")
+    for shift, witness_key, lo, hi in ((-4, "revenue_qoq_pct", -60, 150), (-1, "revenue_yoy_pct", -60, 300)):
+        if shift not in filled:
+            continue
+        target, fields, rev_o = filled[shift]
+        if not _unit_like(rev, rev_o):
+            continue
+        other_shift = -1 if shift == -4 else -4
+        if other_shift in filled and witness_key in filled[other_shift][1] and _unit_like(rev, filled[other_shift][2]):
+            continue
+        witness = safe_num(parsed.get(witness_key))
+        if witness is None or not (lo < witness < hi):
+            continue
+        for k in fields:
+            parsed.pop(k, None)
+        if shift == -1:
+            meta.pop("patQoQRawPct", None)
+            meta.pop("prevQuarter", None)
+        (meta.get("comparativeSources") or {}).pop(target, None)
+        meta.setdefault("issues", []).append(f"COMPARATIVE_UNIT_SUSPECT:{target}")
+
+
 def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[str, Any]], period_end: date,
                                    basis: str | None, fetch_parse) -> dict[str, Any]:
     """NSE's quarterly XBRL often carries only the current period. When the
@@ -4728,10 +4778,12 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
     basis = basis if basis in {"CONSOLIDATED", "STANDALONE"} else (parsed.get("basis") if parsed.get("basis") in {"CONSOLIDATED", "STANDALONE"} else None)
     need_ytd = ((parsed.get("ytd_revenue_cr") is not None and parsed.get("prior_ytd_revenue_cr") is None)
                 or (parsed.get("ytd_pat_cr") is not None and parsed.get("prior_ytd_pat_cr") is None))
+    filled: dict[int, tuple[str, list[str], float | None]] = {}
     for shift, need in ((-4, parsed.get("prior_year_revenue_cr") is None or parsed.get("prior_year_pat_cr") is None or need_ytd),
                         (-1, parsed.get("revenue_qoq_pct") is None)):
         if not need:
             continue
+        before = {k: parsed.get(k) for k in COMPARATIVE_FIELDS[shift]}
         target = _shift_quarters(period_end, shift)
         row = listing_row(listing, target, basis)
         if row is None:
@@ -4784,6 +4836,10 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
         if rev_o is not None or pat_o is not None:
             meta["comparativesFromSameDocument"] = False
             meta.setdefault("comparativeSources", {})[target.isoformat()] = row["xbrlUrl"]
+        changed = [k for k in COMPARATIVE_FIELDS[shift] if parsed.get(k) != before.get(k)]
+        if changed:
+            filled[shift] = (target.isoformat(), changed, rev_o)
+    _drop_unit_suspect_comparatives(parsed, filled)
     # 2.7.0 earnings acceleration: last quarter's own YoY = previous quarter vs
     # the quarter a year before it (one more filing, same basis and concept).
     prev = meta.get("prevQuarter") or {}
