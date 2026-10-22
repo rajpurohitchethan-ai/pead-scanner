@@ -2,11 +2,11 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE168A01017|2026-09-30",
   "createdAt": "2026-10-12T16:30:55Z",
-  "updatedAt": "2026-10-22T07:10:02Z",
+  "updatedAt": "2026-10-22T08:14:38Z",
   "security": {
     "symbol": "J&KBANK",
     "nseSymbol": "J&KBANK",
-    "name": "Jammu & Kashmir Bank Ltd",
+    "name": "The Jammu & Kashmir Bank Limited",
     "sector": "Banks",
     "isin": "INE168A01017",
     "yahooTicker": "J&KBANK.NS",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,31 +44,46 @@
       "state": "SCHEDULED",
       "at": "2026-10-13T16:35:51Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "DISCOVERED",
+      "at": "2026-10-22T07:52:36Z",
+      "reason": "event created"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-22T07:52:36Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-22T08:14:38Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-22",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-22T06:59:11Z",
+      "fetchedAt": "2026-10-22T07:52:36Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-d8a43e830f61dca6.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4d2a962f08a6a955.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-23",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T07:01:46Z",
+      "fetchedAt": "2026-10-22T08:05:38Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "INTRADAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "INTRADAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T07:01:46Z",
+      "fetchedAt": "2026-10-22T08:05:38Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -235,21 +250,57 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T07:52:36Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4d2a962f08a6a955.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-22T13:15:31.777000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T07:52:36Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4d2a962f08a6a955.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T07:52:36Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4d2a962f08a6a955.json",
+      "note": null
+    },
+    "reaction_window_start": {
+      "value": "2026-10-22",
+      "source": "DERIVED",
+      "fetchedAt": "2026-10-22T08:05:38Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "intraday filing"
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-22T07:01:49Z",
-      "lastSuccess": "2026-10-22T07:01:49Z",
-      "status": "OK",
-      "error": null,
-      "rawRef": "raw/nse_price/INE168A01017_2026-09-30/equity_history-16f8dd39248ad8c4.json"
+      "lastAttempt": "2026-10-22T08:05:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 305 s spent failing; last: TimeoutError; 532209.BO: RuntimeError: empty history",
+      "rawRef": null
     },
     "EXCHANGE_META": {
-      "lastAttempt": "2026-10-21T14:58:38Z",
-      "lastSuccess": "2026-10-21T14:58:38Z",
-      "status": "OK",
-      "error": null,
+      "lastAttempt": "2026-10-22T08:05:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "BSE meta: SourceSkipped: BSE switched off for this run: 1 failures in a row, 305 s spent failing; last: TimeoutError",
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
@@ -267,39 +318,73 @@
       "rawRef": "raw/nse/INE168A01017_2026-09-30/integrated_filings-35e3f83e4c79f550.json"
     },
     "PREV_QUARTER": {
-      "lastAttempt": "2026-10-13T08:41:45Z",
-      "lastSuccess": "2026-10-13T08:41:45Z",
-      "status": "OK",
-      "error": null,
+      "lastAttempt": "2026-10-22T08:05:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 305 s spent failing; last: TimeoutError",
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-22T07:01:50Z",
-      "lastSuccess": "2026-10-22T07:01:50Z",
-      "status": "OK",
-      "error": null,
+      "lastAttempt": "2026-10-22T08:05:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "BSE_LOOKUP": {
+      "lastAttempt": "2026-10-22T08:05:37Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 305 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-22T08:05:37Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 305 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-22T08:05:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "532209.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-22T08:05:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 305 s spent failing; last: TimeoutError",
       "rawRef": null
     }
   },
   "derived": {
     "score": 31,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -307,13 +392,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Result came during market hours, so the reaction is measured over 22 Oct and 23 Oct. The plan is ready after the 23 Oct close.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -356,9 +441,9 @@
       "sector": {
         "sector": "Financial Services",
         "stocks": 205,
-        "momentum63dMedian": -7.42,
-        "relativeToMarket": -1.56,
-        "declared": 39,
+        "momentum63dMedian": -7.32,
+        "relativeToMarket": -1.52,
+        "declared": 40,
         "strongResults": 23,
         "avgReaction": -0.15,
         "tailwind": "NEUTRAL"
@@ -880,6 +965,21 @@
     ]
   },
   "mergedFrom": [
-    "NSE:J&KBANK|2026-09-30"
+    "NSE:J&KBANK|2026-09-30",
+    "BSE:532209|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-22T13:15:31.777000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial Results Jammu & Kashmir Bank Ltd - 532209 - REVIEWED FINANCIAL RESULTS (STANDALONE & CONSOLIDATED) OF THE BANK FOR THE QUARTER AND HALF YEAR ENDED 30TH SEPTEMBER, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4d2a962f08a6a955.json",
+      "seenAt": "2026-10-22T08:14:35Z"
+    }
   ]
 }
