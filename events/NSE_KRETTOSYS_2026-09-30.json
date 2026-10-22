@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:KRETTOSYS|2026-09-30",
   "createdAt": "2026-10-16T16:08:06Z",
-  "updatedAt": "2026-10-22T14:19:39Z",
+  "updatedAt": "2026-10-22T15:09:57Z",
   "security": {
     "symbol": "KRETTOSYS",
     "bseSymbol": "KRETTOSYS",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,31 +30,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-22T14:45:29Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-22T14:57:41Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-22",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-22T14:03:16Z",
+      "fetchedAt": "2026-10-22T14:57:08Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-b4e7f73a12990ee4.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5eca3d4544ea3bf3.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-23",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T12:02:18Z",
+      "fetchedAt": "2026-10-22T14:57:39Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T12:02:18Z",
+      "fetchedAt": "2026-10-22T14:57:39Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -63,7 +73,7 @@
     "pre_result_5d_pct": {
       "value": -2.5,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T12:02:20Z",
+      "fetchedAt": "2026-10-22T14:57:41Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_KRETTOSYS_2026-09-30/price_volume_12m-274d8a7fa35df5dc.json",
@@ -72,7 +82,7 @@
     "pre_result_10d_pct": {
       "value": -2.5,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T12:02:20Z",
+      "fetchedAt": "2026-10-22T14:57:41Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_KRETTOSYS_2026-09-30/price_volume_12m-274d8a7fa35df5dc.json",
@@ -81,7 +91,7 @@
     "pre_result_20d_pct": {
       "value": -18.75,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T12:02:20Z",
+      "fetchedAt": "2026-10-22T14:57:41Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_KRETTOSYS_2026-09-30/price_volume_12m-274d8a7fa35df5dc.json",
@@ -90,7 +100,7 @@
     "distance_52w_high_pct": {
       "value": -72.54,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T12:02:20Z",
+      "fetchedAt": "2026-10-22T14:57:41Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_KRETTOSYS_2026-09-30/price_volume_12m-274d8a7fa35df5dc.json",
@@ -99,7 +109,7 @@
     "last_price": {
       "value": 0.39,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T12:02:20Z",
+      "fetchedAt": "2026-10-22T14:57:41Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_KRETTOSYS_2026-09-30/price_volume_12m-274d8a7fa35df5dc.json",
@@ -108,7 +118,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0816,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T12:02:20Z",
+      "fetchedAt": "2026-10-22T14:57:41Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_KRETTOSYS_2026-09-30/price_volume_12m-274d8a7fa35df5dc.json",
@@ -140,19 +150,46 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_KRETTOSYS_2026-09-30/scrip_results-021bbea8d4cb7fa4.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T14:45:29Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5eca3d4544ea3bf3.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-22T20:14:28.457000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T14:45:29Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5eca3d4544ea3bf3.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T14:45:29Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5eca3d4544ea3bf3.json",
+      "note": null
     }
   },
   "fetch": {
     "BSE_LOOKUP": {
-      "lastAttempt": "2026-10-22T12:02:18Z",
+      "lastAttempt": "2026-10-22T14:57:37Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "IndexError: tuple index out of range",
       "rawRef": null
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-22T12:02:20Z",
-      "lastSuccess": "2026-10-22T12:02:20Z",
+      "lastAttempt": "2026-10-22T14:57:41Z",
+      "lastSuccess": "2026-10-22T14:57:41Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/NSE_KRETTOSYS_2026-09-30/price_volume_12m-274d8a7fa35df5dc.json"
@@ -177,27 +214,54 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-22T14:57:39Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/NSE_KRETTOSYS_2026-09-30/results_snapshot-265969d1b8296545.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-22T14:57:39Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-22T14:57:42Z",
+      "lastSuccess": "2026-10-22T14:57:42Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/NSE_KRETTOSYS_2026-09-30/scrip_announcements-9923e6eb68edf582.json"
     }
   },
   "derived": {
     "score": 8,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -205,13 +269,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -253,9 +317,9 @@
       "sectorKey": "Realty",
       "sector": {
         "sector": "Realty",
-        "stocks": 40,
+        "stocks": 42,
         "momentum63dMedian": -12.54,
-        "relativeToMarket": -6.71,
+        "relativeToMarket": -6.74,
         "declared": 4,
         "strongResults": 1,
         "avgReaction": 0.22,
@@ -316,7 +380,15 @@
         }
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-22",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/531328/",
@@ -365,6 +437,11 @@
     },
     {
       "timestamp": "2026-10-22T12:02:20Z",
+      "price": 0.39,
+      "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-22T14:57:41Z",
       "price": 0.39,
       "source": "BSE_PRICE"
     }
@@ -653,9 +730,39 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-22T12:02:20Z",
+    "computedAt": "2026-10-22T14:57:41Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-22T20:14:28.457000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "We are hereby submitiing Financial results for the quarter ended on 30.09.2026. Kretto Syscon Ltd - 531328 - Financial Results On 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5eca3d4544ea3bf3.json",
+      "seenAt": "2026-10-22T15:09:54Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-22T14:57:39Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-22",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }
