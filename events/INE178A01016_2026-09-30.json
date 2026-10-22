@@ -2,11 +2,11 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE178A01016|2026-09-30",
   "createdAt": "2026-10-09T17:24:41Z",
-  "updatedAt": "2026-10-22T08:14:38Z",
+  "updatedAt": "2026-10-22T09:10:02Z",
   "security": {
     "symbol": "CHENNPETRO",
     "nseSymbol": "CHENNPETRO",
-    "name": "Chennai Petroleum Corporation Limited",
+    "name": "Chennai Petroleum Corporation Ltd",
     "sector": "Refineries",
     "isin": "INE178A01016",
     "yahooTicker": "CHENNPETRO.NS",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-12T16:34:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-22T08:48:17Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-22T09:10:02Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-22",
-      "source": "NSE_FINANCIAL_RESULTS",
-      "fetchedAt": "2026-10-22T07:51:52Z",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T08:56:41Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/nse/DISCOVERY/board_meetings-485ab103db296f14.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c520108960965d86.json",
       "note": null
     },
     "reaction_session": {
@@ -244,6 +254,33 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T08:48:17Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c520108960965d86.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-22T14:09:49.043000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T08:48:17Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c520108960965d86.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T08:48:17Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c520108960965d86.json",
+      "note": null
     }
   },
   "fetch": {
@@ -262,15 +299,15 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-09T17:26:22Z",
-      "lastSuccess": "2026-10-09T17:26:22Z",
+      "lastAttempt": "2026-10-22T08:58:28Z",
+      "lastSuccess": "2026-10-22T08:58:28Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE178A01016_2026-09-30/integrated_filings-48ac41eba587c4ec.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-09T17:26:22Z",
-      "lastSuccess": "2026-10-09T17:26:22Z",
+      "lastAttempt": "2026-10-22T08:58:28Z",
+      "lastSuccess": "2026-10-22T08:58:28Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE178A01016_2026-09-30/integrated_filings-48ac41eba587c4ec.json"
@@ -295,27 +332,61 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-22T08:58:31Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE178A01016_2026-09-30/results_comparison-9069effc129c4866.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-22T08:58:32Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE178A01016_2026-09-30/results_snapshot-d1973e4acea39ea0.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-22T08:58:32Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "CHENNPETRO.NS: RuntimeError: latest statement does not match event quarter; 500110.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-22T08:58:35Z",
+      "lastSuccess": "2026-10-22T08:58:35Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE178A01016_2026-09-30/announcements-59f71ecf12f41db8.json"
     }
   },
   "derived": {
     "score": 31,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -323,13 +394,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -373,8 +444,8 @@
         "sector": "Oil, Gas & Consumable Fuels",
         "stocks": 23,
         "momentum63dMedian": -3.62,
-        "relativeToMarket": 2.17,
-        "declared": 1,
+        "relativeToMarket": 2.21,
+        "declared": 2,
         "strongResults": 1,
         "avgReaction": -5.65,
         "tailwind": "NEUTRAL"
@@ -434,7 +505,15 @@
         }
       },
       "deliveryPct": 19.62,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-22",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/CHENNPETRO/",
@@ -817,7 +896,7 @@
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-09T17:26:22Z",
+    "fetchedAt": "2026-10-22T08:58:28Z",
     "v": 2,
     "rows": [
       {
@@ -921,5 +1000,35 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:CHENNPETRO|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-22T14:09:49.043000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial Results for the Quarter and Half Year ended 30.09.2026 Chennai Petroleum Corporation Ltd - 500110 - Audited Financial Results For The Quarter And Half Year Ended 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c520108960965d86.json",
+      "seenAt": "2026-10-22T09:09:58Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-22T08:58:32Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-22",
+    "source": "NSE_ANNOUNCEMENTS"
+  }
 }
