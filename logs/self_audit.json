@@ -1,5 +1,5 @@
 {
-  "status": "WARN",
+  "status": "FAIL",
   "checkedOn": "2026-10-22",
   "checks": [
     {
@@ -14,7 +14,7 @@
       "status": "WARN",
       "count": 1,
       "examples": [
-        "BSE switched off (1 failures in a row, 306 s spent failing; last: TimeoutError)"
+        "NSE switched off (12 failures in a row, 170 s spent failing; last: RemoteProtocolError)"
       ],
       "note": "Data already stored is kept; skipped companies are refreshed next hour."
     },
@@ -64,9 +64,11 @@
     },
     {
       "check": "Declared results have revenue/profit (filed 2+ days ago)",
-      "status": "OK",
-      "count": 0,
-      "examples": [],
+      "status": "FAIL",
+      "count": 1,
+      "examples": [
+        "ICICIPRULI"
+      ],
       "note": "Exchange filing not parsed; check the NSE_XBRL / BSE_RESULTS_SNAPSHOT fetch errors."
     },
     {
@@ -88,16 +90,16 @@
     {
       "check": "Declared results have revenue/profit (filed in last 2 days)",
       "status": "WARN",
-      "count": 21,
+      "count": 16,
       "examples": [
         "TRISHAKT",
         "TOKYOFIN",
         "TINNARUBR",
         "SWIGGY",
-        "SBL",
         "SAYAJIIND",
         "SAPPHIRE",
-        "ROSELABS"
+        "ROSELABS",
+        "OSEASPR"
       ],
       "note": "Normal for a few hours after filing; the engine re-checks every run."
     },
@@ -129,24 +131,26 @@
     {
       "check": "Declared results have year-on-year figures",
       "status": "WARN",
-      "count": 60,
+      "count": 67,
       "examples": [
         "SMEL",
-        "YASHHV",
-        "WELSPLSOL",
-        "VIRTUALG",
-        "SWASTIKA",
-        "SHANTAI",
-        "RITESHIN",
-        "ORIRAIL"
+        "SKYLMILAR",
+        "SBL",
+        "PPEL",
+        "PARSHVA",
+        "MEGRISOFT",
+        "GRWRHITECH",
+        "COLPAL"
       ],
       "note": "Shown as quarter-on-quarter until the year-ago figures are found."
     },
     {
       "check": "Reaction measured once the session has closed",
-      "status": "OK",
-      "count": 0,
-      "examples": [],
+      "status": "FAIL",
+      "count": 1,
+      "examples": [
+        "ICICIPRULI"
+      ],
       "note": ""
     },
     {
@@ -164,16 +168,16 @@
     {
       "check": "Every company has price history",
       "status": "WARN",
-      "count": 20,
+      "count": 16,
       "examples": [
         "CITIUSINVT",
-        "NIITMTS",
-        "MANINFRA",
         "JASCH",
-        "21STCENMGM",
         "SEITINVIT",
-        "SATIN",
-        "CUBEINVIT"
+        "CUBEINVIT",
+        "ATVPR",
+        "SHRIDINE",
+        "GCCLINP",
+        "BAJGLOB"
       ],
       "note": "Filled in rotation, new companies first."
     },
@@ -196,18 +200,18 @@
     {
       "check": "Sector known",
       "status": "OK",
-      "count": 17,
+      "count": 22,
       "examples": [
+        "HONASA",
         "CITIUSINVT",
+        "MFML",
+        "EXCELSOFT",
+        "SANATHAN",
         "NXST",
         "MIRZAINT",
-        "MINDSPACE",
-        "NIITMTS",
-        "JASCH",
-        "EMMBI",
-        "ALLDIGI"
+        "MINDSPACE"
       ],
-      "note": "99% known; exchange data is fetched in rotation."
+      "note": "98% known; exchange data is fetched in rotation."
     },
     {
       "check": "No implausible values (>40% reaction, >1000% revenue growth, margin beyond 100%)",
