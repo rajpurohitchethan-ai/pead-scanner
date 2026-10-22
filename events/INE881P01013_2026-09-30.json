@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE881P01013|2026-09-30",
   "createdAt": "2026-10-16T16:08:06Z",
-  "updatedAt": "2026-10-22T13:17:25Z",
+  "updatedAt": "2026-10-22T14:19:39Z",
   "security": {
     "symbol": "TECHCON",
     "bseSymbol": "TECHCON",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-22T13:52:50Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-22T14:03:51Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-22",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-22T13:00:12Z",
+      "fetchedAt": "2026-10-22T14:03:16Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7d13fb4ac761d5f5.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-857428a4026cf46d.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-23",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T12:01:37Z",
+      "fetchedAt": "2026-10-22T14:03:49Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T12:01:37Z",
+      "fetchedAt": "2026-10-22T14:03:49Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -64,7 +74,7 @@
     "distance_52w_high_pct": {
       "value": 0.0,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T12:01:38Z",
+      "fetchedAt": "2026-10-22T14:03:51Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE881P01013_2026-09-30/price_volume_12m-ccba759f20b37497.json",
@@ -73,7 +83,7 @@
     "last_price": {
       "value": 99.54,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T12:01:38Z",
+      "fetchedAt": "2026-10-22T14:03:51Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE881P01013_2026-09-30/price_volume_12m-ccba759f20b37497.json",
@@ -82,7 +92,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0007,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T12:01:38Z",
+      "fetchedAt": "2026-10-22T14:03:51Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE881P01013_2026-09-30/price_volume_12m-ccba759f20b37497.json",
@@ -132,6 +142,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE881P01013_2026-09-30/scrip_results-41dd9cdb67234d66.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T13:52:50Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-857428a4026cf46d.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-22T18:44:31.030000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T13:52:50Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-857428a4026cf46d.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T13:52:50Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-857428a4026cf46d.json",
+      "note": null
     }
   },
   "fetch": {
@@ -143,8 +180,8 @@
       "rawRef": "raw/bse/NSE_TECHCON_2026-09-30/lookup-cd8d07f34348c417.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-22T12:01:38Z",
-      "lastSuccess": "2026-10-22T12:01:38Z",
+      "lastAttempt": "2026-10-22T14:03:51Z",
+      "lastSuccess": "2026-10-22T14:03:51Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE881P01013_2026-09-30/price_volume_12m-ccba759f20b37497.json"
@@ -169,34 +206,65 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-22T14:03:49Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE881P01013_2026-09-30/results_snapshot-b7276382d9340c73.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-22T14:03:49Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "509917.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-22T14:03:52Z",
+      "lastSuccess": "2026-10-22T14:03:52Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE881P01013_2026-09-30/scrip_announcements-fe844a3b16fad551.json"
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -233,9 +301,9 @@
       "sectorKey": "Services",
       "sector": {
         "sector": "Services",
-        "stocks": 72,
-        "momentum63dMedian": -4.35,
-        "relativeToMarket": 1.49,
+        "stocks": 73,
+        "momentum63dMedian": -4.48,
+        "relativeToMarket": 1.35,
         "declared": 4,
         "strongResults": 0,
         "avgReaction": 4.99,
@@ -278,7 +346,15 @@
         "pressure": null
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-22",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/509917/",
@@ -392,6 +468,11 @@
       "timestamp": "2026-10-22T12:01:38Z",
       "price": 99.54,
       "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-22T14:03:51Z",
+      "price": 99.54,
+      "source": "BSE_PRICE"
     }
   ],
   "plus": {
@@ -444,9 +525,39 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-22T12:01:38Z",
+    "computedAt": "2026-10-22T14:03:51Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-22T18:44:31.030000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "This is to inform you that the Board of Directors of the Company at its meeting held today i.e. 22nd October 2026 inter-alia considered and approved the Unaudited Financial Results for .... Technojet Consultants Ltd - 509917 - Unaudited Financial Results For The Second Quarter And Half Year Ended 30",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-857428a4026cf46d.json",
+      "seenAt": "2026-10-22T14:19:35Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-22T14:03:49Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-22",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }
