@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.29"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.30"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2542,3 +2542,25 @@ def resample_bars(daily: list[tuple[str, float, float, float]], period: str) -> 
             b[2] = min(x for x in (b[2], l) if x is not None) if (b[2] is not None or l is not None) else None
             b[3] = c
     return [tuple(v) for v in out.values()]
+
+
+# ---------------------------------------------------------------------------
+# 2.9.30 Theme tags (owner: "just tag them"): master/themes.json lists themes
+# and their NSE symbols. Display only.
+# ---------------------------------------------------------------------------
+
+def theme_tags(items: list[dict[str, Any]], themes: list[dict[str, Any]] | None) -> int:
+    """Adds plus.themes [names] to every item whose symbol is in a theme. Returns how many were tagged."""
+    by_sym: dict[str, list[str]] = {}
+    for t in themes or []:
+        name = str((t or {}).get("name") or "").strip()
+        for sym in (t or {}).get("symbols") or []:
+            if name and sym:
+                by_sym.setdefault(str(sym).strip().upper(), []).append(name)
+    n = 0
+    for it in items:
+        names = by_sym.get(str(it.get("symbol") or "").upper())
+        if names:
+            it.setdefault("plus", {})["themes"] = names
+            n += 1
+    return n

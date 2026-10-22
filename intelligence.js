@@ -92,7 +92,7 @@
   const upcoming = () => (S.data?.items || []).filter(it => !it.resultsReleased);
   const matches = it => {
     if (!S.q) return true;
-    const h = [it.symbol, it.name, it.sector, it.industry, P(it).sectorKey].join(' ').toLowerCase();
+    const h = [it.symbol, it.name, it.sector, it.industry, P(it).sectorKey, ...(P(it).themes || [])].join(' ').toLowerCase();
     return h.includes(S.q.toLowerCase());
   };
 
@@ -311,7 +311,7 @@
     return `<article class="card ${rail} ${liq.pass === false ? 'dim' : ''}">
       <div class="head"><div><h2 class="sym">${esc(it.symbol)}</h2><div class="co">${esc(it.name)}</div></div>
         <div class="score"><div class="v">${num(it.convictionScore) ?? '—'}</div><div class="l">conviction</div></div></div>
-      <div class="tags">${tags.join('')}</div>
+      <div class="tags">${(P(it).themes || []).map(t => `<span class="tag theme">${esc(t)}</span>`).join('')}${tags.join('')}</div>
       <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? dt(it.reactionWindowStart) + '–' : ''}${dt(it.reactionSession)}` : ''}${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? ' (filed in market hours)' : ''}${num(pc.lastClose) !== null ? `, ${p.live && num(p.live.price) !== null ? 'prev close' : 'last close'} ${inr(pc.lastClose)}` : ''}</div>
       ${concallLine(p.concall)}
       ${liveLine(p.live, pc.lastClose)}
@@ -409,7 +409,7 @@
         const trig = hp ? num(hp.oneR) : num(pl.entry), toTrig = last !== null && trig ? (trig / last - 1) * 100 : null;
         const open = S.open.has(it.eventId);
         return `<div class="row radar-row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">
-          <div><div class="s">${esc(it.symbol)} <span class="gpill g${grade(it).tier}" title="Radar grade">${grade(it).tier} ${grade(it).score}</span></div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${hp ? ' <span class="tag go">You hold</span>' : ''}${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
+          <div><div class="s">${esc(it.symbol)} <span class="gpill g${grade(it).tier}" title="Radar grade">${grade(it).tier} ${grade(it).score}</span></div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${(P(it).themes || []).map(t => ` <span class="tag theme">${esc(t)}</span>`).join('')}${hp ? ' <span class="tag go">You hold</span>' : ''}${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
           <div><div class="k">Reaction</div><div class="v ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}${num(pc.relativeVolume) !== null ? ` <span class="meta">${num(pc.relativeVolume).toFixed(1)}x vol</span>` : ''}</div></div>
           <div><div class="k">${live?.price ? 'Live' : 'Last close'}</div><div class="v">${inr(last)}</div></div>
           <div class="opt"><div class="k">Base (result-day low)</div><div class="v">${inr(low)}${toBase !== null ? ` <span class="meta">${pct(toBase)}</span>` : ''}</div></div>
@@ -687,7 +687,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.29';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.30';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

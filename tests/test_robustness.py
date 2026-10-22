@@ -1927,3 +1927,18 @@ class DiscontinuedOpsComparativeTests(unittest.TestCase):
         p.fill_comparatives_from_listing(cur, self._listing()[1:2], date(2026, 9, 30), "CONSOLIDATED",
                                          lambda u, pe: mk(100.0, 10.0, 5.0))
         self.assertAlmostEqual(cur["revenue_yoy_pct"], 10.0)
+
+
+class ThemeTagTests(unittest.TestCase):
+    """2.9.30: theme tags from master/themes.json (display only)."""
+
+    def test_tags_by_symbol(self):
+        import json
+        import pead_plus as pp
+        themes = json.loads((Path(__file__).resolve().parent.parent / "master" / "themes.json").read_text())["themes"]
+        items = [{"symbol": "STLTECH", "plus": {}}, {"symbol": "syngene", "plus": {}}, {"symbol": "HCLTECH", "plus": {}}]
+        self.assertEqual(pp.theme_tags(items, themes), 2)
+        self.assertEqual(items[0]["plus"]["themes"], ["AI infra / OFC"])
+        self.assertEqual(items[1]["plus"]["themes"], ["Pharma CDMO"])
+        self.assertNotIn("themes", items[2]["plus"])
+        self.assertEqual(pp.theme_tags(items, None), 0)

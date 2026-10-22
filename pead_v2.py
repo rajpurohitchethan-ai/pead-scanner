@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.29"
+ENGINE_VERSION = "2.9.30"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -7434,6 +7434,11 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
     except Exception as exc:
         print(f"Sector index RS skipped: {type(exc).__name__}: {exc}")
     pead_plus.sector_favour(items, sectors, regime, now_ist().date())   # 2.9.20
+    try:                                                              # 2.9.30 theme tags
+        themes = json.loads((MASTER_DIR / "themes.json").read_text(encoding="utf-8")).get("themes")
+        pead_plus.theme_tags(items, themes)
+    except Exception as exc:
+        print(f"Theme tags skipped: {type(exc).__name__}: {exc}")
     for it_ in items:                                                 # 2.9.25 Radar grade (display only)
         if it_.get("resultsReleased"):
             try:
