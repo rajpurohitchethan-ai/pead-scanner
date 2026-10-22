@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE266S01011|2026-09-30",
   "createdAt": "2026-10-13T16:35:51Z",
-  "updatedAt": "2026-10-22T10:06:18Z",
+  "updatedAt": "2026-10-22T11:01:55Z",
   "security": {
     "symbol": "SMEL",
     "bseSymbol": "SMEL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-13T16:35:51Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-22T10:41:48Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-22T10:50:45Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-22",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-22T08:56:41Z",
+      "fetchedAt": "2026-10-22T10:50:33Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-602bd2285e737c2f.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-519cb62145afaef3.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-23",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T07:03:54Z",
+      "fetchedAt": "2026-10-22T10:50:44Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T07:03:54Z",
+      "fetchedAt": "2026-10-22T10:50:44Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -64,7 +74,7 @@
     "distance_52w_high_pct": {
       "value": 0.0,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T07:03:56Z",
+      "fetchedAt": "2026-10-22T10:50:45Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE266S01011_2026-09-30/price_volume_12m-5ff4fcaf221f2564.json",
@@ -73,7 +83,7 @@
     "last_price": {
       "value": 25.57,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T07:03:56Z",
+      "fetchedAt": "2026-10-22T10:50:45Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE266S01011_2026-09-30/price_volume_12m-5ff4fcaf221f2564.json",
@@ -82,7 +92,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0156,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-22T07:03:56Z",
+      "fetchedAt": "2026-10-22T10:50:45Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE266S01011_2026-09-30/price_volume_12m-5ff4fcaf221f2564.json",
@@ -105,6 +115,33 @@
       "rank": 88,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T10:41:48Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-519cb62145afaef3.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-22T15:45:40.423000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T10:41:48Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-519cb62145afaef3.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T10:41:48Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-519cb62145afaef3.json",
+      "note": null
     }
   },
   "fetch": {
@@ -116,8 +153,8 @@
       "rawRef": "raw/bse/NSE_SMEL_2026-09-30/lookup-b3c53eee814012fe.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-22T07:03:56Z",
-      "lastSuccess": "2026-10-22T07:03:56Z",
+      "lastAttempt": "2026-10-22T10:50:45Z",
+      "lastSuccess": "2026-10-22T10:50:45Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE266S01011_2026-09-30/price_volume_12m-5ff4fcaf221f2564.json"
@@ -130,8 +167,8 @@
       "rawRef": null
     },
     "PREV_QUARTER": {
-      "lastAttempt": "2026-10-21T08:00:50Z",
-      "lastSuccess": "2026-10-21T08:00:50Z",
+      "lastAttempt": "2026-10-22T10:50:49Z",
+      "lastSuccess": "2026-10-22T10:50:49Z",
       "status": "OK",
       "error": null,
       "rawRef": null
@@ -142,34 +179,65 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-22T10:50:44Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE266S01011_2026-09-30/results_snapshot-066031596c8fa34b.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-22T10:50:44Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "541799.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-22T10:50:47Z",
+      "lastSuccess": "2026-10-22T10:50:47Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE266S01011_2026-09-30/scrip_announcements-b2403e8ec3220241.json"
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "EXPENSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -208,7 +276,7 @@
         "sector": "Media, Entertainment & Publication",
         "stocks": 29,
         "momentum63dMedian": -6.49,
-        "relativeToMarket": -0.64,
+        "relativeToMarket": -0.57,
         "declared": 2,
         "strongResults": 1,
         "avgReaction": -1.46,
@@ -262,7 +330,15 @@
         }
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-22",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/541799/",
@@ -375,6 +451,11 @@
     },
     {
       "timestamp": "2026-10-22T07:03:56Z",
+      "price": 25.57,
+      "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-22T10:50:45Z",
       "price": 25.57,
       "source": "BSE_PRICE"
     }
@@ -539,8 +620,38 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-22T07:03:56Z",
+    "computedAt": "2026-10-22T10:50:45Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-22T15:45:40.423000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Declaration of Unaudited Financial Result for Half Year ended 30.09.2026. Sungold Media and Entertainment Ltd - 541799 - Unaudited Financial Result For Half Year Ended September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-519cb62145afaef3.json",
+      "seenAt": "2026-10-22T11:01:52Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-22T10:50:44Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-22",
+    "source": "BSE_ANNOUNCEMENTS"
   }
 }
