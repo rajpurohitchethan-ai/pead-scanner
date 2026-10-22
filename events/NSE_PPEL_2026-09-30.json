@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:PPEL|2026-09-30",
   "createdAt": "2026-10-16T16:08:06Z",
-  "updatedAt": "2026-10-22T09:10:03Z",
+  "updatedAt": "2026-10-22T10:06:19Z",
   "security": {
     "symbol": "PPEL",
     "bseSymbol": "PPEL",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,31 +30,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-22T09:44:35Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-22T10:06:19Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-22",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-22T08:56:41Z",
+      "fetchedAt": "2026-10-22T09:44:35Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-602bd2285e737c2f.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e8b5c74b9ef9414.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-23",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T08:07:43Z",
+      "fetchedAt": "2026-10-22T09:58:55Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "INTRADAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "INTRADAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T08:07:43Z",
+      "fetchedAt": "2026-10-22T09:58:55Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -113,14 +123,50 @@
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_PPEL_2026-09-30/price_volume_12m-3b1a096eb4c9d829.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T09:44:35Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e8b5c74b9ef9414.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-22T14:57:17.423000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T09:44:35Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e8b5c74b9ef9414.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T09:44:35Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e8b5c74b9ef9414.json",
+      "note": null
+    },
+    "reaction_window_start": {
+      "value": "2026-10-22",
+      "source": "DERIVED",
+      "fetchedAt": "2026-10-22T09:58:55Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "intraday filing"
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-22T08:07:43Z",
+      "lastAttempt": "2026-10-22T09:58:55Z",
       "lastSuccess": "2026-10-22T03:17:32Z",
       "status": "FAILED",
-      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 305 s spent failing; last: TimeoutError; 544844.BO: RuntimeError: empty history",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 309 s spent failing; last: TimeoutError; no eligible Yahoo ticker (negative-cached or unmapped)",
       "rawRef": "raw/bse_price/NSE_PPEL_2026-09-30/price_volume_12m-3b1a096eb4c9d829.json"
     },
     "EXCHANGE_META": {
@@ -145,42 +191,73 @@
       "rawRef": null
     },
     "BSE_LOOKUP": {
-      "lastAttempt": "2026-10-22T08:07:43Z",
+      "lastAttempt": "2026-10-22T09:58:55Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 305 s spent failing; last: TimeoutError",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 309 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-22T09:58:55Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 309 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-22T09:58:55Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-22T09:58:55Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 309 s spent failing; last: TimeoutError",
       "rawRef": null
     }
   },
   "derived": {
     "score": 5,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PRICED IN",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Result came during market hours, so the reaction is measured over 22 Oct and 23 Oct. The plan is ready after the 23 Oct close.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -224,8 +301,8 @@
         "sector": "Automobile and Auto Components",
         "stocks": 58,
         "momentum63dMedian": -6.24,
-        "relativeToMarket": -0.41,
-        "declared": 2,
+        "relativeToMarket": -0.39,
+        "declared": 3,
         "strongResults": 1,
         "avgReaction": 2.68,
         "tailwind": "NEUTRAL"
@@ -540,5 +617,26 @@
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-22T14:57:17.423000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Results for September 30, 2026 Poojaa Precision Engg. Ltd - 544844 - Results For  September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e8b5c74b9ef9414.json",
+      "seenAt": "2026-10-22T10:06:17Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-22T09:58:55Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  }
 }

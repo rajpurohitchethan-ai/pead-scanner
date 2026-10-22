@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE238C01022|2026-09-30",
   "createdAt": "2026-10-16T02:44:46Z",
-  "updatedAt": "2026-10-22T09:10:02Z",
+  "updatedAt": "2026-10-22T10:06:18Z",
   "security": {
     "symbol": "TRISHAKT",
     "bseSymbol": "TRISHAKT",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T02:44:46Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-22T09:44:33Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-22T10:06:18Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-22",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-22T08:56:41Z",
+      "fetchedAt": "2026-10-22T09:44:33Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-602bd2285e737c2f.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e8b5c74b9ef9414.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-23",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T07:03:49Z",
+      "fetchedAt": "2026-10-22T09:58:42Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "INTRADAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "INTRADAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-22T07:03:49Z",
+      "fetchedAt": "2026-10-22T09:58:42Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -168,6 +178,42 @@
       "rank": 98,
       "rawRef": "raw/bse/INE238C01022_2026-09-30/scrip_results-ef0cb67adf8eee6c.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T09:44:33Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e8b5c74b9ef9414.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-22T15:09:15.860000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T09:44:33Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e8b5c74b9ef9414.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-22T09:44:33Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e8b5c74b9ef9414.json",
+      "note": null
+    },
+    "reaction_window_start": {
+      "value": "2026-10-22",
+      "source": "DERIVED",
+      "fetchedAt": "2026-10-22T09:58:42Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "intraday filing"
     }
   },
   "fetch": {
@@ -179,10 +225,10 @@
       "rawRef": "raw/bse/NSE_TRISHAKT_2026-09-30/lookup-8a771a2672292d8d.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-22T07:03:51Z",
+      "lastAttempt": "2026-10-22T09:58:43Z",
       "lastSuccess": "2026-10-22T07:03:51Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 309 s spent failing; last: TimeoutError; 531279.BO: RuntimeError: empty history",
       "rawRef": "raw/bse_price/INE238C01022_2026-09-30/price_volume_12m-e6455bba0cfa85fe.json"
     },
     "EXCHANGE_META": {
@@ -205,27 +251,54 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-22T09:58:42Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 309 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-22T09:58:42Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "531279.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-22T09:58:43Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 309 s spent failing; last: TimeoutError",
+      "rawRef": null
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PRICED IN",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -233,13 +306,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Result came during market hours, so the reaction is measured over 22 Oct and 23 Oct. The plan is ready after the 23 Oct close.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -283,7 +356,7 @@
         "sector": "Services",
         "stocks": 73,
         "momentum63dMedian": -5.37,
-        "relativeToMarket": 0.47,
+        "relativeToMarket": 0.48,
         "declared": 3,
         "strongResults": 0,
         "avgReaction": 4.99,
@@ -684,5 +757,26 @@
     "computedAt": "2026-10-22T07:03:51Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-22T15:09:15.860000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Results for The Quarter and Half Year ended September 30, 2026 Trishakti Industries Ltd - 531279 - Results For The Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e8b5c74b9ef9414.json",
+      "seenAt": "2026-10-22T10:06:16Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-22T09:58:42Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
   }
 }
