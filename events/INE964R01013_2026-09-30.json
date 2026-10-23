@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE964R01013|2026-09-30",
   "createdAt": "2026-10-20T02:46:38Z",
-  "updatedAt": "2026-10-23T08:14:38Z",
+  "updatedAt": "2026-10-23T09:07:18Z",
   "security": {
     "symbol": "REGENCY",
     "bseSymbol": "REGENCY",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-20T02:46:38Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-23T08:44:56Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-23T09:07:18Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-23",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-23T08:00:54Z",
+      "fetchedAt": "2026-10-23T08:55:04Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-0c48aff77f9d38fb.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7226ea27575c2f67.json",
       "note": null
     },
     "reaction_session": {
@@ -159,6 +169,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE964R01013_2026-09-30/scrip_results-7017dea6c6f38581.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T08:44:56Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7226ea27575c2f67.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-23T13:48:19.890000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T08:44:56Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7226ea27575c2f67.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T08:44:56Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7226ea27575c2f67.json",
+      "note": null
     }
   },
   "fetch": {
@@ -196,27 +233,54 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-23T08:57:12Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE964R01013_2026-09-30/results_snapshot-9d9bda70fb606de2.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-23T08:57:12Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "Yahoo quarterly budget exhausted for this run",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-23T08:57:13Z",
+      "lastSuccess": "2026-10-23T08:57:13Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE964R01013_2026-09-30/scrip_announcements-fa0c3b10d7c0eca0.json"
     }
   },
   "derived": {
     "score": 3,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PRICED IN",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -224,13 +288,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -273,9 +337,9 @@
       "sector": {
         "sector": "Financial Services",
         "stocks": 220,
-        "momentum63dMedian": -7.12,
-        "relativeToMarket": -1.32,
-        "declared": 43,
+        "momentum63dMedian": -7.1,
+        "relativeToMarket": -1.26,
+        "declared": 45,
         "strongResults": 25,
         "avgReaction": -0.56,
         "tailwind": "NEUTRAL"
@@ -335,7 +399,15 @@
         }
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "SCHEDULED",
+        "callDate": "2026-10-26",
+        "noticeUrl": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/329bcc14-3ff2-48c7-8ee9-77ea0f0fa96c.pdf",
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-23",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/540175/",
@@ -667,5 +739,35 @@
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-23T13:48:19.890000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Submission of standalone and consolidated unaudited financial results of the company for the quarter ended 30 september 2026 Regency Fincorp Ltd - 540175 - Submission Of Unaudited Financial Results For The Quarter Ended 30 September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7226ea27575c2f67.json",
+      "seenAt": "2026-10-23T09:07:14Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-23T08:57:12Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "SCHEDULED",
+    "callDate": "2026-10-26",
+    "noticeUrl": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/329bcc14-3ff2-48c7-8ee9-77ea0f0fa96c.pdf",
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-23",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }

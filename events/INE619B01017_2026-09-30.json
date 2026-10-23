@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE619B01017|2026-09-30",
   "createdAt": "2026-10-14T11:41:38Z",
-  "updatedAt": "2026-10-23T08:14:38Z",
+  "updatedAt": "2026-10-23T09:07:17Z",
   "security": {
     "symbol": "NEWGEN",
     "nseSymbol": "NEWGEN",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-15T02:44:01Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-23T08:44:53Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-23T09:07:17Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-23",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-23T08:00:54Z",
+      "fetchedAt": "2026-10-23T08:55:04Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-0c48aff77f9d38fb.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7226ea27575c2f67.json",
       "note": null
     },
     "reaction_session": {
@@ -244,6 +254,33 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T08:44:53Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7226ea27575c2f67.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-23T13:51:56.993000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T08:44:53Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7226ea27575c2f67.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T08:44:53Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7226ea27575c2f67.json",
+      "note": null
     }
   },
   "fetch": {
@@ -262,15 +299,15 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-16T13:04:37Z",
-      "lastSuccess": "2026-10-16T13:04:37Z",
+      "lastAttempt": "2026-10-23T08:57:22Z",
+      "lastSuccess": "2026-10-23T08:57:22Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE619B01017_2026-09-30/integrated_filings-f6bff0179599d2e3.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-16T13:04:37Z",
-      "lastSuccess": "2026-10-16T13:04:37Z",
+      "lastAttempt": "2026-10-23T08:57:22Z",
+      "lastSuccess": "2026-10-23T08:57:22Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE619B01017_2026-09-30/integrated_filings-f6bff0179599d2e3.json"
@@ -288,27 +325,61 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-23T08:57:24Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE619B01017_2026-09-30/results_comparison-74317186ce4ed8d7.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-23T08:57:26Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE619B01017_2026-09-30/results_snapshot-8c7f387d34d7aaf1.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-23T08:57:26Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "Yahoo quarterly budget exhausted for this run",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-23T08:57:28Z",
+      "lastSuccess": "2026-10-23T08:57:28Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE619B01017_2026-09-30/announcements-83708dbf817ebcb7.json"
     }
   },
   "derived": {
     "score": 31,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -316,13 +387,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -366,8 +437,8 @@
         "sector": "Information Technology",
         "stocks": 75,
         "momentum63dMedian": -3.37,
-        "relativeToMarket": 2.43,
-        "declared": 12,
+        "relativeToMarket": 2.47,
+        "declared": 13,
         "strongResults": 6,
         "avgReaction": 3.81,
         "tailwind": "NEUTRAL"
@@ -427,7 +498,16 @@
         }
       },
       "deliveryPct": 45.87,
-      "concall": null,
+      "concall": {
+        "status": "SCHEDULED",
+        "callDate": null,
+        "noticeUrl": "https://nsearchives.nseindia.com/corporate/NEWGEN2_21102026150753_roadshowintimationSIGN.pdf",
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-23",
+        "pendingUntil": "2026-10-26",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/NEWGEN/",
@@ -774,7 +854,7 @@
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-16T13:04:37Z",
+    "fetchedAt": "2026-10-23T08:57:22Z",
     "v": 2,
     "rows": [
       {
@@ -874,5 +954,36 @@
         "filedAt": "2025-05-02T23:12:47+05:30"
       }
     ]
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-23T13:51:56.993000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Enclosed Financial results for Q2 FY 26-27 Newgen Software Technologies Ltd - 540900 -  Unaudited Standalone And Consolidated Financial Results For The Quarter Ended 30Th September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7226ea27575c2f67.json",
+      "seenAt": "2026-10-23T09:07:13Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-23T08:57:26Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "SCHEDULED",
+    "callDate": null,
+    "noticeUrl": "https://nsearchives.nseindia.com/corporate/NEWGEN2_21102026150753_roadshowintimationSIGN.pdf",
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-23",
+    "pendingUntil": "2026-10-26",
+    "source": "NSE_ANNOUNCEMENTS"
   }
 }
