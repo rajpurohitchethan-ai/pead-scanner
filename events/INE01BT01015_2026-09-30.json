@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE01BT01015|2026-09-30",
   "createdAt": "2026-10-07T04:24:34Z",
-  "updatedAt": "2026-10-23T10:28:47Z",
+  "updatedAt": "2026-10-23T11:03:42Z",
   "security": {
     "symbol": "MACIND",
     "bseSymbol": "MACIND",
@@ -21,7 +21,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -142,31 +142,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:14Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-23T10:40:37Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-23T10:52:42Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-23",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-23T10:16:12Z",
+      "fetchedAt": "2026-10-23T10:51:06Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-33eb450600b9a2f6.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c0ba10a9aba1fbf5.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-26",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-23T08:07:14Z",
+      "fetchedAt": "2026-10-23T10:52:40Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-23T08:07:14Z",
+      "fetchedAt": "2026-10-23T10:52:40Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -175,7 +185,7 @@
     "pre_result_5d_pct": {
       "value": -3.75,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-23T08:07:16Z",
+      "fetchedAt": "2026-10-23T10:52:42Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE01BT01015_2026-09-30/price_volume_12m-73fde1ace782d3eb.json",
@@ -184,7 +194,7 @@
     "pre_result_10d_pct": {
       "value": 1.06,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-23T08:07:16Z",
+      "fetchedAt": "2026-10-23T10:52:42Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE01BT01015_2026-09-30/price_volume_12m-73fde1ace782d3eb.json",
@@ -193,7 +203,7 @@
     "pre_result_20d_pct": {
       "value": 1.03,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-23T08:07:16Z",
+      "fetchedAt": "2026-10-23T10:52:42Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE01BT01015_2026-09-30/price_volume_12m-73fde1ace782d3eb.json",
@@ -202,7 +212,7 @@
     "distance_52w_high_pct": {
       "value": -10.63,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-23T08:07:16Z",
+      "fetchedAt": "2026-10-23T10:52:42Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE01BT01015_2026-09-30/price_volume_12m-73fde1ace782d3eb.json",
@@ -211,7 +221,7 @@
     "last_price": {
       "value": 391.0,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-23T08:07:16Z",
+      "fetchedAt": "2026-10-23T10:52:42Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE01BT01015_2026-09-30/price_volume_12m-73fde1ace782d3eb.json",
@@ -220,7 +230,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0047,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-23T08:07:16Z",
+      "fetchedAt": "2026-10-23T10:52:42Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE01BT01015_2026-09-30/price_volume_12m-73fde1ace782d3eb.json",
@@ -279,6 +289,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE01BT01015_2026-09-30/scrip_results-5f51118244430855.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T10:40:37Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c0ba10a9aba1fbf5.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-23T15:43:05.810000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T10:40:37Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c0ba10a9aba1fbf5.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T10:40:37Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c0ba10a9aba1fbf5.json",
+      "note": null
     }
   },
   "fetch": {
@@ -297,15 +334,15 @@
       "rawRef": "raw/bse/NSE_MACIND_2026-09-30/lookup-34241e138df7c013.json"
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-23T08:07:16Z",
+      "lastAttempt": "2026-10-23T10:52:43Z",
       "lastSuccess": "2026-10-21T11:55:42Z",
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
       "rawRef": null
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-23T08:07:16Z",
-      "lastSuccess": "2026-10-23T08:07:16Z",
+      "lastAttempt": "2026-10-23T10:52:42Z",
+      "lastSuccess": "2026-10-23T10:52:42Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE01BT01015_2026-09-30/price_volume_12m-73fde1ace782d3eb.json"
@@ -323,27 +360,54 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-23T10:52:40Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE01BT01015_2026-09-30/results_snapshot-6f8045581d3a4987.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-23T10:52:40Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-23T10:52:43Z",
+      "lastSuccess": "2026-10-23T10:52:43Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE01BT01015_2026-09-30/scrip_announcements-5a9572e68eaa643b.json"
     }
   },
   "derived": {
     "score": 16,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -351,13 +415,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_CONFIRM",
-        "label": "Watch: Q1 held",
-        "why": "Q1 setup sustained. Needs Q2 confirmation."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -399,9 +463,9 @@
       "sectorKey": "Chemicals",
       "sector": {
         "sector": "Chemicals",
-        "stocks": 100,
-        "momentum63dMedian": -2.76,
-        "relativeToMarket": 3.23,
+        "stocks": 101,
+        "momentum63dMedian": -2.79,
+        "relativeToMarket": 3.18,
         "declared": 11,
         "strongResults": 7,
         "avgReaction": -7.9,
@@ -462,7 +526,15 @@
         }
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-23",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/543934/",
@@ -767,7 +839,7 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-23T08:07:16Z",
+    "computedAt": "2026-10-23T10:52:42Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
@@ -877,6 +949,41 @@
       "timestamp": "2026-10-23T08:07:16Z",
       "price": 391.0,
       "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-23T10:52:42Z",
+      "price": 391.0,
+      "source": "BSE_PRICE"
     }
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-23T15:43:05.810000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Considered and approved the Standalone and Consolidated financial results for the quarter and half year ended as on 30 th sept 2026 along with other agenda of the meeting Machhar Industries Ltd - 543934 - OUTCOME OF BOARD OF DIRECTORS MEETING HELD ON 23Rd OCTOBER, 2026 - MACHHAR INDUSTRIES LIMITED.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c0ba10a9aba1fbf5.json",
+      "seenAt": "2026-10-23T11:03:39Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-23T10:52:40Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-23",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }
