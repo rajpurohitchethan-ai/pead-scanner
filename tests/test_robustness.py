@@ -2003,3 +2003,125 @@ class ComparativeUnitErrorTests(unittest.TestCase):
         p.fill_comparatives_from_listing(cur, self._listing(), date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: docs[u])
         self.assertAlmostEqual(cur["revenue_yoy_pct"], 200.0)   # 3x is a real jump, not a unit error
         self.assertAlmostEqual(cur["revenue_qoq_pct"], 20.0)
+
+
+class RenamedSymbolTests(unittest.TestCase):
+    """2.9.32 (23 Oct 2026): ICICI Prudential Life (ISIN INE726G01019, NSE
+    ICICIPRULI, BSE 540133) became ICICI Life Insurance, NSE symbol ICICILIFE.
+    Discovery created a second event NSE:ICICILIFE without an ISIN (the NSE
+    lookup row has none; the saved quote has isinCode INE726G01019). The two
+    names differ, so the duplicate fold did not join them, the 2.9.26 repair
+    took BSE 540133 away as 'another company's code' and the self-check FAILed
+    'Declared results have revenue/profit' for ICICILIFE; the radar listed the
+    company twice."""
+    import json as _json
+    import tempfile as _tempfile
+    P = date(2026, 9, 30)
+
+    def _quote(self, raw, prefix, symbol, isin, name):
+        folder = raw / "nse" / f"{prefix}_2026-09-30"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "quote-1.json").write_text(self._json.dumps(
+            {"metaData": {"symbol": symbol, "isinCode": isin, "companyName": name, "closePrice": 431}}))
+
+    def _setup(self):
+        root = Path(self._tempfile.mkdtemp())
+        st = p.EventStore(root / "events")
+        raw = root / "raw"
+        old = st.ensure_event(security={"isin": "INE726G01019", "symbol": "ICICIPRULI", "nseSymbol": "ICICIPRULI",
+                                        "bseSymbol": "ICICIPRULI", "bseCode": "540133",
+                                        "name": "ICICI Prudential Life Insurance Company Ltd",
+                                        "yahooTicker": "540133.BO"}, period_end=self.P)
+        st.merge_field(old, "results_released", True, source="BSE_RESULT_ANNOUNCEMENT")
+        st.merge_field(old, "market_cap_cr", 62548.3, source="NSE_QUOTE")
+        st.save(old)
+        new = st.ensure_event(security={"symbol": "ICICILIFE", "nseSymbol": "ICICILIFE",
+                                        "name": "ICICI Life Insurance Ltd", "yahooTicker": "ICICILIFE.NS",
+                                        "bseCode": "540133"}, period_end=self.P)
+        st.merge_field(new, "results_released", True, source="NSE_INTEGRATED_FILING")
+        st.merge_field(new, "last_price", 431.0, source="NSE_PRICE")
+        st.save(new)
+        self._quote(raw, "NSE_ICICILIFE", "ICICILIFE", "INE726G01019", "ICICI Life Insurance Limited")
+        return st, raw, old["eventId"], new["eventId"]
+
+    def test_renamed_symbol_folds_into_the_isin_event(self):
+        st, raw, old_id, new_id = self._setup()
+        master = p.SymbolMaster(Path(self._tempfile.mkdtemp()) / "symbols.json")
+        stats = p.integrity_pass(st, today=date(2026, 10, 23), raw_root=raw, master=master)
+        ids = [e["eventId"] for e in st.all()]
+        self.assertEqual(ids, [old_id])                         # one company, one event
+        self.assertEqual(st.resolve(new_id), old_id)
+        ev = st.load(old_id)
+        sec = ev["security"]
+        self.assertEqual(sec["nseSymbol"], "ICICILIFE")         # current NSE symbol
+        self.assertIn("ICICIPRULI", sec.get("formerSymbols") or [])
+        self.assertEqual(sec["bseCode"], "540133")              # not stripped as another company's code
+        self.assertNotIn("identityRepaired", sec)
+        self.assertEqual(st.value(ev, "market_cap_cr"), 62548.3)  # verified values kept
+        self.assertEqual(st.value(ev, "last_price"), 431.0)
+        self.assertGreaterEqual(stats["duplicatesMerged"], 1)
+
+    def test_earlier_wrong_code_repair_is_undone_for_a_rename(self):
+        st, raw, old_id, new_id = self._setup()
+        ev = st.load(new_id)
+        ev["security"].pop("bseCode")
+        ev["security"]["identityRepaired"] = {"wrongBseCode": "540133",
+                                              "wrongBseName": "ICICI Prudential Life Insurance Company Ltd"}
+        st.save(ev)
+        adopted = p.adopt_quote_isins(st, raw)
+        self.assertEqual([a["eventId"] for a in adopted], [new_id])
+        sec = st.load(new_id)["security"]
+        self.assertEqual(sec["isin"], "INE726G01019")
+        self.assertNotIn("identityRepaired", sec)
+
+    def test_quote_of_another_symbol_or_company_is_not_adopted(self):
+        root = Path(self._tempfile.mkdtemp())
+        st = p.EventStore(root / "events")
+        raw = root / "raw"
+        a = st.ensure_event(security={"symbol": "SEL", "nseSymbol": "SEL", "name": "Sanathnagar Enterprises Ltd"},
+                            period_end=self.P)
+        st.save(a)
+        self._quote(raw, "NSE_SEL", "SEL", "INE0SUN01011", "Sungarner Energies Limited")   # other company's name
+        b = st.ensure_event(security={"symbol": "ABC", "nseSymbol": "ABC", "name": "Abc Ltd"}, period_end=self.P)
+        st.save(b)
+        self._quote(raw, "NSE_ABC", "XYZ", "INE111A01011", "Abc Limited")                   # other symbol
+        self.assertEqual(p.adopt_quote_isins(st, raw), [])
+        self.assertNotIn("isin", st.load(a["eventId"])["security"])
+        self.assertNotIn("isin", st.load(b["eventId"])["security"])
+
+    def test_rebuild_accepts_price_rows_under_the_former_symbol(self):
+        rows = [{"chSymbol": "ICICIPRULI", "mtimestamp": "22-Oct-2026", "chClosingPrice": 431}]
+        sec = {"nseSymbol": "ICICILIFE", "formerSymbols": ["ICICIPRULI"]}
+        self.assertTrue(p._payload_symbol_ok(rows, sec))
+        self.assertFalse(p._payload_symbol_ok(rows, {"nseSymbol": "ICICILIFE"}))
+        self.assertTrue(p._payload_symbol_ok([{"mtimestamp": "x"}], {"nseSymbol": "ICICILIFE"}))
+
+
+class HeldTradeEnrichmentFirstTests(unittest.TestCase):
+    """2.9.32 (23 Oct 2026): after the close, 47 results of the last two days
+    (rank A0) came before the open trades (A1) in every run; ~60 declared slots
+    per run and new A0 rows each hour meant GROWW / THELEELA / HCLTECH were
+    never re-priced after 15:45 (last attempt 22 Oct 19:46 IST), so My trades
+    judged the stops on the 22 Oct close at 20:42 IST."""
+
+    def _ev(self, i, sym, rd, last_session):
+        return {"eventId": f"E{i:04d}", "period": {"end": "2026-09-30"},
+                "security": {"nseSymbol": sym, "exchangeSector": "Information Technology"},
+                "fields": {"result_date": {"value": rd.isoformat(), "status": "OK"},
+                           "results_released": {"value": True, "status": "OK"},
+                           "revenue_cr": {"value": 10.0, "status": "OK"}, "pat_cr": {"value": 1.0, "status": "OK"}},
+                "fetch": {"PRICE_HISTORY": {"lastAttempt": "2026-10-22T14:17:00Z"}},
+                "plus": {"price": {"last_session": last_session.isoformat()}}}
+
+    def test_open_trade_behind_goes_before_fresh_results(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 10, 23, 20, 0, tzinfo=p.IST)
+        today = now.date()
+        fresh = [self._ev(i, f"F{i}", date(2026, 10, 22), date(2026, 10, 22)) for i in range(80)]
+        held = self._ev(999, "GROWW", date(2026, 10, 14), date(2026, 10, 22))
+        with mock.patch.object(p, "now_ist", return_value=now), \
+                mock.patch.object(p, "open_positions", return_value=[{"symbol": "GROWW"}]):
+            self.assertEqual(p.last_completed_session(today), date(2026, 10, 23))
+            self.assertEqual(p.enrichment_group(held, today, held={"GROWW"})[0], "A")
+            sel, _ = p.select_for_enrichment(fresh + [held], 20, today)
+        self.assertEqual(sel[0], held)

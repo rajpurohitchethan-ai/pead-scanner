@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.31"
+ENGINE_VERSION = "2.9.32"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1696,7 +1696,8 @@ def _last_enriched(event: dict[str, Any]) -> datetime:
 def enrichment_group(event: dict[str, Any], today: date | None = None,
                      last_session: date | None = None, held: set[str] | None = None) -> tuple[str, int]:
     """(group, rank within the group; lower first).
-    A  declared, still needs work. Rank 0 result in the last 2 days with
+    A  declared, still needs work. Rank -1 open trade (positions.json) with
+       prices behind; 0 result in the last 2 days with
        prices behind or figures missing; 1 open trade / live plan with prices
        behind; 2 prices behind the last closed session; 3 figures not read;
        4 concall pending or result in the last 5 days (transcript check).
@@ -1718,8 +1719,14 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
         no_figures = meta_value(event, "revenue_cr") is None or meta_value(event, "pat_cr") is None
         sec = event.get("security") or {}
         signal = str((((event.get("derived") or {}).get("plus") or {}).get("plan") or {}).get("signal") or "")
-        live = signal in LIVE_SIGNALS or bool(held and {str(sec.get("nseSymbol") or "").upper(),
-                                                         str(sec.get("bseSymbol") or "").upper()} & held)
+        is_held = bool(held and {str(sec.get("nseSymbol") or "").upper(),
+                                 str(sec.get("bseSymbol") or "").upper()} & held)
+        live = signal in LIVE_SIGNALS or is_held
+        if behind and is_held:
+            # 2.9.32: the owner's open trades first. After the close 47 fresh
+            # results (rank 0) took every declared slot each hour and GROWW /
+            # THELEELA were judged on the previous close all evening.
+            return "A", -1
         if age is not None and 0 <= age <= 2 and (behind or no_figures):
             return "A", 0
         if behind and live:
@@ -3779,7 +3786,89 @@ def _merge_keys(sec: dict[str, Any]) -> set[str]:
     bc = str(sec.get("bseCode") or "").strip()
     if bc.isdigit():
         keys.add("BSE:" + bc)
+    isin = str(sec.get("isin") or "").strip().upper()
+    if re.fullmatch(r"IN[A-Z0-9]{10}", isin):
+        keys.add("ISIN:" + isin)        # 2.9.32: one ISIN = one company (renamed symbol)
     return keys
+
+
+def _quote_identity(payload: Any) -> dict[str, Any] | None:
+    """(symbol, isin, companyName) from a saved NSE quote payload."""
+    if not isinstance(payload, dict):
+        return None
+    for key in ("metaData", "metadata", "info"):
+        m = payload.get(key)
+        if isinstance(m, dict) and m.get("symbol"):
+            isin = str(m.get("isinCode") or m.get("isin") or "").strip().upper()
+            return {"symbol": normalize_symbol(m.get("symbol")), "companyName": m.get("companyName"),
+                    "isin": isin if re.fullmatch(r"IN[A-Z0-9]{10}", isin) else None}
+    return None
+
+
+def adopt_quote_isins(store: EventStore, raw_root: Path = RAW_DIR) -> list[dict[str, Any]]:
+    """2.9.32: an event without an ISIN takes the ISIN of the NSE quote saved
+    for its own NSE symbol (same symbol, matching company name). ICICILIFE (the
+    renamed ICICI Prudential Life) was a second event because NSE's lookup row
+    has no ISIN; the quote says INE726G01019. When another event of the period
+    already holds that ISIN under an older symbol, that event takes the current
+    symbol / name (old symbol kept in security.formerSymbols) so the fold that
+    follows keeps the current identity, and a 2.9.26 'wrong BSE code' repair
+    made because of the old name is withdrawn."""
+    base = raw_root / "nse"
+    if not base.exists():
+        return []
+    events = store.all()
+    adopted = []
+    for e in events:
+        sec = e.get("security") or {}
+        sym = normalize_symbol(sec.get("nseSymbol"))
+        if sec.get("isin") or not sym:
+            continue
+        files = []
+        for eid in [e["eventId"], *(e.get("mergedFrom") or [])]:
+            prefix = safe_filename(eid).rsplit("_", 1)[0]
+            files += list(base.glob(f"{prefix}_*/quote-*.json"))
+        ident = None
+        for fpath in sorted(files, key=lambda x: x.stat().st_mtime, reverse=True):
+            try:
+                ident = _quote_identity(json.loads(fpath.read_text(encoding="utf-8")))
+            except Exception:
+                ident = None
+            if ident:
+                break
+        if not ident or not ident.get("isin") or ident.get("symbol") != sym:
+            continue
+        if sec.get("name") and ident.get("companyName") and not same_company(
+                {"name": sec.get("name")}, {"name": ident["companyName"]}):
+            continue
+        isin = ident["isin"]
+        sec["isin"] = isin
+        sec["isinSource"] = "NSE_QUOTE"
+        end = (e.get("period") or {}).get("end")
+        owner = next((o for o in events if o["eventId"] != e["eventId"] and (o.get("period") or {}).get("end") == end
+                      and str((o.get("security") or {}).get("isin") or "").upper() == isin), None)
+        rep = sec.get("identityRepaired") or {}
+        if rep.get("wrongBseCode") and owner is not None \
+                and str((owner.get("security") or {}).get("bseCode") or "") == str(rep["wrongBseCode"]):
+            sec.pop("identityRepaired", None)
+        if owner is not None:
+            osec = owner.setdefault("security", {})
+            old_sym = normalize_symbol(osec.get("nseSymbol"))
+            if old_sym and old_sym != sym:
+                former = osec.setdefault("formerSymbols", [])
+                if old_sym not in former:
+                    former.append(old_sym)
+                osec["nseSymbol"] = sym
+                osec["symbol"] = sym
+                if str(osec.get("yahooTicker") or "").endswith(".NS") or not osec.get("yahooTicker"):
+                    osec["yahooTicker"] = f"{sym}.NS"
+                if ident.get("companyName"):
+                    osec["name"] = ident["companyName"]
+                store.save(owner)
+        store.save(e)
+        adopted.append({"eventId": e["eventId"], "symbol": sym, "isin": isin,
+                        "owner": owner["eventId"] if owner is not None else None})
+    return adopted
 
 
 def merge_duplicate_events(store: EventStore) -> list[dict[str, Any]]:
@@ -3822,7 +3911,9 @@ def merge_duplicate_events(store: EventStore) -> list[dict[str, Any]]:
     def rank(e: dict[str, Any]) -> tuple:
         sec = e.get("security") or {}
         ok = sum(1 for m in (e.get("fields") or {}).values() if isinstance(m, dict) and m.get("status") == "OK")
-        return (bool(sec.get("isin")), bool(sec.get("nseSymbol")), ok, e["eventId"])
+        # 2.9.32: an event keyed by its own ISIN survives (stable identity).
+        keyed = bool(sec.get("isin")) and str(e["eventId"]).upper().startswith(str(sec["isin"]).upper() + "|")
+        return (bool(sec.get("isin")), keyed, bool(sec.get("nseSymbol")), ok, e["eventId"])
 
     merged: list[dict[str, Any]] = []
     for members in groups.values():
@@ -3883,6 +3974,8 @@ def integrity_pass(store: EventStore, *, today: date | None = None, raw_root: Pa
     index = build_evidence_index(raw_root)
     stats: dict[str, Any] = {"checked": 0, "reverified": 0, "revoked": 0, "postResultPurged": 0,
                              "snapshotsReplayed": 0, "financialsApplied": 0, "revocations": []}
+    adopted = adopt_quote_isins(store, raw_root)
+    stats["isinFromQuote"] = len(adopted)
     repaired = repair_lookup_mismatches(store, master, raw_root)
     stats["identityRepaired"] = len(repaired)
     stats["revocations"].extend(repaired)
@@ -5055,6 +5148,12 @@ def enrich_exchange_meta(event: dict[str, Any], store: EventStore, ctx: SourceCo
             for k, v in (parsed.get("identity") or {}).items():
                 if v:
                     sec[k] = v
+            qid = _quote_identity(payload)
+            if qid and qid.get("isin") and not sec.get("isin") and qid.get("symbol") == symbol and (
+                    not sec.get("name") or not qid.get("companyName")
+                    or same_company({"name": sec.get("name")}, {"name": qid["companyName"]})):
+                sec["isin"] = qid["isin"]          # 2.9.32: folded into the ISIN event by the next integrity pass
+                sec["isinSource"] = "NSE_QUOTE"
             got = got or bool(parsed)
         except Exception as exc:
             errors.append(f"NSE quote: {type(exc).__name__}: {exc}")
@@ -6843,6 +6942,17 @@ def _payload_symbol(payload: Any) -> str | None:
     return None
 
 
+def _payload_symbol_ok(payload: Any, sec: dict[str, Any]) -> bool:
+    """NSE price rows belong to this event: no symbol on the rows, the current
+    NSE symbol, or a former one (2.9.32: NSE still labels ICICILIFE's history
+    with the old symbol ICICIPRULI)."""
+    got = _payload_symbol(payload)
+    if got is None:
+        return True
+    ok = {normalize_symbol(sec.get("nseSymbol"))} | {normalize_symbol(x) for x in (sec.get("formerSymbols") or [])}
+    return got in ok - {None, ""}
+
+
 def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Path = RAW_DIR) -> bool:
     """Recompute price analytics from the newest saved price payload (NSE OHLC
     preferred, BSE close-only fallback). Used when no fresh fetch happened, so
@@ -6861,7 +6971,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
             payload = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if kind == "NSE" and _payload_symbol(payload) not in (None, nse_sym):
+        if kind == "NSE" and not _payload_symbol_ok(payload, event.get("security") or {}):
             continue   # another company's prices (pre-2.5.4 lookup mix-up)
         if kind == "BSE" and not (event.get("security") or {}).get("bseCode"):
             continue   # BSE code removed as another company's (2.6.1)
