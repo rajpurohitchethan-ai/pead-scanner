@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE249U01013|2026-09-30",
   "createdAt": "2026-10-16T16:08:06Z",
-  "updatedAt": "2026-10-23T14:13:20Z",
+  "updatedAt": "2026-10-23T15:12:28Z",
   "security": {
     "symbol": "SUERYAAKNI",
     "bseSymbol": "SUERYAAKNI",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-23T14:48:16Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-23T15:12:28Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-23",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-23T14:00:25Z",
+      "fetchedAt": "2026-10-23T15:00:18Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-73b5ab79f9ec3b20.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b1617b140b791fe8.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-26",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-23T11:59:20Z",
+      "fetchedAt": "2026-10-23T15:00:48Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-23T11:59:20Z",
+      "fetchedAt": "2026-10-23T15:00:48Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -78,6 +88,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE249U01013_2026-09-30/scrip_results-a701fb5295458709.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T14:48:16Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b1617b140b791fe8.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-23T20:14:25.023000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T14:48:16Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b1617b140b791fe8.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-23T14:48:16Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b1617b140b791fe8.json",
+      "note": null
     }
   },
   "fetch": {
@@ -89,7 +126,7 @@
       "rawRef": "raw/bse/NSE_SUERYAAKNI_2026-09-30/lookup-d1650a9464bff0fd.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-23T11:59:22Z",
+      "lastAttempt": "2026-10-23T15:00:49Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
@@ -110,42 +147,73 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-23T11:59:22Z",
+      "lastAttempt": "2026-10-23T15:00:51Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-23T15:00:48Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE249U01013_2026-09-30/results_snapshot-0728a3e353041cfd.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-23T15:00:48Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-23T15:00:51Z",
+      "lastSuccess": "2026-10-23T15:00:51Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE249U01013_2026-09-30/scrip_announcements-d8001ae8b6072307.json"
     }
   },
   "derived": {
-    "score": 5,
-    "completenessPct": 33.3,
+    "score": 2,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -189,11 +257,11 @@
         "sector": "Textiles",
         "stocks": 69,
         "momentum63dMedian": -0.78,
-        "relativeToMarket": 5.52,
-        "declared": 3,
+        "relativeToMarket": 5.58,
+        "declared": 4,
         "strongResults": 2,
         "avgReaction": -1.91,
-        "tailwind": "STRONG"
+        "tailwind": "POSITIVE"
       },
       "identity": {
         "macroSector": "Consumer Discretionary",
@@ -205,7 +273,15 @@
       },
       "price": {},
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-23",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/540318/",
@@ -217,10 +293,38 @@
     },
     "valuationInputCount": 1,
     "expectationFullWindow": false,
-    "reasons": [
-      "Sector tailwind: Textiles peers are outperforming."
-    ],
+    "reasons": [],
     "risks": []
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-23T20:14:25.023000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Standalone Financial Results for quarter and half year ended September 30, 2026 Sueryaa Knitwear Ltd - 540318 - Unaudited Standalone Financial Results For Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b1617b140b791fe8.json",
+      "seenAt": "2026-10-23T15:12:25Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-23T15:00:48Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-23",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }
