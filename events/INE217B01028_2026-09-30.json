@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE217B01028|2026-09-30",
   "createdAt": "2026-10-17T10:36:48Z",
-  "updatedAt": "2026-10-24T13:12:50Z",
+  "updatedAt": "2026-10-24T14:00:49Z",
   "security": {
     "symbol": "KAJARIACER",
     "nseSymbol": "KAJARIACER",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-20T02:46:38Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-24T13:39:12Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-24T14:00:49Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-24",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-24T13:01:04Z",
+      "fetchedAt": "2026-10-24T13:51:44Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-cbe293f673abea4e.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-caf14443f36ee3fd.json",
       "note": null
     },
     "reaction_session": {
@@ -244,6 +254,33 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-24T13:39:12Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-caf14443f36ee3fd.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-24T19:00:18.370000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-24T13:39:12Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-caf14443f36ee3fd.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-24T13:39:12Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-caf14443f36ee3fd.json",
+      "note": null
     }
   },
   "fetch": {
@@ -262,15 +299,15 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-17T10:45:24Z",
-      "lastSuccess": "2026-10-17T10:45:24Z",
+      "lastAttempt": "2026-10-24T13:52:26Z",
+      "lastSuccess": "2026-10-24T13:52:26Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE217B01028_2026-09-30/integrated_filings-5a0629d376b3af4b.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-17T10:45:24Z",
-      "lastSuccess": "2026-10-17T10:45:24Z",
+      "lastAttempt": "2026-10-24T13:52:26Z",
+      "lastSuccess": "2026-10-24T13:52:26Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE217B01028_2026-09-30/integrated_filings-5a0629d376b3af4b.json"
@@ -295,27 +332,61 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-24T13:52:28Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE217B01028_2026-09-30/results_comparison-820adc7712de6efa.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-24T13:52:30Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE217B01028_2026-09-30/results_snapshot-101b051d89095e72.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-24T13:52:30Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "KAJARIACER.NS: RuntimeError: latest statement does not match event quarter; 500233.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-24T13:52:32Z",
+      "lastSuccess": "2026-10-24T13:52:32Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE217B01028_2026-09-30/announcements-6322cebcbd7dc199.json"
     }
   },
   "derived": {
-    "score": 31,
-    "completenessPct": 100.0,
+    "score": 28,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -323,13 +394,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -371,13 +442,13 @@
       "sectorKey": "Consumer Durables",
       "sector": {
         "sector": "Consumer Durables",
-        "stocks": 78,
-        "momentum63dMedian": -8.74,
-        "relativeToMarket": -1.81,
-        "declared": 6,
+        "stocks": 79,
+        "momentum63dMedian": -8.45,
+        "relativeToMarket": -1.49,
+        "declared": 7,
         "strongResults": 2,
         "avgReaction": 2.07,
-        "tailwind": "NEUTRAL"
+        "tailwind": "WEAK"
       },
       "identity": {
         "macroSector": "Consumer Discretionary",
@@ -434,7 +505,15 @@
         }
       },
       "deliveryPct": 48.98,
-      "concall": null,
+      "concall": {
+        "status": "SCHEDULED",
+        "callDate": "2026-10-24",
+        "noticeUrl": "https://nsearchives.nseindia.com/corporate/KAJARIACER_19102026124643_Conference_Call.pdf",
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-24",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/KAJARIACER/",
@@ -449,7 +528,9 @@
     "reasons": [
       "Low pre-result expectation: 20D move -6.6%."
     ],
-    "risks": []
+    "risks": [
+      "Sector headwind: Consumer Durables peers are lagging."
+    ]
   },
   "priceTrail": [
     {
@@ -782,7 +863,7 @@
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-17T10:45:24Z",
+    "fetchedAt": "2026-10-24T13:52:26Z",
     "v": 2,
     "rows": [
       {
@@ -902,5 +983,35 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:KAJARIACER|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-24T19:00:18.370000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "The Board of Directors of the Company at its meeting held today, approved the Unaudited Financial Results for the quarter and half year ended September 30, 2026. Kajaria Ceramics Ltd - 500233 - Unaudited Financial Results Of The Company For The Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-caf14443f36ee3fd.json",
+      "seenAt": "2026-10-24T14:00:43Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-24T13:52:30Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "SCHEDULED",
+    "callDate": "2026-10-24",
+    "noticeUrl": "https://nsearchives.nseindia.com/corporate/KAJARIACER_19102026124643_Conference_Call.pdf",
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-24",
+    "source": "NSE_ANNOUNCEMENTS"
+  }
 }
