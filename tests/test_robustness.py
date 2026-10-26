@@ -2125,3 +2125,59 @@ class HeldTradeEnrichmentFirstTests(unittest.TestCase):
             self.assertEqual(p.enrichment_group(held, today, held={"GROWW"})[0], "A")
             sel, _ = p.select_for_enrichment(fresh + [held], 20, today)
         self.assertEqual(sel[0], held)
+
+
+class YoYMissingEnrichmentTests(unittest.TestCase):
+    """2.9.33 (26 Oct 2026): DRREDDY (results 23 Oct 17:30 IST, Rs 1 lakh Cr)
+    showed the BSE table (basis unknown, no YoY) for three days. Its NSE
+    listing was read at 18:31 IST, before the Integrated Filing appeared, and
+    the event was never enriched again: results of the last two days without
+    figures (rank A0, re-tried every hour even when looked at minutes ago) and
+    the prices-behind rank filled every declared slot, while a declared result
+    with figures but no YoY sat in the lowest rank (A4)."""
+
+    def _ev(self, i, sym, rd, last_session, attempt, figures=True, yoy=None):
+        fields = {"result_date": {"value": rd.isoformat(), "status": "OK"},
+                  "results_released": {"value": True, "status": "OK"}}
+        if figures:
+            fields["revenue_cr"] = {"value": 5572.6, "status": "OK"}
+            fields["pat_cr"] = {"value": 695.8, "status": "OK"}
+        if yoy is not None:
+            fields["revenue_yoy_pct"] = {"value": yoy, "status": "OK"}
+            fields["pat_yoy_pct"] = {"value": yoy, "status": "OK"}
+        return {"eventId": f"E{i:04d}", "period": {"end": "2026-09-30"},
+                "security": {"nseSymbol": sym, "exchangeSector": "Healthcare"},
+                "fields": fields,
+                "fetch": {"PRICE_HISTORY": {"lastAttempt": attempt}},
+                "plus": {"price": {"last_session": last_session.isoformat()}}}
+
+    def test_yoy_missing_is_reached_before_fresh_rows_tried_minutes_ago(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 10, 26, 11, 0, tzinfo=p.IST)        # market hours: last closed session 23 Oct
+        today = now.date()
+        fresh = [self._ev(i, f"F{i}", date(2026, 10, 26), date(2026, 10, 23), "2026-10-26T05:10:00Z", figures=False)
+                 for i in range(40)]
+        drreddy = self._ev(999, "DRREDDY", date(2026, 10, 23), date(2026, 10, 23), "2026-10-23T15:03:04Z")
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.last_completed_session(today), date(2026, 10, 23))
+            self.assertEqual(p.enrichment_group(drreddy, today), ("A", 3))
+            sel, _ = p.select_for_enrichment(fresh + [drreddy], 35, today)
+        self.assertIn(drreddy, sel)
+
+    def test_fresh_row_without_figures_still_first_when_not_tried_for_2h(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 10, 26, 11, 0, tzinfo=p.IST)
+        fresh = self._ev(1, "F1", date(2026, 10, 26), date(2026, 10, 23), "2026-10-26T02:00:00Z", figures=False)
+        recent = self._ev(2, "F2", date(2026, 10, 26), date(2026, 10, 23), "2026-10-26T05:10:00Z", figures=False)
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(fresh, now.date()), ("A", 0))
+            self.assertEqual(p.enrichment_group(recent, now.date()), ("A", 3))
+
+    def test_complete_result_and_old_result_unchanged(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 10, 26, 11, 0, tzinfo=p.IST)
+        done = self._ev(1, "D1", date(2026, 10, 23), date(2026, 10, 23), "2026-10-23T15:03:04Z", yoy=12.0)
+        old = self._ev(2, "D2", date(2026, 10, 9), date(2026, 10, 23), "2026-10-23T15:03:04Z")   # > 10 days: no re-read
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(done, now.date()), ("A", 4))
+            self.assertEqual(p.enrichment_group(old, now.date()), ("D", 0))

@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.32"
+ENGINE_VERSION = "2.9.33"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1674,6 +1674,7 @@ ENRICH_SLOTS_DECLARED = int(os.getenv("ENRICH_SLOTS_DECLARED", "35"))   # A: dec
 ENRICH_SLOTS_UPCOMING = int(os.getenv("ENRICH_SLOTS_UPCOMING", "45"))   # B: reporting within 7 days, prices stale
 ENRICH_UPCOMING_WINDOW_DAYS = 7
 ENRICH_RECENT_RESULT_DAYS = 5     # declared this recently: concall / transcript / reaction still moving
+ENRICH_RETRY_FRESH_HOURS = 2      # 2.9.33: a fresh result without figures re-jumps the queue after this
 
 
 def last_completed_session(today: date | None = None) -> date:
@@ -1701,6 +1702,8 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
        prices behind or figures missing; 1 open trade / live plan with prices
        behind; 2 prices behind the last closed session; 3 figures not read;
        4 concall pending or result in the last 5 days (transcript check).
+       2.9.33: rank 3 also holds results of the last 10 days with figures
+       but no YoY; a fresh no-figures row tried < 2 h ago drops from 0 to 3.
     B  not declared: result due today or in the last 2 days (filing awaited,
        rank 0), or within 7 days / overdue with prices behind (rank 1).
     C  never enriched: no price history or no sector.
@@ -1727,13 +1730,22 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
             # results (rank 0) took every declared slot each hour and GROWW /
             # THELEELA were judged on the previous close all evening.
             return "A", -1
-        if age is not None and 0 <= age <= 2 and (behind or no_figures):
+        # 2.9.33: a fresh result without figures jumps the queue only when not
+        # tried for ENRICH_RETRY_FRESH_HOURS (the NSE listing is cached 3 h);
+        # otherwise it rotates with the other figure gaps in rank 3. A result
+        # of the last 10 days with figures but no YoY rotates there too, so
+        # its 3-hourly XBRL re-read is actually reached (DRREDDY 23-26 Oct).
+        tried_recently = (now_ist() - _last_enriched(event)).total_seconds() < ENRICH_RETRY_FRESH_HOURS * 3600
+        yoy_missing = (not no_figures and age is not None and 0 <= age <= 10
+                       and comparatives_missing({k: meta_value(event, k) for k in
+                                                 ("revenue_yoy_pct", "pat_yoy_pct", "pat_trend")}))
+        if age is not None and 0 <= age <= 2 and (behind or (no_figures and not tried_recently)):
             return "A", 0
         if behind and live:
             return "A", 1
         if behind:
             return "A", 2
-        if no_figures:
+        if no_figures or yoy_missing:
             return "A", 3
         if concall or (age is not None and 0 <= age <= ENRICH_RECENT_RESULT_DAYS):
             return "A", 4
