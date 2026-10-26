@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE556D01017|2026-09-30",
   "createdAt": "2026-10-22T02:49:20Z",
-  "updatedAt": "2026-10-26T12:16:59Z",
+  "updatedAt": "2026-10-26T15:29:40Z",
   "security": {
     "symbol": "ADMANUM",
     "bseSymbol": "ADMANUM",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-22T02:49:20Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-26T14:54:06Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-26T15:29:40Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-26",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-26T12:05:12Z",
+      "fetchedAt": "2026-10-26T15:09:35Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7308636a178728b4.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-290488de4625267a.json",
       "note": null
     },
     "reaction_session": {
@@ -159,6 +169,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE556D01017_2026-09-30/scrip_results-a1efc64ca5864109.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-26T14:54:06Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-290488de4625267a.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-26T19:44:02.680000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-26T14:54:06Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-290488de4625267a.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-26T14:54:06Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-290488de4625267a.json",
+      "note": null
     }
   },
   "fetch": {
@@ -200,23 +237,29 @@
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -224,13 +267,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -272,11 +315,11 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 258,
-        "momentum63dMedian": -8.44,
-        "relativeToMarket": -0.81,
-        "declared": 61,
-        "strongResults": 36,
+        "stocks": 265,
+        "momentum63dMedian": -8.3,
+        "relativeToMarket": -0.66,
+        "declared": 64,
+        "strongResults": 37,
         "avgReaction": -1.51,
         "tailwind": "NEUTRAL"
       },
@@ -665,5 +708,19 @@
     "computedAt": "2026-10-26T11:12:59Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-26T19:44:02.680000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "The Board of Directors of the Company in its Meeting held on October 26, 2026, has approved the Unaudited Financial Results for the Quarter & Half year ended on September 30, 2026 Ad-Manum Finance Ltd - 511359 - Unaudited Financial Results For The Quarter/Half Year Ended On September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-290488de4625267a.json",
+      "seenAt": "2026-10-26T15:29:35Z"
+    }
+  ]
 }

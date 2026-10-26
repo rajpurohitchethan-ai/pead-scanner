@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:GCCL|2026-09-30",
   "createdAt": "2026-10-20T02:46:38Z",
-  "updatedAt": "2026-10-26T12:16:59Z",
+  "updatedAt": "2026-10-26T15:29:41Z",
   "security": {
     "symbol": "GCCL",
     "bseSymbol": "GCCL",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,31 +30,46 @@
       "state": "SCHEDULED",
       "at": "2026-10-20T02:46:38Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-26T14:54:26Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "FINANCIALS_PARSED",
+      "at": "2026-10-26T15:15:26Z",
+      "reason": "verified BSE_RESULTS_SNAPSHOT snapshot applied"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-26T15:15:27Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-26",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-26T12:05:12Z",
+      "fetchedAt": "2026-10-26T15:09:35Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7308636a178728b4.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-290488de4625267a.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-27",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-26T11:11:44Z",
+      "fetchedAt": "2026-10-26T15:15:26Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-26T11:11:44Z",
+      "fetchedAt": "2026-10-26T15:15:26Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -63,7 +78,7 @@
     "distance_52w_high_pct": {
       "value": -68.25,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-26T11:11:46Z",
+      "fetchedAt": "2026-10-26T15:15:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_GCCL_2026-09-30/price_volume_12m-16d955ef252534fe.json",
@@ -72,7 +87,7 @@
     "last_price": {
       "value": 3.0,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-26T11:11:46Z",
+      "fetchedAt": "2026-10-26T15:15:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_GCCL_2026-09-30/price_volume_12m-16d955ef252534fe.json",
@@ -81,7 +96,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0024,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-26T11:11:46Z",
+      "fetchedAt": "2026-10-26T15:15:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_GCCL_2026-09-30/price_volume_12m-16d955ef252534fe.json",
@@ -140,12 +155,129 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_GCCL_2026-09-30/scrip_results-00e068350f7268f3.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-26T14:54:26Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-290488de4625267a.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-26T18:46:33.693000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-26T14:54:26Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-290488de4625267a.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-26T14:54:26Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-290488de4625267a.json",
+      "note": null
+    },
+    "basis": {
+      "value": "UNKNOWN",
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "opm_pct": {
+      "value": 119.69,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "revenue_qoq_pct": {
+      "value": -20.41,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "pat_cr": {
+      "value": 0.3,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "margin_change_bps": {
+      "value": 4397,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "revenue_cr": {
+      "value": 0.39,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "opm_prev_q_pct": {
+      "value": 75.72,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "eps": {
+      "value": 0.25,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "pat_qoq_trend": {
+      "value": "PROFIT_GROWTH",
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "pat_qoq_pct": {
+      "value": 20.0,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-26T11:11:46Z",
-      "lastSuccess": "2026-10-26T11:11:46Z",
+      "lastAttempt": "2026-10-26T15:15:27Z",
+      "lastSuccess": "2026-10-26T15:15:27Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/NSE_GCCL_2026-09-30/price_volume_12m-16d955ef252534fe.json"
@@ -170,34 +302,71 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-26T15:15:26Z",
+      "lastSuccess": "2026-10-26T15:15:26Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json"
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-26T15:15:29Z",
+      "lastSuccess": "2026-10-26T15:15:29Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/scrip_announcements-13b4679be5d3e31c.json"
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
-      "lens": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
+      "lens": {
+        "revenue": {
+          "qoq": -20.41,
+          "yoy": null,
+          "ytd": null
+        },
+        "profit": {
+          "qoq": 20.0,
+          "yoy": null,
+          "ytd": null
+        },
+        "profitStatus": null,
+        "notes": []
+      },
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -221,22 +390,22 @@
       },
       "margins": {
         "opm": null,
-        "opmPrevQ": null,
+        "opmPrevQ": 75.72,
         "opmPriorYear": null,
         "changeBps": null,
         "opmTtm": 75.72,
-        "opmNote": null,
-        "basis": null,
-        "revenueQoQ": null,
-        "patQoQ": null,
-        "patQoQStatus": null
+        "opmNote": "n/m (exchange figure 119.7%: other income or a unit mismatch)",
+        "basis": "QoQ",
+        "revenueQoQ": -20.41,
+        "patQoQ": 20.0,
+        "patQoQStatus": "PROFIT_GROWTH"
       },
       "sectorKey": "Realty",
       "sector": {
         "sector": "Realty",
-        "stocks": 54,
-        "momentum63dMedian": -10.54,
-        "relativeToMarket": -2.92,
+        "stocks": 55,
+        "momentum63dMedian": -10.58,
+        "relativeToMarket": -2.94,
         "declared": 7,
         "strongResults": 1,
         "avgReaction": 1.02,
@@ -279,7 +448,15 @@
         "pressure": null
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-26",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/531953/",
@@ -352,6 +529,11 @@
     },
     {
       "timestamp": "2026-10-26T11:11:46Z",
+      "price": 3.0,
+      "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-26T15:15:27Z",
       "price": 3.0,
       "source": "BSE_PRICE"
     }
@@ -439,8 +621,88 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-26T11:11:46Z",
+    "computedAt": "2026-10-26T15:15:27Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-26T18:46:33.693000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please find enclosed herewith unaudited standalone financial results for the quarter and half year ended 30th September, 2026. GCCL Construction & Realities Ltd - 531953 - Results-Financial Results For The Quarter And Half Year Ended 30Th September, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-290488de4625267a.json",
+      "seenAt": "2026-10-26T15:29:36Z"
+    }
+  ],
+  "financialSnapshots": {
+    "BSE_RESULTS_SNAPSHOT": {
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-10-26T15:15:26Z",
+      "rawRef": "raw/bse/NSE_GCCL_2026-09-30/results_snapshot-f8b1d636378b7ace.json",
+      "documentUrl": null,
+      "periodEnd": "2026-09-30",
+      "basis": "UNKNOWN",
+      "revenueDefinition": "BSE_SNAPSHOT_REVENUE",
+      "concepts": {
+        "revenue": "Revenue",
+        "pat": "Net Profit"
+      },
+      "reference": {
+        "fy_revenue_cr": 1.42,
+        "fy_pat_cr": 0.93
+      },
+      "values": {
+        "opm_pct": 119.69,
+        "revenue_qoq_pct": -20.41,
+        "pat_cr": 0.3,
+        "margin_change_bps": 4397,
+        "revenue_cr": 0.39,
+        "opm_prev_q_pct": 75.72,
+        "eps": 0.25,
+        "pat_qoq_trend": "PROFIT_GROWTH",
+        "pat_qoq_pct": 20.0
+      },
+      "validation": {
+        "status": "VERIFIED",
+        "issues": [
+          "BASIS_UNKNOWN",
+          "NO_PRIOR_YEAR_COLUMN"
+        ]
+      },
+      "parserVersion": 2
+    }
+  },
+  "financialIntegrity": {
+    "checkedAt": "2026-10-26T15:29:36Z",
+    "snapshotsConsidered": 1,
+    "status": "VERIFIED",
+    "issues": [
+      "BASIS_UNKNOWN",
+      "NO_PRIOR_YEAR_COLUMN"
+    ],
+    "selectedSource": "BSE_RESULTS_SNAPSHOT",
+    "documentUrl": null,
+    "basis": "UNKNOWN",
+    "revenueDefinition": "BSE_SNAPSHOT_REVENUE",
+    "concepts": {
+      "revenue": "Revenue",
+      "pat": "Net Profit"
+    },
+    "periodEnd": "2026-09-30",
+    "crossCheck": []
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-26",
+    "source": "BSE_ANNOUNCEMENTS"
   }
 }
