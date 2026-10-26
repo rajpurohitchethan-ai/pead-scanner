@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE837C01013|2026-09-30",
   "createdAt": "2026-10-20T02:46:38Z",
-  "updatedAt": "2026-10-26T15:29:41Z",
+  "updatedAt": "2026-10-26T16:07:51Z",
   "security": {
     "symbol": "QGO",
     "bseSymbol": "QGO",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-20T02:46:38Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-26T15:39:47Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-26T16:07:51Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-26",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-26T15:09:35Z",
+      "fetchedAt": "2026-10-26T15:54:31Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-a7c51f960e40f807.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-6166f97cd50cb3c2.json",
       "note": null
     },
     "reaction_session": {
@@ -159,6 +169,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE837C01013_2026-09-30/scrip_results-7e40aa80b487c56a.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-26T15:39:47Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-6166f97cd50cb3c2.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-26T20:53:14.167000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-26T15:39:47Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-6166f97cd50cb3c2.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-26T15:39:47Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-6166f97cd50cb3c2.json",
+      "note": null
     }
   },
   "fetch": {
@@ -199,24 +236,30 @@
     }
   },
   "derived": {
-    "score": 7,
-    "completenessPct": 66.7,
+    "score": 9,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -224,13 +267,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -272,13 +315,13 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 265,
-        "momentum63dMedian": -8.3,
-        "relativeToMarket": -0.66,
-        "declared": 64,
-        "strongResults": 37,
+        "stocks": 266,
+        "momentum63dMedian": -8.27,
+        "relativeToMarket": -0.64,
+        "declared": 65,
+        "strongResults": 39,
         "avgReaction": -1.51,
-        "tailwind": "NEUTRAL"
+        "tailwind": "POSITIVE"
       },
       "identity": {
         "macroSector": "Financial Services",
@@ -673,5 +716,19 @@
     "computedAt": "2026-10-26T15:18:06Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-26T20:53:14.167000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Un-audited Financial Results for September 30, 2026 QGO Finance Ltd - 538646 - Financial Results For September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-6166f97cd50cb3c2.json",
+      "seenAt": "2026-10-26T16:07:46Z"
+    }
+  ]
 }
