@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE552H01017|2026-09-30",
   "createdAt": "2026-10-23T02:50:48Z",
-  "updatedAt": "2026-10-27T10:24:46Z",
+  "updatedAt": "2026-10-27T11:17:02Z",
   "security": {
     "symbol": "TASHIND",
     "bseSymbol": "TASHIND",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-23T02:50:48Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-27T10:48:12Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-27T11:17:02Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-27",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-27T10:07:15Z",
+      "fetchedAt": "2026-10-27T11:04:44Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-35082e2b84259155.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4d0de3c4c5c42d6b.json",
       "note": null
     },
     "reaction_session": {
@@ -132,6 +142,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE552H01017_2026-09-30/scrip_results-48c7f0de3e017646.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T10:48:12Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4d0de3c4c5c42d6b.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-27T15:24:50.260000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T10:48:12Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4d0de3c4c5c42d6b.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T10:48:12Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4d0de3c4c5c42d6b.json",
+      "note": null
     }
   },
   "fetch": {
@@ -173,30 +210,40 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -233,10 +280,10 @@
       "sectorKey": "Services",
       "sector": {
         "sector": "Services",
-        "stocks": 106,
+        "stocks": 108,
         "momentum63dMedian": -4.79,
-        "relativeToMarket": 2.67,
-        "declared": 12,
+        "relativeToMarket": 2.71,
+        "declared": 13,
         "strongResults": 3,
         "avgReaction": -2.16,
         "tailwind": "WEAK"
@@ -375,5 +422,19 @@
     "computedAt": "2026-10-27T07:43:08Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-27T15:24:50.260000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Pursuant to Regulation 33 of SEBI Listing Regulation, 2015, please find enclosed the Unaudited Standalaone and Consolidated Financial Results of the Company for the quarter and half year .... Tashi India Ltd - 512271 - Unaudited Financial Results Of The Company For The Quarter And Half Year Ended Se",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4d0de3c4c5c42d6b.json",
+      "seenAt": "2026-10-27T11:16:56Z"
+    }
+  ]
 }
