@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE077F01035|2026-09-30",
   "createdAt": "2026-10-13T13:37:01Z",
-  "updatedAt": "2026-10-27T05:14:10Z",
+  "updatedAt": "2026-10-27T06:05:20Z",
   "security": {
     "symbol": "GOCLCORP",
     "nseSymbol": "GOCLCORP",
@@ -69,13 +69,23 @@
       "state": "PEAD_SCORED",
       "at": "2026-10-21T12:01:42Z",
       "reason": "core PEAD signals scored"
+    },
+    {
+      "state": "DISCOVERED",
+      "at": "2026-10-27T05:57:07Z",
+      "reason": "event created"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-27T05:57:07Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-19",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-27T04:50:55Z",
+      "fetchedAt": "2026-10-27T05:57:07Z",
       "status": "OK",
       "rank": 110,
       "rawRef": "raw/bse/DISCOVERY/result_announcements-01a9f59efe12700f.json",
@@ -84,7 +94,7 @@
     "reaction_session": {
       "value": "2026-10-21",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-24T04:53:01Z",
+      "fetchedAt": "2026-10-27T05:57:23Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -93,7 +103,7 @@
     "filing_session": {
       "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-24T04:53:01Z",
+      "fetchedAt": "2026-10-27T05:57:23Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -264,7 +274,7 @@
     "results_released": {
       "value": true,
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-27T04:50:55Z",
+      "fetchedAt": "2026-10-27T05:57:07Z",
       "status": "OK",
       "rank": 110,
       "rawRef": "raw/bse/DISCOVERY/result_announcements-01a9f59efe12700f.json",
@@ -273,7 +283,7 @@
     "filing_timestamp": {
       "value": "2026-10-19T21:23:10.540000+05:30",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-27T04:50:55Z",
+      "fetchedAt": "2026-10-27T05:57:07Z",
       "status": "OK",
       "rank": 110,
       "rawRef": "raw/bse/DISCOVERY/result_announcements-01a9f59efe12700f.json",
@@ -282,7 +292,7 @@
     "result_source": {
       "value": "BSE_RESULT_ANNOUNCEMENT",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-27T04:50:55Z",
+      "fetchedAt": "2026-10-27T05:57:07Z",
       "status": "OK",
       "rank": 98,
       "rawRef": "raw/bse/DISCOVERY/result_announcements-d1bc87241267d874.json",
@@ -561,17 +571,17 @@
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-24T04:53:04Z",
-      "lastSuccess": "2026-10-24T04:53:04Z",
-      "status": "OK",
-      "error": null,
-      "rawRef": "raw/nse_price/INE077F01035_2026-09-30/equity_history-cac18aee560b7327.json"
+      "lastAttempt": "2026-10-27T05:57:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 303 s spent failing; last: TimeoutError; 506480.BO: RuntimeError: empty history",
+      "rawRef": null
     },
     "EXCHANGE_META": {
-      "lastAttempt": "2026-10-24T04:53:08Z",
-      "lastSuccess": "2026-10-24T04:53:08Z",
-      "status": "OK",
-      "error": null,
+      "lastAttempt": "2026-10-27T05:57:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "BSE meta: SourceSkipped: BSE switched off for this run: 1 failures in a row, 303 s spent failing; last: TimeoutError",
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
@@ -589,10 +599,10 @@
       "rawRef": "raw/nse/INE077F01035_2026-09-30/integrated_filings-5c92e030415d44b1.json"
     },
     "PREV_QUARTER": {
-      "lastAttempt": "2026-10-13T16:39:12Z",
-      "lastSuccess": "2026-10-13T16:39:12Z",
-      "status": "OK",
-      "error": null,
+      "lastAttempt": "2026-10-27T05:57:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 303 s spent failing; last: TimeoutError",
       "rawRef": null
     },
     "NSE_LOOKUP": {
@@ -603,10 +613,10 @@
       "rawRef": "raw/nse/NSE_GOCLCORP_2026-09-30/lookup-5ef7017051bfa829.json"
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-24T04:53:10Z",
-      "lastSuccess": "2026-10-24T04:53:10Z",
-      "status": "OK",
-      "error": null,
+      "lastAttempt": "2026-10-27T05:57:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
       "rawRef": null
     },
     "NSE_XBRL": {
@@ -624,11 +634,32 @@
       "rawRef": "raw/nse/INE077F01035_2026-09-30/results_comparison-e0ade9e3c9b0d20b.json"
     },
     "CONCALL": {
-      "lastAttempt": "2026-10-24T04:53:10Z",
-      "lastSuccess": "2026-10-24T04:53:10Z",
-      "status": "OK",
-      "error": null,
-      "rawRef": "raw/nse/INE077F01035_2026-09-30/announcements-a4ff86d124ce96e8.json"
+      "lastAttempt": "2026-10-27T05:57:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 303 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "BSE_LOOKUP": {
+      "lastAttempt": "2026-10-27T05:57:22Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 303 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-27T05:57:22Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 303 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-27T05:57:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "506480.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
     }
   },
   "derived": {
@@ -735,7 +766,7 @@
         "sector": "Chemicals",
         "stocks": 124,
         "momentum63dMedian": -7.61,
-        "relativeToMarket": 0.02,
+        "relativeToMarket": 0.0,
         "declared": 14,
         "strongResults": 9,
         "avgReaction": -7.59,
@@ -1424,7 +1455,8 @@
   },
   "tradeLog": {},
   "mergedFrom": [
-    "NSE:GOCLCORP|2026-09-30"
+    "NSE:GOCLCORP|2026-09-30",
+    "BSE:506480|2026-09-30"
   ],
   "filings": [
     {
@@ -1437,7 +1469,7 @@
       "xbrlUrl": null,
       "headline": "Unaudited Financial Results for the quarter and half year ended September 30, 2026 GOCL Corporation Ltd-$ - 506480 - Unaudited Financial Results For The Quarter And Half Year Ended September 30, 2026",
       "rawRef": "raw/bse/DISCOVERY/result_announcements-fc1f00ce131bf21b.json",
-      "seenAt": "2026-10-27T05:14:03Z"
+      "seenAt": "2026-10-27T06:05:15Z"
     },
     {
       "source": "NSE_INTEGRATED_FILING",
@@ -1449,7 +1481,7 @@
       "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1742107_19102026092526_WEB.xml",
       "headline": "Integrated Filing - Financials Consolidated Original",
       "rawRef": "raw/nse/INE077F01035_2026-09-30/integrated_filings-5c92e030415d44b1.json",
-      "seenAt": "2026-10-27T05:14:03Z"
+      "seenAt": "2026-10-27T06:05:15Z"
     },
     {
       "source": "NSE_INTEGRATED_FILING",
@@ -1461,7 +1493,7 @@
       "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1742108_19102026092543_WEB.xml",
       "headline": "Integrated Filing - Financials Standalone Original",
       "rawRef": "raw/nse/INE077F01035_2026-09-30/integrated_filings-5c92e030415d44b1.json",
-      "seenAt": "2026-10-27T05:14:03Z"
+      "seenAt": "2026-10-27T06:05:15Z"
     }
   ],
   "financialSnapshots": {
@@ -1512,7 +1544,7 @@
     }
   },
   "financialIntegrity": {
-    "checkedAt": "2026-10-27T05:14:03Z",
+    "checkedAt": "2026-10-27T06:05:15Z",
     "snapshotsConsidered": 1,
     "status": "FLAGGED",
     "issues": [
