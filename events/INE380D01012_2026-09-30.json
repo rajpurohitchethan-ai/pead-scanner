@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE380D01012|2026-09-30",
   "createdAt": "2026-10-16T16:08:06Z",
-  "updatedAt": "2026-10-27T11:17:02Z",
+  "updatedAt": "2026-10-27T12:18:10Z",
   "security": {
     "symbol": "MODWOOL",
     "bseSymbol": "MODWOOL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-27T11:45:21Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-27T12:18:10Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-27",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-27T11:04:44Z",
+      "fetchedAt": "2026-10-27T12:04:48Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-c33e47f0069d247f.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e2f4e8228812323.json",
       "note": null
     },
     "reaction_session": {
@@ -141,6 +151,33 @@
       "rank": 105,
       "rawRef": "raw/bse_price/INE380D01012_2026-09-30/price_volume_12m-a56c9e11c0eec640.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T11:45:21Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e2f4e8228812323.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-27T17:14:35.770000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T11:45:21Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e2f4e8228812323.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T11:45:21Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e2f4e8228812323.json",
+      "note": null
     }
   },
   "fetch": {
@@ -182,23 +219,29 @@
   },
   "derived": {
     "score": 1,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS (PARTIAL)",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -206,13 +249,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -254,12 +297,12 @@
       "sectorKey": "Services",
       "sector": {
         "sector": "Services",
-        "stocks": 108,
+        "stocks": 112,
         "momentum63dMedian": -4.79,
-        "relativeToMarket": 2.71,
-        "declared": 13,
+        "relativeToMarket": 2.82,
+        "declared": 14,
         "strongResults": 3,
-        "avgReaction": -2.16,
+        "avgReaction": -1.73,
         "tailwind": "WEAK"
       },
       "identity": {
@@ -688,5 +731,19 @@
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-27T17:14:35.770000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "As Required under the SEBI (LODR) Reg. 2015, we hereby inform you that the Board of Directors of the Company in its Meeting held today 27th October 2026, has Considered and approved the .... Modella Woollens Ltd - 503772 - Outcome Of Board Meeting As Required under the SEBI (LODR) Reg. 2015, we here",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9e2f4e8228812323.json",
+      "seenAt": "2026-10-27T12:18:04Z"
+    }
+  ]
 }
