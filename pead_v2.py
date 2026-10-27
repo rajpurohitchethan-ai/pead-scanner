@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.33"
+ENGINE_VERSION = "2.9.34"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1674,6 +1674,7 @@ ENRICH_SLOTS_DECLARED = int(os.getenv("ENRICH_SLOTS_DECLARED", "35"))   # A: dec
 ENRICH_SLOTS_UPCOMING = int(os.getenv("ENRICH_SLOTS_UPCOMING", "45"))   # B: reporting within 7 days, prices stale
 ENRICH_UPCOMING_WINDOW_DAYS = 7
 ENRICH_RECENT_RESULT_DAYS = 5     # declared this recently: concall / transcript / reaction still moving
+REACTION_DUE_TRADED_DAYS = 10   # 2.9.34: reaction-due rank only for stocks that traded this recently
 ENRICH_RETRY_FRESH_HOURS = 2      # 2.9.33: a fresh result without figures re-jumps the queue after this
 
 
@@ -1740,6 +1741,16 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
                        and comparatives_missing({k: meta_value(event, k) for k in
                                                  ("revenue_yoy_pct", "pat_yoy_pct", "pat_trend")}))
         if age is not None and 0 <= age <= 2 and (behind or (no_figures and not tried_recently)):
+            return "A", 0
+        # 2.9.34: a closed reaction session the stored prices do not cover yet
+        # is as urgent as a fresh result. "age <= 2" counts calendar days, so
+        # a Friday after-close filing (reaction Monday) fell to rank 2 on
+        # Monday evening and COFORGE's reaction was still unmeasured on
+        # Tuesday. Only for stocks that traded within REACTION_DUE_TRADED_DAYS
+        # of the session (untraded scrips never fill it) and not tried < 2 h.
+        rs = parse_date(meta_value(event, "reaction_session"))
+        if (rs is not None and rs <= last_session and ls is not None and ls < rs
+                and (rs - ls).days <= REACTION_DUE_TRADED_DAYS and not tried_recently):
             return "A", 0
         if behind and live:
             return "A", 1

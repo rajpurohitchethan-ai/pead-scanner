@@ -2181,3 +2181,53 @@ class YoYMissingEnrichmentTests(unittest.TestCase):
         with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
             self.assertEqual(p.enrichment_group(done, now.date()), ("A", 4))
             self.assertEqual(p.enrichment_group(old, now.date()), ("D", 0))
+
+
+class ReactionDueEnrichmentTests(unittest.TestCase):
+    """2.9.34 (27 Oct 2026): COFORGE (Rs 84,000 Cr) and CUBEXTUB filed after
+    the close on Fri 23 Oct; their reaction session was Mon 26 Oct. Rank A0
+    ("result in the last 2 days") counts calendar days, so on Monday evening
+    the result was 3 days old and both rotated in rank A2 with ~315 other
+    "prices behind" rows (35 declared slots per run). By Tuesday evening the
+    reaction was still unmeasured (self-check FAIL) - prices last fetched
+    26 Oct 09:04 IST, before the session. A closed reaction session that the
+    stored prices do not yet cover now ranks A0 (when the stock traded within
+    10 days of the session and was not tried in the last 2 h)."""
+
+    def _ev(self, sym, rd, rs, last_session, attempt):
+        return {"eventId": f"E-{sym}", "period": {"end": "2026-09-30"},
+                "security": {"nseSymbol": sym, "exchangeSector": "Information Technology"},
+                "fields": {"result_date": {"value": rd.isoformat(), "status": "OK"},
+                           "results_released": {"value": True, "status": "OK"},
+                           "reaction_session": {"value": rs.isoformat(), "status": "OK"},
+                           "revenue_cr": {"value": 4000.0, "status": "OK"},
+                           "pat_cr": {"value": 400.0, "status": "OK"},
+                           "revenue_yoy_pct": {"value": 20.0, "status": "OK"},
+                           "pat_yoy_pct": {"value": 20.0, "status": "OK"}},
+                "fetch": {"PRICE_HISTORY": {"lastAttempt": attempt}},
+                "plus": {"price": {"last_session": last_session.isoformat()}}}
+
+    def test_friday_after_close_result_reaction_due_on_tuesday(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 10, 27, 20, 0, tzinfo=p.IST)
+        today = now.date()
+        coforge = self._ev("COFORGE", date(2026, 10, 23), date(2026, 10, 26), date(2026, 10, 23),
+                           "2026-10-26T03:34:01Z")
+        behind = [self._ev(f"X{i}", date(2026, 10, 9), date(2026, 10, 12), date(2026, 10, 24 - (i % 3)),
+                           "2026-10-20T03:00:00Z") for i in range(60)]
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(coforge, today), ("A", 0))
+            sel, _ = p.select_for_enrichment(behind + [coforge], 35, today)
+        self.assertIn(coforge, sel)
+
+    def test_untraded_or_recently_tried_or_covered_not_promoted(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 10, 27, 20, 0, tzinfo=p.IST)
+        today = now.date()
+        untraded = self._ev("ALSTONE", date(2026, 10, 7), date(2026, 10, 8), date(2026, 5, 25), "2026-10-26T03:34:01Z")
+        tried = self._ev("CUBEXTUB", date(2026, 10, 23), date(2026, 10, 26), date(2026, 10, 23), "2026-10-27T13:30:00Z")
+        covered = self._ev("DONE", date(2026, 10, 23), date(2026, 10, 26), date(2026, 10, 26), "2026-10-26T13:30:00Z")
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(untraded, today), ("A", 2))
+            self.assertEqual(p.enrichment_group(tried, today), ("A", 2))
+            self.assertEqual(p.enrichment_group(covered, today)[1] != 0, True)
