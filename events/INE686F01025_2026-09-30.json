@@ -2,11 +2,11 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE686F01025|2026-09-30",
   "createdAt": "2026-10-07T08:19:51Z",
-  "updatedAt": "2026-10-27T15:55:31Z",
+  "updatedAt": "2026-10-27T17:34:10Z",
   "security": {
     "symbol": "UBL",
     "nseSymbol": "UBL",
-    "name": "United Breweries Limited",
+    "name": "United Breweries Ltd",
     "sector": "Brew/Distilleries",
     "isin": "INE686F01025",
     "bseSymbol": "UBL",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-07T04:24:34Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-27T16:55:56Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-27T17:34:10Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-27",
-      "source": "NSE_FINANCIAL_RESULTS",
-      "fetchedAt": "2026-10-27T15:41:20Z",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T17:20:08Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/nse/DISCOVERY/board_meetings-eab7b94417d4ab88.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ccfe4641700657fa.json",
       "note": null
     },
     "reaction_session": {
@@ -235,6 +245,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE686F01025_2026-09-30/integrated_filings-41365e4b664ef42f.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T16:55:56Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ccfe4641700657fa.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-27T21:52:26.187000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T16:55:56Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ccfe4641700657fa.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T16:55:56Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ccfe4641700657fa.json",
+      "note": null
     }
   },
   "fetch": {
@@ -290,23 +327,29 @@
   },
   "derived": {
     "score": 28,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -314,13 +357,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -362,11 +405,11 @@
       "sectorKey": "Fast Moving Consumer Goods",
       "sector": {
         "sector": "Fast Moving Consumer Goods",
-        "stocks": 110,
-        "momentum63dMedian": -7.5,
-        "relativeToMarket": -0.19,
-        "declared": 17,
-        "strongResults": 7,
+        "stocks": 115,
+        "momentum63dMedian": -7.35,
+        "relativeToMarket": 0.0,
+        "declared": 18,
+        "strongResults": 8,
         "avgReaction": -5.72,
         "tailwind": "NEUTRAL"
       },
@@ -956,5 +999,19 @@
         "filedAt": "2025-05-16T17:55:05+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-27T21:52:26.187000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Outcome of the Meeting of the Board of Directors of United Breweries Limited United Breweries Ltd-$ - 532478 - Results-Financial Results For The Quarter Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ccfe4641700657fa.json",
+      "seenAt": "2026-10-27T17:34:05Z"
+    }
+  ]
 }
