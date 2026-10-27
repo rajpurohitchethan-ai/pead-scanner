@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE873D01016|2026-09-30",
   "createdAt": "2026-10-14T11:41:37Z",
-  "updatedAt": "2026-10-27T07:47:52Z",
+  "updatedAt": "2026-10-27T08:22:42Z",
   "security": {
     "symbol": "INDOCO",
     "nseSymbol": "INDOCO",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,31 +44,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-15T02:44:01Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-27T07:54:40Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-27T08:13:12Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-27",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-27T07:34:32Z",
+      "fetchedAt": "2026-10-27T08:11:24Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-35082e2b84259155.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-8c3b5e527da8d2e0.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-28",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-27T06:00:24Z",
+      "fetchedAt": "2026-10-27T08:13:09Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "INTRADAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "INTRADAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-27T06:00:24Z",
+      "fetchedAt": "2026-10-27T08:13:09Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -77,7 +87,7 @@
     "pre_result_5d_pct": {
       "value": -10.65,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-27T06:00:28Z",
+      "fetchedAt": "2026-10-27T08:13:12Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE873D01016_2026-09-30/equity_history-bd84cd32e24f9eb0.json",
@@ -86,7 +96,7 @@
     "pre_result_10d_pct": {
       "value": -4.85,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-27T06:00:28Z",
+      "fetchedAt": "2026-10-27T08:13:12Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE873D01016_2026-09-30/equity_history-bd84cd32e24f9eb0.json",
@@ -95,7 +105,7 @@
     "pre_result_20d_pct": {
       "value": -12.3,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-27T06:00:28Z",
+      "fetchedAt": "2026-10-27T08:13:12Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE873D01016_2026-09-30/equity_history-bd84cd32e24f9eb0.json",
@@ -104,7 +114,7 @@
     "distance_52w_high_pct": {
       "value": -23.73,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-27T06:00:28Z",
+      "fetchedAt": "2026-10-27T08:13:12Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE873D01016_2026-09-30/equity_history-bd84cd32e24f9eb0.json",
@@ -113,7 +123,7 @@
     "last_price": {
       "value": 219.5,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-27T06:00:28Z",
+      "fetchedAt": "2026-10-27T08:13:12Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE873D01016_2026-09-30/equity_history-bd84cd32e24f9eb0.json",
@@ -122,7 +132,7 @@
     "avg_turnover_20d_cr": {
       "value": 33.5975,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-27T06:00:28Z",
+      "fetchedAt": "2026-10-27T08:13:12Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE873D01016_2026-09-30/equity_history-bd84cd32e24f9eb0.json",
@@ -226,12 +236,57 @@
       "rank": 98,
       "rawRef": "raw/nse/INE873D01016_2026-09-30/integrated_filings-c2538aaaf736aa22.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T07:54:40Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-8c3b5e527da8d2e0.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-27T12:51:34.897000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T07:54:40Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-8c3b5e527da8d2e0.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T07:54:40Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-8c3b5e527da8d2e0.json",
+      "note": null
+    },
+    "reaction_window_start": {
+      "value": "2026-10-27",
+      "source": "DERIVED",
+      "fetchedAt": "2026-10-27T08:13:09Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "intraday filing"
+    },
+    "forward_pe": {
+      "value": 18.32099,
+      "source": "YAHOO_FUNDAMENTALS",
+      "fetchedAt": "2026-10-27T08:13:15Z",
+      "status": "OK",
+      "rank": 50,
+      "rawRef": null,
+      "note": null
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-27T06:00:28Z",
-      "lastSuccess": "2026-10-27T06:00:28Z",
+      "lastAttempt": "2026-10-27T08:13:12Z",
+      "lastSuccess": "2026-10-27T08:13:12Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse_price/INE873D01016_2026-09-30/equity_history-bd84cd32e24f9eb0.json"
@@ -244,15 +299,15 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-19T19:00:33Z",
-      "lastSuccess": "2026-10-19T19:00:33Z",
+      "lastAttempt": "2026-10-27T08:13:04Z",
+      "lastSuccess": "2026-10-27T08:13:04Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE873D01016_2026-09-30/integrated_filings-c2538aaaf736aa22.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-19T19:00:33Z",
-      "lastSuccess": "2026-10-19T19:00:33Z",
+      "lastAttempt": "2026-10-27T08:13:04Z",
+      "lastSuccess": "2026-10-27T08:13:04Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE873D01016_2026-09-30/integrated_filings-c2538aaaf736aa22.json"
@@ -265,32 +320,66 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-27T06:00:29Z",
+      "lastAttempt": "2026-10-27T08:13:15Z",
+      "lastSuccess": "2026-10-27T08:13:15Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-27T08:13:07Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "Yahoo fundamentals budget exhausted for this run",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE873D01016_2026-09-30/results_comparison-e491c1de83df60f5.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-27T08:13:08Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE873D01016_2026-09-30/results_snapshot-33a22e642639b7a2.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-27T08:13:09Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "INDOCO.NS: RuntimeError: latest statement does not match event quarter; 532612.BO: RuntimeError: quarterly statement empty",
       "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-27T08:13:14Z",
+      "lastSuccess": "2026-10-27T08:13:14Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE873D01016_2026-09-30/announcements-81c49d2c53b5cdcc.json"
     }
   },
   "derived": {
-    "score": 30,
-    "completenessPct": 100.0,
+    "score": 27,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
-    "valuationReality": "EXPENSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "priceResponse": "UNVERIFIED",
+    "valuationReality": "EXCESSIVE",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -298,13 +387,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Result came during market hours, so the reaction is measured over 27 Oct and 28 Oct. The plan is ready after the 28 Oct close.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -346,13 +435,13 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 106,
-        "momentum63dMedian": -3.59,
+        "stocks": 108,
+        "momentum63dMedian": -3.63,
         "relativeToMarket": 4.04,
-        "declared": 8,
+        "declared": 11,
         "strongResults": 5,
         "avgReaction": 2.26,
-        "tailwind": "STRONG"
+        "tailwind": "POSITIVE"
       },
       "identity": {
         "macroSector": "Healthcare",
@@ -409,7 +498,16 @@
         }
       },
       "deliveryPct": 59.42,
-      "concall": null,
+      "concall": {
+        "status": "SCHEDULED",
+        "callDate": null,
+        "noticeUrl": "https://nsearchives.nseindia.com/corporate/INDOCO_21102026145329_IntimationstkECC271026merged.pdf",
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-27",
+        "pendingUntil": "2026-10-29",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/INDOCO/",
@@ -419,11 +517,10 @@
         "tvEmbed": "BSE:INDOCO"
       }
     },
-    "valuationInputCount": 2,
+    "valuationInputCount": 3,
     "expectationFullWindow": true,
     "reasons": [
-      "Low pre-result expectation: 20D move -12.3%.",
-      "Sector tailwind: Healthcare peers are outperforming."
+      "Low pre-result expectation: 20D move -12.3%."
     ],
     "risks": [
       "Trailing P/E 653.6x is elevated."
@@ -466,6 +563,11 @@
     },
     {
       "timestamp": "2026-10-27T06:00:28Z",
+      "price": 219.5,
+      "source": "NSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-27T08:13:12Z",
       "price": 219.5,
       "source": "NSE_PRICE"
     }
@@ -754,12 +856,12 @@
       ]
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-10-27T06:00:28Z",
+    "computedAt": "2026-10-27T08:13:12Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-19T19:00:33Z",
+    "fetchedAt": "2026-10-27T08:13:04Z",
     "v": 2,
     "rows": [
       {
@@ -867,5 +969,36 @@
         "filedAt": "2025-05-22T17:56:31+05:30"
       }
     ]
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-27T12:51:34.897000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Approval of the Financial Results for the Quarter and Half Year Ended 30th September, 2026 Indoco Remedies Ltd - 532612 - Approval Of The Financial Results For The Quarter And Half Year Ended 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-8c3b5e527da8d2e0.json",
+      "seenAt": "2026-10-27T08:22:37Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-27T08:13:09Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "SCHEDULED",
+    "callDate": null,
+    "noticeUrl": "https://nsearchives.nseindia.com/corporate/INDOCO_21102026145329_IntimationstkECC271026merged.pdf",
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-27",
+    "pendingUntil": "2026-10-29",
+    "source": "NSE_ANNOUNCEMENTS"
   }
 }

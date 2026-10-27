@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE054301028|2026-09-30",
   "createdAt": "2026-10-16T12:50:05Z",
-  "updatedAt": "2026-10-27T07:47:50Z",
+  "updatedAt": "2026-10-27T08:22:40Z",
   "security": {
     "symbol": "ODIGMA",
     "nseSymbol": "ODIGMA",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-27T07:54:38Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-27T08:22:40Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-27",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-27T07:34:32Z",
+      "fetchedAt": "2026-10-27T08:11:24Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-35082e2b84259155.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-8c3b5e527da8d2e0.json",
       "note": null
     },
     "reaction_session": {
@@ -225,6 +235,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE054301028_2026-09-30/integrated_filings-1806209b2fdbb183.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T07:54:38Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-8c3b5e527da8d2e0.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-27T12:51:50.443000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T07:54:38Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-8c3b5e527da8d2e0.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-27T07:54:38Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-8c3b5e527da8d2e0.json",
+      "note": null
     }
   },
   "fetch": {
@@ -280,23 +317,29 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -304,13 +347,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -354,7 +397,7 @@
         "sector": "Information Technology",
         "stocks": 87,
         "momentum63dMedian": -5.52,
-        "relativeToMarket": 2.11,
+        "relativeToMarket": 2.15,
         "declared": 20,
         "strongResults": 8,
         "avgReaction": 1.23,
@@ -818,5 +861,19 @@
         "filedAt": "2025-05-29T13:31:13+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-27T12:51:50.443000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited (Standalone) Financial Results for the quarter and half year ended on September 30, 2026. Odigma Consultancy Solutions Ltd - 544301 - Unaudited (Standalone) Financial Results For The Quarter And Half Year Ended On September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-8c3b5e527da8d2e0.json",
+      "seenAt": "2026-10-27T08:22:33Z"
+    }
+  ]
 }
