@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE930H01015|2026-09-30",
   "createdAt": "2026-10-16T05:59:40Z",
-  "updatedAt": "2026-10-28T06:30:52Z",
+  "updatedAt": "2026-10-28T07:36:45Z",
   "security": {
     "symbol": "KPRMILL",
     "nseSymbol": "KPRMILL",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,31 +44,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-28T07:02:07Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-28T07:28:27Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-28",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-28T06:14:12Z",
+      "fetchedAt": "2026-10-28T07:02:07Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-ee1cc2c116f6a94b.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-794ba5b41a513892.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-10-29",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-28T05:22:39Z",
+      "fetchedAt": "2026-10-28T07:28:23Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "INTRADAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "INTRADAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-28T05:22:39Z",
+      "fetchedAt": "2026-10-28T07:28:23Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -77,7 +87,7 @@
     "pre_result_5d_pct": {
       "value": -2.81,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-28T05:22:42Z",
+      "fetchedAt": "2026-10-28T07:28:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE930H01015_2026-09-30/equity_history-de175ec0eb58a9e8.json",
@@ -86,7 +96,7 @@
     "pre_result_10d_pct": {
       "value": -3.8,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-28T05:22:42Z",
+      "fetchedAt": "2026-10-28T07:28:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE930H01015_2026-09-30/equity_history-de175ec0eb58a9e8.json",
@@ -95,7 +105,7 @@
     "pre_result_20d_pct": {
       "value": -6.05,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-28T05:22:42Z",
+      "fetchedAt": "2026-10-28T07:28:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE930H01015_2026-09-30/equity_history-de175ec0eb58a9e8.json",
@@ -104,7 +114,7 @@
     "distance_52w_high_pct": {
       "value": -14.69,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-28T05:22:42Z",
+      "fetchedAt": "2026-10-28T07:28:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE930H01015_2026-09-30/equity_history-de175ec0eb58a9e8.json",
@@ -113,7 +123,7 @@
     "last_price": {
       "value": 1039.5,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-28T05:22:42Z",
+      "fetchedAt": "2026-10-28T07:28:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE930H01015_2026-09-30/equity_history-de175ec0eb58a9e8.json",
@@ -122,7 +132,7 @@
     "avg_turnover_20d_cr": {
       "value": 15.2514,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-28T05:22:42Z",
+      "fetchedAt": "2026-10-28T07:28:27Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE930H01015_2026-09-30/equity_history-de175ec0eb58a9e8.json",
@@ -235,12 +245,57 @@
       "rank": 98,
       "rawRef": "raw/nse/INE930H01015_2026-09-30/integrated_filings-53ec8059eb5b5a4f.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T07:02:07Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-794ba5b41a513892.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-28T11:59:30.400000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T07:02:07Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-794ba5b41a513892.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T07:02:07Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-794ba5b41a513892.json",
+      "note": null
+    },
+    "reaction_window_start": {
+      "value": "2026-10-28",
+      "source": "DERIVED",
+      "fetchedAt": "2026-10-28T07:28:23Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "intraday filing"
+    },
+    "forward_pe": {
+      "value": 29.167759,
+      "source": "YAHOO_FUNDAMENTALS",
+      "fetchedAt": "2026-10-28T07:28:29Z",
+      "status": "OK",
+      "rank": 50,
+      "rawRef": null,
+      "note": null
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-28T05:22:42Z",
-      "lastSuccess": "2026-10-28T05:22:42Z",
+      "lastAttempt": "2026-10-28T07:28:27Z",
+      "lastSuccess": "2026-10-28T07:28:27Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse_price/INE930H01015_2026-09-30/equity_history-de175ec0eb58a9e8.json"
@@ -260,15 +315,15 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-21T03:17:31Z",
-      "lastSuccess": "2026-10-21T03:17:31Z",
+      "lastAttempt": "2026-10-28T07:28:20Z",
+      "lastSuccess": "2026-10-28T07:28:20Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE930H01015_2026-09-30/integrated_filings-53ec8059eb5b5a4f.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-21T03:17:31Z",
-      "lastSuccess": "2026-10-21T03:17:31Z",
+      "lastAttempt": "2026-10-28T07:28:20Z",
+      "lastSuccess": "2026-10-28T07:28:20Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE930H01015_2026-09-30/integrated_filings-53ec8059eb5b5a4f.json"
@@ -281,32 +336,66 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-28T05:22:45Z",
+      "lastAttempt": "2026-10-28T07:28:29Z",
+      "lastSuccess": "2026-10-28T07:28:29Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-28T07:28:23Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "Yahoo fundamentals budget exhausted for this run",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE930H01015_2026-09-30/results_comparison-51c8c04cfd5a4077.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-28T07:28:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError",
       "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-28T07:28:23Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "KPRMILL.NS: RuntimeError: latest statement does not match event quarter; 532889.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-28T07:28:29Z",
+      "lastSuccess": "2026-10-28T07:28:29Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE930H01015_2026-09-30/announcements-777ffbfd60569bb7.json"
     }
   },
   "derived": {
-    "score": 31,
-    "completenessPct": 100.0,
+    "score": 28,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -314,13 +403,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Result came during market hours, so the reaction is measured over 28 Oct and 29 Oct. The plan is ready after the 29 Oct close.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -362,13 +451,13 @@
       "sectorKey": "Textiles",
       "sector": {
         "sector": "Textiles",
-        "stocks": 110,
-        "momentum63dMedian": -7.16,
-        "relativeToMarket": 0.15,
-        "declared": 6,
+        "stocks": 111,
+        "momentum63dMedian": -6.5,
+        "relativeToMarket": 0.76,
+        "declared": 7,
         "strongResults": 2,
         "avgReaction": -1.91,
-        "tailwind": "NEUTRAL"
+        "tailwind": "WEAK"
       },
       "identity": {
         "macroSector": "Consumer Discretionary",
@@ -425,7 +514,15 @@
         }
       },
       "deliveryPct": 56.08,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-28",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/KPRMILL/",
@@ -435,12 +532,14 @@
         "tvEmbed": "BSE:KPRMILL"
       }
     },
-    "valuationInputCount": 2,
+    "valuationInputCount": 3,
     "expectationFullWindow": true,
     "reasons": [
       "Low pre-result expectation: 20D move -6.0%."
     ],
-    "risks": []
+    "risks": [
+      "Sector headwind: Textiles peers are lagging."
+    ]
   },
   "tradeLog": {},
   "priceTrail": [
@@ -471,6 +570,11 @@
     },
     {
       "timestamp": "2026-10-28T05:22:42Z",
+      "price": 1039.5,
+      "source": "NSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-28T07:28:27Z",
       "price": 1039.5,
       "source": "NSE_PRICE"
     }
@@ -759,7 +863,7 @@
       ]
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-10-28T05:22:42Z",
+    "computedAt": "2026-10-28T07:28:27Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
@@ -767,7 +871,7 @@
     "NSE:KPRMILL|2026-09-30"
   ],
   "nseResultListing": {
-    "fetchedAt": "2026-10-21T03:17:31Z",
+    "fetchedAt": "2026-10-28T07:28:20Z",
     "v": 2,
     "rows": [
       {
@@ -867,5 +971,35 @@
         "filedAt": "2025-05-09T16:32:20+05:30"
       }
     ]
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-28T11:59:30.400000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "We wish to inform you that Board of Directors of the Company at their meeting held on 28th October, 2026 have approved the following Un-Audited Financial Results of the Company for the .... K.P.R. Mill Limited - 532889 - Results - Financial Results For The Board Meeting Held On 28Th October, 2026 We",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-794ba5b41a513892.json",
+      "seenAt": "2026-10-28T07:36:38Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-28T07:28:23Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-28",
+    "source": "NSE_ANNOUNCEMENTS"
   }
 }
