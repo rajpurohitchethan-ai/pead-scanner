@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE710A01016|2026-09-30",
   "createdAt": "2026-10-19T07:54:39Z",
-  "updatedAt": "2026-10-28T10:32:31Z",
+  "updatedAt": "2026-10-28T11:28:52Z",
   "security": {
     "symbol": "VSTIND",
     "nseSymbol": "VSTIND",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-20T02:46:39Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-28T10:55:28Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-28T11:28:52Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-28",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-28T10:18:06Z",
+      "fetchedAt": "2026-10-28T11:16:12Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-ee1cc2c116f6a94b.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-98d9ee34d594d44a.json",
       "note": null
     },
     "reaction_session": {
@@ -244,6 +254,33 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T10:55:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-98d9ee34d594d44a.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-28T15:41:54.233000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T10:55:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-98d9ee34d594d44a.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T10:55:28Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-98d9ee34d594d44a.json",
+      "note": null
     }
   },
   "fetch": {
@@ -299,23 +336,29 @@
   },
   "derived": {
     "score": 26,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -323,13 +366,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -373,8 +416,8 @@
         "sector": "Fast Moving Consumer Goods",
         "stocks": 122,
         "momentum63dMedian": -7.88,
-        "relativeToMarket": -0.69,
-        "declared": 20,
+        "relativeToMarket": -0.7,
+        "declared": 21,
         "strongResults": 9,
         "avgReaction": -5.72,
         "tailwind": "NEUTRAL"
@@ -841,5 +884,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:VSTIND|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-28T15:41:54.233000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial Results for the quarter and half year ended 30th September, 2026. VST Industries Ltd - 509966 - Unaudited Financial Results",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-98d9ee34d594d44a.json",
+      "seenAt": "2026-10-28T11:28:44Z"
+    }
   ]
 }
