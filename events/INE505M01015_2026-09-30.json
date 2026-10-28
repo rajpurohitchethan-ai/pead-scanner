@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE505M01015|2026-09-30",
   "createdAt": "2026-10-07T04:24:34Z",
-  "updatedAt": "2026-10-28T11:28:51Z",
+  "updatedAt": "2026-10-28T12:23:27Z",
   "security": {
     "symbol": "ADROITIND",
     "bseSymbol": "ADROITIND",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -163,16 +163,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-21T11:41:46Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-28T11:52:57Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-28T12:23:27Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-28",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-28T11:16:12Z",
+      "fetchedAt": "2026-10-28T11:52:57Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-b15d2c1d53094404.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9d438e26e4a10c96.json",
       "note": null
     },
     "reaction_session": {
@@ -291,6 +301,33 @@
       "rank": 90,
       "rawRef": "raw/nse/INE505M01015_2026-09-30/quote-4c556cb4b16f788b.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T11:52:57Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9d438e26e4a10c96.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-28T16:57:32.577000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T11:52:57Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9d438e26e4a10c96.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T11:52:57Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9d438e26e4a10c96.json",
+      "note": null
     }
   },
   "fetch": {
@@ -353,33 +390,43 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS (PARTIAL)",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -423,10 +470,10 @@
         "sector": "Automobile and Auto Components",
         "stocks": 86,
         "momentum63dMedian": -6.57,
-        "relativeToMarket": 0.61,
-        "declared": 18,
+        "relativeToMarket": 0.72,
+        "declared": 20,
         "strongResults": 10,
-        "avgReaction": 6.25,
+        "avgReaction": 5.88,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -768,5 +815,19 @@
         "replacedAt": "2026-10-15T05:04:00Z"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-28T16:57:32.577000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Un-Audited Standalone and Consolidated Financial Results for Quarter and half year ended September 30, 2026 Adroit Industries (India) Ltd - 544950 - Un-Audited Financial Results For The Quarter And Half Year Ended September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9d438e26e4a10c96.json",
+      "seenAt": "2026-10-28T12:23:22Z"
+    }
+  ]
 }

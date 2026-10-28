@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE451A01017|2026-09-30",
   "createdAt": "2026-10-21T16:41:46Z",
-  "updatedAt": "2026-10-28T11:28:51Z",
+  "updatedAt": "2026-10-28T12:23:27Z",
   "security": {
     "symbol": "FORCEMOT",
     "nseSymbol": "FORCEMOT",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-22T02:49:20Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-28T11:53:01Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-28T12:23:27Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-28",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-28T11:16:12Z",
+      "fetchedAt": "2026-10-28T11:53:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-b15d2c1d53094404.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9d438e26e4a10c96.json",
       "note": null
     },
     "reaction_session": {
@@ -234,6 +244,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE451A01017_2026-09-30/integrated_filings-735296a12d3b16c8.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T11:53:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9d438e26e4a10c96.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-28T16:46:23.510000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T11:53:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9d438e26e4a10c96.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T11:53:01Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9d438e26e4a10c96.json",
+      "note": null
     }
   },
   "fetch": {
@@ -289,23 +326,29 @@
   },
   "derived": {
     "score": 31,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -313,13 +356,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -363,10 +406,10 @@
         "sector": "Automobile and Auto Components",
         "stocks": 86,
         "momentum63dMedian": -6.57,
-        "relativeToMarket": 0.61,
-        "declared": 18,
+        "relativeToMarket": 0.72,
+        "declared": 20,
         "strongResults": 10,
-        "avgReaction": 6.25,
+        "avgReaction": 5.88,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -861,5 +904,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:FORCEMOT|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-28T16:46:23.510000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Results-Financial Results for the quarter and half year ended on 30.09.2026 Force Motors Ltd-$ - 500033 - Results-Financial Results For The Quarter And Half Year Ended On 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-9d438e26e4a10c96.json",
+      "seenAt": "2026-10-28T12:23:21Z"
+    }
   ]
 }
