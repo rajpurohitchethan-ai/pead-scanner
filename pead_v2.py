@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.34"
+ENGINE_VERSION = "2.9.35"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1770,6 +1770,23 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
     return "D", 1
 
 
+def _a0_subrank(event: dict[str, Any], last_session: date) -> int:
+    """2.9.35: order inside rank A0. 0 = a closed reaction session the stored
+    prices do not cover yet (stock traded within REACTION_DUE_TRADED_DAYS),
+    1 = figures not read, 2 = only behind by the latest bar (reaction already
+    measured). TATACAP's 28 Oct reaction waited behind ~80 results of 26 Oct
+    that only needed the new bar."""
+    price = (event.get("plus") or {}).get("price") or {}
+    ls = parse_date(price.get("last_session"))
+    rs = parse_date(meta_value(event, "reaction_session"))
+    if (rs is not None and rs <= last_session and ls is not None and ls < rs
+            and (rs - ls).days <= REACTION_DUE_TRADED_DAYS):
+        return 0
+    if meta_value(event, "revenue_cr") is None or meta_value(event, "pat_cr") is None:
+        return 1
+    return 2
+
+
 def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: date | None = None
                           ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Reserve slots: A up to ENRICH_SLOTS_DECLARED, B up to
@@ -1790,7 +1807,8 @@ def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: dat
         last = _last_enriched(ev)
         eid = str(ev.get("eventId") or "")
         if g == "A":
-            key = (rank, last, dist, eid)
+            sub = _a0_subrank(ev, last_session) if rank == 0 else 0
+            key = (rank, sub, last, dist, eid)
         elif g in ("B", "C"):
             # Pure rotation, least recently enriched first. A result due now
             # jumps the queue only when not looked at for 3 h (the per-company

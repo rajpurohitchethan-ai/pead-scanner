@@ -2231,3 +2231,59 @@ class ReactionDueEnrichmentTests(unittest.TestCase):
             self.assertEqual(p.enrichment_group(untraded, today), ("A", 2))
             self.assertEqual(p.enrichment_group(tried, today), ("A", 2))
             self.assertEqual(p.enrichment_group(covered, today)[1] != 0, True)
+
+
+class ReactionDueFirstInA0Tests(unittest.TestCase):
+    """2.9.35 (28 Oct 2026): at 21:00 IST the reaction of 17 liquid results
+    filed after the close on 27 Oct (TATACAP Rs 1.27 lakh Cr, RADICO, ACUTAAS,
+    HONAUT, AWL ...) was still unmeasured. Their prices were last fetched at
+    16:57 IST, before NSE posted the 28 Oct bar. Rank A0 held 117 rows, most
+    of them results of 26 Oct whose reaction (27 Oct) was already measured and
+    which were only "behind" by today's bar; within A0 the least recently
+    enriched went first, so the 19:33 and 20:28 runs (35 declared slots) gave
+    the slots to those. Within A0, a reaction that is due now goes first, then
+    results without figures, then rows that only need the new bar."""
+
+    def _ev(self, sym, rd, rs, last_session, attempt, figures=True):
+        f = {"result_date": {"value": rd.isoformat(), "status": "OK"},
+             "results_released": {"value": True, "status": "OK"},
+             "reaction_session": {"value": rs.isoformat(), "status": "OK"}}
+        if figures:
+            f.update({"revenue_cr": {"value": 4000.0, "status": "OK"},
+                      "pat_cr": {"value": 400.0, "status": "OK"},
+                      "revenue_yoy_pct": {"value": 20.0, "status": "OK"},
+                      "pat_yoy_pct": {"value": 20.0, "status": "OK"}})
+        return {"eventId": f"E-{sym}", "period": {"end": "2026-09-30"},
+                "security": {"nseSymbol": sym, "exchangeSector": "Financial Services"},
+                "fields": f,
+                "fetch": {"PRICE_HISTORY": {"lastAttempt": attempt}},
+                "plus": {"price": {"last_session": last_session.isoformat()}}}
+
+    def test_reaction_due_today_beats_rows_only_behind(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 10, 28, 20, 28, tzinfo=p.IST)
+        today = now.date()
+        tatacap = self._ev("TATACAP", date(2026, 10, 27), date(2026, 10, 28), date(2026, 10, 27),
+                           "2026-10-28T11:27:21Z")
+        # 26 Oct results, reaction 27 Oct already in the stored prices,
+        # tried earlier in the afternoon (so they sort first by recency).
+        measured = [self._ev(f"M{i}", date(2026, 10, 26), date(2026, 10, 27), date(2026, 10, 27),
+                             "2026-10-28T08:30:00Z") for i in range(60)]
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(tatacap, today), ("A", 0))
+            self.assertEqual(p.enrichment_group(measured[0], today), ("A", 0))
+            sel, _ = p.select_for_enrichment(measured + [tatacap], 35, today)
+        self.assertIn(tatacap, sel)
+        self.assertIs(sel[0], tatacap)
+
+    def test_no_figures_before_rows_only_behind(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 10, 28, 20, 28, tzinfo=p.IST)
+        today = now.date()
+        fresh = self._ev("TVSMOTOR", date(2026, 10, 28), date(2026, 10, 29), date(2026, 10, 27),
+                         "2026-10-28T12:00:00Z", figures=False)
+        measured = [self._ev(f"M{i}", date(2026, 10, 26), date(2026, 10, 27), date(2026, 10, 27),
+                             "2026-10-28T08:30:00Z") for i in range(60)]
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            sel, _ = p.select_for_enrichment(measured + [fresh], 35, today)
+        self.assertIs(sel[0], fresh)
