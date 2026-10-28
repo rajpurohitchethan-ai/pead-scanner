@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE280B01018|2026-09-30",
   "createdAt": "2026-10-15T02:44:01Z",
-  "updatedAt": "2026-10-28T15:15:25Z",
+  "updatedAt": "2026-10-28T16:24:01Z",
   "security": {
     "symbol": "ELANTAS",
     "bseSymbol": "ELANTAS",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -33,16 +33,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-15T02:44:01Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-28T15:46:05Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-28T16:24:01Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-28",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-28T11:16:12Z",
+      "fetchedAt": "2026-10-28T16:08:22Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-b15d2c1d53094404.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
       "note": null
     },
     "reaction_session": {
@@ -215,6 +225,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_ELANTAS_2026-09-30/scrip_results-9ba8d1ede7795449.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T15:46:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-28T19:20:29.940000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T15:46:05Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T15:46:05Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "note": null
     }
   },
   "fetch": {
@@ -269,24 +306,30 @@
     }
   },
   "derived": {
-    "score": 28,
-    "completenessPct": 100.0,
+    "score": 26,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -294,13 +337,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_CONFIRM",
-        "label": "Watch: Q1 held",
-        "why": "Q1 setup sustained. Needs Q2 confirmation."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -342,13 +385,13 @@
       "sectorKey": "Chemicals",
       "sector": {
         "sector": "Chemicals",
-        "stocks": 154,
-        "momentum63dMedian": -7.73,
-        "relativeToMarket": -0.45,
-        "declared": 19,
+        "stocks": 157,
+        "momentum63dMedian": -7.61,
+        "relativeToMarket": -0.33,
+        "declared": 22,
         "strongResults": 12,
         "avgReaction": -4.09,
-        "tailwind": "POSITIVE"
+        "tailwind": "NEUTRAL"
       },
       "identity": {
         "macroSector": "Commodities",
@@ -757,5 +800,19 @@
     "fetchedAt": "2026-10-21T03:18:53Z",
     "v": 2,
     "rows": []
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-28T19:20:29.940000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial Results for the Quarter and Nine months ended on 30th September, 2026 Elantas Beck India Ltd-$ - 500123 - Unaudited Financial Results For Quarter And Nine Months Ended On 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "seenAt": "2026-10-28T16:23:52Z"
+    }
+  ]
 }

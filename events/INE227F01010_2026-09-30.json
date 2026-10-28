@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE227F01010|2026-09-30",
   "createdAt": "2026-10-20T02:46:39Z",
-  "updatedAt": "2026-10-28T15:15:25Z",
+  "updatedAt": "2026-10-28T16:24:01Z",
   "security": {
     "symbol": "MKEXIM",
     "bseSymbol": "MKEXIM",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -33,16 +33,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-20T02:46:39Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-28T15:46:17Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-28T16:24:01Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-28",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-28T11:16:12Z",
+      "fetchedAt": "2026-10-28T16:08:22Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-b15d2c1d53094404.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
       "note": null
     },
     "reaction_session": {
@@ -215,6 +225,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_MKEXIM_2026-09-30/scrip_results-14d133de7542d4d4.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T15:46:17Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-28T18:52:44.463000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T15:46:17Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T15:46:17Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "note": null
     }
   },
   "fetch": {
@@ -270,33 +307,43 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -339,8 +386,8 @@
       "sector": {
         "sector": "Consumer Services",
         "stocks": 92,
-        "momentum63dMedian": -5.99,
-        "relativeToMarket": 1.29,
+        "momentum63dMedian": -6.15,
+        "relativeToMarket": 1.13,
         "declared": 22,
         "strongResults": 12,
         "avgReaction": -1.04,
@@ -655,5 +702,19 @@
     "fetchedAt": "2026-10-20T04:54:17Z",
     "v": 2,
     "rows": []
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-28T18:52:44.463000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Un-audited Standalone Results for the Quarter and Half-Year ended 30.09.2026 attached. M.K. Exim (India) Ltd - 538890 - Integrated Filing (Financial) For The Quarter And Half-Year Ended 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "seenAt": "2026-10-28T16:23:51Z"
+    }
+  ]
 }

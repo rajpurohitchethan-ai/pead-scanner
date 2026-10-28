@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0OLH01013|2026-09-30",
   "createdAt": "2026-10-22T02:49:20Z",
-  "updatedAt": "2026-10-28T15:15:24Z",
+  "updatedAt": "2026-10-28T16:24:00Z",
   "security": {
     "symbol": "ROBU",
     "bseSymbol": "ROBU",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-22T02:49:20Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-28T15:47:11Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-28T16:24:00Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-28",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-28T11:16:12Z",
+      "fetchedAt": "2026-10-28T16:08:22Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-b15d2c1d53094404.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
       "note": null
     },
     "reaction_session": {
@@ -141,6 +151,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE0OLH01013_2026-09-30/scrip_results-1abfb706018e90ec.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T15:47:11Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-28T17:27:53.957000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T15:47:11Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-28T15:47:11Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "note": null
     }
   },
   "fetch": {
@@ -182,23 +219,29 @@
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -206,13 +249,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -255,8 +298,8 @@
       "sector": {
         "sector": "Consumer Services",
         "stocks": 92,
-        "momentum63dMedian": -5.99,
-        "relativeToMarket": 1.29,
+        "momentum63dMedian": -6.15,
+        "relativeToMarket": 1.13,
         "declared": 22,
         "strongResults": 12,
         "avgReaction": -1.04,
@@ -657,5 +700,19 @@
     "computedAt": "2026-10-28T13:09:32Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-28T17:27:53.957000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "This is to inform you that the Board of Directors at its meeting held today, i.e. on 28th October, 2026, have inter-alia, approved the Unaudited Standalone and Consolidated Financial Results .... Macfos Ltd - 543787 - Outcome Of The Meeting Of The Board Of Directors Of Macfos Limited (\"The Company\")",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-64a8de99a9abe342.json",
+      "seenAt": "2026-10-28T16:23:50Z"
+    }
+  ]
 }
