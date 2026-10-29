@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE021A01018|2026-09-30",
   "createdAt": "2026-10-07T08:19:51Z",
-  "updatedAt": "2026-10-29T08:48:37Z",
+  "updatedAt": "2026-10-29T09:40:25Z",
   "security": {
     "symbol": "ASIANPAINT",
     "nseSymbol": "ASIANPAINT",
@@ -26,7 +26,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -157,16 +157,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:14Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-29T09:02:33Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-29T09:40:25Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-29",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-29T08:37:15Z",
+      "fetchedAt": "2026-10-29T09:26:59Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-9f877ef68107a95f.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2e3aa7641298e58e.json",
       "note": null
     },
     "reaction_session": {
@@ -348,6 +358,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE021A01018_2026-09-30/integrated_filings-707f46d0df651d4d.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T09:02:33Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2e3aa7641298e58e.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-29T14:09:12.817000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T09:02:33Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2e3aa7641298e58e.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T09:02:33Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2e3aa7641298e58e.json",
+      "note": null
     }
   },
   "fetch": {
@@ -409,24 +446,30 @@
     }
   },
   "derived": {
-    "score": 31,
-    "completenessPct": 100.0,
+    "score": 28,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -434,13 +477,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -482,13 +525,13 @@
       "sectorKey": "Consumer Durables",
       "sector": {
         "sector": "Consumer Durables",
-        "stocks": 105,
-        "momentum63dMedian": -9.56,
-        "relativeToMarket": -2.46,
-        "declared": 19,
+        "stocks": 106,
+        "momentum63dMedian": -9.45,
+        "relativeToMarket": -2.34,
+        "declared": 20,
         "strongResults": 6,
         "avgReaction": -1.5,
-        "tailwind": "NEUTRAL"
+        "tailwind": "WEAK"
       },
       "identity": {
         "macroSector": "Consumer Discretionary",
@@ -560,7 +603,9 @@
     "reasons": [
       "Low pre-result expectation: 20D move -5.6%."
     ],
-    "risks": []
+    "risks": [
+      "Sector headwind: Consumer Durables peers are lagging."
+    ]
   },
   "tradeLog": {},
   "plus": {
@@ -1062,5 +1107,19 @@
         "filedAt": "2025-05-08T20:01:42+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-29T14:09:12.817000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Find enclosed the audited standalone and unaudited consolidated financial results of the Company for the quarter and half year ended 30th September 2026 Asian Paints Ltd - 500820 - Audited Standalone And Unaudited Consolidated Financial Results Of The Company For The Quarter And Half Year Ended 30Th",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2e3aa7641298e58e.json",
+      "seenAt": "2026-10-29T09:40:13Z"
+    }
+  ]
 }
