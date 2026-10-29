@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE359A01012|2026-09-30",
   "createdAt": "2026-10-16T16:08:06Z",
-  "updatedAt": "2026-10-29T13:42:35Z",
+  "updatedAt": "2026-10-29T14:49:36Z",
   "security": {
     "symbol": "INVIGO",
     "bseSymbol": "INVIGO",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-29T14:11:13Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-29T14:49:36Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-29",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-29T13:35:09Z",
+      "fetchedAt": "2026-10-29T14:35:48Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-cd9fa7c30f58a290.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-484e68ee9ae804ff.json",
       "note": null
     },
     "reaction_session": {
@@ -159,6 +169,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE359A01012_2026-09-30/scrip_results-cc0b2d4503d03da3.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T14:11:13Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-484e68ee9ae804ff.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-29T18:36:57.423000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T14:11:13Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-484e68ee9ae804ff.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T14:11:13Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-484e68ee9ae804ff.json",
+      "note": null
     }
   },
   "fetch": {
@@ -200,23 +237,29 @@
   },
   "derived": {
     "score": 8,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -224,13 +267,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -272,9 +315,9 @@
       "sectorKey": "Services",
       "sector": {
         "sector": "Services",
-        "stocks": 161,
-        "momentum63dMedian": -6.44,
-        "relativeToMarket": 0.66,
+        "stocks": 163,
+        "momentum63dMedian": -6.33,
+        "relativeToMarket": 0.77,
         "declared": 21,
         "strongResults": 4,
         "avgReaction": -2.5,
@@ -676,5 +719,19 @@
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-29T18:36:57.423000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "The Board has in its meeting held on October 29, 2026 inter alia approved the Unaudited Financial Results for the Quarter and Half Year Ended September 30, 2026 Invigorated Business Consulting Ltd - 511716 - Unaudited Financial Results For The Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-484e68ee9ae804ff.json",
+      "seenAt": "2026-10-29T14:49:26Z"
+    }
+  ]
 }
