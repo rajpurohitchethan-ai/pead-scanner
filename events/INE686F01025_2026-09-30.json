@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE686F01025|2026-09-30",
   "createdAt": "2026-10-07T08:19:51Z",
-  "updatedAt": "2026-10-29T15:38:32Z",
+  "updatedAt": "2026-10-29T16:22:13Z",
   "security": {
     "symbol": "UBL",
     "nseSymbol": "UBL",
@@ -64,13 +64,23 @@
       "state": "PEAD_SCORED",
       "at": "2026-10-28T14:18:48Z",
       "reason": "core PEAD signals scored"
+    },
+    {
+      "state": "DISCOVERED",
+      "at": "2026-10-29T16:17:24Z",
+      "reason": "event created"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-29T16:17:24Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-27",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-29T15:17:15Z",
+      "fetchedAt": "2026-10-29T16:17:24Z",
       "status": "OK",
       "rank": 110,
       "rawRef": "raw/bse/DISCOVERY/result_announcements-03f2d17e4163bbb8.json",
@@ -79,7 +89,7 @@
     "reaction_session": {
       "value": "2026-10-28",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-28T14:08:05Z",
+      "fetchedAt": "2026-10-29T16:19:49Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -88,7 +98,7 @@
     "filing_session": {
       "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-28T14:08:05Z",
+      "fetchedAt": "2026-10-29T16:19:49Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -259,7 +269,7 @@
     "results_released": {
       "value": true,
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-29T15:17:15Z",
+      "fetchedAt": "2026-10-29T16:17:24Z",
       "status": "OK",
       "rank": 110,
       "rawRef": "raw/bse/DISCOVERY/result_announcements-03f2d17e4163bbb8.json",
@@ -268,7 +278,7 @@
     "filing_timestamp": {
       "value": "2026-10-27T21:52:26.187000+05:30",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-29T15:17:15Z",
+      "fetchedAt": "2026-10-29T16:17:24Z",
       "status": "OK",
       "rank": 110,
       "rawRef": "raw/bse/DISCOVERY/result_announcements-03f2d17e4163bbb8.json",
@@ -277,10 +287,10 @@
     "result_source": {
       "value": "BSE_RESULT_ANNOUNCEMENT",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-29T15:17:15Z",
+      "fetchedAt": "2026-10-29T16:17:24Z",
       "status": "OK",
       "rank": 98,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-d56eb0be142ef941.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-cb5272be185e3fd1.json",
       "note": null
     },
     "prior_year_revenue_cr": {
@@ -545,18 +555,18 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-28T14:08:10Z",
-      "lastSuccess": "2026-10-28T14:08:10Z",
+      "lastAttempt": "2026-10-29T16:19:49Z",
+      "lastSuccess": "2026-10-29T16:19:49Z",
       "status": "OK",
       "error": null,
       "rawRef": null
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-28T14:08:08Z",
-      "lastSuccess": "2026-10-28T14:08:08Z",
-      "status": "OK",
-      "error": null,
-      "rawRef": "raw/nse_price/INE686F01025_2026-09-30/equity_history-5a7e43c7344ced95.json"
+      "lastAttempt": "2026-10-29T16:19:49Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 302 s spent failing; last: TimeoutError; Yahoo price budget exhausted for this run",
+      "rawRef": null
     },
     "EXCHANGE_META": {
       "lastAttempt": "2026-10-27T18:14:19Z",
@@ -606,6 +616,27 @@
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE686F01025_2026-09-30/announcements-283c27c2092865c4.json"
+    },
+    "BSE_LOOKUP": {
+      "lastAttempt": "2026-10-29T16:19:49Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 302 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-29T16:19:49Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 302 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-29T16:19:49Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "Yahoo quarterly budget exhausted for this run",
+      "rawRef": null
     }
   },
   "derived": {
@@ -1139,7 +1170,8 @@
   },
   "tradeLog": {},
   "mergedFrom": [
-    "NSE:UBL|2026-09-30"
+    "NSE:UBL|2026-09-30",
+    "BSE:532478|2026-09-30"
   ],
   "fieldHistory": {
     "avg_turnover_20d_cr": [
@@ -1401,7 +1433,7 @@
       "xbrlUrl": null,
       "headline": "Outcome of the Meeting of the Board of Directors of United Breweries Limited United Breweries Ltd-$ - 532478 - Results-Financial Results For The Quarter Ended September 30, 2026",
       "rawRef": "raw/bse/DISCOVERY/result_announcements-fca58f195e282502.json",
-      "seenAt": "2026-10-29T15:38:26Z"
+      "seenAt": "2026-10-29T16:22:03Z"
     },
     {
       "source": "NSE_INTEGRATED_FILING",
@@ -1413,7 +1445,7 @@
       "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1747289_27102026100013_WEB.xml",
       "headline": "Integrated Filing - Financials Standalone Original",
       "rawRef": "raw/nse/INE686F01025_2026-09-30/integrated_filings-916f137d74f6ce0c.json",
-      "seenAt": "2026-10-29T15:38:26Z"
+      "seenAt": "2026-10-29T16:22:03Z"
     },
     {
       "source": "NSE_INTEGRATED_FILING",
@@ -1425,7 +1457,7 @@
       "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1747288_27102026100007_WEB.xml",
       "headline": "Integrated Filing - Financials Consolidated Original",
       "rawRef": "raw/nse/INE686F01025_2026-09-30/integrated_filings-916f137d74f6ce0c.json",
-      "seenAt": "2026-10-29T15:38:26Z"
+      "seenAt": "2026-10-29T16:22:03Z"
     }
   ],
   "financialSnapshots": {
@@ -1473,7 +1505,7 @@
     }
   },
   "financialIntegrity": {
-    "checkedAt": "2026-10-29T15:38:26Z",
+    "checkedAt": "2026-10-29T16:22:03Z",
     "snapshotsConsidered": 1,
     "status": "VERIFIED",
     "issues": [],
