@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE947Q01010|2026-09-30",
   "createdAt": "2026-10-13T11:31:34Z",
-  "updatedAt": "2026-10-29T09:40:28Z",
+  "updatedAt": "2026-10-29T10:37:32Z",
   "security": {
     "symbol": "LAURUSLABS",
     "nseSymbol": "LAURUSLABS",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-13T16:35:51Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-29T09:59:50Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-29T10:37:32Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-29",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-29T09:26:59Z",
+      "fetchedAt": "2026-10-29T10:23:40Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-07d5003516edb8f5.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3769b1a5e47c0988.json",
       "note": null
     },
     "reaction_session": {
@@ -244,6 +254,33 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T09:59:50Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3769b1a5e47c0988.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-29T15:00:11.540000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T09:59:50Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3769b1a5e47c0988.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T09:59:50Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3769b1a5e47c0988.json",
+      "note": null
     }
   },
   "fetch": {
@@ -291,24 +328,30 @@
     }
   },
   "derived": {
-    "score": 26,
-    "completenessPct": 100.0,
+    "score": 23,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "EXCESSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -316,13 +359,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_CONFIRM",
-        "label": "Watch: Q1 held",
-        "why": "Q1 setup sustained. Needs Q2 confirmation."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -364,13 +407,13 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 138,
+        "stocks": 139,
         "momentum63dMedian": -2.02,
-        "relativeToMarket": 5.09,
-        "declared": 20,
+        "relativeToMarket": 5.07,
+        "declared": 21,
         "strongResults": 12,
         "avgReaction": 4.51,
-        "tailwind": "STRONG"
+        "tailwind": "POSITIVE"
       },
       "identity": {
         "macroSector": "Healthcare",
@@ -439,9 +482,7 @@
     },
     "valuationInputCount": 3,
     "expectationFullWindow": true,
-    "reasons": [
-      "Sector tailwind: Healthcare peers are outperforming."
-    ],
+    "reasons": [],
     "risks": [
       "Trailing P/E 108.1x is elevated."
     ]
@@ -887,5 +928,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:LAURUSLABS|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-29T15:00:11.540000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please see annexed enclosure Laurus Labs Ltd - 540222 - Results - Financial Results For Quarter And Half Year Ended 30Th September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3769b1a5e47c0988.json",
+      "seenAt": "2026-10-29T10:37:24Z"
+    }
   ]
 }
