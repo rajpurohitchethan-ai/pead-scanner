@@ -2,12 +2,17 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:SHETR|2026-09-30",
   "createdAt": "2026-10-29T03:57:54Z",
-  "updatedAt": "2026-10-29T17:05:19Z",
+  "updatedAt": "2026-10-29T17:47:46Z",
   "security": {
     "symbol": "SHETR",
     "bseSymbol": "SHETR",
     "bseCode": "526137",
-    "name": "Shetron Ltd"
+    "name": "Shetron Ltd",
+    "yahooTicker": "526137.BO",
+    "identityRepaired": {
+      "wrongNseSymbol": "SHETRON",
+      "at": "2026-10-29T17:47:00Z"
+    }
   },
   "period": {
     "end": "2026-09-30",
@@ -35,9 +40,77 @@
       "rank": 110,
       "rawRef": "raw/bse/DISCOVERY/result_calendar-cd9fa7c30f58a290.json",
       "note": null
+    },
+    "reaction_session": {
+      "value": "2026-11-04",
+      "source": "DERIVED",
+      "fetchedAt": "2026-10-29T17:43:32Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "UNKNOWN_TIME_NEXT_SESSION"
+    },
+    "filing_session": {
+      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "source": "DERIVED",
+      "fetchedAt": "2026-10-29T17:43:32Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": null
     }
   },
-  "fetch": {},
+  "fetch": {
+    "NSE_LOOKUP": {
+      "lastAttempt": "2026-10-29T17:43:32Z",
+      "lastSuccess": "2026-10-29T17:43:32Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/NSE_SHETR_2026-09-30/lookup-feacf61229d68b3c.json"
+    },
+    "BSE_LOOKUP": {
+      "lastAttempt": "2026-10-29T17:43:32Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 306 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "PRICE_HISTORY": {
+      "lastAttempt": "2026-10-29T17:43:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 306 s spent failing; last: TimeoutError; SHETRON.NS: RuntimeError: empty history; 526137.BO: RuntimeError: empty history",
+      "rawRef": null
+    },
+    "EXCHANGE_META": {
+      "lastAttempt": "2026-10-29T17:43:43Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "NSE quote: HTTPStatusError: Client error '404 Not Found' for url 'https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData&marketType=N&series=EQ&symbol=SHETRON'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404; BSE meta: SourceSkipped: BSE switched off for this run: 1 failures in a row, 306 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "NSE_INTEGRATED_FILING": {
+      "lastAttempt": "2026-10-29T17:43:45Z",
+      "lastSuccess": "2026-10-29T17:43:45Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/NSE_SHETRON_2026-09-30/integrated_filings-4f53cda18c2baa0c.json"
+    },
+    "NSE_RESULT_LISTING": {
+      "lastAttempt": "2026-10-29T17:43:47Z",
+      "lastSuccess": "2026-10-29T17:43:47Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/NSE_SHETRON_2026-09-30/financial_results-4f53cda18c2baa0c.json"
+    },
+    "PREV_QUARTER": {
+      "lastAttempt": "2026-10-29T17:43:47Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 306 s spent failing; last: TimeoutError",
+      "rawRef": null
+    }
+  },
   "derived": {
     "score": 0,
     "completenessPct": 33.3,
@@ -131,6 +204,11 @@
     "expectationFullWindow": false,
     "reasons": [],
     "risks": []
+  },
+  "nseResultListing": {
+    "fetchedAt": "2026-10-29T17:43:47Z",
+    "v": 2,
+    "rows": []
   },
   "tradeLog": {}
 }
