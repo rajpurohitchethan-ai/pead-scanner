@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.35"
+ENGINE_VERSION = "2.9.36"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -2192,6 +2192,10 @@ XBRL_BANK_REVENUE_CONCEPTS = ["interestearned", "totalinterestearned"]
 # Insurers (in-capmkt insurance taxonomy, verified on ICICIGI / SBILIFE Q1 FY27 filings).
 XBRL_INSURANCE_REVENUE_CONCEPTS = ["premiumearned", "netpremiumincome", "netpremiumwritten", "grosspremiumincome",
                                    "grosspremiumswritten"]
+# 2.9.36: insurers filing under Ind AS 117 (NSE taxonomy IF_INS_COM_IND_AS,
+# STARHEALTH Q2 FY27): the top line is InsuranceRevenue. A different concept
+# from premium earned, so never compared with an old-format filing.
+XBRL_IND_AS_117_REVENUE_CONCEPTS = ["insurancerevenue"]
 XBRL_TOTAL_INCOME_CONCEPTS = ["income", "totalincome", "totalrevenue"]
 XBRL_PAT_OWNER_CONCEPTS = [
     "profitlossforperiodattributabletoownersofparent", "profitorlossattributabletoownersofparent",
@@ -2215,7 +2219,7 @@ XBRL_EPS_CONCEPTS = [
 QUARTER_DAYS = (80, 100)
 SNAPSHOT_PARSER_VERSION = 2   # 2.9.4: re-parse saved BSE/NSE result tables once (PAT model on QoQ)
 XBRL_DISCONTINUED_CONCEPTS = ["profitlossfromdiscontinuedoperationsaftertax", "profitlossfromdiscontinuedoperations"]
-XBRL_PARSER_VERSION = 10  # bump to re-read every stored XBRL snapshot once
+XBRL_PARSER_VERSION = 11  # bump to re-read every stored XBRL snapshot once
 
 
 def _xbrl_local(tag: str) -> str:
@@ -2350,6 +2354,9 @@ def parse_xbrl_financials(documents: list[bytes], period_end: date) -> dict[str,
     if rev is None and rev_concept is None:
         rev, rev_concept = pick(XBRL_BANK_REVENUE_CONCEPTS, current_ctx)
         revenue_concepts, revenue_definition = XBRL_BANK_REVENUE_CONCEPTS, "INTEREST_EARNED"
+    if rev is None and rev_concept is None:
+        rev, rev_concept = pick(XBRL_IND_AS_117_REVENUE_CONCEPTS, current_ctx)
+        revenue_concepts, revenue_definition = XBRL_IND_AS_117_REVENUE_CONCEPTS, "INSURANCE_REVENUE"
     if rev is None and rev_concept is None:
         rev, rev_concept = pick(XBRL_INSURANCE_REVENUE_CONCEPTS, current_ctx)
         revenue_concepts, revenue_definition = XBRL_INSURANCE_REVENUE_CONCEPTS, "PREMIUM_INCOME"

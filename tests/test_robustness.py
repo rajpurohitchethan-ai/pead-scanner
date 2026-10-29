@@ -2287,3 +2287,35 @@ class ReactionDueFirstInA0Tests(unittest.TestCase):
         with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
             sel, _ = p.select_for_enrichment(measured + [fresh], 35, today)
         self.assertIs(sel[0], fresh)
+
+
+class IndAs117InsurerTests(unittest.TestCase):
+    """Engine 2.9.36: STARHEALTH's Q2 FY27 filing uses NSE's new Ind AS 117
+    insurance taxonomy (IF_INS_COM_IND_AS): the top line is InsuranceRevenue,
+    not premium earned, so revenue was never read and the card had profit only
+    (self-check FAIL "Declared results have revenue/profit")."""
+
+    FIXTURE = Path(__file__).parent / "fixtures" / "nse" / "STARHEALTH_INDAS117_2026-09-30.xml"
+
+    def test_insurance_revenue_is_read(self):
+        r = p.parse_xbrl_financials([self.FIXTURE.read_bytes()], date(2026, 9, 30))
+        self.assertEqual(r["revenue_cr"], 5073.77)
+        self.assertEqual(r["pat_cr"], 264.81)
+        self.assertEqual(r["basis"], "STANDALONE")
+        self.assertEqual(r["_meta"]["revenueDefinition"], "INSURANCE_REVENUE")
+        self.assertEqual(r["_meta"]["concepts"]["revenue"], "insurancerevenue")
+        self.assertEqual(r["ytd_revenue_cr"], 9930.38)
+        self.assertIsNone(r.get("revenue_yoy_pct"))          # no comparatives in the document
+
+    def test_not_compared_with_old_premium_filing(self):
+        r = p.parse_xbrl_financials([self.FIXTURE.read_bytes()], date(2026, 9, 30))
+        listing = [{"periodEnd": "2025-09-30", "basis": "STANDALONE", "cumulative": False, "xbrlUrl": "ya"},
+                   {"periodEnd": "2026-06-30", "basis": "STANDALONE", "cumulative": False, "xbrlUrl": "pq"}]
+        old = {"revenue_cr": 4500.0, "pat_cr": 100.0,
+               "_meta": {"concepts": {"revenue": "premiumearned", "pat": "profitlossforperiod"}}}
+        q1 = {"revenue_cr": 4856.6, "pat_cr": 549.73,
+              "_meta": {"concepts": {"revenue": "insurancerevenue", "pat": "profitlossforperiod"}}}
+        p.fill_comparatives_from_listing(r, listing, date(2026, 9, 30), "STANDALONE",
+                                         lambda u, pe: {"ya": old, "pq": q1}[u])
+        self.assertIsNone(r.get("revenue_yoy_pct"))          # premium vs insurance revenue never mixed
+        self.assertAlmostEqual(r["revenue_qoq_pct"], 4.47, places=1)   # same Ind AS 117 concept
