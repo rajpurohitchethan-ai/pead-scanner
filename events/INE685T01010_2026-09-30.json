@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE685T01010|2026-09-30",
   "createdAt": "2026-10-07T04:23:55Z",
-  "updatedAt": "2026-10-29T11:33:25Z",
+  "updatedAt": "2026-10-29T12:32:31Z",
   "security": {
     "symbol": "HORIZONIND",
     "bseSymbol": "HORIZONIND",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -58,50 +58,54 @@
       "state": "SCHEDULED",
       "at": "2026-10-22T02:49:20Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-29T11:54:12Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-29T12:32:31Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "results_released": {
       "value": true,
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T08:19:47Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-10-29T11:54:12Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": null,
-      "note": "migrated last-known-good v1 release proof",
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-06-30"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-fca58f195e282502.json",
+      "note": "re-verified from saved exchange evidence"
     },
     "result_date": {
       "value": "2026-10-29",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-29T11:21:50Z",
+      "fetchedAt": "2026-10-29T12:22:26Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-cd9fa7c30f58a290.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-fca58f195e282502.json",
       "note": null
     },
     "filing_timestamp": {
-      "value": "2026-11-09T15:59:28.030000+05:30",
+      "value": "2026-10-29T16:50:00.810000+05:30",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T04:23:55Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-10-29T11:54:12Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-e39d1b0043af9dcb.json",
-      "note": null,
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-06-30"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-fca58f195e282502.json",
+      "note": null
     },
     "result_source": {
       "value": "BSE_RESULT_ANNOUNCEMENT",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T04:23:55Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-10-29T11:54:12Z",
+      "status": "OK",
       "rank": 98,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-e39d1b0043af9dcb.json",
-      "note": null,
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-06-30"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-fca58f195e282502.json",
+      "note": null
     },
     "reaction_session": {
       "value": "2026-10-30",
@@ -393,24 +397,30 @@
     }
   },
   "derived": {
-    "score": 28,
-    "completenessPct": 100.0,
+    "score": 25,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -418,13 +428,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -468,11 +478,11 @@
         "sector": "Realty",
         "stocks": 78,
         "momentum63dMedian": -9.98,
-        "relativeToMarket": -2.9,
-        "declared": 13,
+        "relativeToMarket": -2.89,
+        "declared": 14,
         "strongResults": 4,
-        "avgReaction": -0.51,
-        "tailwind": "NEUTRAL"
+        "avgReaction": -0.39,
+        "tailwind": "WEAK"
       },
       "identity": {
         "macroSector": "Consumer Discretionary",
@@ -543,7 +553,9 @@
     "reasons": [
       "Low pre-result expectation: 20D move -7.1%."
     ],
-    "risks": []
+    "risks": [
+      "Sector headwind: Realty peers are lagging."
+    ]
   },
   "priceTrail": [
     {
@@ -1016,5 +1028,19 @@
   },
   "mergedFrom": [
     "NSE:HORIZONIND|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-29T16:50:00.810000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial results (Standalone and Consolidated) for the quarter and half year ended September 30, 2026 Horizon Industrial Parks Ltd - 544880 - Unaudited Financial Results (Standalone And Consolidated) For The Quarter And Half Year Ended September 30, 2026 O",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-fca58f195e282502.json",
+      "seenAt": "2026-10-29T12:32:24Z"
+    }
   ]
 }
