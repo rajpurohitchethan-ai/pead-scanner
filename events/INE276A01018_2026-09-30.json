@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE276A01018|2026-09-30",
   "createdAt": "2026-10-22T10:41:17Z",
-  "updatedAt": "2026-10-29T10:37:31Z",
+  "updatedAt": "2026-10-29T11:33:24Z",
   "security": {
     "symbol": "GARFIBRES",
     "nseSymbol": "GARFIBRES",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-23T02:50:48Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-29T10:57:09Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-29T11:33:24Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-29",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-29T10:23:40Z",
+      "fetchedAt": "2026-10-29T11:21:50Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-9f877ef68107a95f.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-baa32bbd4ff4afd0.json",
       "note": null
     },
     "reaction_session": {
@@ -253,6 +263,33 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T10:57:09Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-baa32bbd4ff4afd0.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-29T16:17:53.100000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T10:57:09Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-baa32bbd4ff4afd0.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-29T10:57:09Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-baa32bbd4ff4afd0.json",
+      "note": null
     }
   },
   "fetch": {
@@ -300,24 +337,30 @@
     }
   },
   "derived": {
-    "score": 26,
-    "completenessPct": 100.0,
+    "score": 23,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "ATTRACTIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -325,13 +368,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_REPEAD",
-        "label": "Watch: re-PEAD",
-        "why": "Q1 setup faded. Strong Q2 could restart the drift."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -373,13 +416,13 @@
       "sectorKey": "Textiles",
       "sector": {
         "sector": "Textiles",
-        "stocks": 122,
-        "momentum63dMedian": -8.85,
-        "relativeToMarket": -1.76,
-        "declared": 10,
-        "strongResults": 4,
+        "stocks": 124,
+        "momentum63dMedian": -8.5,
+        "relativeToMarket": -1.42,
+        "declared": 11,
+        "strongResults": 3,
         "avgReaction": -4.25,
-        "tailwind": "NEUTRAL"
+        "tailwind": "WEAK"
       },
       "identity": {
         "macroSector": "Consumer Discretionary",
@@ -451,7 +494,9 @@
     "reasons": [
       "Low pre-result expectation: 20D move -2.7%."
     ],
-    "risks": []
+    "risks": [
+      "Sector headwind: Textiles peers are lagging."
+    ]
   },
   "priceTrail": [
     {
@@ -900,5 +945,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:GARFIBRES|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-29T16:17:53.100000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "We refer to our letter dated October 22, 2026 and inform that the meeting of the Board of Directors of the Company was held today i.e., Thursday, October 29, 2026. The Board of Directors .... Garware Technical Fibres Ltd - 509557 - Outcome Of Board Meeting Held On October 29, 2026 We refer to our le",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-baa32bbd4ff4afd0.json",
+      "seenAt": "2026-10-29T11:33:14Z"
+    }
   ]
 }
