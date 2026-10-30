@@ -1,6 +1,8 @@
 """Engine 2.9.4 regression tests: run guard and the 10 Oct 2026 data audit."""
 import sys
 import unittest
+import json
+import tempfile
 from pathlib import Path
 from unittest import mock
 
@@ -2319,3 +2321,150 @@ class IndAs117InsurerTests(unittest.TestCase):
                                          lambda u, pe: {"ya": old, "pq": q1}[u])
         self.assertIsNone(r.get("revenue_yoy_pct"))          # premium vs insurance revenue never mixed
         self.assertAlmostEqual(r["revenue_qoq_pct"], 4.47, places=1)   # same Ind AS 117 concept
+
+
+class ParserBumpReReadTests(unittest.TestCase):
+    """2.9.37 (30 Oct 2026): 2.9.36 bumped XBRL_PARSER_VERSION to 11 so that
+    STARHEALTH's stored Ind AS 117 filing would be re-read with the new
+    InsuranceRevenue concept. The re-read only happens when the event is
+    enriched, and STARHEALTH (result 27 Oct, PAT only) rotated in rank A2/A3
+    behind ~300 rows: 24 h later its snapshot was still parserVersion 10 and
+    the self-check still FAILed "Declared results have revenue/profit". A
+    declared result with figures missing whose stored XBRL snapshot is from an
+    older parser now ranks A0 (subrank 1), when not tried in the last 2 h."""
+
+    def _ev(self, parser_version, attempt="2026-10-29T15:24:11Z"):
+        return {"eventId": "INE575P01011_2026-09-30", "period": {"end": "2026-09-30"},
+                "security": {"nseSymbol": "STARHEALTH", "exchangeSector": "Financial Services"},
+                "fields": {"result_date": {"value": "2026-10-27", "status": "OK"},
+                           "results_released": {"value": True, "status": "OK"},
+                           "reaction_session": {"value": "2026-10-28", "status": "OK"},
+                           "pat_cr": {"value": 264.81, "status": "OK"}},
+                "financialSnapshots": {"NSE_XBRL": {"parserVersion": parser_version,
+                                                    "values": {"pat_cr": 264.81}}},
+                "fetch": {"PRICE_HISTORY": {"lastAttempt": attempt}},
+                "plus": {"price": {"last_session": "2026-10-29"}}}
+
+    def _behind(self, i):
+        return {"eventId": f"E{i}", "period": {"end": "2026-09-30"},
+                "security": {"nseSymbol": f"S{i}", "exchangeSector": "IT"},
+                "fields": {"result_date": {"value": "2026-10-22", "status": "OK"},
+                           "results_released": {"value": True, "status": "OK"},
+                           "reaction_session": {"value": "2026-10-23", "status": "OK"},
+                           "revenue_cr": {"value": 100.0, "status": "OK"},
+                           "pat_cr": {"value": 10.0, "status": "OK"},
+                           "revenue_yoy_pct": {"value": 5.0, "status": "OK"},
+                           "pat_yoy_pct": {"value": 5.0, "status": "OK"}},
+                "fetch": {"PRICE_HISTORY": {"lastAttempt": "2026-10-28T10:00:00Z"}},
+                "plus": {"price": {"last_session": "2026-10-28"}}}
+
+    def test_stale_parser_snapshot_without_figures_jumps_queue(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 10, 30, 20, 54, tzinfo=p.IST)
+        today = now.date()
+        star = self._ev(p.XBRL_PARSER_VERSION - 1)
+        others = [self._behind(i) for i in range(80)]
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(star, today), ("A", 0))
+            sel, _ = p.select_for_enrichment(others + [star], 35, today)
+        self.assertIn(star, sel)
+
+    def test_current_parser_or_recent_try_does_not_jump(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 10, 30, 20, 54, tzinfo=p.IST)
+        today = now.date()
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertNotEqual(p.enrichment_group(self._ev(p.XBRL_PARSER_VERSION), today), ("A", 0))
+            self.assertNotEqual(p.enrichment_group(self._ev(p.XBRL_PARSER_VERSION - 1, "2026-10-30T14:30:00Z"), today), ("A", 0))
+
+
+class BseRenameDuplicateTests(unittest.TestCase):
+    """2.9.37 (30 Oct 2026): three companies appeared twice on the radar.
+    VIRAT: BSE renamed scrip 530521 from "Virat Industries Ltd" to "Brahm
+    Virat Industries Corporation Ltd"; two calendar payloads (same code, same
+    URL) gave two names and the second became BSE:530521 because the names
+    differ. NRBBEARING: "NRB Bearing Limited" (NSE) vs "NRB Bearings Ltd"
+    (BSE) failed the name test (plural). 21STCENMGM: BSE's announcement says
+    "Twentyfirst Century Management Services Ltd", the ISIN event "21st
+    Century ..."; ensure_event saw a name conflict, dropped the alias and
+    re-created BSE:526921 every few runs, although BSE's own lookup of 526921
+    returns that ISIN. One BSE code is one company when the code is the
+    event's only identity or BSE's lookup confirms it for the event's ISIN.
+    A code attached to an NSE company without that confirmation (Bright Solar
+    with Bright Outdoor's 543831) still never folds."""
+    P = date(2026, 9, 30)
+
+    def _store(self):
+        root = Path(tempfile.mkdtemp())
+        return p.EventStore(root / "events"), root / "raw"
+
+    def test_plural_name_matches(self):
+        self.assertTrue(p.same_company({"name": "NRB Bearing Limited"}, {"name": "NRB Bearings Ltd"}))
+        self.assertFalse(p.same_company({"name": "Sanathnagar Enterprises Ltd"}, {"name": "Sungarner Energies Limited"}))
+
+    def test_renamed_bse_scrip_folds(self):
+        st, _ = self._store()
+        a = st.ensure_event(security={"symbol": "VIRAT", "bseSymbol": "VIRAT", "bseCode": "530521",
+                                      "name": "Virat Industries Ltd"}, period_end=self.P)
+        st.save(a)
+        b = st.ensure_event(security={"symbol": "VIRAT", "bseSymbol": "VIRAT", "bseCode": "530521",
+                                      "name": "Brahm Virat Industries Corporation Ltd"}, period_end=self.P)
+        st.save(b)
+        p.merge_duplicate_events(st)
+        self.assertEqual(len(st.all()), 1)
+
+    def _isin_event(self, st, raw):
+        folder = raw / "bse" / "BSE_526921_2026-09-30"
+        folder.mkdir(parents=True)
+        (folder / "lookup-1.json").write_text(json.dumps({"bse_code": "526921", "isin": "INE253B01015",
+                                                          "company_name": "TWENTYFIRST CENTURY MANAGEMENT SERVICES LTD",
+                                                          "symbol": "21STCENMGM"}))
+        ev = st.ensure_event(security={"isin": "INE253B01015", "nseSymbol": "21STCENMGM", "symbol": "21STCENMGM",
+                                       "bseSymbol": "21STCENMGM", "bseCode": "526921",
+                                       "name": "21st Century Management Services Limited"}, period_end=self.P)
+        ev["fetch"]["BSE_LOOKUP"] = {"status": "OK", "rawRef": "raw/bse/BSE_526921_2026-09-30/lookup-1.json"}
+        st.save(ev)
+        st.add_alias("BSE:526921|2026-09-30", ev["eventId"])
+        st.add_alias("NSE:21STCENMGM|2026-09-30", ev["eventId"])
+        return ev
+
+    def test_confirmed_code_routes_to_isin_event(self):
+        st, raw = self._store()
+        with mock.patch.object(p, "RAW_DIR", raw):
+            ev = self._isin_event(st, raw)
+            got = st.ensure_event(security={"symbol": "21STCENMGM", "bseSymbol": "21STCENMGM", "bseCode": "526921",
+                                            "name": "Twentyfirst Century Management Services Ltd"}, period_end=self.P)
+        self.assertEqual(got["eventId"], ev["eventId"])
+        self.assertEqual(st.aliases().get("BSE:526921|2026-09-30"), ev["eventId"])
+
+    def test_existing_duplicate_folds_into_confirmed_isin_event(self):
+        st, raw = self._store()
+        with mock.patch.object(p, "RAW_DIR", raw):
+            ev = self._isin_event(st, raw)
+            st.aliases().pop("BSE:526921|2026-09-30")
+            st.aliases().pop("NSE:21STCENMGM|2026-09-30")
+            dup = st.ensure_event(security={"symbol": "21STCENMGM", "bseSymbol": "21STCENMGM", "bseCode": "526921",
+                                            "name": "Twentyfirst Century Management Services Ltd"}, period_end=self.P)
+            st.save(dup)
+            self.assertEqual(len(st.all()), 2)
+            p.merge_duplicate_events(st)
+        ids = [e["eventId"] for e in st.all()]
+        self.assertEqual(ids, [ev["eventId"]])
+
+    def test_unconfirmed_code_on_nse_company_never_folds(self):
+        st, raw = self._store()
+        folder = raw / "bse" / "NSE_BRIGHT_2026-09-30"
+        folder.mkdir(parents=True)
+        (folder / "lookup-1.json").write_text(json.dumps({"bse_code": "543831", "isin": "INE0OMI01019",
+                                                          "company_name": "BRIGHT OUTDOOR MEDIA LTD", "symbol": "BRIGHT"}))
+        with mock.patch.object(p, "RAW_DIR", raw):
+            solar = st.ensure_event(security={"symbol": "BRIGHT", "nseSymbol": "BRIGHT", "bseCode": "543831",
+                                              "bseSymbol": "BRIGHT", "name": "Bright Solar Limited"}, period_end=self.P)
+            solar["fetch"]["BSE_LOOKUP"] = {"status": "OK", "rawRef": "raw/bse/NSE_BRIGHT_2026-09-30/lookup-1.json"}
+            st.save(solar)
+            outdoor = st.ensure_event(security={"symbol": "BRIGHT", "bseSymbol": "BRIGHT", "bseCode": "543831",
+                                                "name": "Bright Outdoor Media Ltd"}, period_end=self.P)
+            st.save(outdoor)
+            self.assertNotEqual(outdoor["eventId"], solar["eventId"])
+            p.merge_duplicate_events(st)
+        self.assertEqual(len(st.all()), 2)

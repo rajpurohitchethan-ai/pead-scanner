@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.36"
+ENGINE_VERSION = "2.9.37"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -660,9 +660,53 @@ class FetchLogger:
 # ---------------------------------------------------------------------------
 
 
-def _identity_conflict(existing: dict[str, Any], incoming: dict[str, Any]) -> bool:
+def _bse_lookup_confirms(event: dict[str, Any]) -> bool:
+    """2.9.37: BSE's own lookup payload saved for this event maps the event's
+    BSE code to the event's ISIN."""
+    sec = event.get("security") or {}
+    code, isin = str(sec.get("bseCode") or "").strip(), str(sec.get("isin") or "").strip().upper()
+    ref = ((event.get("fetch") or {}).get("BSE_LOOKUP") or {}).get("rawRef")
+    if not (code and isin and ref):
+        return False
+    path = Path(ref)
+    if not path.is_absolute():
+        path = RAW_DIR.parent / ref
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    return (isinstance(obj, dict) and str(obj.get("bse_code") or "").strip() == code
+            and str(obj.get("isin") or "").strip().upper() == isin)
+
+
+def same_bse_listing(existing: dict[str, Any], incoming_sec: dict[str, Any]) -> bool:
+    """2.9.37: one BSE scrip code is one company. Two identities with the same
+    BSE code are the same company although the names differ (BSE renamed
+    530521 "Virat Industries" to "Brahm Virat Industries Corporation"; BSE
+    writes "Twentyfirst Century" for 21st Century Management) when the code
+    is the existing event's only identity (no NSE symbol, no ISIN) or BSE's
+    lookup confirms the code for the existing event's ISIN. A code attached to
+    an NSE company by a fuzzy lookup (Bright Solar with Bright Outdoor's
+    543831) is neither, so it never counts. `existing` is an event."""
+    sec = existing.get("security") or {}
+    code = str(sec.get("bseCode") or "").strip()
+    if not code.isdigit() or code != str(incoming_sec.get("bseCode") or "").strip():
+        return False
+    ia, ib = str(sec.get("isin") or "").upper(), str(incoming_sec.get("isin") or "").upper()
+    if ia and ib and ia != ib:
+        return False
+    if incoming_sec.get("nseSymbol") and normalize_symbol(incoming_sec.get("nseSymbol")) != normalize_symbol(sec.get("nseSymbol")):
+        return False
+    if not sec.get("nseSymbol") and not sec.get("isin"):
+        return True
+    return _bse_lookup_confirms(existing)
+
+
+def _identity_conflict(existing: dict[str, Any], incoming: dict[str, Any], existing_event: dict[str, Any] | None = None) -> bool:
     """True when an incoming security clearly is a different company from the
     event its key resolved to (different BSE code / ISIN, or unrelated names)."""
+    if existing_event is not None and same_bse_listing(existing_event, incoming):
+        return False
     ia, ib = str(existing.get("isin") or "").upper(), str(incoming.get("isin") or "").upper()
     if ia and ib and (ia == ib or (_issuer_code(ia) and _issuer_code(ia) == _issuer_code(ib))):
         return False
@@ -763,7 +807,7 @@ class EventStore:
         )
         eid = self.resolve(event_id_for(security_key, period_end))
         event = self.load(eid)
-        if event is not None and _identity_conflict(event.get("security") or {}, security):
+        if event is not None and _identity_conflict(event.get("security") or {}, security, event):
             # 2.6.1: a BSE scrip id that equals another company's NSE symbol
             # (BRIGHT = Bright Outdoor Media on BSE, Bright Solar on NSE) must
             # not land in that company's event; key it by its BSE code.
@@ -774,7 +818,7 @@ class EventStore:
             event = self.load(eid)
             # 2.9.1: a stale alias (BSE:543831 -> NSE:BRIGHT) must not lead
             # back into the namesake; drop it and use the BSE key itself.
-            if event is not None and _identity_conflict(event.get("security") or {}, security):
+            if event is not None and _identity_conflict(event.get("security") or {}, security, event):
                 self.aliases().pop(alt_id, None)
                 json_dump_atomic(self._alias_path(), self.aliases())
                 eid, event = alt_id, None
@@ -1742,6 +1786,12 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
                                                  ("revenue_yoy_pct", "pat_yoy_pct", "pat_trend")}))
         if age is not None and 0 <= age <= 2 and (behind or (no_figures and not tried_recently)):
             return "A", 0
+        # 2.9.37: a parser bump re-reads stored XBRL only on enrichment. When
+        # figures are missing and the stored XBRL snapshot is from an older
+        # parser, the re-read may fill them (STARHEALTH: 2.9.36's Ind AS 117
+        # revenue waited 24 h in rank A2/A3), so it jumps the queue once.
+        if no_figures and not tried_recently and _xbrl_reread_pending(event):
+            return "A", 0
         # 2.9.34: a closed reaction session the stored prices do not cover yet
         # is as urgent as a fresh result. "age <= 2" counts calendar days, so
         # a Friday after-close filing (reaction Monday) fell to rank 2 on
@@ -1768,6 +1818,16 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
     if never_priced or not sector_key(event.get("security") or {}):
         return "C", 0
     return "D", 1
+
+
+def _xbrl_reread_pending(event: dict[str, Any]) -> bool:
+    """A stored, not rejected XBRL snapshot parsed by an older XBRL parser."""
+    for src in ("NSE_XBRL", "BSE_XBRL"):
+        snap = (event.get("financialSnapshots") or {}).get(src) or {}
+        if snap and snap.get("parserVersion") != XBRL_PARSER_VERSION \
+                and (snap.get("validation") or {}).get("status") != "REJECTED":
+            return True
+    return False
 
 
 def _a0_subrank(event: dict[str, Any], last_session: date) -> int:
@@ -3810,7 +3870,10 @@ def same_company(a: dict[str, Any], b: dict[str, Any]) -> bool:
     ja, jb = "".join(ta), "".join(tb)
     names_match = bool(ta and tb) and (
         ta[:2] == tb[:2] or (min(len(ta), len(tb)) == 1 and ta[0] == tb[0])
-        or (min(len(ja), len(jb)) >= 8 and ja[:12] == jb[:12]))   # "Extrusiontechnik" vs "Extrusion Technik"
+        or (min(len(ja), len(jb)) >= 8 and ja[:12] == jb[:12])    # "Extrusiontechnik" vs "Extrusion Technik"
+        # 2.9.37: "NRB Bearing" vs "NRB Bearings": the shorter joined name (>= 8
+        # letters) is the start of the longer one.
+        or (min(len(ja), len(jb)) >= 8 and ja[:min(12, len(ja), len(jb))] == jb[:min(12, len(ja), len(jb))]))
     ia, ib = _issuer_code(a.get("isin")), _issuer_code(b.get("isin"))
     if ia and ib and ia != ib:
         # Different issuer codes: only the same NSE symbol AND the same full
@@ -3948,7 +4011,10 @@ def merge_duplicate_events(store: EventStore) -> list[dict[str, Any]]:
         sec = e.get("security") or {}
         for k in _merge_keys(sec):
             for other in seen.get((k, pe), []):
-                if find(other) != find(e["eventId"]) and same_company(sec, by_id[other].get("security") or {}):
+                osec = by_id[other].get("security") or {}
+                if find(other) != find(e["eventId"]) and (
+                        same_company(sec, osec) or (k.startswith("BSE:") and (
+                            same_bse_listing(by_id[other], sec) or same_bse_listing(e, osec)))):
                     parent[find(e["eventId"])] = find(other)
             seen.setdefault((k, pe), []).append(e["eventId"])
 
