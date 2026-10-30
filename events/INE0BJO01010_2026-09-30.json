@@ -2,11 +2,11 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0BJO01010|2026-09-30",
   "createdAt": "2026-10-28T10:54:29Z",
-  "updatedAt": "2026-10-30T18:04:11Z",
+  "updatedAt": "2026-10-30T19:34:23Z",
   "security": {
     "symbol": "JPL",
     "nseSymbol": "JPL",
-    "name": "Jio Platforms Limited",
+    "name": "Jio Platforms Ltd",
     "sector": "-",
     "isin": "INE0BJO01010",
     "yahooTicker": "JPL.NS",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-29T03:57:53Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-30T18:56:18Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-30T19:34:23Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-30",
-      "source": "NSE_FINANCIAL_RESULTS",
-      "fetchedAt": "2026-10-30T17:51:30Z",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T18:56:18Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/nse/DISCOVERY/board_meetings-5f841e47d58eb9b9.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de4d9253207f5338.json",
       "note": null
     },
     "reaction_session": {
@@ -162,6 +172,33 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T18:56:18Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de4d9253207f5338.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-30T19:12:19.573000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T18:56:18Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de4d9253207f5338.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T18:56:18Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de4d9253207f5338.json",
+      "note": null
     }
   },
   "fetch": {
@@ -209,34 +246,44 @@
     }
   },
   "derived": {
-    "score": 18,
-    "completenessPct": 66.7,
+    "score": 15,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -280,11 +327,11 @@
         "sector": "Telecommunication",
         "stocks": 21,
         "momentum63dMedian": -0.31,
-        "relativeToMarket": 6.73,
-        "declared": 8,
+        "relativeToMarket": 6.69,
+        "declared": 9,
         "strongResults": 5,
         "avgReaction": 2.11,
-        "tailwind": "STRONG"
+        "tailwind": "POSITIVE"
       },
       "identity": {
         "macroSector": "Telecommunication",
@@ -335,9 +382,7 @@
     },
     "valuationInputCount": 2,
     "expectationFullWindow": false,
-    "reasons": [
-      "Sector tailwind: Telecommunication peers are outperforming."
-    ],
+    "reasons": [],
     "risks": []
   },
   "priceTrail": [
@@ -419,5 +464,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:JPL|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-30T19:12:19.573000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please find attached Unaudited Financial Results (Consolidated and Standalone) for the quarter and half year ended September 30, 2026. Jio Platforms Ltd - 545004 - Unaudited Financial Results (Consolidated And Standalone) For The Quarter And Half Year Ended September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de4d9253207f5338.json",
+      "seenAt": "2026-10-30T19:34:06Z"
+    }
   ]
 }

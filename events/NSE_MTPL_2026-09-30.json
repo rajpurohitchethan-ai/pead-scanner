@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:MTPL|2026-09-30",
   "createdAt": "2026-10-27T03:32:08Z",
-  "updatedAt": "2026-10-30T18:04:14Z",
+  "updatedAt": "2026-10-30T19:34:26Z",
   "security": {
     "symbol": "MTPL",
     "bseSymbol": "MTPL",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,31 +30,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-27T03:32:08Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-30T18:56:25Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-30T19:29:40Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-30",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-30T13:37:24Z",
+      "fetchedAt": "2026-10-30T18:56:25Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-86f7faef731ad7e0.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de4d9253207f5338.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-02",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-30T15:09:58Z",
+      "fetchedAt": "2026-10-30T19:29:38Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-30T15:09:58Z",
+      "fetchedAt": "2026-10-30T19:29:38Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -63,7 +73,7 @@
     "pre_result_5d_pct": {
       "value": 1.5,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-30T15:10:01Z",
+      "fetchedAt": "2026-10-30T19:29:40Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_MTPL_2026-09-30/price_volume_12m-e61d02efb4774595.json",
@@ -72,7 +82,7 @@
     "pre_result_10d_pct": {
       "value": -4.8,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-30T15:10:01Z",
+      "fetchedAt": "2026-10-30T19:29:40Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_MTPL_2026-09-30/price_volume_12m-e61d02efb4774595.json",
@@ -81,7 +91,7 @@
     "pre_result_20d_pct": {
       "value": -18.58,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-30T15:10:01Z",
+      "fetchedAt": "2026-10-30T19:29:40Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_MTPL_2026-09-30/price_volume_12m-e61d02efb4774595.json",
@@ -90,7 +100,7 @@
     "distance_52w_high_pct": {
       "value": -68.13,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-30T15:10:01Z",
+      "fetchedAt": "2026-10-30T19:29:40Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_MTPL_2026-09-30/price_volume_12m-e61d02efb4774595.json",
@@ -99,7 +109,7 @@
     "last_price": {
       "value": 6.75,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-30T15:10:01Z",
+      "fetchedAt": "2026-10-30T19:29:40Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_MTPL_2026-09-30/price_volume_12m-e61d02efb4774595.json",
@@ -108,7 +118,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.2046,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-10-30T15:10:01Z",
+      "fetchedAt": "2026-10-30T19:29:40Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/NSE_MTPL_2026-09-30/price_volume_12m-e61d02efb4774595.json",
@@ -149,19 +159,46 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_MTPL_2026-09-30/scrip_results-66654a1a30f229ac.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T18:56:25Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de4d9253207f5338.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-30T19:00:00.663000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T18:56:25Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de4d9253207f5338.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T18:56:25Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de4d9253207f5338.json",
+      "note": null
     }
   },
   "fetch": {
     "BSE_LOOKUP": {
-      "lastAttempt": "2026-10-30T15:09:58Z",
+      "lastAttempt": "2026-10-30T19:29:35Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "IndexError: tuple index out of range",
       "rawRef": null
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-30T15:10:01Z",
-      "lastSuccess": "2026-10-30T15:10:01Z",
+      "lastAttempt": "2026-10-30T19:29:40Z",
+      "lastSuccess": "2026-10-30T19:29:40Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/NSE_MTPL_2026-09-30/price_volume_12m-e61d02efb4774595.json"
@@ -186,27 +223,54 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-30T19:29:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/NSE_MTPL_2026-09-30/results_snapshot-a75a4e80ffdb51fc.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-30T19:29:38Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "540254.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-30T19:29:41Z",
+      "lastSuccess": "2026-10-30T19:29:41Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/NSE_MTPL_2026-09-30/scrip_announcements-715dd248b80b5471.json"
     }
   },
   "derived": {
     "score": 13,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -214,13 +278,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -263,10 +327,10 @@
       "sector": {
         "sector": "Financial Services",
         "stocks": 348,
-        "momentum63dMedian": -8.43,
-        "relativeToMarket": -1.38,
-        "declared": 103,
-        "strongResults": 67,
+        "momentum63dMedian": -8.6,
+        "relativeToMarket": -1.6,
+        "declared": 108,
+        "strongResults": 68,
         "avgReaction": -1.43,
         "tailwind": "POSITIVE"
       },
@@ -325,7 +389,15 @@
         }
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-31",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/540254/",
@@ -359,6 +431,11 @@
     },
     {
       "timestamp": "2026-10-30T15:10:01Z",
+      "price": 6.75,
+      "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-30T19:29:40Z",
       "price": 6.75,
       "source": "BSE_PRICE"
     }
@@ -647,8 +724,38 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-30T15:10:01Z",
+    "computedAt": "2026-10-30T19:29:40Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-30T19:00:00.663000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial Result Marg Techno Projects Ltd - 540254 - Result- Financial Result For The Period Ended On 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-de4d9253207f5338.json",
+      "seenAt": "2026-10-30T19:34:17Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-30T19:29:38Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-31",
+    "source": "BSE_ANNOUNCEMENTS"
   }
 }
