@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE027H01010|2026-09-30",
   "createdAt": "2026-10-23T12:49:11Z",
-  "updatedAt": "2026-10-30T09:40:54Z",
+  "updatedAt": "2026-10-30T10:38:37Z",
   "security": {
     "symbol": "MAXHEALTH",
     "nseSymbol": "MAXHEALTH",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-24T02:51:05Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-30T10:00:27Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-30T10:38:37Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-30",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-30T09:32:09Z",
+      "fetchedAt": "2026-10-30T10:30:20Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-9e6dcaaca5324261.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-f5597ea170ed5b31.json",
       "note": null
     },
     "reaction_session": {
@@ -234,6 +244,33 @@
       "rank": 88,
       "rawRef": "raw/bse/INE027H01010_2026-09-30/equity_meta-20bf408f35b5d318.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T10:00:27Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-f5597ea170ed5b31.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-30T14:45:41.947000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T10:00:27Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-f5597ea170ed5b31.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T10:00:27Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-f5597ea170ed5b31.json",
+      "note": null
     }
   },
   "fetch": {
@@ -281,24 +318,30 @@
     }
   },
   "derived": {
-    "score": 33,
-    "completenessPct": 100.0,
+    "score": 30,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -306,13 +349,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -354,13 +397,13 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 146,
+        "stocks": 147,
         "momentum63dMedian": -2.26,
         "relativeToMarket": 4.75,
-        "declared": 33,
+        "declared": 34,
         "strongResults": 20,
         "avgReaction": 4.07,
-        "tailwind": "STRONG"
+        "tailwind": "POSITIVE"
       },
       "identity": {
         "macroSector": "Healthcare",
@@ -430,8 +473,7 @@
     "valuationInputCount": 2,
     "expectationFullWindow": true,
     "reasons": [
-      "Low pre-result expectation: 20D move -13.3%.",
-      "Sector tailwind: Healthcare peers are outperforming."
+      "Low pre-result expectation: 20D move -13.3%."
     ],
     "risks": []
   },
@@ -845,5 +887,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:MAXHEALTH|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-30T14:45:41.947000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Result - Financial Results for the quarter and half year ended September 30, 2026 Max Healthcare Institute Ltd - 543220 - Results - Financial Results For The Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-f5597ea170ed5b31.json",
+      "seenAt": "2026-10-30T10:38:21Z"
+    }
   ]
 }
