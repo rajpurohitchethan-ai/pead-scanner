@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE830C01026|2026-09-30",
   "createdAt": "2026-10-22T11:42:01Z",
-  "updatedAt": "2026-10-30T08:49:02Z",
+  "updatedAt": "2026-10-30T09:40:57Z",
   "security": {
     "symbol": "EMAMIPAP",
     "nseSymbol": "EMAMIPAP",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,31 +43,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-23T02:50:48Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-30T09:01:56Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-30T09:33:11Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-30",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-30T08:39:33Z",
+      "fetchedAt": "2026-10-30T09:32:09Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-9e6dcaaca5324261.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5f6de6e13d23e983.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-02",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-29T19:34:42Z",
+      "fetchedAt": "2026-10-30T09:33:06Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "INTRADAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "INTRADAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-29T19:34:42Z",
+      "fetchedAt": "2026-10-30T09:33:06Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -76,7 +86,7 @@
     "pre_result_5d_pct": {
       "value": 4.07,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-29T19:34:47Z",
+      "fetchedAt": "2026-10-30T09:33:11Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE830C01026_2026-09-30/equity_history-9dea70488a06f5eb.json",
@@ -85,7 +95,7 @@
     "pre_result_10d_pct": {
       "value": -3.84,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-29T19:34:47Z",
+      "fetchedAt": "2026-10-30T09:33:11Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE830C01026_2026-09-30/equity_history-9dea70488a06f5eb.json",
@@ -94,7 +104,7 @@
     "pre_result_20d_pct": {
       "value": -0.94,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-29T19:34:47Z",
+      "fetchedAt": "2026-10-30T09:33:11Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE830C01026_2026-09-30/equity_history-9dea70488a06f5eb.json",
@@ -103,7 +113,7 @@
     "distance_52w_high_pct": {
       "value": -4.38,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-29T19:34:47Z",
+      "fetchedAt": "2026-10-30T09:33:11Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE830C01026_2026-09-30/equity_history-9dea70488a06f5eb.json",
@@ -112,7 +122,7 @@
     "last_price": {
       "value": 117.5,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-29T19:34:47Z",
+      "fetchedAt": "2026-10-30T09:33:11Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE830C01026_2026-09-30/equity_history-9dea70488a06f5eb.json",
@@ -121,7 +131,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.3635,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-10-29T19:34:47Z",
+      "fetchedAt": "2026-10-30T09:33:11Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/nse_price/INE830C01026_2026-09-30/equity_history-9dea70488a06f5eb.json",
@@ -234,12 +244,48 @@
       "rank": 90,
       "rawRef": "raw/nse/INE830C01026_2026-09-30/quote-10fe3fc806d28370.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T09:01:56Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5f6de6e13d23e983.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-30T14:04:34.177000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T09:01:56Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5f6de6e13d23e983.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-30T09:01:56Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5f6de6e13d23e983.json",
+      "note": null
+    },
+    "reaction_window_start": {
+      "value": "2026-10-30",
+      "source": "DERIVED",
+      "fetchedAt": "2026-10-30T09:33:06Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "intraday filing"
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-29T19:34:47Z",
-      "lastSuccess": "2026-10-29T19:34:47Z",
+      "lastAttempt": "2026-10-30T09:33:11Z",
+      "lastSuccess": "2026-10-30T09:33:11Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse_price/INE830C01026_2026-09-30/equity_history-9dea70488a06f5eb.json"
@@ -252,15 +298,15 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-10-22T12:03:14Z",
-      "lastSuccess": "2026-10-22T12:03:14Z",
+      "lastAttempt": "2026-10-30T09:33:02Z",
+      "lastSuccess": "2026-10-30T09:33:02Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE830C01026_2026-09-30/integrated_filings-99f96e5beeac2b6c.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-10-22T12:03:14Z",
-      "lastSuccess": "2026-10-22T12:03:14Z",
+      "lastAttempt": "2026-10-30T09:33:02Z",
+      "lastSuccess": "2026-10-30T09:33:02Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/nse/INE830C01026_2026-09-30/integrated_filings-99f96e5beeac2b6c.json"
@@ -273,32 +319,66 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-29T19:34:51Z",
+      "lastAttempt": "2026-10-30T09:33:13Z",
+      "lastSuccess": "2026-10-30T09:33:13Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": null
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-10-30T09:33:04Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "Yahoo fundamentals budget exhausted for this run",
+      "error": "no quarterly row for event period",
+      "rawRef": "raw/nse/INE830C01026_2026-09-30/results_comparison-fa375606d079d98e.json"
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-30T09:33:06Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE830C01026_2026-09-30/results_snapshot-c6c067af5db91346.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-30T09:33:06Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "EMAMIPAP.NS: RuntimeError: latest statement does not match event quarter; 533208.BO: RuntimeError: quarterly statement empty",
       "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-30T09:33:13Z",
+      "lastSuccess": "2026-10-30T09:33:13Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE830C01026_2026-09-30/announcements-5baaa890f4b4a8ac.json"
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -306,13 +386,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_REPEAD",
-        "label": "Watch: re-PEAD",
-        "why": "Q1 setup faded. Strong Q2 could restart the drift."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Result came during market hours, so the reaction is measured over 30 Oct and 02 Nov. The plan is ready after the 02 Nov close.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -417,7 +497,15 @@
         }
       },
       "deliveryPct": 49.0,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-10-30",
+        "source": "NSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/EMAMIPAP/",
@@ -451,6 +539,11 @@
     },
     {
       "timestamp": "2026-10-29T19:34:47Z",
+      "price": 117.5,
+      "source": "NSE_PRICE"
+    },
+    {
+      "timestamp": "2026-10-30T09:33:11Z",
       "price": 117.5,
       "source": "NSE_PRICE"
     }
@@ -739,12 +832,12 @@
       ]
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-10-29T19:34:47Z",
+    "computedAt": "2026-10-30T09:33:11Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
   },
   "nseResultListing": {
-    "fetchedAt": "2026-10-22T12:03:14Z",
+    "fetchedAt": "2026-10-30T09:33:02Z",
     "v": 2,
     "rows": [
       {
@@ -808,5 +901,35 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:EMAMIPAP|2026-09-30"
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-30T14:04:34.177000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Un-audited Financial Results for the quarter and half year ended 30th September, 2026. Emami Paper Mills Ltd - 533208 - Un-Audited Financial Results For The Quarter And Half Year Ended 30Th September, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-5f6de6e13d23e983.json",
+      "seenAt": "2026-10-30T09:40:47Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-30T09:33:06Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-10-30",
+    "source": "NSE_ANNOUNCEMENTS"
+  }
 }
