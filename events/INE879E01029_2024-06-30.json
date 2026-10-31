@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE879E01029|2024-06-30",
   "createdAt": "2026-10-07T08:19:49Z",
-  "updatedAt": "2026-10-31T10:23:25Z",
+  "updatedAt": "2026-10-31T11:11:12Z",
   "security": {
     "symbol": "KANANIIND",
     "nseSymbol": "KANANIIND",
@@ -13,7 +13,7 @@
     "end": "2024-06-30",
     "quarter": "Q1 FY25"
   },
-  "state": "RESULT_FILED",
+  "state": "FINANCIALS_PARSED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -24,6 +24,11 @@
       "state": "RESULT_FILED",
       "at": "2026-10-07T08:19:49Z",
       "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "FINANCIALS_PARSED",
+      "at": "2026-10-31T11:11:02Z",
+      "reason": "verified NSE_RESULTS_COMPARISON snapshot applied"
     }
   ],
   "fields": {
@@ -98,14 +103,59 @@
       "rank": 10,
       "rawRef": null,
       "note": "intraday filing"
+    },
+    "pat_cr": {
+      "value": -0.04,
+      "source": "NSE_RESULTS_COMPARISON",
+      "fetchedAt": "2026-10-31T11:11:02Z",
+      "status": "OK",
+      "rank": 100,
+      "rawRef": "raw/nse/INE879E01029_2026-09-30/results_comparison-f91ce658664f38db.json",
+      "note": "snapshot NSE_RESULTS_COMPARISON basis=STANDALONE"
+    },
+    "eps": {
+      "value": 0.0,
+      "source": "NSE_RESULTS_COMPARISON",
+      "fetchedAt": "2026-10-31T11:11:02Z",
+      "status": "OK",
+      "rank": 100,
+      "rawRef": "raw/nse/INE879E01029_2026-09-30/results_comparison-f91ce658664f38db.json",
+      "note": "snapshot NSE_RESULTS_COMPARISON basis=STANDALONE"
+    },
+    "pat_qoq_trend": {
+      "value": "LOSS_NARROWING",
+      "source": "NSE_RESULTS_COMPARISON",
+      "fetchedAt": "2026-10-31T11:11:02Z",
+      "status": "OK",
+      "rank": 100,
+      "rawRef": "raw/nse/INE879E01029_2026-09-30/results_comparison-f91ce658664f38db.json",
+      "note": "snapshot NSE_RESULTS_COMPARISON basis=STANDALONE"
+    },
+    "basis": {
+      "value": "STANDALONE",
+      "source": "NSE_RESULTS_COMPARISON",
+      "fetchedAt": "2026-10-31T11:11:02Z",
+      "status": "OK",
+      "rank": 100,
+      "rawRef": "raw/nse/INE879E01029_2026-09-30/results_comparison-f91ce658664f38db.json",
+      "note": "snapshot NSE_RESULTS_COMPARISON basis=STANDALONE"
+    },
+    "revenue_cr": {
+      "value": 0.0,
+      "source": "NSE_RESULTS_COMPARISON",
+      "fetchedAt": "2026-10-31T11:11:02Z",
+      "status": "OK",
+      "rank": 100,
+      "rawRef": "raw/nse/INE879E01029_2026-09-30/results_comparison-f91ce658664f38db.json",
+      "note": "snapshot NSE_RESULTS_COMPARISON basis=STANDALONE"
     }
   },
   "fetch": {},
   "derived": {
     "score": 0,
-    "completenessPct": 0.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 0,
+      "present": 2,
       "required": 8
     },
     "resultReality": "UNVERIFIED",
@@ -149,7 +199,9 @@
         "style": null,
         "stage": null,
         "sizeFraction": null,
-        "redFlags": []
+        "redFlags": [
+          "figures flagged for review"
+        ]
       },
       "liquidity": {
         "pass": null,
@@ -176,7 +228,7 @@
         "basis": null,
         "revenueQoQ": null,
         "patQoQ": null,
-        "patQoQStatus": null
+        "patQoQStatus": "LOSS_NARROWING"
       },
       "sectorKey": null,
       "sector": null,
@@ -216,7 +268,7 @@
       "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INDAS_121278_1708883_06082026020723.xml",
       "headline": "First Quarter Quarterly Non-Consolidated",
       "rawRef": "raw/nse/DISCOVERY/financial_results-6a4f38c6193f48b6.json",
-      "seenAt": "2026-10-31T10:23:14Z"
+      "seenAt": "2026-10-31T11:11:02Z"
     }
   ],
   "fieldHistory": {
@@ -231,5 +283,54 @@
       }
     ]
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "financialSnapshots": {
+    "NSE_RESULTS_COMPARISON": {
+      "source": "NSE_RESULTS_COMPARISON",
+      "fetchedAt": "2026-10-31T11:11:02Z",
+      "rawRef": "raw/nse/INE879E01029_2026-09-30/results_comparison-f91ce658664f38db.json",
+      "documentUrl": null,
+      "periodEnd": "2024-06-30",
+      "basis": "STANDALONE",
+      "revenueDefinition": "REVENUE_FROM_OPERATIONS",
+      "concepts": {
+        "revenue": "re_net_sale",
+        "pat": "re_net_profit"
+      },
+      "reference": null,
+      "values": {
+        "pat_cr": -0.04,
+        "eps": 0.0,
+        "pat_qoq_trend": "LOSS_NARROWING",
+        "revenue_cr": 0.0
+      },
+      "validation": {
+        "status": "FLAGGED",
+        "issues": [
+          "BASIS_ASSUMED_STANDALONE",
+          "ZERO_REVENUE"
+        ]
+      },
+      "parserVersion": 2
+    }
+  },
+  "financialIntegrity": {
+    "checkedAt": "2026-10-31T11:11:02Z",
+    "snapshotsConsidered": 1,
+    "status": "FLAGGED",
+    "issues": [
+      "BASIS_ASSUMED_STANDALONE",
+      "ZERO_REVENUE"
+    ],
+    "selectedSource": "NSE_RESULTS_COMPARISON",
+    "documentUrl": null,
+    "basis": "STANDALONE",
+    "revenueDefinition": "REVENUE_FROM_OPERATIONS",
+    "concepts": {
+      "revenue": "re_net_sale",
+      "pat": "re_net_profit"
+    },
+    "periodEnd": "2024-06-30",
+    "crossCheck": []
+  }
 }

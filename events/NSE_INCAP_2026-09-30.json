@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:INCAP|2026-09-30",
   "createdAt": "2026-10-16T16:08:06Z",
-  "updatedAt": "2026-10-31T10:23:25Z",
+  "updatedAt": "2026-10-31T11:11:13Z",
   "security": {
     "symbol": "INCAP",
     "bseSymbol": "INCAP",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,31 +30,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-16T16:08:06Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-31T10:46:36Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-31T11:11:13Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-31",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-31T07:33:24Z",
+      "fetchedAt": "2026-10-31T10:46:38Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7abbaf0634fb928e.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-02",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-30T19:31:44Z",
+      "fetchedAt": "2026-10-31T11:02:53Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "NON_TRADING_DAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "NON_TRADING_DAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-30T19:31:44Z",
+      "fetchedAt": "2026-10-31T11:02:53Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -158,21 +168,48 @@
       "rank": 88,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-31T10:46:38Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-31T15:58:44.797000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-31T10:46:38Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-31T10:46:38Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
+      "note": null
     }
   },
   "fetch": {
     "BSE_LOOKUP": {
-      "lastAttempt": "2026-10-30T19:31:44Z",
+      "lastAttempt": "2026-10-31T11:02:53Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "IndexError: tuple index out of range",
+      "error": "SourceSkipped: BSE switched off for this run: 2 failures in a row, 300 s spent failing; last: TimeoutError",
       "rawRef": null
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-30T19:31:46Z",
+      "lastAttempt": "2026-10-31T11:02:54Z",
       "lastSuccess": "2026-10-30T19:31:46Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 2 failures in a row, 300 s spent failing; last: TimeoutError; 517370.BO: RuntimeError: empty history",
       "rawRef": "raw/bse_price/NSE_INCAP_2026-09-30/price_volume_12m-63a66c448b4d3e1d.json"
     },
     "EXCHANGE_META": {
@@ -190,42 +227,73 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-30T19:31:49Z",
+      "lastAttempt": "2026-10-31T11:02:54Z",
       "lastSuccess": "2026-10-30T19:31:49Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-31T11:02:53Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 2 failures in a row, 300 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-31T11:02:53Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "517370.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-31T11:02:54Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 2 failures in a row, 300 s spent failing; last: TimeoutError",
       "rawRef": null
     }
   },
   "derived": {
     "score": 8,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "EXPENSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -270,7 +338,7 @@
         "stocks": 338,
         "momentum63dMedian": -4.28,
         "relativeToMarket": 2.69,
-        "declared": 78,
+        "declared": 80,
         "strongResults": 46,
         "avgReaction": -1.16,
         "tailwind": "NEUTRAL"
@@ -644,5 +712,38 @@
     "computedAt": "2026-10-30T19:31:46Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-31T15:58:44.797000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudifed results sept 2026 Incap Ltd - 517370 - Results Sept 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
+      "seenAt": "2026-10-31T11:11:03Z"
+    },
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-31T15:59:41.570000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudifed results sept 2026 Incap Ltd - 517370 - Results Sept 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
+      "seenAt": "2026-10-31T11:11:03Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-31T11:02:53Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
   }
 }

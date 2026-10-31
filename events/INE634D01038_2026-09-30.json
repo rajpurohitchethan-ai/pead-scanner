@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE634D01038|2026-09-30",
   "createdAt": "2026-10-29T03:57:53Z",
-  "updatedAt": "2026-10-31T10:23:24Z",
+  "updatedAt": "2026-10-31T11:11:12Z",
   "security": {
     "symbol": "GTEIT",
     "bseSymbol": "GTEIT",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-29T03:57:53Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-31T10:46:33Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-31T11:11:12Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-31",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-31T07:33:24Z",
+      "fetchedAt": "2026-10-31T10:46:33Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7abbaf0634fb928e.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-02",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-31T09:29:27Z",
+      "fetchedAt": "2026-10-31T11:04:42Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "NON_TRADING_DAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "NON_TRADING_DAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-31T09:29:27Z",
+      "fetchedAt": "2026-10-31T11:04:42Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -127,7 +137,7 @@
     "trailing_pe": {
       "value": 511.5,
       "source": "BSE_META",
-      "fetchedAt": "2026-10-31T09:29:28Z",
+      "fetchedAt": "2026-10-31T11:04:42Z",
       "status": "OK",
       "rank": 88,
       "rawRef": null,
@@ -141,6 +151,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE634D01038_2026-09-30/scrip_results-b50cb559a68c4063.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-31T10:46:33Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-31T16:01:37.733000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-31T10:46:33Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-31T10:46:33Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
+      "note": null
     }
   },
   "fetch": {
@@ -152,17 +189,17 @@
       "rawRef": "raw/bse/NSE_GTEIT_2026-09-30/lookup-d4e17f3ef839090f.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-31T09:29:28Z",
+      "lastAttempt": "2026-10-31T11:04:42Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "BSE: SourceSkipped: BSE switched off for this run: 2 failures in a row, 305 s spent failing; last: TimeoutError; 532139.BO: RuntimeError: empty history",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 2 failures in a row, 300 s spent failing; last: TimeoutError; no eligible Yahoo ticker (negative-cached or unmapped)",
       "rawRef": "raw/bse_price/INE634D01038_2026-09-30/price_volume_12m-096adf33f3d4eb9e.json"
     },
     "EXCHANGE_META": {
-      "lastAttempt": "2026-10-31T09:29:28Z",
+      "lastAttempt": "2026-10-31T11:04:42Z",
       "lastSuccess": "2026-10-29T11:26:59Z",
       "status": "FAILED",
-      "error": "BSE meta: SourceSkipped: BSE switched off for this run: 2 failures in a row, 305 s spent failing; last: TimeoutError",
+      "error": "BSE meta: SourceSkipped: BSE switched off for this run: 2 failures in a row, 300 s spent failing; last: TimeoutError",
       "rawRef": null
     },
     "PREV_QUARTER": {
@@ -173,42 +210,73 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-31T09:29:28Z",
+      "lastAttempt": "2026-10-31T11:04:42Z",
       "lastSuccess": "2026-10-29T11:27:01Z",
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-31T11:04:42Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 2 failures in a row, 300 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-31T11:04:42Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-31T11:04:42Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 2 failures in a row, 300 s spent failing; last: TimeoutError",
       "rawRef": null
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "ELEVATED SHORT-TERM",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "EXPENSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -514,5 +582,26 @@
     "computedAt": "2026-10-29T11:26:57Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-31T16:01:37.733000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Quarterly Results 30th September 2026 G-Tech Info-Training Ltd - 532139 - Quarterly Results 30Th September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b7a0336f64ae6e78.json",
+      "seenAt": "2026-10-31T11:11:00Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-31T11:04:42Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
   }
 }
