@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE035401020|2026-09-30",
   "createdAt": "2026-10-24T02:51:05Z",
-  "updatedAt": "2026-10-31T08:39:00Z",
+  "updatedAt": "2026-10-31T09:31:54Z",
   "security": {
     "symbol": "ACEENGITEC",
     "bseSymbol": "ACEENGITEC",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-24T02:51:05Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-10-31T08:53:06Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-10-31T09:31:54Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-10-31",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-31T07:33:24Z",
+      "fetchedAt": "2026-10-31T08:53:06Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7abbaf0634fb928e.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ec99751c24eacb10.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-02",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-30T19:29:47Z",
+      "fetchedAt": "2026-10-31T09:27:44Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "NON_TRADING_DAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "NON_TRADING_DAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-30T19:29:47Z",
+      "fetchedAt": "2026-10-31T09:27:44Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -159,6 +169,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE035401020_2026-09-30/scrip_results-45bd3f8b5dbba4fd.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-31T08:53:06Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ec99751c24eacb10.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-10-31T14:00:59.400000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-31T08:53:06Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ec99751c24eacb10.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-10-31T08:53:06Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ec99751c24eacb10.json",
+      "note": null
     }
   },
   "fetch": {
@@ -170,10 +207,10 @@
       "rawRef": "raw/bse/NSE_ACEENGITEC_2026-09-30/lookup-096fb51fa42d6784.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-10-30T19:30:00Z",
+      "lastAttempt": "2026-10-31T09:27:45Z",
       "lastSuccess": "2026-10-30T19:30:00Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 2 failures in a row, 305 s spent failing; last: TimeoutError; 530669.BO: RuntimeError: empty history",
       "rawRef": "raw/bse_price/INE035401020_2026-09-30/price_volume_12m-59d2eed2cc12b23b.json"
     },
     "EXCHANGE_META": {
@@ -191,32 +228,59 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-10-30T19:30:02Z",
+      "lastAttempt": "2026-10-31T09:27:45Z",
       "lastSuccess": "2026-10-30T19:30:02Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-10-31T09:27:44Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 2 failures in a row, 305 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-10-31T09:27:44Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "530669.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-10-31T09:27:45Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 2 failures in a row, 305 s spent failing; last: TimeoutError",
       "rawRef": null
     }
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -224,13 +288,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -601,5 +665,26 @@
     "computedAt": "2026-10-30T19:30:00Z",
     "plusVersion": "2.9.28",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-10-31T14:00:59.400000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Reg 33 results for qtr and half year ended 30.09.2026 Ace Engitech Ltd - 530669 - Pursuant To Reg 33 Of Sebi Lodr Pfa The Results For Qtr Ended 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-ec99751c24eacb10.json",
+      "seenAt": "2026-10-31T09:31:36Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-10-31T09:27:44Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
   }
 }
