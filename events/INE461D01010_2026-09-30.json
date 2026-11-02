@@ -2,11 +2,11 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE461D01010|2026-09-30",
   "createdAt": "2026-10-23T10:39:58Z",
-  "updatedAt": "2026-11-02T10:53:43Z",
+  "updatedAt": "2026-11-02T11:50:07Z",
   "security": {
     "symbol": "HLEGLAS",
     "nseSymbol": "HLEGLAS",
-    "name": "HLE Glascoat Limited",
+    "name": "HLE Glascoat Ltd",
     "sector": "-",
     "isin": "INE461D01010",
     "yahooTicker": "HLEGLAS.NS",
@@ -26,7 +26,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -47,16 +47,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-24T02:51:05Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-02T11:11:44Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-02T11:50:07Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-02",
-      "source": "NSE_FINANCIAL_RESULTS",
-      "fetchedAt": "2026-11-02T10:13:29Z",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-02T11:11:44Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/nse/DISCOVERY/board_meetings-2ac3bc8dea2a683f.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c4def5ead583c004.json",
       "note": null
     },
     "reaction_session": {
@@ -238,6 +248,33 @@
       "rank": 88,
       "rawRef": "raw/bse/INE461D01010_2026-09-30/equity_meta-9821658b4e109bb5.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-02T11:11:44Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c4def5ead583c004.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-02T16:23:05.677000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-02T11:11:44Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c4def5ead583c004.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-02T11:11:44Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c4def5ead583c004.json",
+      "note": null
     }
   },
   "fetch": {
@@ -293,23 +330,29 @@
   },
   "derived": {
     "score": 28,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -317,13 +360,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -368,7 +411,7 @@
         "stocks": 345,
         "momentum63dMedian": -4.16,
         "relativeToMarket": 2.67,
-        "declared": 87,
+        "declared": 89,
         "strongResults": 47,
         "avgReaction": -1.16,
         "tailwind": "NEUTRAL"
@@ -887,5 +930,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:HLEGLAS|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-02T16:23:05.677000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Standalone and Consolidated Unaudited Financial Results for the period ended September 30, 2026. HLE Glascoat Ltd - 522215 - Results - Financial Results For The Period Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c4def5ead583c004.json",
+      "seenAt": "2026-11-02T11:49:52Z"
+    }
   ]
 }
