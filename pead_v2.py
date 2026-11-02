@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.37"
+ENGINE_VERSION = "2.9.38"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -113,7 +113,9 @@ INDEX_CACHE_PATH = MASTER_DIR / "index_nifty500.json"
 EXCHANGE_META_REFRESH_HOURS = float(os.getenv("EXCHANGE_META_REFRESH_HOURS", "20"))
 # New (engine 2.4) per-event calls are budgeted per run so hourly runs stay
 # short; the backlog fills over the first few runs.
-EXTRA_CALL_BUDGET = int(os.getenv("EXTRA_CALL_BUDGET", "120"))
+# 2.9.38: 120 ran out on the declared slots alone (extraCallsUsed 120 on 2 Nov);
+# a declared event past the cap got no NSE filing listing, hence no figures.
+EXTRA_CALL_BUDGET = int(os.getenv("EXTRA_CALL_BUDGET", "300"))
 _EXTRA_CALLS_USED = {"n": 0}
 
 
@@ -1716,6 +1718,10 @@ def _enrichment_priority(event: dict[str, Any]) -> tuple[int, int, int, str]:
 # (LICI, TEAMLEASE: no price, no sector) were never reached.
 ENRICH_SLOTS_DECLARED = int(os.getenv("ENRICH_SLOTS_DECLARED", "35"))   # A: declared that still need work
 ENRICH_SLOTS_UPCOMING = int(os.getenv("ENRICH_SLOTS_UPCOMING", "45"))   # B: reporting within 7 days, prices stale
+# 2.9.38: peak of the season. When more liquid reactions / unread figures are
+# due than A has slots, A borrows from C (then B) up to this; the total stays
+# MAX_ACTIVE_ENRICH_EVENTS. RELIANCE's 2 Nov reaction waited among 254 due rows.
+ENRICH_SLOTS_DECLARED_SURGE = int(os.getenv("ENRICH_SLOTS_DECLARED_SURGE", "70"))
 ENRICH_UPCOMING_WINDOW_DAYS = 7
 ENRICH_RECENT_RESULT_DAYS = 5     # declared this recently: concall / transcript / reaction still moving
 REACTION_DUE_TRADED_DAYS = 10   # 2.9.34: reaction-due rank only for stocks that traded this recently
@@ -1847,6 +1853,11 @@ def _a0_subrank(event: dict[str, Any], last_session: date) -> int:
     return 2
 
 
+def _known_illiquid(event: dict[str, Any]) -> bool:
+    """Failed the liquidity test on stored prices. Unknown is not illiquid."""
+    return (((event.get("derived") or {}).get("plus") or {}).get("liquidity") or {}).get("pass") is False
+
+
 def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: date | None = None
                           ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Reserve slots: A up to ENRICH_SLOTS_DECLARED, B up to
@@ -1859,6 +1870,7 @@ def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: dat
     held = {str(r.get("symbol") or "").upper() for r in open_positions()} - {""}
     groups: dict[str, list[tuple[tuple, dict[str, Any]]]] = {"A": [], "B": [], "C": [], "D": []}
     tag: dict[int, str] = {}
+    urgent = 0
     for ev in candidates:
         g, rank = enrichment_group(ev, today, last_session, held)
         tag[id(ev)] = g
@@ -1868,7 +1880,12 @@ def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: dat
         eid = str(ev.get("eventId") or "")
         if g == "A":
             sub = _a0_subrank(ev, last_session) if rank == 0 else 0
-            key = (rank, sub, last, dist, eid)
+            # 2.9.38: among equally urgent rows, stocks that can be traded go
+            # first; an illiquid scrip's reaction can wait for a quiet run.
+            illiquid = rank == 0 and _known_illiquid(ev)
+            if rank < 0 or (rank == 0 and sub <= 1 and not illiquid):
+                urgent += 1
+            key = (rank, sub, illiquid, last, dist, eid)
         elif g in ("B", "C"):
             # Pure rotation, least recently enriched first. A result due now
             # jumps the queue only when not looked at for 3 h (the per-company
@@ -1886,7 +1903,8 @@ def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: dat
     c = [e for _, e in groups["C"]]
     d = [e for _, e in groups["D"]]
     cap = max(0, int(cap))
-    take_a = a[:min(ENRICH_SLOTS_DECLARED, cap)]
+    a_slots = ENRICH_SLOTS_DECLARED_SURGE if urgent > ENRICH_SLOTS_DECLARED else ENRICH_SLOTS_DECLARED
+    take_a = a[:min(a_slots, cap)]
     take_b = b[:min(ENRICH_SLOTS_UPCOMING, cap - len(take_a))]
     take_c = c[:cap - len(take_a) - len(take_b)]
     selected = take_a + take_b + take_c
@@ -1895,7 +1913,8 @@ def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: dat
     counts = {"declaredNeedsWork": len(a), "upcomingStale": len(b), "neverEnriched": len(c), "settled": len(d),
               "selectedDeclared": sum(1 for e in selected if tag[id(e)] == "A"),
               "selectedUpcoming": sum(1 for e in selected if tag[id(e)] == "B"),
-              "selectedNeverEnriched": sum(1 for e in selected if tag[id(e)] == "C")}
+              "selectedNeverEnriched": sum(1 for e in selected if tag[id(e)] == "C"),
+              "urgentDeclared": urgent}
     return selected, counts
 
 
@@ -3640,6 +3659,25 @@ def bootstrap_from_v1_intelligence(store: EventStore) -> int:
 # ---------------------------------------------------------------------------
 
 
+# 2.9.38: BSE announcement rows carry the scrip code but no short name.
+# Asking the exchange per row, per run cost 1,362 calls (~45 min) on 2 Nov and
+# spent the whole run budget before enrichment; codes already in the store never
+# need the call. A code is asked at most once a run, and only this many times.
+BSE_SCRIP_NAME_BUDGET = int(os.getenv("BSE_SCRIP_NAME_BUDGET", "60"))
+
+
+def bse_code_symbols(store: EventStore) -> dict[str, str]:
+    """BSE code -> BSE short name from the stored events. A code stored with
+    two different names is left out (the exchange is asked instead)."""
+    seen: dict[str, set[str]] = {}
+    for ev in store.all():
+        sec = ev.get("security") or {}
+        code, sym = str(sec.get("bseCode") or "").strip(), normalize_symbol(sec.get("bseSymbol"))
+        if code and sym:
+            seen.setdefault(code, set()).add(sym)
+    return {code: next(iter(names)) for code, names in seen.items() if len(names) == 1}
+
+
 def discover_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -> dict[str, Any]:
     stats = {"nseFilings": 0, "nseUpcoming": 0, "bseFilings": 0, "bseUpcoming": 0, "errors": []}
     now_naive = now_ist().replace(tzinfo=None)
@@ -3672,19 +3710,26 @@ def discover_events(store: EventStore, master: SymbolMaster, ctx: SourceContext)
             announcements, raw_ref = bse.result_announcements(
                 now_naive - timedelta(days=min(DISCOVERY_LOOKBACK_DAYS, 30)), now_naive
             )
+            known_codes = bse_code_symbols(store)
+            asked: set[str] = set()
             for item in announcements:
                 if not isinstance(item, dict):
                     continue
                 c = normalize_bse_announcement(item)
                 if c:
                     # Resolve missing BSE symbol if code exists.
-                    if not c["security"].get("symbol") and c["security"].get("bseCode"):
-                        try:
-                            name_payload, _ = bse.scrip_name(c["security"]["bseCode"], "DISCOVERY")
-                            c["security"]["symbol"] = normalize_symbol(name_payload)
-                            c["security"]["bseSymbol"] = c["security"]["symbol"]
-                        except Exception:
-                            pass
+                    code = str(c["security"].get("bseCode") or "")
+                    if not c["security"].get("symbol") and code:
+                        if code not in known_codes and code not in asked and len(asked) < BSE_SCRIP_NAME_BUDGET:
+                            asked.add(code)
+                            try:
+                                name_payload, _ = bse.scrip_name(code, "DISCOVERY")
+                                known_codes[code] = normalize_symbol(name_payload)
+                            except Exception:
+                                pass
+                        if known_codes.get(code):
+                            c["security"]["symbol"] = known_codes[code]
+                            c["security"]["bseSymbol"] = known_codes[code]
                     apply_discovery(store, master, c, raw_ref)
                     stats["bseFilings"] += 1
             calendar, raw_ref2 = bse.result_calendar(now_naive, now_naive + timedelta(days=UPCOMING_DAYS))
@@ -7131,7 +7176,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
-PLUS_VERSION = "2.9.28"   # bump to rebuild every stored chart/price analytic once
+PLUS_VERSION = "2.9.38"   # bump to rebuild every stored chart/price analytic once
 
 
 def replay_plus(store: EventStore) -> int:

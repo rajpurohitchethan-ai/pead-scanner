@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.37"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.38"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -458,6 +458,12 @@ def trade_plan(*, released: bool, reaction_traded: bool, quality_ok: bool | None
         return done("WATCH", "Base intact; no entry pattern yet (early, pullback or breakout).")
 
     entry = _r2(trigger)
+    if entry is not None and sl is not None and entry <= sl:
+        # 2.9.38: a trigger under the stop is no plan (IOC 2 Nov: gapped up on
+        # the reaction day, "pullback" trigger 130.15 from before the result,
+        # stop 131.18 under the result-day low: risk -0.79%).
+        plan["style"] = None
+        return done("WATCH", f"Base intact; no valid entry yet: the trigger {entry:,.2f} is under the stop {sl:,.2f}.")
     risk = _pct(entry, sl)
     plan.update({"entry": entry, "sl": sl, "riskPct": _r2(risk)})
     if risk is not None and risk > MAX_RISK_PCT:
@@ -820,6 +826,9 @@ def update_trade_log(log: dict[str, Any] | None, plan: dict[str, Any], last_pric
         t = log.get(key)
         if t and t.get("date") == today.isoformat() and not triggered:
             log.pop(key)
+        # 2.9.38: an entry logged with its stop at or above it was never a trade.
+        elif t and _num(t.get("entry")) is not None and _num(t.get("sl")) is not None and _num(t["entry"]) <= _num(t["sl"]):
+            log.pop(key)
     if triggered:
         key = stage.lower()
         if key not in log:
@@ -1112,6 +1121,9 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
         rs = d(it.get("reactionSession"))
         if rs and rs < today and (it.get("priceContext") or {}).get("resultDayPct") is None:
             overdue.append(it["symbol"])
+    add("Stop below entry on every published plan",
+        [it.get("symbol") for it in items if _num(it.get("entry")) is not None and _num(it.get("sl")) is not None
+         and _num(it["sl"]) >= _num(it["entry"])], fail=True)
     add("Reaction measured once the session has closed", [x for x in overdue if candidate(x)], fail=True)
     add("Reaction not measurable (no price history or illiquid)", [x for x in overdue if not candidate(x)],
         note="No usable prices for the reaction session; not a trade candidate.")

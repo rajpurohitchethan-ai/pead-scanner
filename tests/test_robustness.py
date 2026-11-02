@@ -2468,3 +2468,160 @@ class BseRenameDuplicateTests(unittest.TestCase):
             self.assertNotEqual(outdoor["eventId"], solar["eventId"])
             p.merge_duplicate_events(st)
         self.assertEqual(len(st.all()), 2)
+
+
+class BseScripNameCacheTests(unittest.TestCase):
+    """2 Nov 2026: discovery called getScripName once per BSE announcement
+    row (1,362 rows x ~2 s), every run. The 40-minute budget was gone before
+    enrichment started: 6 of 11 runs enriched 0 companies, so RELIANCE's and
+    251 other 2 Nov reactions were unmeasured at 21:00 IST and the BSE calendar
+    was never read."""
+
+    def _run(self, store, rows, calendar=()):
+        calls = []
+
+        class FakeBSE:
+            def __init__(self, ctx): pass
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def result_announcements(self, a, b): return rows, "raw"
+            def result_calendar(self, a, b): return list(calendar), "raw2"
+            def scrip_name(self, code, event_id):
+                calls.append(code)
+                return f"SYM{code}", "raw3"
+
+        class FakeNSE(FakeBSE):
+            def financial_results(self, a, b): return [], "r"
+            def board_meetings(self, a, b): return [], "r"
+
+        master = mock.Mock()
+        with mock.patch.object(p, "BSEAdapter", FakeBSE), mock.patch.object(p, "NSEAdapter", FakeNSE):
+            stats = p.discover_events(store, master, mock.Mock())
+        return calls, stats
+
+    def _row(self, code):
+        return {"SCRIP_CD": code, "NEWS_DT": "2026-10-31T18:00:00",
+                "HEADLINE": "Financial results for the quarter ended September 30, 2026",
+                "SLONGNAME": f"Company {code} Ltd"}
+
+    def test_known_codes_never_call_the_exchange(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = p.EventStore(Path(td) / "events")
+            store.save({"eventId": "E1", "security": {"bseCode": "500325", "bseSymbol": "RELIANCE", "name": "Company 500325 Ltd"},
+                        "period": {"end": "2026-09-30"}, "fields": {}})
+            calls, stats = self._run(store, [self._row("500325")] * 3)
+            self.assertEqual(calls, [])
+            self.assertEqual(stats["bseFilings"], 3)
+
+    def test_unknown_code_is_asked_once_per_run(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = p.EventStore(Path(td) / "events")
+            calls, _ = self._run(store, [self._row("111111"), self._row("111111")])
+            self.assertEqual(calls, ["111111"])
+
+    def test_lookups_are_capped_per_run(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = p.EventStore(Path(td) / "events")
+            rows = [self._row(str(100000 + i)) for i in range(p.BSE_SCRIP_NAME_BUDGET + 25)]
+            calls, stats = self._run(store, rows)
+            self.assertEqual(len(calls), p.BSE_SCRIP_NAME_BUDGET)
+            self.assertEqual(stats["bseFilings"], len(rows))   # rows beyond the cap still recorded
+
+
+class ReactionBacklogSurgeTests(unittest.TestCase):
+    """2 Nov 2026: 96 liquid reactions (RELIANCE, SUNPHARMA, NTPC ...) waited
+    among 254 due rows with 35 declared slots a run, least recently enriched
+    first, so illiquid names took slots ahead of them."""
+
+    def _ev(self, i, liquid=True, attempt="2026-11-02T05:00:00Z"):
+        return {"eventId": f"E{i:04d}", "period": {"end": "2026-09-30"},
+                "security": {"nseSymbol": f"S{i}", "exchangeSector": "Information Technology"},
+                "fields": {"result_date": {"value": "2026-10-30", "status": "OK"},
+                           "reaction_session": {"value": "2026-11-02", "status": "OK"},
+                           "results_released": {"value": True, "status": "OK"},
+                           "revenue_cr": {"value": 10.0, "status": "OK"}, "pat_cr": {"value": 1.0, "status": "OK"}},
+                "plus": {"price": {"last_session": "2026-10-30"}},
+                "derived": {"plus": {"liquidity": {"pass": liquid}}},
+                "fetch": {"PRICE_HISTORY": {"lastAttempt": attempt}}}
+
+    def _others(self):
+        """100 upcoming rows (B) and 40 never-enriched ones (C)."""
+        up = [{"eventId": f"U{i}", "period": {"end": "2026-09-30"}, "security": {"nseSymbol": f"U{i}"},
+               "fields": {"result_date": {"value": "2026-11-05", "status": "OK"}}} for i in range(100)]
+        never = [{"eventId": f"N{i}", "period": {"end": "2026-09-30"}, "security": {"nseSymbol": f"N{i}"},
+                  "fields": {"result_date": {"value": "2026-12-20", "status": "OK"}}} for i in range(40)]
+        return up + never
+
+    def _select(self, cands):
+        from datetime import datetime as _dt
+        now = _dt(2026, 11, 2, 21, 0, tzinfo=p.IST)
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            return p.select_for_enrichment(cands, 120, now.date())
+
+    def test_liquid_reactions_go_before_illiquid_ones(self):
+        illiquid = [self._ev(i, liquid=False, attempt="2026-11-01T05:00:00Z") for i in range(40)]
+        liquid = [self._ev(100 + i) for i in range(10)]
+        sel, _ = self._select(illiquid + liquid)
+        self.assertEqual({e["eventId"] for e in sel[:10]}, {e["eventId"] for e in liquid})
+
+    def test_backlog_borrows_slots_and_small_queue_does_not(self):
+        big = [self._ev(i) for i in range(p.ENRICH_SLOTS_DECLARED + 20)]
+        upcoming = self._others()
+        _, counts = self._select(big + upcoming)
+        self.assertEqual(counts["selectedDeclared"], p.ENRICH_SLOTS_DECLARED + 20)
+        self.assertLessEqual(counts["selectedDeclared"], p.ENRICH_SLOTS_DECLARED_SURGE)
+        self.assertEqual(counts["selectedUpcoming"], p.ENRICH_SLOTS_UPCOMING)
+        small = [self._ev(i) for i in range(p.ENRICH_SLOTS_DECLARED - 5)]
+        _, counts = self._select(small + upcoming)
+        self.assertEqual(counts["selectedDeclared"], p.ENRICH_SLOTS_DECLARED - 5)
+
+    def test_illiquid_backlog_alone_does_not_surge(self):
+        rows = [self._ev(i, liquid=False) for i in range(p.ENRICH_SLOTS_DECLARED + 40)]
+        _, counts = self._select(rows + self._others())
+        self.assertEqual(counts["selectedDeclared"], p.ENRICH_SLOTS_DECLARED)
+
+
+class StopAboveEntryTests(unittest.TestCase):
+    """2 Nov 2026: IOC gapped up on its reaction day; the "pullback" trigger was
+    the session before the result (130.15) while the stop, 1% under the
+    result-day low, was 131.18: a published plan with its stop ABOVE its entry
+    (riskPct -0.79). Radar graded it B. SADHNANIQ the same (2.23 / 2.32)."""
+
+    def _plan(self, day_before_high=130.15, low=132.51):
+        import pead_plus as pp
+        x = {"ema10": 130.98, "ema21": 134.0, "ema63": 128.0, "sessions_since_reaction": 0,
+             "reaction_close": 134.6, "reclaimed_prev_high": True, "day_before_high": day_before_high,
+             "prev_session_high": 136.4, "base_broken": False}
+        return pp.trade_plan(released=True, reaction_traded=True, quality_ok=True, x=x, last_price=134.6,
+                             result_return=2.0, rvol=1.5, result_low=low, result_high=136.4)
+
+    def test_stop_at_or_above_entry_publishes_no_levels(self):
+        plan = self._plan()
+        self.assertEqual(plan["signal"], "WATCH")
+        self.assertIsNone(plan["entry"])
+        self.assertIsNone(plan["sl"])
+        self.assertIsNone(plan["riskPct"])
+
+    def test_valid_pullback_keeps_its_levels(self):
+        plan = self._plan(day_before_high=133.5, low=132.51)
+        self.assertEqual(plan["signal"], "ENTRY_PULLBACK")
+        self.assertEqual(plan["entry"], 133.5)
+        self.assertLess(plan["sl"], plan["entry"])
+
+    def test_logged_impossible_entry_is_dropped(self):
+        from datetime import date as _d
+        import pead_plus as pp
+        log = {"full": {"date": "2026-10-29", "entry": 2.23, "sl": 2.32, "signal": "ENTRY_PULLBACK", "minSeen": 2.34}}
+        out = pp.update_trade_log(log, {"signal": "WATCH"}, 2.34, _d(2026, 11, 2))
+        self.assertNotIn("full", out)
+        good = {"full": {"date": "2026-10-29", "entry": 3.0, "sl": 2.5, "signal": "ENTRY_PULLBACK", "minSeen": 3.0}}
+        self.assertIn("full", pp.update_trade_log(good, {"signal": "WATCH"}, 3.1, _d(2026, 11, 2)))
+
+    def test_self_audit_fails_a_stop_above_entry(self):
+        from datetime import date as _d
+        import pead_plus as pp
+        items = [{"symbol": "X", "resultsReleased": True, "entry": 130.15, "sl": 131.18, "plus": {}, "priceContext": {}, "fundamentalSnapshot": {}}]
+        audit = pp.self_audit(items, {}, {}, _d(2026, 11, 2))
+        chk = [c for c in audit["checks"] if c["check"] == "Stop below entry on every published plan"]
+        self.assertEqual(chk[0]["status"], "FAIL")
+        self.assertEqual(chk[0]["examples"], ["X"])
