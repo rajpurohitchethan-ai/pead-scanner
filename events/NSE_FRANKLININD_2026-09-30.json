@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:FRANKLININD|2026-09-30",
   "createdAt": "2026-10-28T03:56:20Z",
-  "updatedAt": "2026-11-02T14:48:02Z",
+  "updatedAt": "2026-11-02T16:28:25Z",
   "security": {
     "symbol": "FRANKLININD",
     "bseSymbol": "FRANKLININD",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,16 +30,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-28T03:56:20Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-02T15:56:07Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-02T16:28:25Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-02",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-02T05:45:50Z",
+      "fetchedAt": "2026-11-02T15:56:14Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-fa4092e07e72c6db.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3c83cf54749b2651.json",
       "note": null
     },
     "reaction_session": {
@@ -167,6 +177,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_FRANKLININD_2026-09-30/scrip_results-3a00eddcbb0c2e84.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-02T15:56:07Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3c83cf54749b2651.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-02T19:27:14.440000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-02T15:56:07Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3c83cf54749b2651.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-02T15:56:07Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3c83cf54749b2651.json",
+      "note": null
     }
   },
   "fetch": {
@@ -208,23 +245,29 @@
   },
   "derived": {
     "score": 13,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -232,13 +275,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -281,11 +324,11 @@
       "sector": {
         "sector": "Services",
         "stocks": 183,
-        "momentum63dMedian": -3.48,
-        "relativeToMarket": 3.49,
+        "momentum63dMedian": -3.49,
+        "relativeToMarket": 3.57,
         "declared": 25,
         "strongResults": 8,
-        "avgReaction": -1.88,
+        "avgReaction": -1.75,
         "tailwind": "POSITIVE"
       },
       "identity": {
@@ -660,8 +703,23 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-11-02T14:40:42Z",
-    "plusVersion": "2.9.28",
+    "computedAt": "2026-11-02T16:27:26Z",
+    "replayedFromRaw": true,
+    "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-02T19:27:14.440000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Submission of Financial Results for the Quarter and Half year ended 30th September, 2026 Franklin Industries Ltd - 540190 - Outcome Of Board Meeting Held Today I.E., Monday, 2Nd November, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3c83cf54749b2651.json",
+      "seenAt": "2026-11-02T16:19:38Z"
+    }
+  ]
 }

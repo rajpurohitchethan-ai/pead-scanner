@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:INDPRUD|2026-09-30",
   "createdAt": "2026-10-23T02:50:49Z",
-  "updatedAt": "2026-11-02T14:48:02Z",
+  "updatedAt": "2026-11-02T16:28:25Z",
   "security": {
     "symbol": "INDPRUD",
     "bseSymbol": "INDPRUD",
@@ -39,10 +39,10 @@
     "result_date": {
       "value": "2026-11-11",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-02T05:45:52Z",
+      "fetchedAt": "2026-11-02T15:56:16Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-fa4092e07e72c6db.json",
+      "rawRef": "raw/bse/DISCOVERY/result_calendar-6886079bcd6e9d4a.json",
       "note": null
     },
     "reaction_session": {
@@ -67,28 +67,34 @@
       "value": -1.68,
       "source": "NSE_PRICE",
       "fetchedAt": "2026-10-23T03:46:44Z",
-      "status": "OK",
+      "status": "REVOKED",
       "rank": 105,
       "rawRef": "raw/nse_price/NSE_INDPRUD_2026-09-30/equity_history-ce8e6f1f9f994895.json",
-      "note": null
+      "note": null,
+      "revokedAt": "2026-11-02T16:27:39Z",
+      "revokedReason": "no trades in the sessions before the result"
     },
     "pre_result_10d_pct": {
       "value": -3.33,
       "source": "NSE_PRICE",
       "fetchedAt": "2026-10-23T03:46:44Z",
-      "status": "OK",
+      "status": "REVOKED",
       "rank": 105,
       "rawRef": "raw/nse_price/NSE_INDPRUD_2026-09-30/equity_history-ce8e6f1f9f994895.json",
-      "note": null
+      "note": null,
+      "revokedAt": "2026-11-02T16:27:39Z",
+      "revokedReason": "no trades in the sessions before the result"
     },
     "pre_result_20d_pct": {
       "value": -2.84,
       "source": "NSE_PRICE",
       "fetchedAt": "2026-10-23T03:46:44Z",
-      "status": "OK",
+      "status": "REVOKED",
       "rank": 105,
       "rawRef": "raw/nse_price/NSE_INDPRUD_2026-09-30/equity_history-ce8e6f1f9f994895.json",
-      "note": null
+      "note": null,
+      "revokedAt": "2026-11-02T16:27:39Z",
+      "revokedReason": "no trades in the sessions before the result"
     },
     "distance_52w_high_pct": {
       "value": -12.3,
@@ -252,14 +258,14 @@
     }
   },
   "derived": {
-    "score": 21,
-    "completenessPct": 100.0,
+    "score": 6,
+    "completenessPct": 66.7,
     "completeness": {
-      "present": 3,
+      "present": 2,
       "required": 3
     },
     "resultReality": "AWAITING RESULT",
-    "expectationReality": "LOW EXPECTATIONS",
+    "expectationReality": "AWAITING PRICE HISTORY",
     "priceResponse": "AWAITING RESULT",
     "valuationReality": "FAIR",
     "verdict": "AWAIT RESULT — WATCHLIST",
@@ -275,8 +281,12 @@
       "live": null,
       "strength": null,
       "q1Strength": null,
-      "q1Setup": null,
-      "bucket": null,
+      "q1Setup": false,
+      "bucket": {
+        "code": "WATCH_FRESH",
+        "label": "Watch: fresh",
+        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+      },
       "plan": {
         "signal": "WAIT_RESULT",
         "why": "Results not declared yet.",
@@ -322,11 +332,11 @@
       "sector": {
         "sector": "Financial Services",
         "stocks": 351,
-        "momentum63dMedian": -8.47,
-        "relativeToMarket": -1.5,
+        "momentum63dMedian": -8.8,
+        "relativeToMarket": -1.74,
         "declared": 115,
-        "strongResults": 71,
-        "avgReaction": -1.43,
+        "strongResults": 72,
+        "avgReaction": -1.35,
         "tailwind": "POSITIVE"
       },
       "identity": {
@@ -354,6 +364,12 @@
         "low_52w": 6081.0,
         "last_session": "2026-10-22",
         "atr14": 131.25,
+        "q1_reaction_date": "2026-08-07",
+        "q1_reaction_return_pct": -1.89,
+        "q1_reaction_rvol": 3.4,
+        "q1_return_to_q2_pct": -5.83,
+        "q1_max_gain_pct": -0.27,
+        "q1_sustained": false,
         "breakout_recent": false,
         "breakout_failed": null,
         "nh52_recent": null,
@@ -389,10 +405,8 @@
       }
     },
     "valuationInputCount": 2,
-    "expectationFullWindow": true,
-    "reasons": [
-      "Low pre-result expectation: 20D move -2.8%."
-    ],
+    "expectationFullWindow": false,
+    "reasons": [],
     "risks": [
       "20D average turnover ₹7.0 lakh/day is thin.",
       "Illiquid: ₹0.07 Cr/day."
@@ -424,6 +438,12 @@
       "low_52w": 6081.0,
       "last_session": "2026-10-22",
       "atr14": 131.25,
+      "q1_reaction_date": "2026-08-07",
+      "q1_reaction_return_pct": -1.89,
+      "q1_reaction_rvol": 3.4,
+      "q1_return_to_q2_pct": -5.83,
+      "q1_max_gain_pct": -0.27,
+      "q1_sustained": false,
       "breakout_recent": false,
       "breakout_failed": null,
       "nh52_recent": null,
@@ -684,8 +704,9 @@
       ]
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-10-23T03:46:44Z",
-    "plusVersion": "2.9.28",
+    "computedAt": "2026-11-02T16:27:39Z",
+    "replayedFromRaw": true,
+    "plusVersion": "2.9.38",
     "corporateActions": null
   },
   "nseResultListing": {

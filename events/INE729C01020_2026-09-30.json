@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE729C01020|2026-09-30",
   "createdAt": "2026-10-23T02:50:49Z",
-  "updatedAt": "2026-11-02T14:48:01Z",
+  "updatedAt": "2026-11-02T16:28:24Z",
   "security": {
     "symbol": "PURSHOTTAM",
     "bseSymbol": "PURSHOTTAM",
@@ -37,10 +37,10 @@
     "result_date": {
       "value": "2026-11-04",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-02T05:45:51Z",
+      "fetchedAt": "2026-11-02T15:56:15Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-fa4092e07e72c6db.json",
+      "rawRef": "raw/bse/DISCOVERY/result_calendar-6886079bcd6e9d4a.json",
       "note": null
     },
     "reaction_session": {
@@ -65,28 +65,34 @@
       "value": -8.65,
       "source": "BSE_PRICE",
       "fetchedAt": "2026-10-23T03:03:22Z",
-      "status": "OK",
+      "status": "REVOKED",
       "rank": 105,
       "rawRef": "raw/bse_price/INE729C01020_2026-09-30/price_volume_12m-17edd80741c40af8.json",
-      "note": null
+      "note": null,
+      "revokedAt": "2026-11-02T16:25:34Z",
+      "revokedReason": "no trades in the sessions before the result"
     },
     "pre_result_10d_pct": {
       "value": 6.92,
       "source": "BSE_PRICE",
       "fetchedAt": "2026-10-23T03:03:22Z",
-      "status": "OK",
+      "status": "REVOKED",
       "rank": 105,
       "rawRef": "raw/bse_price/INE729C01020_2026-09-30/price_volume_12m-17edd80741c40af8.json",
-      "note": null
+      "note": null,
+      "revokedAt": "2026-11-02T16:25:34Z",
+      "revokedReason": "no trades in the sessions before the result"
     },
     "pre_result_20d_pct": {
       "value": 11.88,
       "source": "BSE_PRICE",
       "fetchedAt": "2026-10-23T03:03:22Z",
-      "status": "OK",
+      "status": "REVOKED",
       "rank": 105,
       "rawRef": "raw/bse_price/INE729C01020_2026-09-30/price_volume_12m-17edd80741c40af8.json",
-      "note": null
+      "note": null,
+      "revokedAt": "2026-11-02T16:25:34Z",
+      "revokedReason": "no trades in the sessions before the result"
     },
     "distance_52w_high_pct": {
       "value": -13.28,
@@ -191,14 +197,14 @@
     }
   },
   "derived": {
-    "score": 6,
-    "completenessPct": 66.7,
+    "score": 2,
+    "completenessPct": 33.3,
     "completeness": {
-      "present": 2,
+      "present": 1,
       "required": 3
     },
     "resultReality": "AWAITING RESULT",
-    "expectationReality": "PARTLY PRICED",
+    "expectationReality": "AWAITING PRICE HISTORY",
     "priceResponse": "AWAITING RESULT",
     "valuationReality": "FAIR",
     "verdict": "AWAIT RESULT — WATCHLIST",
@@ -214,8 +220,12 @@
       "live": null,
       "strength": null,
       "q1Strength": null,
-      "q1Setup": null,
-      "bucket": null,
+      "q1Setup": false,
+      "bucket": {
+        "code": "WATCH_FRESH",
+        "label": "Watch: fresh",
+        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+      },
       "plan": {
         "signal": "WAIT_RESULT",
         "why": "Results not declared yet.",
@@ -261,11 +271,11 @@
       "sector": {
         "sector": "Financial Services",
         "stocks": 351,
-        "momentum63dMedian": -8.47,
-        "relativeToMarket": -1.5,
+        "momentum63dMedian": -8.8,
+        "relativeToMarket": -1.74,
         "declared": 115,
-        "strongResults": 71,
-        "avgReaction": -1.43,
+        "strongResults": 72,
+        "avgReaction": -1.35,
         "tailwind": "POSITIVE"
       },
       "identity": {
@@ -293,6 +303,12 @@
         "low_52w": 31.15,
         "last_session": "2026-10-22",
         "atr14": 2.83,
+        "q1_reaction_date": "2026-08-13",
+        "q1_reaction_return_pct": -4.93,
+        "q1_reaction_rvol": 1.78,
+        "q1_return_to_q2_pct": 2.65,
+        "q1_max_gain_pct": 12.37,
+        "q1_sustained": true,
         "breakout_recent": true,
         "breakout_failed": true,
         "nh52_recent": false,
@@ -328,7 +344,7 @@
       }
     },
     "valuationInputCount": 2,
-    "expectationFullWindow": true,
+    "expectationFullWindow": false,
     "reasons": [],
     "risks": [
       "20D average turnover ₹8.7 lakh/day is thin.",
@@ -360,6 +376,12 @@
       "low_52w": 31.15,
       "last_session": "2026-10-22",
       "atr14": 2.83,
+      "q1_reaction_date": "2026-08-13",
+      "q1_reaction_return_pct": -4.93,
+      "q1_reaction_rvol": 1.78,
+      "q1_return_to_q2_pct": 2.65,
+      "q1_max_gain_pct": 12.37,
+      "q1_sustained": true,
       "breakout_recent": true,
       "breakout_failed": true,
       "nh52_recent": false,
@@ -620,8 +642,9 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-23T03:03:22Z",
-    "plusVersion": "2.9.28",
+    "computedAt": "2026-11-02T16:25:34Z",
+    "replayedFromRaw": true,
+    "plusVersion": "2.9.38",
     "corporateActions": null
   },
   "tradeLog": {}

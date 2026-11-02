@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:GSLTD|2026-09-30",
   "createdAt": "2026-10-29T03:57:53Z",
-  "updatedAt": "2026-11-02T14:48:02Z",
+  "updatedAt": "2026-11-02T16:28:25Z",
   "security": {
     "symbol": "GSLTD",
     "bseSymbol": "GSLTD",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,16 +30,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-29T03:57:53Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-02T15:56:07Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-02T16:28:25Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-02",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-02T05:45:50Z",
+      "fetchedAt": "2026-11-02T15:56:14Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-fa4092e07e72c6db.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3c83cf54749b2651.json",
       "note": null
     },
     "reaction_session": {
@@ -167,6 +177,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_GSLTD_2026-09-30/scrip_results-daefd7f3873eb082.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-02T15:56:07Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3c83cf54749b2651.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-02T18:58:20.170000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-02T15:56:07Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3c83cf54749b2651.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-02T15:56:07Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3c83cf54749b2651.json",
+      "note": null
     }
   },
   "fetch": {
@@ -193,33 +230,43 @@
   },
   "derived": {
     "score": 1,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "EXPENSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
-      "q1Setup": null,
-      "bucket": null,
+      "q1Setup": false,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -262,11 +309,11 @@
       "sector": {
         "sector": "Fast Moving Consumer Goods",
         "stocks": 159,
-        "momentum63dMedian": -8.01,
-        "relativeToMarket": -1.04,
-        "declared": 39,
+        "momentum63dMedian": -7.82,
+        "relativeToMarket": -0.76,
+        "declared": 38,
         "strongResults": 12,
-        "avgReaction": -2.87,
+        "avgReaction": -2.8,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -294,6 +341,12 @@
         "low_52w": 13.64,
         "last_session": "2026-10-29",
         "atr14": 1.29,
+        "q1_reaction_date": "2026-08-17",
+        "q1_reaction_return_pct": -4.98,
+        "q1_reaction_rvol": 1.72,
+        "q1_return_to_q2_pct": -2.66,
+        "q1_max_gain_pct": 1.82,
+        "q1_sustained": true,
         "breakout_recent": true,
         "breakout_failed": false,
         "nh52_recent": true,
@@ -363,6 +416,12 @@
       "low_52w": 13.64,
       "last_session": "2026-10-29",
       "atr14": 1.29,
+      "q1_reaction_date": "2026-08-17",
+      "q1_reaction_return_pct": -4.98,
+      "q1_reaction_rvol": 1.72,
+      "q1_return_to_q2_pct": -2.66,
+      "q1_max_gain_pct": 1.82,
+      "q1_sustained": true,
       "breakout_recent": true,
       "breakout_failed": false,
       "nh52_recent": true,
@@ -623,8 +682,23 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-10-29T14:44:11Z",
-    "plusVersion": "2.9.28",
+    "computedAt": "2026-11-02T16:27:30Z",
+    "replayedFromRaw": true,
+    "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-02T18:58:20.170000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial results for Quarter and Half year ended 30th September 2026. Galaxy Supermarket Ltd-$ - 506186 - Unaudited Financial Results For Quarter And Half Year Ended 30Th September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-3c83cf54749b2651.json",
+      "seenAt": "2026-11-02T16:19:38Z"
+    }
+  ]
 }
