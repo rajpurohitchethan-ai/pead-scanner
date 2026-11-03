@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE234A01025|2026-09-30",
   "createdAt": "2026-10-07T04:24:35Z",
-  "updatedAt": "2026-11-03T13:25:04Z",
+  "updatedAt": "2026-11-03T14:38:58Z",
   "security": {
     "symbol": "NOVARTIND",
     "bseSymbol": "NOVARTIND",
@@ -21,7 +21,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -142,16 +142,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:14Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T14:24:47Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T14:38:58Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T13:10:58Z",
+      "fetchedAt": "2026-11-03T14:24:55Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7c5dcb0228b99284.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-83bd0e5bc23470ea.json",
       "note": null
     },
     "reaction_session": {
@@ -279,6 +289,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE234A01025_2026-09-30/scrip_results-08469dfb4fd93677.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T14:24:47Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-83bd0e5bc23470ea.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T19:23:30.190000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T14:24:47Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-83bd0e5bc23470ea.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T14:24:47Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-83bd0e5bc23470ea.json",
+      "note": null
     }
   },
   "fetch": {
@@ -327,23 +364,29 @@
   },
   "derived": {
     "score": 13,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -351,13 +394,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -401,8 +444,8 @@
         "sector": "Healthcare",
         "stocks": 168,
         "momentum63dMedian": -3.12,
-        "relativeToMarket": 3.89,
-        "declared": 56,
+        "relativeToMarket": 3.88,
+        "declared": 60,
         "strongResults": 32,
         "avgReaction": 0.73,
         "tailwind": "POSITIVE"
@@ -836,6 +879,20 @@
       "timestamp": "2026-11-03T12:01:11Z",
       "price": 1719.85,
       "source": "BSE_PRICE"
+    }
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T19:23:30.190000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial Results for the Quarter and half year ended as on September 30, 2026 Evonile Pharma Ltd - 500672 - Unaudited Financial Results For The Quarter And Half Year Ended As On September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-83bd0e5bc23470ea.json",
+      "seenAt": "2026-11-03T14:38:44Z"
     }
   ]
 }

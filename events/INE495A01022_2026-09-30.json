@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE495A01022|2026-09-30",
   "createdAt": "2026-10-23T06:49:42Z",
-  "updatedAt": "2026-11-03T13:25:04Z",
+  "updatedAt": "2026-11-03T14:38:59Z",
   "security": {
     "symbol": "DALMIASUG",
     "nseSymbol": "DALMIASUG",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-24T02:51:05Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T14:24:48Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T14:38:59Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T13:10:58Z",
+      "fetchedAt": "2026-11-03T14:24:55Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7c5dcb0228b99284.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-83bd0e5bc23470ea.json",
       "note": null
     },
     "reaction_session": {
@@ -235,6 +245,33 @@
       "rank": 88,
       "rawRef": "raw/bse/INE495A01022_2026-09-30/equity_meta-88c4e3b4b071301c.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T14:24:48Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-83bd0e5bc23470ea.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T19:07:19.917000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T14:24:48Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-83bd0e5bc23470ea.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T14:24:48Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-83bd0e5bc23470ea.json",
+      "note": null
     }
   },
   "fetch": {
@@ -290,23 +327,29 @@
   },
   "derived": {
     "score": 28,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -314,13 +357,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -363,9 +406,9 @@
       "sector": {
         "sector": "Fast Moving Consumer Goods",
         "stocks": 177,
-        "momentum63dMedian": -7.68,
-        "relativeToMarket": -0.66,
-        "declared": 41,
+        "momentum63dMedian": -7.82,
+        "relativeToMarket": -0.81,
+        "declared": 42,
         "strongResults": 15,
         "avgReaction": -1.36,
         "tailwind": "NEUTRAL"
@@ -836,5 +879,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:DALMIASUG|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T19:07:19.917000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Outcome of the Board Meeting for the Unaudited Financial Results for the quarter and Half year ended September 30, 2026 prepared on Standalone and Consolidated basis. Dalmia Bharat Sugar and Industries Ltd - 500097 - Outcome Of The Board Meeting Pursuant To Regulation 30 Of The SEBI (Listing Obligat",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-83bd0e5bc23470ea.json",
+      "seenAt": "2026-11-03T14:38:47Z"
+    }
   ]
 }
