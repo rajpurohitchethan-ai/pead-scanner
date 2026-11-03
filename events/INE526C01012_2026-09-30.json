@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE526C01012|2026-09-30",
   "createdAt": "2026-10-27T03:32:08Z",
-  "updatedAt": "2026-11-03T11:18:00Z",
+  "updatedAt": "2026-11-03T12:05:30Z",
   "security": {
     "symbol": "NIKKIGL",
     "bseSymbol": "NIKKIGL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-27T03:32:08Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T11:58:10Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T12:05:30Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T11:04:39Z",
+      "fetchedAt": "2026-11-03T11:58:17Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-dfbd65d6f92daa64.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-e5be16b5cfa80adb.json",
       "note": null
     },
     "reaction_session": {
@@ -159,6 +169,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE526C01012_2026-09-30/scrip_results-5c47b27f23cbe7de.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:58:10Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-e5be16b5cfa80adb.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T17:08:57.590000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:58:10Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-e5be16b5cfa80adb.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:58:10Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-e5be16b5cfa80adb.json",
+      "note": null
     }
   },
   "fetch": {
@@ -200,23 +237,29 @@
   },
   "derived": {
     "score": 16,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -224,13 +267,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -274,10 +317,10 @@
         "sector": "Financial Services",
         "stocks": 394,
         "momentum63dMedian": -8.4,
-        "relativeToMarket": -1.43,
-        "declared": 119,
+        "relativeToMarket": -1.41,
+        "declared": 121,
         "strongResults": 74,
-        "avgReaction": -1.24,
+        "avgReaction": -1.2,
         "tailwind": "POSITIVE"
       },
       "identity": {
@@ -660,5 +703,19 @@
     "computedAt": "2026-11-03T11:15:04Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T17:08:57.590000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "OUTCOME OF THE BM FOR UN AUDITED FINANCIAL RESULTS FOR THE PERIOD ENDED ON 30.09.2026. Nikki Global Finance Ltd - 531272 - OUTCOME OF THE BOARD MEETING FOR APPROVAL OF UNAUDITED FINANCIAL RESULTS FOR THE PERIOD 30.09.2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-e5be16b5cfa80adb.json",
+      "seenAt": "2026-11-03T12:05:19Z"
+    }
+  ]
 }

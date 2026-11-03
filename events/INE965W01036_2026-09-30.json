@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE965W01036|2026-09-30",
   "createdAt": "2026-10-27T07:15:31Z",
-  "updatedAt": "2026-11-03T11:18:01Z",
+  "updatedAt": "2026-11-03T12:05:31Z",
   "security": {
     "symbol": "BMWVENTLTD",
     "nseSymbol": "BMWVENTLTD",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-28T03:56:20Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T11:58:10Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T12:05:31Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T11:04:39Z",
+      "fetchedAt": "2026-11-03T11:58:17Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-dfbd65d6f92daa64.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-e5be16b5cfa80adb.json",
       "note": null
     },
     "reaction_session": {
@@ -216,6 +226,33 @@
       "rank": 88,
       "rawRef": "raw/bse/INE965W01036_2026-09-30/equity_meta-219186970c28eb77.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:58:10Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-e5be16b5cfa80adb.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T17:23:25.433000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:58:10Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-e5be16b5cfa80adb.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:58:10Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-e5be16b5cfa80adb.json",
+      "note": null
     }
   },
   "fetch": {
@@ -264,23 +301,29 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PRICED IN",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -288,13 +331,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -337,11 +380,11 @@
       "sector": {
         "sector": "Metals & Mining",
         "stocks": 75,
-        "momentum63dMedian": -7.88,
-        "relativeToMarket": -0.91,
-        "declared": 15,
+        "momentum63dMedian": -8.68,
+        "relativeToMarket": -1.68,
+        "declared": 16,
         "strongResults": 6,
-        "avgReaction": -0.19,
+        "avgReaction": -1.06,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -787,5 +830,19 @@
   },
   "mergedFrom": [
     "NSE:BMWVENTLTD|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T17:23:25.433000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Result for September 30,2026 BMW Ventures Ltd - 544543 - Unaudited Result For September 30,2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-e5be16b5cfa80adb.json",
+      "seenAt": "2026-11-03T12:05:23Z"
+    }
   ]
 }
