@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0YD401026|2026-09-30",
   "createdAt": "2026-10-29T07:02:11Z",
-  "updatedAt": "2026-11-03T06:23:34Z",
+  "updatedAt": "2026-11-03T07:38:54Z",
   "security": {
     "symbol": "JAINREC",
     "nseSymbol": "JAINREC",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-30T04:08:58Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T07:18:27Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T07:38:54Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T06:03:39Z",
+      "fetchedAt": "2026-11-03T07:18:33Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-97e0c3259b146e86.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-19aaee2f4b5bf7ec.json",
       "note": null
     },
     "reaction_session": {
@@ -216,6 +226,33 @@
       "rank": 88,
       "rawRef": "raw/bse/INE0YD401026_2026-09-30/equity_meta-6b7ecdc06e26f079.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T07:18:27Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-19aaee2f4b5bf7ec.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T12:19:12.777000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T07:18:27Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-19aaee2f4b5bf7ec.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T07:18:27Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-19aaee2f4b5bf7ec.json",
+      "note": null
     }
   },
   "fetch": {
@@ -271,23 +308,29 @@
   },
   "derived": {
     "score": 28,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -295,13 +338,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -343,10 +386,10 @@
       "sectorKey": "Metals & Mining",
       "sector": {
         "sector": "Metals & Mining",
-        "stocks": 75,
-        "momentum63dMedian": -7.88,
-        "relativeToMarket": -0.9,
-        "declared": 13,
+        "stocks": 74,
+        "momentum63dMedian": -7.84,
+        "relativeToMarket": -0.88,
+        "declared": 15,
         "strongResults": 5,
         "avgReaction": -0.19,
         "tailwind": "NEUTRAL"
@@ -828,5 +871,19 @@
   },
   "mergedFrom": [
     "NSE:JAINREC|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T12:19:12.777000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial Results for the quarter and half year ended September 30, 2026. Jain Resource Recycling Ltd - 544537 -  Financial Results For The Quarter And Half Year Ended September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-19aaee2f4b5bf7ec.json",
+      "seenAt": "2026-11-03T07:38:38Z"
+    }
   ]
 }
