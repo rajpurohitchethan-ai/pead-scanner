@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:VISTARAMAR|2026-09-30",
   "createdAt": "2026-10-27T03:32:08Z",
-  "updatedAt": "2026-11-03T10:19:57Z",
+  "updatedAt": "2026-11-03T11:18:02Z",
   "security": {
     "symbol": "VISTARAMAR",
     "bseSymbol": "VISTARAMAR",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,16 +30,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-27T03:32:08Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T11:04:31Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T11:18:02Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T10:04:26Z",
+      "fetchedAt": "2026-11-03T11:04:31Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-174020aa131d8e2d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
       "note": null
     },
     "reaction_session": {
@@ -167,6 +177,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_VISTARAMAR_2026-09-30/scrip_results-4c4e66eb782b62eb.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T15:35:41.740000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": null
     }
   },
   "fetch": {
@@ -208,23 +245,29 @@
   },
   "derived": {
     "score": 7,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -232,13 +275,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_REPEAD",
-        "label": "Watch: re-PEAD",
-        "why": "Q1 setup faded. Strong Q2 could restart the drift."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -281,11 +324,11 @@
       "sector": {
         "sector": "Fast Moving Consumer Goods",
         "stocks": 176,
-        "momentum63dMedian": -7.57,
-        "relativeToMarket": -0.6,
+        "momentum63dMedian": -7.78,
+        "relativeToMarket": -0.81,
         "declared": 41,
         "strongResults": 15,
-        "avgReaction": -2.51,
+        "avgReaction": -2.33,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -661,5 +704,19 @@
     "computedAt": "2026-11-03T04:11:49Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T15:35:41.740000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Pursuant to Regulation 33 of SEBI (LODR) regulations, 2015, we are enclosing herewith following documents for the quarter and half year ended 30th September, 2026:\r\n\r\n1) Un-audited Financial .... Vistar Amar Ltd - 538565 - Results - Financial Result For September 30, 2026 Pursuant to Regulation 33 o",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "seenAt": "2026-11-03T11:17:54Z"
+    }
+  ]
 }

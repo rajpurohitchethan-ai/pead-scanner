@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE267E01019|2026-09-30",
   "createdAt": "2026-10-29T03:57:54Z",
-  "updatedAt": "2026-11-03T10:19:54Z",
+  "updatedAt": "2026-11-03T11:17:59Z",
   "security": {
     "symbol": "LIBORD",
     "bseSymbol": "LIBORD",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-29T03:57:54Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T11:04:31Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T11:17:59Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T10:04:26Z",
+      "fetchedAt": "2026-11-03T11:04:39Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-174020aa131d8e2d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
       "note": null
     },
     "reaction_session": {
@@ -159,6 +169,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE267E01019_2026-09-30/scrip_results-a4d1e49733a3f20f.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T16:14:21.330000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": null
     }
   },
   "fetch": {
@@ -199,33 +236,43 @@
   },
   "derived": {
     "score": 13,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -267,10 +314,10 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 393,
-        "momentum63dMedian": -8.47,
-        "relativeToMarket": -1.5,
-        "declared": 118,
+        "stocks": 394,
+        "momentum63dMedian": -8.4,
+        "relativeToMarket": -1.43,
+        "declared": 119,
         "strongResults": 74,
         "avgReaction": -1.24,
         "tailwind": "POSITIVE"
@@ -633,5 +680,19 @@
     "computedAt": "2026-11-03T07:28:47Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T16:14:21.330000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Pursuant to the requirements of Regulation 30 (read with part A of Schedule III) and Regulation 33 of SEBI (LODR) Regulations, 2015, this is to inform you that the Board of Directors of .... Libord Securities Ltd - 531027 - Results - Financial Results For Sep 30, 2026 Pursuant to the requirements of",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "seenAt": "2026-11-03T11:17:45Z"
+    }
+  ]
 }

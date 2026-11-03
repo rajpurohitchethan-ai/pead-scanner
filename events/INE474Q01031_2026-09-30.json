@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE474Q01031|2026-09-30",
   "createdAt": "2026-10-22T11:42:01Z",
-  "updatedAt": "2026-11-03T10:19:55Z",
+  "updatedAt": "2026-11-03T11:18:00Z",
   "security": {
     "symbol": "MEDANTA",
     "nseSymbol": "MEDANTA",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-23T02:50:49Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T11:04:31Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T11:18:00Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T10:04:26Z",
+      "fetchedAt": "2026-11-03T11:04:39Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-174020aa131d8e2d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
       "note": null
     },
     "reaction_session": {
@@ -234,6 +244,33 @@
       "rank": 88,
       "rawRef": "raw/bse/INE474Q01031_2026-09-30/equity_meta-b07927146c9c40ce.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T16:11:06.067000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": null
     }
   },
   "fetch": {
@@ -288,24 +325,30 @@
     }
   },
   "derived": {
-    "score": 36,
-    "completenessPct": 100.0,
+    "score": 33,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -313,13 +356,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -361,13 +404,13 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 167,
-        "momentum63dMedian": -2.98,
-        "relativeToMarket": 3.99,
-        "declared": 52,
+        "stocks": 168,
+        "momentum63dMedian": -3.01,
+        "relativeToMarket": 3.96,
+        "declared": 54,
         "strongResults": 32,
         "avgReaction": 0.84,
-        "tailwind": "STRONG"
+        "tailwind": "POSITIVE"
       },
       "identity": {
         "macroSector": "Healthcare",
@@ -437,8 +480,7 @@
     "valuationInputCount": 2,
     "expectationFullWindow": true,
     "reasons": [
-      "Low pre-result expectation: 20D move -4.3%.",
-      "Sector tailwind: Healthcare peers are outperforming."
+      "Low pre-result expectation: 20D move -4.3%."
     ],
     "risks": []
   },
@@ -852,5 +894,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:MEDANTA|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T16:11:06.067000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Results for the Quarter and Half Year ended September 30, 2026 Global Health Ltd - 543654 - Results For The Quarter & Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "seenAt": "2026-11-03T11:17:48Z"
+    }
   ]
 }

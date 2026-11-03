@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:AVI|2026-09-30",
   "createdAt": "2026-10-23T02:50:48Z",
-  "updatedAt": "2026-11-03T10:19:56Z",
+  "updatedAt": "2026-11-03T11:18:01Z",
   "security": {
     "symbol": "AVI",
     "bseSymbol": "AVI",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,16 +30,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-23T02:50:48Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T11:04:31Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T11:18:01Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T10:04:25Z",
+      "fetchedAt": "2026-11-03T11:04:39Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-174020aa131d8e2d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
       "note": null
     },
     "reaction_session": {
@@ -140,6 +150,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_AVI_2026-09-30/scrip_results-e3404e69d97a7641.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T16:25:16.387000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T11:04:31Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "note": null
     }
   },
   "fetch": {
@@ -181,30 +218,40 @@
   },
   "derived": {
     "score": 8,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -244,9 +291,9 @@
         "stocks": 197,
         "momentum63dMedian": -6.9,
         "relativeToMarket": 0.07,
-        "declared": 59,
+        "declared": 60,
         "strongResults": 33,
-        "avgReaction": -2.78,
+        "avgReaction": -2.83,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -634,5 +681,19 @@
     "computedAt": "2026-11-03T07:29:43Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T16:25:16.387000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial results for the quarter ended September 30, 2026 AVI Polymers Ltd - 539288 - Financial Results For The Quarter Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7c571b194f39a45.json",
+      "seenAt": "2026-11-03T11:17:53Z"
+    }
+  ]
 }
