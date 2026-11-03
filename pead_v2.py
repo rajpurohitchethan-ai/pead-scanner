@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.38"
+ENGINE_VERSION = "2.9.39"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1725,6 +1725,9 @@ ENRICH_SLOTS_DECLARED_SURGE = int(os.getenv("ENRICH_SLOTS_DECLARED_SURGE", "70")
 ENRICH_UPCOMING_WINDOW_DAYS = 7
 ENRICH_RECENT_RESULT_DAYS = 5     # declared this recently: concall / transcript / reaction still moving
 REACTION_DUE_TRADED_DAYS = 10   # 2.9.34: reaction-due rank only for stocks that traded this recently
+ENRICH_RESERVE_LIVE = 20          # 2.9.39: of the surge's declared slots, kept for live Radar plans
+ENRICH_RESERVE_GAPS = 5           # 2.9.39: ... and for a tradable stock's figure gaps
+FILING_MISSING_RETRY_DAYS = 30    # 2.9.39: look for a quarter's NSE filing this long after the result
 ENRICH_RETRY_FRESH_HOURS = 2      # 2.9.33: a fresh result without figures re-jumps the queue after this
 
 
@@ -1755,6 +1758,7 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
        4 concall pending or result in the last 5 days (transcript check).
        2.9.33: rank 3 also holds results of the last 10 days with figures
        but no YoY; a fresh no-figures row tried < 2 h ago drops from 0 to 3.
+       2.9.39: ranks are not the processing order; see _a_order.
     B  not declared: result due today or in the last 2 days (filing awaited,
        rank 0), or within 7 days / overdue with prices behind (rank 1).
     C  never enriched: no price history or no sector.
@@ -1790,6 +1794,14 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
         yoy_missing = (not no_figures and age is not None and 0 <= age <= 10
                        and comparatives_missing({k: meta_value(event, k) for k in
                                                  ("revenue_yoy_pct", "pat_yoy_pct", "pat_trend")}))
+        # 2.9.39: the cached NSE listing was read before the quarter's filing
+        # appeared (DRREDDY: read 23 Oct, still no filing on day 11). Keep
+        # looking for FILING_MISSING_RETRY_DAYS, not only 10.
+        filing_unread = (not no_figures and age is not None and 0 <= age <= FILING_MISSING_RETRY_DAYS
+                         and comparatives_missing({k: meta_value(event, k) for k in
+                                                   ("revenue_yoy_pct", "pat_yoy_pct", "pat_trend")})
+                         and _listing_lacks_period(event))
+        yoy_missing = yoy_missing or filing_unread
         if age is not None and 0 <= age <= 2 and (behind or (no_figures and not tried_recently)):
             return "A", 0
         # 2.9.37: a parser bump re-reads stored XBRL only on enrichment. When
@@ -1810,6 +1822,12 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
             return "A", 0
         if behind and live:
             return "A", 1
+        # 2.9.39: a tradable stock's figure gap goes before plain price
+        # catch-up (select_for_enrichment orders rank 3 before 2). After every
+        # close ~1,000 rows are "prices behind", so a gap ranked under them was
+        # never reached in season. Tried < 2 h ago: back to its old place.
+        if behind and (no_figures or yoy_missing) and not tried_recently and not _known_illiquid(event):
+            return "A", 3
         if behind:
             return "A", 2
         if no_figures or yoy_missing:
@@ -1858,6 +1876,61 @@ def _known_illiquid(event: dict[str, Any]) -> bool:
     return (((event.get("derived") or {}).get("plus") or {}).get("liquidity") or {}).get("pass") is False
 
 
+def _live_plan(event: dict[str, Any]) -> bool:
+    """The plan shows on the Radar (stored signal) and the stock can be traded."""
+    signal = str((((event.get("derived") or {}).get("plus") or {}).get("plan") or {}).get("signal") or "")
+    return signal in LIVE_SIGNALS and not _known_illiquid(event)
+
+
+def _listing_lacks_period(event: dict[str, Any]) -> bool:
+    """An NSE company whose cached listing has rows but none for this quarter."""
+    rows = (event.get("nseResultListing") or {}).get("rows") or []
+    period_end = (event.get("period") or {}).get("end")
+    return bool((event.get("security") or {}).get("nseSymbol") and rows
+                and not any(r.get("periodEnd") == period_end for r in rows))
+
+
+def _a_order(rank: int, sub: int, live: bool, illiquid: bool) -> int:
+    """2.9.39: processing order of the declared group. Open trades; reaction
+    due / figures not read on a fresh result; live Radar plans with prices
+    behind (a result of the last 2 days that only needs the latest bar counts
+    here when its plan is live); other rows only behind by the latest bar;
+    a tradable stock's figure gaps; prices behind; an illiquid stock's gaps;
+    transcript checks. On 3 Nov 163 of 196 live plans were priced on a close
+    older than the day before: rank 0 sub 2 took every slot ahead of them."""
+    if rank < 0:
+        return 0
+    if rank == 0 and sub <= 1:
+        return 1
+    if rank == 1 and not illiquid or (rank == 0 and live):
+        return 2
+    if rank == 0:
+        return 3
+    if rank == 3 and not illiquid:
+        return 4
+    if rank in (1, 2):
+        return 5
+    if rank == 3:
+        return 6
+    return 7
+
+
+def _take_declared(keyed: list[tuple[tuple, dict[str, Any]]], slots: int, surge: bool) -> list[dict[str, Any]]:
+    """The first `slots` declared rows. 2.9.39: in a surge part of them is kept
+    for live Radar plans and for figure gaps: results without figures are
+    retried every 2 h, so in season that queue never empties and everything
+    under it would wait until the season ends. Processing order is kept."""
+    rows = keyed[:slots]
+    if surge:
+        reserve = {2: ENRICH_RESERVE_LIVE, 4: ENRICH_RESERVE_GAPS}
+        kept = {order: [x for x in keyed if x[0][0] == order][:n] for order, n in reserve.items()}
+        kept_ids = {id(x[1]) for v in kept.values() for x in v}
+        free = max(0, slots - len(kept_ids))
+        others = [x for x in keyed if id(x[1]) not in kept_ids][:free]
+        rows = sorted(others + [x for v in kept.values() for x in v], key=lambda x: x[0])
+    return [e for _, e in rows]
+
+
 def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: date | None = None
                           ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Reserve slots: A up to ENRICH_SLOTS_DECLARED, B up to
@@ -1882,10 +1955,12 @@ def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: dat
             sub = _a0_subrank(ev, last_session) if rank == 0 else 0
             # 2.9.38: among equally urgent rows, stocks that can be traded go
             # first; an illiquid scrip's reaction can wait for a quiet run.
-            illiquid = rank == 0 and _known_illiquid(ev)
-            if rank < 0 or (rank == 0 and sub <= 1 and not illiquid):
+            known_illiquid = _known_illiquid(ev)
+            illiquid = rank == 0 and known_illiquid
+            order = _a_order(rank, sub, _live_plan(ev), known_illiquid)
+            if rank < 0 or (rank == 0 and sub <= 1 and not illiquid) or order == 2:
                 urgent += 1
-            key = (rank, sub, illiquid, last, dist, eid)
+            key = (order, sub if order == 1 else 0, illiquid, last, dist, eid)
         elif g in ("B", "C"):
             # Pure rotation, least recently enriched first. A result due now
             # jumps the queue only when not looked at for 3 h (the per-company
@@ -1904,11 +1979,12 @@ def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: dat
     d = [e for _, e in groups["D"]]
     cap = max(0, int(cap))
     a_slots = ENRICH_SLOTS_DECLARED_SURGE if urgent > ENRICH_SLOTS_DECLARED else ENRICH_SLOTS_DECLARED
-    take_a = a[:min(a_slots, cap)]
+    take_a = _take_declared(groups["A"], min(a_slots, cap), surge=urgent > ENRICH_SLOTS_DECLARED)
     take_b = b[:min(ENRICH_SLOTS_UPCOMING, cap - len(take_a))]
     take_c = c[:cap - len(take_a) - len(take_b)]
     selected = take_a + take_b + take_c
-    rest = a[len(take_a):] + b[len(take_b):] + c[len(take_c):] + d
+    taken = {id(e) for e in take_a}
+    rest = [e for e in a if id(e) not in taken] + b[len(take_b):] + c[len(take_c):] + d
     selected += rest[:cap - len(selected)]
     counts = {"declaredNeedsWork": len(a), "upcomingStale": len(b), "neverEnriched": len(c), "settled": len(d),
               "selectedDeclared": sum(1 for e in selected if tag[id(e)] == "A"),

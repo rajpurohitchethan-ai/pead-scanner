@@ -256,6 +256,12 @@
     const t = at ? new Date(at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
     return live ? `<span class="tag good">LIVE${t ? ' ' + t : ''}</span>` : `<span class="tag">CLOSED</span> Last close`;
   }
+  // 2.9.39: a close older than the market's last session says so (in season a
+  // company is re-priced in rotation; a plan on an old close can be out of date).
+  function oldClose(it) {
+    const last = (P(it).price || {}).last_session, asOf = S.data.regime?.asOf;
+    return last && asOf && String(last) < String(asOf) && !P(it).live ? ` <span class="tag warn">close of ${dt(last)}</span>` : '';
+  }
   function liveLine(l, prevClose) {
     if (!l || num(l.price) === null) return '';
     const st = { ABOVE_TRIGGER: ['above entry', 'good'], NEAR_TRIGGER: ['near entry', 'warn'], BELOW_TRIGGER: ['below entry', ''] }[l.state];
@@ -312,7 +318,7 @@
       <div class="head"><div><h2 class="sym">${esc(it.symbol)}</h2><div class="co">${esc(it.name)}</div></div>
         <div class="score"><div class="v">${num(it.convictionScore) ?? '—'}</div><div class="l">conviction</div></div></div>
       <div class="tags">${(P(it).themes || []).map(t => `<span class="tag theme">${esc(t)}</span>`).join('')}${tags.join('')}</div>
-      <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? dt(it.reactionWindowStart) + '–' : ''}${dt(it.reactionSession)}` : ''}${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? ' (filed in market hours)' : ''}${num(pc.lastClose) !== null ? `, ${p.live && num(p.live.price) !== null ? 'prev close' : 'last close'} ${inr(pc.lastClose)}` : ''}</div>
+      <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? dt(it.reactionWindowStart) + '–' : ''}${dt(it.reactionSession)}` : ''}${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? ' (filed in market hours)' : ''}${num(pc.lastClose) !== null ? `, ${p.live && num(p.live.price) !== null ? 'prev close' : 'last close'} ${inr(pc.lastClose)}${oldClose(it)}` : ''}</div>
       ${concallLine(p.concall)}
       ${liveLine(p.live, pc.lastClose)}
       ${chart(it)}
@@ -411,7 +417,7 @@
         return `<div class="row radar-row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">
           <div><div class="s">${esc(it.symbol)} <span class="gpill g${grade(it).tier}" title="Radar grade">${grade(it).tier} ${grade(it).score}</span></div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${(P(it).themes || []).map(t => ` <span class="tag theme">${esc(t)}</span>`).join('')}${hp ? ' <span class="tag go">You hold</span>' : ''}${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
           <div><div class="k">Reaction</div><div class="v ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}${num(pc.relativeVolume) !== null ? ` <span class="meta">${num(pc.relativeVolume).toFixed(1)}x vol</span>` : ''}</div></div>
-          <div><div class="k">${live?.price ? 'Live' : 'Last close'}</div><div class="v">${inr(last)}</div></div>
+          <div><div class="k">${live?.price ? 'Live' : 'Last close'}</div><div class="v">${inr(last)}${oldClose(it)}</div></div>
           <div class="opt"><div class="k">Base (result-day low)</div><div class="v">${inr(low)}${toBase !== null ? ` <span class="meta">${pct(toBase)}</span>` : ''}</div></div>
           <div><div class="k">${hp ? 'Your +1R' : trig ? 'Trigger' : 'Risk'}</div><div class="v">${trig ? `${inr(trig)}${toTrig !== null ? ` <span class="meta">${toTrig > 0 ? pct(toTrig) + ' away' : 'above'}</span>` : ''}` : (num(pl.riskPct) !== null ? `${num(pl.riskPct).toFixed(1)}%` : '—')}</div></div>
           <div class="chev" aria-hidden="true">›</div></div>
@@ -687,7 +693,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.38';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.39';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

@@ -2581,6 +2581,148 @@ class ReactionBacklogSurgeTests(unittest.TestCase):
         self.assertEqual(counts["selectedDeclared"], p.ENRICH_SLOTS_DECLARED)
 
 
+class LivePlansOnFreshPricesTests(unittest.TestCase):
+    """2.9.39 (evening check, 3 Nov 2026): 163 of 196 live Radar plans of liquid
+    companies were priced on a close older than 2 Nov (JSWSTEEL, ADANIPOWER,
+    IDFCFIRSTB 28 Oct; CARERATING graded A on 30 Oct), and DRREDDY / SHREECEM /
+    ATUL still had no NSE filing read 11 days after the result. In peak season
+    rank A0 (every result of the last 2 days, even when only the latest bar is
+    due) took all the declared slots, ahead of A1 (live plans) and of the figure
+    gaps, which sat BELOW ~1,000 "prices behind" rows and so were never reached."""
+
+    NOW = (2026, 11, 3, 20, 30)
+
+    def _ev(self, eid, rd="2026-11-02", rs="2026-11-03", last="2026-11-02", attempt="2026-11-03T10:00:00Z",
+            signal=None, liquid=True, figures=True, yoy=12.0, listing=None):
+        fields = {"result_date": {"value": rd, "status": "OK"}, "reaction_session": {"value": rs, "status": "OK"},
+                  "results_released": {"value": True, "status": "OK"}}
+        if figures:
+            fields["revenue_cr"] = {"value": 10.0, "status": "OK"}
+            fields["pat_cr"] = {"value": 1.0, "status": "OK"}
+        if yoy is not None:
+            fields["revenue_yoy_pct"] = {"value": yoy, "status": "OK"}
+            fields["pat_yoy_pct"] = {"value": yoy, "status": "OK"}
+        ev = {"eventId": eid, "period": {"end": "2026-09-30"},
+              "security": {"nseSymbol": eid, "exchangeSector": "Metals"}, "fields": fields,
+              "plus": {"price": {"last_session": last}},
+              "derived": {"plus": {"liquidity": {"pass": liquid}, "plan": {"signal": signal}}},
+              "fetch": {"PRICE_HISTORY": {"lastAttempt": attempt}}}
+        if listing is not None:
+            ev["nseResultListing"] = {"v": 2, "fetchedAt": "2026-10-23T13:01:42Z", "rows": listing}
+        return ev
+
+    def _select(self, rows, cap=120):
+        from datetime import datetime as _dt
+        now = _dt(*self.NOW, tzinfo=p.IST)
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            return p.select_for_enrichment(rows, cap, now.date())
+
+    def _group(self, ev):
+        from datetime import datetime as _dt
+        now = _dt(*self.NOW, tzinfo=p.IST)
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            return p.enrichment_group(ev, now.date())
+
+    def test_live_plan_before_rows_only_behind_by_the_latest_bar(self):
+        # 100 results of 2 Nov whose reaction is measured: only the 3 Nov bar is
+        # due. They were looked at earlier than the live plan, so the old order
+        # took them first and JSWSTEEL stayed on its 28 Oct close.
+        latest_bar = [self._ev(f"N{i}", last="2026-11-02", rs="2026-11-02", attempt="2026-11-03T02:00:00Z")
+                      for i in range(100)]
+        jsw = self._ev("JSWSTEEL", rd="2026-10-23", rs="2026-10-26", last="2026-10-28",
+                       attempt="2026-11-03T06:00:00Z", signal="ENTRY_TRIGGERED")
+        sel, _ = self._select(latest_bar + [jsw], cap=35)
+        self.assertIn("JSWSTEEL", [e["eventId"] for e in sel])
+
+    def test_live_result_of_the_last_two_days_counts_as_live(self):
+        rows = [self._ev(f"N{i}", last="2026-11-02", rs="2026-11-02", attempt="2026-11-03T02:00:00Z") for i in range(50)]
+        live = self._ev("MARICO", last="2026-11-02", rs="2026-11-02", attempt="2026-11-03T09:00:00Z", signal="NEAR_ENTRY")
+        sel, _ = self._select(rows + [live], cap=35)
+        self.assertEqual(sel[0]["eventId"], "MARICO")
+
+    def test_reaction_due_still_goes_before_live_plans(self):
+        live = self._ev("OLD", rd="2026-10-23", rs="2026-10-26", last="2026-10-28",
+                        attempt="2026-10-28T06:00:00Z", signal="NEAR_ENTRY")
+        due = self._ev("DUE", rd="2026-11-02", rs="2026-11-03", last="2026-11-02", attempt="2026-11-03T02:00:00Z")
+        sel, _ = self._select([live, due])
+        self.assertEqual([e["eventId"] for e in sel[:2]], ["DUE", "OLD"])
+
+    def test_illiquid_live_plan_does_not_jump(self):
+        ill = self._ev("ILL", rd="2026-10-23", rs="2026-10-26", last="2026-10-28", attempt="2026-10-28T06:00:00Z",
+                       signal="NEAR_ENTRY", liquid=False)
+        tradable = self._ev("TRD", rd="2026-11-02", rs="2026-11-02", last="2026-11-02", attempt="2026-11-03T10:00:00Z")
+        sel, _ = self._select([ill, tradable])
+        self.assertEqual(sel[0]["eventId"], "TRD")
+
+    def test_live_backlog_surges_declared_slots(self):
+        live = [self._ev(f"L{i}", rd="2026-10-23", rs="2026-10-26", last="2026-10-28",
+                         attempt="2026-10-28T06:00:00Z", signal="WATCH") for i in range(60)]
+        _, counts = self._select(live)
+        self.assertEqual(counts["selectedDeclared"], 60)
+        self.assertGreaterEqual(counts["urgentDeclared"], 60)
+
+    def test_results_without_figures_cannot_starve_live_plans(self):
+        # No-figure rows come back every 2 h, so their queue never empties.
+        fresh = [self._ev(f"F{i}", rd="2026-11-03", rs="2026-11-04", last="2026-11-03", figures=False, yoy=None,
+                          attempt="2026-11-03T02:00:00Z") for i in range(200)]
+        live = [self._ev(f"L{i}", rd="2026-10-23", rs="2026-10-26", last="2026-10-28",
+                         attempt="2026-10-28T06:00:00Z", signal="WATCH") for i in range(40)]
+        ya = [{"periodEnd": "2026-06-30", "basis": "CONSOLIDATED", "xbrlUrl": "x"}]
+        gaps = [self._ev(f"G{i}", rd="2026-10-23", rs="2026-10-26", last="2026-10-26", yoy=None,
+                         attempt="2026-10-26T19:21:44Z", listing=ya) for i in range(10)]
+        sel, counts = self._select(fresh + live + gaps, cap=p.ENRICH_SLOTS_DECLARED_SURGE)
+        ids = [e["eventId"] for e in sel]
+        self.assertEqual(counts["selectedDeclared"], p.ENRICH_SLOTS_DECLARED_SURGE)
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(sum(1 for x in ids if x.startswith("L")), p.ENRICH_RESERVE_LIVE)
+        self.assertEqual(sum(1 for x in ids if x.startswith("G")), p.ENRICH_RESERVE_GAPS)
+        self.assertTrue(ids[0].startswith("F"))     # processing order unchanged
+
+    def test_figure_gap_goes_before_prices_behind(self):
+        # DRREDDY: BSE table only, listing read before the NSE filing appeared.
+        ya = [{"periodEnd": "2026-06-30", "basis": "CONSOLIDATED", "xbrlUrl": "x"}]
+        dr = self._ev("DRREDDY", rd="2026-10-23", rs="2026-10-26", last="2026-10-26", yoy=None,
+                      attempt="2026-10-26T19:21:44Z", listing=ya)
+        behind = [self._ev(f"B{i}", rd="2026-10-20", rs="2026-10-21", last="2026-10-21", attempt="2026-10-22T02:00:00Z")
+                  for i in range(200)]
+        self.assertEqual(self._group(dr), ("A", 3))      # day 11, but the filing was never found
+        sel, _ = self._select(behind + [dr], cap=35)
+        self.assertEqual(sel[0]["eventId"], "DRREDDY")
+
+    def test_figure_gap_tried_recently_stays_in_rotation(self):
+        ya = [{"periodEnd": "2026-06-30", "basis": "CONSOLIDATED", "xbrlUrl": "x"}]
+        dr = self._ev("DRREDDY", rd="2026-10-23", rs="2026-10-26", last="2026-10-26", yoy=None,
+                      attempt="2026-11-03T14:30:00Z", listing=ya)
+        self.assertEqual(self._group(dr), ("A", 2))
+
+    def test_old_gap_with_the_filing_found_is_not_retried(self):
+        found = [{"periodEnd": "2026-09-30", "basis": "CONSOLIDATED", "xbrlUrl": "x"}]
+        dr = self._ev("TRF", rd="2026-10-14", rs="2026-10-15", last="2026-11-03", yoy=None,
+                      attempt="2026-10-26T19:21:44Z", listing=found)
+        self.assertEqual(self._group(dr), ("D", 0))
+
+    def test_illiquid_figure_gap_stays_behind_prices(self):
+        gap = self._ev("TINY", rd="2026-10-25", rs="2026-10-26", last="2026-10-30", figures=False, yoy=None,
+                       attempt="2026-10-30T02:00:00Z", liquid=False)
+        tradable = self._ev("TRD", rd="2026-10-25", rs="2026-10-26", last="2026-10-30", figures=False, yoy=None,
+                            attempt="2026-11-01T02:00:00Z")
+        self.assertEqual(self._group(gap), ("A", 2))
+        sel, _ = self._select([gap, tradable])
+        self.assertEqual(sel[0]["eventId"], "TRD")
+
+    def test_self_audit_lists_live_plans_on_old_closes(self):
+        import pead_plus as pp
+        def it(sym, last, liquid=True, signal="NEAR_ENTRY"):
+            return {"symbol": sym, "resultsReleased": True, "resultDate": "2026-10-20", "entrySignal": signal,
+                    "priceContext": {}, "plus": {"price": {"last_session": last}, "plan": {"signal": signal},
+                                                 "liquidity": {"pass": liquid}}}
+        items = [it("JSWSTEEL", "2026-10-28"), it("MARICO", "2026-11-02"), it("ILL", "2026-10-28", liquid=False),
+                 it("OUT", "2026-10-28", signal="NO_ENTRY")]
+        audit = pp.self_audit(items, {}, {}, date(2026, 11, 3))
+        c = next(x for x in audit["checks"] if x["check"].startswith("Live plans priced"))
+        self.assertEqual((c["status"], c["examples"]), ("WARN", ["JSWSTEEL"]))
+
+
 class StopAboveEntryTests(unittest.TestCase):
     """2 Nov 2026: IOC gapped up on its reaction day; the "pullback" trigger was
     the session before the result (130.15) while the stop, 1% under the

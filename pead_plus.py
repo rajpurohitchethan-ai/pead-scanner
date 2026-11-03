@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.38"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.39"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -342,6 +342,9 @@ def classify_bucket(*, released: bool, q2_strength: str | None, setup: bool | No
 # Trade plan
 # ---------------------------------------------------------------------------
 
+# 2.9.39: signals the Radar tab lists (live plans).
+LIVE_PLAN_SIGNALS = {"ENTRY_EARLY", "ENTRY_PULLBACK", "ENTRY_BREAKOUT", "ENTRY_TRIGGERED", "NEAR_ENTRY", "PULLBACK_ZONE",
+                     "WATCH", "RISK_TOO_WIDE", "EXTENDED", "WAIT_CONCALL"}
 ACTIONABLE = {"ENTRY_EARLY", "ENTRY_PULLBACK", "ENTRY_BREAKOUT", "ENTRY_TRIGGERED", "NEAR_ENTRY", "PULLBACK_ZONE"}
 
 
@@ -1137,6 +1140,24 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
         if rd and 0 <= (rd - today).days <= 7 and last and (today - last).days > 4:
             stale.append(it["symbol"])
     add("Prices fresh for companies reporting within 7 days", stale)
+    # 2.9.39: a live plan judged on an old close is not a live plan. 163 of 196
+    # on 3 Nov (JSWSTEEL "in trade" on its 28 Oct close, CARERATING graded A on
+    # 30 Oct). More than 2 weekdays behind: today's close can still be pending.
+    def weekdays_behind(last):
+        n, cur = 0, last
+        while cur < today:
+            cur += _td(days=1)
+            n += 1 if cur.weekday() < 5 else 0
+        return n
+    old_live = []
+    for it in declared:
+        pl = it.get("plus") or {}
+        last = d((pl.get("price") or {}).get("last_session"))
+        if (str((pl.get("plan") or {}).get("signal") or it.get("entrySignal") or "") in LIVE_PLAN_SIGNALS
+                and (pl.get("liquidity") or {}).get("pass") is not False and last and weekdays_behind(last) > 2):
+            old_live.append(it["symbol"])
+    add("Live plans priced on a recent close", old_live,
+        note="Updated in rotation; the card and Radar row show the close's date. Read it before acting on a trigger.")
     no_sector = [it["symbol"] for it in items if not (it.get("plus") or {}).get("sectorKey")]
     share = len(no_sector) / max(1, len(items))
     checks.append({"check": "Sector known", "status": "OK" if share <= 0.10 else "WARN", "count": len(no_sector),
