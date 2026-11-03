@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE457H01027|2026-09-30",
   "createdAt": "2026-10-27T03:32:08Z",
-  "updatedAt": "2026-11-03T08:43:29Z",
+  "updatedAt": "2026-11-03T09:07:59Z",
   "security": {
     "symbol": "SIMPLXMIL",
     "bseSymbol": "SIMPLXMIL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-27T03:32:08Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T08:49:49Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T09:03:03Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T08:26:48Z",
+      "fetchedAt": "2026-11-03T08:49:58Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-174020aa131d8e2d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d4086f1ae6dd0113.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-04",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-03T04:10:38Z",
+      "fetchedAt": "2026-11-03T09:03:02Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "INTRADAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "INTRADAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-03T04:10:38Z",
+      "fetchedAt": "2026-11-03T09:03:02Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -64,7 +74,7 @@
     "distance_52w_high_pct": {
       "value": -27.7,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-03T04:10:39Z",
+      "fetchedAt": "2026-11-03T09:03:03Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE457H01027_2026-09-30/price_volume_12m-0d318d5e1822e6e7.json",
@@ -73,7 +83,7 @@
     "last_price": {
       "value": 4121.0,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-03T04:10:39Z",
+      "fetchedAt": "2026-11-03T09:03:03Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE457H01027_2026-09-30/price_volume_12m-0d318d5e1822e6e7.json",
@@ -82,7 +92,7 @@
     "avg_turnover_20d_cr": {
       "value": 0.0016,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-03T04:10:39Z",
+      "fetchedAt": "2026-11-03T09:03:03Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE457H01027_2026-09-30/price_volume_12m-0d318d5e1822e6e7.json",
@@ -132,6 +142,42 @@
       "rank": 98,
       "rawRef": "raw/bse/INE457H01027_2026-09-30/scrip_results-7eb0f1730ea8f45c.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T08:49:49Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d4086f1ae6dd0113.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T14:03:33.877000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T08:49:49Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d4086f1ae6dd0113.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T08:49:49Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d4086f1ae6dd0113.json",
+      "note": null
+    },
+    "reaction_window_start": {
+      "value": "2026-11-03",
+      "source": "DERIVED",
+      "fetchedAt": "2026-11-03T09:03:02Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "intraday filing"
     }
   },
   "fetch": {
@@ -143,7 +189,8 @@
       "rawRef": "raw/bse/NSE_SIMPLXMIL_2026-09-30/lookup-5c4702fc265c3913.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-11-03T04:10:39Z",
+      "lastAttempt": "2026-11-03T09:03:03Z",
+      "lastSuccess": "2026-11-03T09:03:03Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE457H01027_2026-09-30/price_volume_12m-0d318d5e1822e6e7.json"
@@ -163,42 +210,73 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-11-03T04:10:43Z",
+      "lastAttempt": "2026-11-03T09:03:05Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "Yahoo fundamentals budget exhausted for this run",
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-11-03T09:03:02Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE457H01027_2026-09-30/results_snapshot-fbe077aa52ee9150.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-11-03T09:03:02Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "Yahoo quarterly budget exhausted for this run",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-11-03T09:03:05Z",
+      "lastSuccess": "2026-11-03T09:03:05Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE457H01027_2026-09-30/scrip_announcements-c4d6ee94b9c53368.json"
     }
   },
   "derived": {
     "score": 2,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
-      "q1Setup": null,
-      "bucket": null,
+      "q1Setup": false,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Result came during market hours, so the reaction is measured over 03 Nov and 04 Nov. The plan is ready after the 04 Nov close.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -273,6 +351,12 @@
         "low_52w": 4121.0,
         "last_session": "2026-10-19",
         "atr14": 307.84,
+        "q1_reaction_date": "2026-08-04",
+        "q1_reaction_return_pct": -5.0,
+        "q1_reaction_rvol": 0.44,
+        "q1_return_to_q2_pct": -19.08,
+        "q1_max_gain_pct": 9.96,
+        "q1_sustained": false,
         "breakout_recent": null,
         "breakout_failed": null,
         "nh52_recent": null,
@@ -296,7 +380,15 @@
         }
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-11-03",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/533018/",
@@ -325,6 +417,11 @@
       "timestamp": "2026-11-03T04:10:39Z",
       "price": 4121.0,
       "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-11-03T09:03:03Z",
+      "price": 4121.0,
+      "source": "BSE_PRICE"
     }
   ],
   "plus": {
@@ -345,6 +442,12 @@
       "low_52w": 4121.0,
       "last_session": "2026-10-19",
       "atr14": 307.84,
+      "q1_reaction_date": "2026-08-04",
+      "q1_reaction_return_pct": -5.0,
+      "q1_reaction_rvol": 0.44,
+      "q1_return_to_q2_pct": -19.08,
+      "q1_max_gain_pct": 9.96,
+      "q1_sustained": false,
       "breakout_recent": null,
       "breakout_failed": null,
       "nh52_recent": null,
@@ -466,8 +569,38 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-11-03T04:10:39Z",
+    "computedAt": "2026-11-03T09:03:03Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T14:03:33.877000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited financial results for the quarter ended 30.09.26 Simplex Mills Company Ltd - 533018 - Unaudited Financial Results For Quarter Ended 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d4086f1ae6dd0113.json",
+      "seenAt": "2026-11-03T09:07:42Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-11-03T09:03:02Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-11-03",
+    "source": "BSE_ANNOUNCEMENTS"
   }
 }
