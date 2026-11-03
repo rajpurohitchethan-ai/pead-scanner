@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE973X01012|2026-09-30",
   "createdAt": "2026-10-30T04:08:58Z",
-  "updatedAt": "2026-11-03T12:05:31Z",
+  "updatedAt": "2026-11-03T13:25:05Z",
   "security": {
     "symbol": "POOJA",
     "bseSymbol": "POOJA",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-30T04:08:58Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T13:10:51Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T13:25:05Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T11:58:17Z",
+      "fetchedAt": "2026-11-03T13:10:58Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-20b61f1608c94ea0.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
       "note": null
     },
     "reaction_session": {
@@ -168,6 +178,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE973X01012_2026-09-30/scrip_results-f300ffd8c71f2592.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T13:10:51Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T17:53:37.337000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T13:10:51Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T13:10:51Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "note": null
     }
   },
   "fetch": {
@@ -209,23 +246,29 @@
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -233,13 +276,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_REPEAD",
-        "label": "Watch: re-PEAD",
-        "why": "Q1 setup faded. Strong Q2 could restart the drift."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -283,10 +326,10 @@
         "sector": "Capital Goods",
         "stocks": 389,
         "momentum63dMedian": -4.46,
-        "relativeToMarket": 2.54,
+        "relativeToMarket": 2.56,
         "declared": 106,
         "strongResults": 58,
-        "avgReaction": -1.14,
+        "avgReaction": -0.78,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -664,5 +707,19 @@
     "computedAt": "2026-11-03T08:58:24Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T17:53:37.337000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Considered, approved and take on record the Unaudited Standalone and Consolidated Financial results of the comapny for the quater ended September 30, 2026. Poojawestern Metaliks Ltd - 540727 - Outcome Of Board Meeting Held Today I.E., On November 03, 2026, To Consider Financial Results For September",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "seenAt": "2026-11-03T13:24:56Z"
+    }
+  ]
 }

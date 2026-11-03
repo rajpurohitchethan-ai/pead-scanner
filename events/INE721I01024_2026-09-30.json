@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE721I01024|2026-09-30",
   "createdAt": "2026-10-08T04:33:49Z",
-  "updatedAt": "2026-11-03T12:05:30Z",
+  "updatedAt": "2026-11-03T13:25:05Z",
   "security": {
     "symbol": "NSE",
     "bseSymbol": "NSE",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T04:33:49Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T13:10:51Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T13:25:05Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T11:58:17Z",
+      "fetchedAt": "2026-11-03T13:10:58Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-20b61f1608c94ea0.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
       "note": null
     },
     "reaction_session": {
@@ -114,6 +124,33 @@
       "rank": 105,
       "rawRef": "raw/bse_price/INE721I01024_2026-09-30/price_volume_12m-93ef2540bf1e7db3.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T13:10:51Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T17:51:10.677000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T13:10:51Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T13:10:51Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "note": null
     }
   },
   "fetch": {
@@ -154,34 +191,44 @@
     }
   },
   "derived": {
-    "score": 22,
-    "completenessPct": 66.7,
+    "score": 20,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -224,12 +271,12 @@
       "sector": {
         "sector": "Financial Services",
         "stocks": 394,
-        "momentum63dMedian": -8.4,
-        "relativeToMarket": -1.41,
-        "declared": 121,
+        "momentum63dMedian": -8.57,
+        "relativeToMarket": -1.55,
+        "declared": 124,
         "strongResults": 74,
-        "avgReaction": -1.2,
-        "tailwind": "POSITIVE"
+        "avgReaction": -1.14,
+        "tailwind": "NEUTRAL"
       },
       "identity": {
         "macroSector": "Financial Services",
@@ -485,5 +532,19 @@
     "computedAt": "2026-11-03T12:01:16Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T17:51:10.677000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Results - Standalone and Consolidated Audited Financial results for the quarter and half year ended September 30, 2026 National Stock Exchange of India Ltd - 544937 - Results - Standalone And Consolidated Audited Financial Results For The Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "seenAt": "2026-11-03T13:24:53Z"
+    }
+  ]
 }

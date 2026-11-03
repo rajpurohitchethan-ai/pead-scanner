@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE532U01012|2026-09-30",
   "createdAt": "2026-10-28T03:56:20Z",
-  "updatedAt": "2026-11-03T12:05:30Z",
+  "updatedAt": "2026-11-03T13:25:05Z",
   "security": {
     "symbol": "ZSOUTGAS",
     "bseSymbol": "ZSOUTGAS",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-28T03:56:20Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-03T13:10:51Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-03T13:25:05Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-03",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-03T11:58:18Z",
+      "fetchedAt": "2026-11-03T13:10:58Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-20b61f1608c94ea0.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
       "note": null
     },
     "reaction_session": {
@@ -132,6 +142,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE532U01012_2026-09-30/scrip_results-7d5b0a798b9b1681.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T13:10:51Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-03T18:32:08.470000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T13:10:51Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-03T13:10:51Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "note": null
     }
   },
   "fetch": {
@@ -172,30 +209,40 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -232,12 +279,12 @@
       "sectorKey": "Chemicals",
       "sector": {
         "sector": "Chemicals",
-        "stocks": 198,
-        "momentum63dMedian": -6.9,
-        "relativeToMarket": 0.09,
+        "stocks": 199,
+        "momentum63dMedian": -7.14,
+        "relativeToMarket": -0.12,
         "declared": 62,
         "strongResults": 33,
-        "avgReaction": -2.67,
+        "avgReaction": -2.25,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -358,5 +405,19 @@
     "computedAt": "2026-11-03T08:59:06Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-03T18:32:08.470000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please find attached Unaudited Financial Results for the quarter and half year ended on September 30, 2026. Southern Gas Ltd - 509910 - Unaudited Financial Results For The Quarter And Half Year Ended On September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-aa2859cde9063658.json",
+      "seenAt": "2026-11-03T13:24:51Z"
+    }
+  ]
 }
