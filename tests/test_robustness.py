@@ -952,6 +952,23 @@ class OverdueFilingCheckTests(_StoreCase):
         with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
             self.assertNotEqual(p.enrichment_group(e, now.date()), ("A", 0))
 
+    def test_the_listing_read_itself_does_not_count_as_tried(self):
+        """2.9.41: the first live run declared 77 and enriched none: the listing
+        read had just stamped lastAttempt, so "tried < 2 h ago" held them back."""
+        from datetime import datetime as _dt
+        e = self._nse_event("HDFCBANK", "2026-10-17")
+        self.store.merge_field(e, "results_released", True, source="NSE_INTEGRATED_FILING")
+        e["lateDeclaredAt"] = "2026-11-04T16:21:34Z"
+        e["fetch"] = {"NSE_RESULT_LISTING": {"lastAttempt": "2026-11-04T16:21:34Z"},
+                      "NSE_INTEGRATED_FILING": {"lastAttempt": "2026-11-04T16:21:34Z"},
+                      "PRICE_HISTORY": {"lastAttempt": "2026-10-24T09:54:25Z"}}
+        e["plus"] = {"price": {"last_session": "2026-10-23"}}
+        now = _dt(2026, 11, 4, 22, 0, tzinfo=p.IST)
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(e, now.date()), ("A", 0))
+            e["fetch"]["PRICE_HISTORY"]["lastAttempt"] = "2026-11-04T16:25:00Z"   # really tried: wait 2 h
+            self.assertNotEqual(p.enrichment_group(e, now.date()), ("A", 0))
+
     def test_self_check_lists_past_dates_of_tradable_companies(self):
         from datetime import date as _d
         import pead_plus as pp

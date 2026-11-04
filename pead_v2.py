@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.40"
+ENGINE_VERSION = "2.9.41"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1822,9 +1822,12 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
         # 2.9.40: declared late by check_overdue_filings; the result date is old,
         # so nothing else here would bring its figures forward in season.
         late = parse_datetime(event.get("lateDeclaredAt"))
-        if (no_figures and not tried_recently and late is not None
-                and (now_ist() - late).total_seconds() < LATE_DECLARED_PRIORITY_DAYS * 86400):
-            return "A", 0
+        if no_figures and late is not None and (now_ist() - late).total_seconds() < LATE_DECLARED_PRIORITY_DAYS * 86400:
+            # 2.9.41: the listing read that declared it stamps lastAttempt; only
+            # a real pass since then (prices are always attempted) counts as tried.
+            passed = parse_datetime(((event.get("fetch") or {}).get("PRICE_HISTORY") or {}).get("lastAttempt"))
+            if not tried_recently or passed is None or passed < late:
+                return "A", 0
         # 2.9.34: a closed reaction session the stored prices do not cover yet
         # is as urgent as a fresh result. "age <= 2" counts calendar days, so
         # a Friday after-close filing (reaction Monday) fell to rank 2 on
