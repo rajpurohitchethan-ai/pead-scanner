@@ -2,11 +2,11 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE885E01034|2026-09-30",
   "createdAt": "2026-10-29T13:02:16Z",
-  "updatedAt": "2026-11-04T15:54:00Z",
+  "updatedAt": "2026-11-04T16:46:59Z",
   "security": {
     "symbol": "MAZDA",
     "nseSymbol": "MAZDA",
-    "name": "Mazda Limited",
+    "name": "Mazda Ltd-$",
     "sector": "-",
     "isin": "INE885E01034",
     "bseSymbol": "MAZDA",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-30T04:08:59Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-04T16:21:28Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-04T16:46:59Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-04",
-      "source": "NSE_FINANCIAL_RESULTS",
-      "fetchedAt": "2026-11-04T15:28:13Z",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-04T16:21:30Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/nse/DISCOVERY/board_meetings-508ac031b28e5de4.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a1fbd07050b205f.json",
       "note": null
     },
     "reaction_session": {
@@ -180,6 +190,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE885E01034_2026-09-30/scrip_results-39eeb2d1f403d019.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-04T16:21:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a1fbd07050b205f.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-04T20:10:13.450000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-04T16:21:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a1fbd07050b205f.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-04T16:21:28Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a1fbd07050b205f.json",
+      "note": null
     }
   },
   "fetch": {
@@ -227,33 +264,43 @@
   },
   "derived": {
     "score": 4,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -297,10 +344,10 @@
         "sector": "Capital Goods",
         "stocks": 417,
         "momentum63dMedian": -4.79,
-        "relativeToMarket": 2.16,
-        "declared": 112,
+        "relativeToMarket": 2.15,
+        "declared": 127,
         "strongResults": 64,
-        "avgReaction": -0.93,
+        "avgReaction": -0.55,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -662,5 +709,19 @@
     "computedAt": "2026-11-03T17:30:09Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-04T20:10:13.450000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Pursuant to Regulation 30 and Regulation 33 of the SEBI (Listing Obligations and Disclosure Requirements) Regulations, 2015, the Board of Directors, at the meeting held today, has, inter .... Mazda Ltd-$ - 523792 - Financial Results For The Period Ended On 30Th September, 2026 Pursuant to Regulation",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a1fbd07050b205f.json",
+      "seenAt": "2026-11-04T16:46:45Z"
+    }
+  ]
 }
