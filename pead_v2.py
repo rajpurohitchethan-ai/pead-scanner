@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.39"
+ENGINE_VERSION = "2.9.40"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1512,9 +1512,18 @@ class BSEAdapter:
                 collected = []
                 page = 1
                 while page <= 30:
-                    res = self.client.announcements(
-                        page_no=page, from_date=from_dt, to_date=to_dt, category="Result"
-                    ) or {}
+                    try:
+                        res = self.client.announcements(
+                            page_no=page, from_date=from_dt, to_date=to_dt, category="Result"
+                        ) or {}
+                    except Exception as exc:
+                        # 2.9.40: newest rows come first. A timeout on a later page
+                        # must not throw away the pages already read (4 Nov: one
+                        # timeout cost two runs every filing of the day).
+                        if not collected or isinstance(exc, SourceSkipped):
+                            raise
+                        print(f"BSE announcements: page {page} failed ({type(exc).__name__}); keeping {len(collected)} rows", flush=True)
+                        break
                     table = res.get("Table") or []
                     if not table:
                         break
@@ -1809,6 +1818,12 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
         # parser, the re-read may fill them (STARHEALTH: 2.9.36's Ind AS 117
         # revenue waited 24 h in rank A2/A3), so it jumps the queue once.
         if no_figures and not tried_recently and _xbrl_reread_pending(event):
+            return "A", 0
+        # 2.9.40: declared late by check_overdue_filings; the result date is old,
+        # so nothing else here would bring its figures forward in season.
+        late = parse_datetime(event.get("lateDeclaredAt"))
+        if (no_figures and not tried_recently and late is not None
+                and (now_ist() - late).total_seconds() < LATE_DECLARED_PRIORITY_DAYS * 86400):
             return "A", 0
         # 2.9.34: a closed reaction session the stored prices do not cover yet
         # is as urgent as a fresh result. "age <= 2" counts calendar days, so
@@ -3783,39 +3798,47 @@ def discover_events(store: EventStore, master: SymbolMaster, ctx: SourceContext)
 
     try:
         with BSEAdapter(ctx) as bse:
-            announcements, raw_ref = bse.result_announcements(
-                now_naive - timedelta(days=min(DISCOVERY_LOOKBACK_DAYS, 30)), now_naive
-            )
-            known_codes = bse_code_symbols(store)
-            asked: set[str] = set()
-            for item in announcements:
-                if not isinstance(item, dict):
-                    continue
-                c = normalize_bse_announcement(item)
-                if c:
-                    # Resolve missing BSE symbol if code exists.
-                    code = str(c["security"].get("bseCode") or "")
-                    if not c["security"].get("symbol") and code:
-                        if code not in known_codes and code not in asked and len(asked) < BSE_SCRIP_NAME_BUDGET:
-                            asked.add(code)
-                            try:
-                                name_payload, _ = bse.scrip_name(code, "DISCOVERY")
-                                known_codes[code] = normalize_symbol(name_payload)
-                            except Exception:
-                                pass
-                        if known_codes.get(code):
-                            c["security"]["symbol"] = known_codes[code]
-                            c["security"]["bseSymbol"] = known_codes[code]
-                    apply_discovery(store, master, c, raw_ref)
-                    stats["bseFilings"] += 1
-            calendar, raw_ref2 = bse.result_calendar(now_naive, now_naive + timedelta(days=UPCOMING_DAYS))
-            for item in calendar:
-                if not isinstance(item, dict):
-                    continue
-                c = normalize_bse_calendar(item)
-                if c:
-                    apply_discovery(store, master, c, raw_ref2)
-                    stats["bseUpcoming"] += 1
+            # 2.9.40: the calendar has its own try, so a timeout on the
+            # announcements does not also lose the schedule.
+            try:
+                announcements, raw_ref = bse.result_announcements(
+                    now_naive - timedelta(days=min(DISCOVERY_LOOKBACK_DAYS, 30)), now_naive
+                )
+                known_codes = bse_code_symbols(store)
+                asked: set[str] = set()
+                for item in announcements:
+                    if not isinstance(item, dict):
+                        continue
+                    c = normalize_bse_announcement(item)
+                    if c:
+                        # Resolve missing BSE symbol if code exists.
+                        code = str(c["security"].get("bseCode") or "")
+                        if not c["security"].get("symbol") and code:
+                            if code not in known_codes and code not in asked and len(asked) < BSE_SCRIP_NAME_BUDGET:
+                                asked.add(code)
+                                try:
+                                    name_payload, _ = bse.scrip_name(code, "DISCOVERY")
+                                    known_codes[code] = normalize_symbol(name_payload)
+                                except Exception:
+                                    pass
+                            if known_codes.get(code):
+                                c["security"]["symbol"] = known_codes[code]
+                                c["security"]["bseSymbol"] = known_codes[code]
+                        apply_discovery(store, master, c, raw_ref)
+                        stats["bseFilings"] += 1
+            except Exception as exc:
+                stats["errors"].append(f"BSE announcements: {type(exc).__name__}: {exc}")
+            try:
+                calendar, raw_ref2 = bse.result_calendar(now_naive, now_naive + timedelta(days=UPCOMING_DAYS))
+                for item in calendar:
+                    if not isinstance(item, dict):
+                        continue
+                    c = normalize_bse_calendar(item)
+                    if c:
+                        apply_discovery(store, master, c, raw_ref2)
+                        stats["bseUpcoming"] += 1
+            except Exception as exc:
+                stats["errors"].append(f"BSE calendar: {type(exc).__name__}: {exc}")
     except Exception as exc:
         stats["errors"].append(f"BSE discovery: {type(exc).__name__}: {exc}")
 
@@ -6049,6 +6072,10 @@ def fetch_cooling_down(event: dict[str, Any], source: str, hours: float) -> bool
 
 
 NSE_LISTING_REFRESH_HOURS = float(os.getenv("NSE_LISTING_REFRESH_HOURS", "3"))
+# 2.9.40: companies past their scheduled date whose own NSE listing is read per run.
+OVERDUE_CHECK_MAX = int(os.getenv("OVERDUE_CHECK_MAX", "80"))
+OVERDUE_CHECK_DAYS = int(os.getenv("OVERDUE_CHECK_DAYS", "45"))
+LATE_DECLARED_PRIORITY_DAYS = 3
 
 
 def nse_result_listing(event: dict[str, Any], store: EventStore, ctx: SourceContext, *, force: bool = False) -> list[dict[str, Any]]:
@@ -6110,6 +6137,60 @@ def nse_result_listing(event: dict[str, Any], store: EventStore, ctx: SourceCont
     except Exception as exc:
         store.record_fetch(event, "NSE_RESULT_LISTING", ok=False, error=f"{type(exc).__name__}: {exc}")
         return rows
+
+
+def _overdue_listing_due(event: dict[str, Any], today: date) -> bool:
+    """Not declared, the scheduled date has come, NSE listed, listing not read
+    in the last NSE_LISTING_REFRESH_HOURS."""
+    if boolish(meta_value(event, "results_released")) is True:
+        return False
+    if not (event.get("security") or {}).get("nseSymbol"):
+        return False
+    rd = parse_date(meta_value(event, "result_date"))
+    if rd is None or not 0 <= (today - rd).days <= OVERDUE_CHECK_DAYS:
+        return False
+    cache = event.get("nseResultListing") or {}
+    fetched = parse_datetime(cache.get("fetchedAt"))
+    return (cache.get("v") != 2 or fetched is None
+            or (now_ist() - fetched).total_seconds() >= NSE_LISTING_REFRESH_HOURS * 3600)
+
+
+def check_overdue_filings(events: list[dict[str, Any]], store: "EventStore", ctx: SourceContext,
+                          today: date | None = None) -> dict[str, int]:
+    """2.9.40: a date on the calendar proves nothing, and BSE rows that do not
+    name the period ("Outcome of Board Meeting") rightly do not declare. So when
+    the date has come, ask the company's own NSE listing, which carries the
+    period. HDFCBANK waited 18 days because the listing was only read on events
+    already declared. Runs before selection with a small budget of its own, so
+    declared rows keep EXTRA_CALL_BUDGET. Largest companies first among those not
+    read since their date; never declares without a filing for this period."""
+    today = today or now_ist().date()
+    due = [e for e in events if _overdue_listing_due(e, today)]
+
+    def order(e: dict[str, Any]) -> tuple:
+        rd = parse_date(meta_value(e, "result_date"))
+        fetched = parse_datetime((e.get("nseResultListing") or {}).get("fetchedAt"))
+        unread_since_date = fetched is None or fetched.date() <= rd
+        mcap = safe_num(meta_value(e, "market_cap_cr")) or 0.0
+        return (not unread_since_date, -mcap, str(e.get("eventId") or ""))
+
+    due.sort(key=order)
+    stats = {"overdue": len(due), "checked": 0, "declared": 0}
+    used_before = _EXTRA_CALLS_USED["n"]
+    try:
+        for event in due[:OVERDUE_CHECK_MAX]:
+            if RUN_GUARD.elapsed() >= RUN_BUDGET_SEC or "NSE" in RUN_GUARD.down:
+                break
+            stats["checked"] += 1
+            nse_result_listing(event, store, ctx)
+            if boolish(store.value(event, "results_released")) is True:
+                event["lateDeclaredAt"] = iso_now()
+                store.set_state(event, "RESULT_FILED", "official exchange result filing found in the company's NSE listing")
+                stats["declared"] += 1
+            store.save(event)
+    finally:
+        _EXTRA_CALLS_USED["n"] = used_before
+    return stats
 
 
 def listing_row(rows: list[dict[str, Any]], period_end: date, basis: str | None = None) -> dict[str, Any] | None:
@@ -6496,6 +6577,8 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
     classified = [(event, enrichment_activity(event)) for event in all_events]
     candidates = [event for event, (active, _) in classified if active]
     candidates.sort(key=_enrichment_priority)
+    overdue_stats = check_overdue_filings(candidates, store, ctx)
+    print(f"Overdue filing check: {overdue_stats}", flush=True)
 
     # Hard cap prevents an unexpectedly noisy exchange response from turning an
     # hourly run into a 60-minute historical backfill. 2.9.19: slots are
@@ -6514,6 +6597,7 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
         "selectedForEnrichment": len(selected),
         "deferredByCap": deferred_by_cap,
         "slots": slot_counts,
+        "overdueFilings": overdue_stats,
         "activityReasons": reason_counts,
         "yahooBudget": _YAHOO_BUDGET_USED,
     }

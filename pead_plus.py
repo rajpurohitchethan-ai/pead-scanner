@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.39"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.40"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -1158,6 +1158,14 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
             old_live.append(it["symbol"])
     add("Live plans priced on a recent close", old_live,
         note="Updated in rotation; the card and Radar row show the close's date. Read it before acting on a trigger.")
+    # 2.9.40: a tradable company whose date has passed with no filing read
+    # (HDFCBANK sat 18 days as "awaiting result"; no check saw it).
+    overdue = [it for it in items if not it.get("resultsReleased") and d(it.get("resultDate"))
+               and (today - d(it.get("resultDate"))).days > 2
+               and ((it.get("plus") or {}).get("liquidity") or {}).get("pass") is not False]
+    overdue.sort(key=lambda it: -(it.get("marketCapCr") or 0))
+    add("Result date passed, no filing read (2+ days)", [it["symbol"] for it in overdue],
+        note="Shown as awaiting result. The company's NSE listing is re-read every few hours; a postponed meeting stays here until a new date is filed.")
     no_sector = [it["symbol"] for it in items if not (it.get("plus") or {}).get("sectorKey")]
     share = len(no_sector) / max(1, len(items))
     checks.append({"check": "Sector known", "status": "OK" if share <= 0.10 else "WARN", "count": len(no_sector),

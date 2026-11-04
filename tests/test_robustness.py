@@ -774,6 +774,197 @@ class LiveQuoteAfterCloseTests(unittest.TestCase):
         self.assertEqual((v["last"], v["live"]), (1327.0, False))
 
 
+
+class BseDiscoveryTimeoutTests(unittest.TestCase):
+    """2.9.40: two runs on 4 Nov read no BSE filing at all: a timeout during the
+    30-page announcement read dropped every page and skipped the calendar too."""
+
+    def _adapter(self, client):
+        a = p.BSEAdapter.__new__(p.BSEAdapter)
+        a.client = client
+        a.ctx = mock.Mock()
+        a.ctx.raw.save.return_value = "raw/x"
+        return a
+
+    def test_timeout_on_a_later_page_keeps_the_pages_read(self):
+        class C:
+            def announcements(self, page_no, from_date, to_date, category):
+                if page_no == 3:
+                    raise TimeoutError("Request timed out")
+                return {"Table": [{"page": page_no}], "Table1": [{"ROWCNT": 9}]}
+        with mock.patch.object(p, "SOURCE_DELAY_SEC", 0):
+            rows, _ = self._adapter(C()).result_announcements(p.datetime(2026, 10, 5), p.datetime(2026, 11, 4))
+        self.assertEqual([r["page"] for r in rows], [1, 2])
+
+    def test_timeout_on_the_first_page_still_fails(self):
+        class C:
+            def announcements(self, **k):
+                raise TimeoutError("Request timed out")
+        with mock.patch.object(p, "SOURCE_DELAY_SEC", 0), self.assertRaises(TimeoutError):
+            self._adapter(C()).result_announcements(p.datetime(2026, 10, 5), p.datetime(2026, 11, 4))
+
+    def test_announcement_failure_does_not_lose_the_calendar(self):
+        seen = []
+
+        class FakeBSE:
+            def __init__(self, ctx):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def result_announcements(self, a, b):
+                raise TimeoutError("Request timed out")
+
+            def result_calendar(self, a, b):
+                seen.append("calendar")
+                return [], None
+
+        class FakeNSE(FakeBSE):
+            def financial_results(self, *a, **k):
+                return [], None
+
+            def board_meetings(self, *a, **k):
+                return [], None
+
+        with tempfile.TemporaryDirectory() as td, mock.patch.object(p, "BSEAdapter", FakeBSE), \
+                mock.patch.object(p, "NSEAdapter", FakeNSE):
+            store = p.EventStore(Path(td) / "events")
+            stats = p.discover_events(store, mock.Mock(), mock.Mock())
+        self.assertEqual(seen, ["calendar"])
+        self.assertTrue(any("BSE announcements: TimeoutError" in e for e in stats["errors"]))
+
+
+class OverdueFilingCheckTests(_StoreCase):
+    """2.9.40 (evening check, 4 Nov 2026): HDFCBANK (17 Oct), WIPRO, TECHM, LT,
+    COALINDIA, TRENT and 280 others were still "awaiting result" with a past
+    date. BSE's rows do not name the period ("Outcome of Board Meeting", "As
+    attached"), so since 2.9.4 they rightly do not declare; the company's own NSE
+    listing would, but it was only read on declared events (or once for the
+    previous quarter's time), so it was never read after the result date."""
+
+    def _nse_event(self, sym, rd):
+        e = self.store.ensure_event(security={"symbol": sym, "nseSymbol": sym}, period_end=date(2026, 9, 30))
+        self.store.merge_field(e, "result_date", rd, source="BSE_RESULT_CALENDAR")
+        e["state"] = "SCHEDULED"
+        e["nseResultListing"] = {"v": 2, "fetchedAt": "2026-10-08T16:50:50Z", "rows": []}
+        self.store.save(e)
+        return e
+
+    def _now(self):
+        from datetime import datetime as _dt
+        return _dt(2026, 11, 4, 21, 0, tzinfo=p.IST)
+
+    def _run(self, events, rows_by_symbol, maximum=80):
+        calls = []
+
+        class FakeNSE:
+            def __init__(self, ctx):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def integrated_filings(self, symbol, event_id=None):
+                calls.append(symbol)
+                return rows_by_symbol.get(symbol, []), None
+
+            def financial_results(self, *a, **k):
+                return [], None
+
+        with mock.patch.object(p, "now_ist", return_value=self._now()), mock.patch.object(p, "NSEAdapter", FakeNSE), \
+                mock.patch.object(p, "OVERDUE_CHECK_MAX", maximum):
+            stats = p.check_overdue_filings(events, self.store, None)
+        return calls, stats
+
+    def _row(self, sym, filed="17-Oct-2026 16:01:12"):
+        return {"symbol": sym, "type": "Integrated Filing- Financials", "qe_Date": "30-Sep-2026", "broadcast_Date": filed,
+                "consolidated": "Consolidated", "xbrl": "https://nsearchives.nseindia.com/corporate/xbrl/x.xml"}
+
+    def test_past_date_is_declared_from_the_companys_own_filing(self):
+        e = self._nse_event("HDFCBANK", "2026-10-17")
+        calls, stats = self._run([e], {"HDFCBANK": [self._row("HDFCBANK")]})
+        self.assertEqual(calls, ["HDFCBANK"])
+        self.assertEqual(stats["declared"], 1)
+        self.assertIs(p.boolish(self.store.value(e, "results_released")), True)
+        self.assertEqual(self.store.value(e, "result_date"), "2026-10-17")
+        self.assertEqual(self.store.value(e, "filing_timestamp")[:10], "2026-10-17")
+        self.assertEqual(e["state"], "RESULT_FILED")
+        self.assertTrue(e.get("lateDeclaredAt"))
+
+    def test_no_filing_stays_scheduled(self):
+        e = self._nse_event("POSTPONED", "2026-10-30")
+        calls, stats = self._run([e], {"POSTPONED": []})
+        self.assertEqual(calls, ["POSTPONED"])
+        self.assertEqual(stats["declared"], 0)
+        self.assertIsNot(p.boolish(self.store.value(e, "results_released")), True)
+        self.assertEqual(e["state"], "SCHEDULED")
+
+    def test_calendar_date_alone_never_declares_and_other_period_does_not_count(self):
+        e = self._nse_event("OLDROW", "2026-10-30")
+        row = dict(self._row("OLDROW"), qe_Date="30-Jun-2026", broadcast_Date="18-Jul-2026 16:01:12")
+        _, stats = self._run([e], {"OLDROW": [row]})
+        self.assertEqual(stats["declared"], 0)
+        self.assertIsNot(p.boolish(self.store.value(e, "results_released")), True)
+
+    def test_future_date_and_released_are_not_checked(self):
+        future = self._nse_event("LATER", "2026-11-12")
+        done = self._nse_event("DONE", "2026-10-20")
+        self.store.merge_field(done, "results_released", True, source="NSE_INTEGRATED_FILING")
+        calls, _ = self._run([future, done], {})
+        self.assertEqual(calls, [])
+
+    def test_today_is_checked_and_recent_listing_is_not_read_again(self):
+        today = self._nse_event("TODAY", "2026-11-04")
+        recent = self._nse_event("RECENT", "2026-10-30")
+        recent["nseResultListing"]["fetchedAt"] = "2026-11-04T14:00:00Z"
+        calls, _ = self._run([today, recent], {})
+        self.assertEqual(calls, ["TODAY"])
+
+    def test_cap_takes_largest_never_rechecked_first_and_keeps_declared_budget(self):
+        small = self._nse_event("SMALL", "2026-10-17")
+        big = self._nse_event("BIG", "2026-10-17")
+        self.store.merge_field(small, "market_cap_cr", 2000.0, source="NSE_QUOTE")
+        self.store.merge_field(big, "market_cap_cr", 900000.0, source="NSE_QUOTE")
+        p._EXTRA_CALLS_USED["n"] = 0
+        calls, stats = self._run([small, big], {}, maximum=1)
+        self.assertEqual(calls, ["BIG"])
+        self.assertEqual(stats["overdue"], 2)
+        self.assertEqual(p._EXTRA_CALLS_USED["n"], 0)  # the declared rows keep their whole budget
+
+    def test_late_declared_without_figures_goes_first(self):
+        from datetime import datetime as _dt
+        e = self._nse_event("HDFCBANK", "2026-10-17")
+        self.store.merge_field(e, "results_released", True, source="NSE_INTEGRATED_FILING")
+        e["lateDeclaredAt"] = "2026-11-04T14:00:00Z"
+        e.setdefault("fetch", {})["PRICE_HISTORY"] = {"lastAttempt": "2026-10-24T09:54:25Z"}
+        e["plus"] = {"price": {"last_session": "2026-10-23"}}
+        now = _dt(2026, 11, 4, 21, 0, tzinfo=p.IST)
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(e, now.date()), ("A", 0))
+        e["lateDeclaredAt"] = "2026-10-25T14:00:00Z"   # the jump is only for the first days
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertNotEqual(p.enrichment_group(e, now.date()), ("A", 0))
+
+    def test_self_check_lists_past_dates_of_tradable_companies(self):
+        from datetime import date as _d
+        import pead_plus as pp
+        base = {"resultsReleased": False, "plus": {"liquidity": {"pass": True}}, "priceContext": {}}
+        items = [dict(base, symbol="HDFCBANK", eventId="a", name="HDFC", resultDate="2026-10-17"),
+                 dict(base, symbol="TODAY", eventId="b", name="T", resultDate="2026-11-03"),
+                 dict(base, symbol="LATER", eventId="c", name="L", resultDate="2026-11-12"),
+                 dict(base, symbol="THIN", eventId="d", name="N", resultDate="2026-10-17", plus={"liquidity": {"pass": False}})]
+        out = pp.self_audit(items, {"asOf": "2026-11-04"}, {}, _d(2026, 11, 4))
+        check = [c for c in out["checks"] if c["check"].startswith("Result date passed")][0]
+        self.assertEqual(check["status"], "WARN")
+        self.assertEqual(check["examples"], ["HDFCBANK"])
+
 if __name__ == "__main__":
     unittest.main()
 
