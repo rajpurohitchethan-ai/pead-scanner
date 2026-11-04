@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE721V01019|2026-09-30",
   "createdAt": "2026-10-24T02:51:05Z",
-  "updatedAt": "2026-11-04T16:46:58Z",
+  "updatedAt": "2026-11-04T17:22:11Z",
   "security": {
     "symbol": "MEENST",
     "bseSymbol": "MEENST",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-24T02:51:05Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-04T16:59:02Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-04T17:22:11Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-04",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-04T16:21:30Z",
+      "fetchedAt": "2026-11-04T16:59:10Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-d3c19452c66e2f74.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
       "note": null
     },
     "reaction_session": {
@@ -96,6 +106,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE721V01019_2026-09-30/scrip_results-abbe95270c4dfda1.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-04T16:59:02Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-04T16:46:35.593000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-04T16:59:02Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-04T16:59:02Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "note": null
     }
   },
   "fetch": {
@@ -130,33 +167,43 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -199,11 +246,11 @@
       "sector": {
         "sector": "Capital Goods",
         "stocks": 417,
-        "momentum63dMedian": -4.79,
-        "relativeToMarket": 2.15,
-        "declared": 127,
-        "strongResults": 64,
-        "avgReaction": -0.55,
+        "momentum63dMedian": -4.78,
+        "relativeToMarket": 2.12,
+        "declared": 157,
+        "strongResults": 69,
+        "avgReaction": -0.37,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -231,5 +278,19 @@
     "reasons": [],
     "risks": []
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-04T16:46:35.593000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "We submit herewith un-audited financial results (Standalone and Consolidated) financial results for the quarter and half year ended 30.09.2026 duly approved by the Board of Directors at .... Meenakshi Steel Industries Ltd - 512505 - Un-Audited Financial Results (Standalone And Consolidated) For The ",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "seenAt": "2026-11-04T17:21:56Z"
+    }
+  ]
 }

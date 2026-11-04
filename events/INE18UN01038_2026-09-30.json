@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE18UN01038|2026-09-30",
   "createdAt": "2026-10-07T04:24:03Z",
-  "updatedAt": "2026-11-04T16:46:56Z",
+  "updatedAt": "2026-11-04T17:22:09Z",
   "security": {
     "symbol": "GAJA",
     "bseSymbol": "GAJA",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -58,50 +58,54 @@
       "state": "SCHEDULED",
       "at": "2026-10-31T03:25:59Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-04T16:59:04Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-04T17:22:09Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "results_released": {
       "value": true,
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T08:19:47Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-04T16:59:04Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": null,
-      "note": "migrated last-known-good v1 release proof",
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-06-30"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "note": "re-verified from saved exchange evidence"
     },
     "result_date": {
       "value": "2026-11-04",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-04T16:21:30Z",
+      "fetchedAt": "2026-11-04T16:59:10Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-d3c19452c66e2f74.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
       "note": null
     },
     "filing_timestamp": {
-      "value": "2026-10-09T11:46:33.787000+05:30",
+      "value": "2026-11-04T10:39:55.933000+05:30",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T04:24:03Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-04T16:59:04Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-e39d1b0043af9dcb.json",
-      "note": null,
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-06-30"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "note": null
     },
     "result_source": {
       "value": "BSE_RESULT_ANNOUNCEMENT",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T04:24:03Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-04T16:59:04Z",
+      "status": "OK",
       "rank": 98,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-e39d1b0043af9dcb.json",
-      "note": null,
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-06-30"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "note": null
     },
     "reaction_session": {
       "value": "2026-11-05",
@@ -349,23 +353,29 @@
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -373,13 +383,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -422,11 +432,11 @@
       "sector": {
         "sector": "Financial Services",
         "stocks": 427,
-        "momentum63dMedian": -8.21,
-        "relativeToMarket": -1.27,
-        "declared": 147,
-        "strongResults": 80,
-        "avgReaction": -0.88,
+        "momentum63dMedian": -8.05,
+        "relativeToMarket": -1.15,
+        "declared": 156,
+        "strongResults": 81,
+        "avgReaction": -0.9,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -963,5 +973,19 @@
   },
   "mergedFrom": [
     "NSE:GAJA|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-04T10:39:55.933000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Results for Q1 and H1 FY 27 Gaja Alternative Asset Management Ltd - 544885 - Results - Financials For Quarter And Half Year Ended 30 Sep.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "seenAt": "2026-11-04T17:21:46Z"
+    }
   ]
 }

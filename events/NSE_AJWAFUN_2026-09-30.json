@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:AJWAFUN|2026-09-30",
   "createdAt": "2026-10-07T04:23:49Z",
-  "updatedAt": "2026-11-04T16:46:59Z",
+  "updatedAt": "2026-11-04T17:22:11Z",
   "security": {
     "symbol": "AJWAFUN",
     "bseSymbol": "AJWAFUN",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -41,50 +41,54 @@
       "state": "SCHEDULED",
       "at": "2026-10-31T03:25:59Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-04T16:59:02Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-04T17:22:11Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "results_released": {
       "value": true,
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T08:19:47Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-04T16:59:02Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": null,
-      "note": "migrated last-known-good v1 release proof",
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-03-31"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "note": "re-verified from saved exchange evidence"
     },
     "result_date": {
       "value": "2026-11-04",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-04T16:21:30Z",
+      "fetchedAt": "2026-11-04T16:59:09Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-d3c19452c66e2f74.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
       "note": null
     },
     "filing_timestamp": {
-      "value": "2026-12-09T12:42:50.580000+05:30",
+      "value": "2026-11-04T17:05:08.153000+05:30",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T04:23:49Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-04T16:59:02Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-e39d1b0043af9dcb.json",
-      "note": null,
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-03-31"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "note": null
     },
     "result_source": {
       "value": "BSE_RESULT_ANNOUNCEMENT",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T04:23:49Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-04T16:59:02Z",
+      "status": "OK",
       "rank": 98,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-e39d1b0043af9dcb.json",
-      "note": null,
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-03-31"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "note": null
     },
     "pre_result_5d_pct": {
       "value": 11.89,
@@ -256,23 +260,29 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -280,13 +290,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -328,12 +338,12 @@
       "sectorKey": "Consumer Services",
       "sector": {
         "sector": "Consumer Services",
-        "stocks": 130,
-        "momentum63dMedian": -8.79,
-        "relativeToMarket": -1.85,
-        "declared": 43,
-        "strongResults": 21,
-        "avgReaction": -1.8,
+        "stocks": 131,
+        "momentum63dMedian": -8.02,
+        "relativeToMarket": -1.12,
+        "declared": 50,
+        "strongResults": 22,
+        "avgReaction": -1.22,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -876,5 +886,19 @@
     "plusVersion": "2.9.38",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-04T17:05:08.153000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "1. Financial Results: Approved the standalone unaudited financial results for the quarter and half year ended 30th September 2026 with statement of asset and liabilities and cash flow statement .... Ajwa Fun World & Resort Ltd - 526628 - Outcome Of The Board Meeting Held On 4Th November, 2026 Under ",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-d7490533615f936c.json",
+      "seenAt": "2026-11-04T17:22:00Z"
+    }
+  ]
 }
