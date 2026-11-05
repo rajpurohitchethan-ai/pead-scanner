@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE782E01017|2026-09-30",
   "createdAt": "2026-10-27T09:48:16Z",
-  "updatedAt": "2026-11-05T03:43:37Z",
+  "updatedAt": "2026-11-05T09:59:48Z",
   "security": {
     "symbol": "HESTERBIO",
     "nseSymbol": "HESTERBIO",
@@ -23,7 +23,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -44,16 +44,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-28T03:56:20Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-05T09:31:52Z",
+      "reason": "official exchange result filing found in the company's NSE listing"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-05T09:59:48Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-05",
-      "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-05T03:18:02Z",
+      "source": "NSE_INTEGRATED_FILING",
+      "fetchedAt": "2026-11-05T09:31:52Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-8b4e1f5521bdc789.json",
+      "rawRef": "raw/nse/INE782E01017_2026-09-30/integrated_filings-2edc928d0b7ca33d.json",
       "note": null
     },
     "reaction_session": {
@@ -235,6 +245,24 @@
       "rank": 98,
       "rawRef": "raw/nse/INE782E01017_2026-09-30/integrated_filings-0cf1f9aeee899bbf.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "NSE_INTEGRATED_FILING",
+      "fetchedAt": "2026-11-05T09:31:52Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse/INE782E01017_2026-09-30/integrated_filings-2edc928d0b7ca33d.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-05T12:01:11+05:30",
+      "source": "NSE_INTEGRATED_FILING",
+      "fetchedAt": "2026-11-05T09:59:35Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse/INE782E01017_2026-09-30/integrated_filings-2edc928d0b7ca33d.json",
+      "note": null
     }
   },
   "fetch": {
@@ -266,18 +294,18 @@
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-11-05T03:19:49Z",
-      "lastSuccess": "2026-11-05T03:19:49Z",
+      "lastAttempt": "2026-11-05T09:31:52Z",
+      "lastSuccess": "2026-11-05T09:31:52Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/INE782E01017_2026-09-30/integrated_filings-0cf1f9aeee899bbf.json"
+      "rawRef": "raw/nse/INE782E01017_2026-09-30/integrated_filings-2edc928d0b7ca33d.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-11-05T03:19:49Z",
-      "lastSuccess": "2026-11-05T03:19:49Z",
+      "lastAttempt": "2026-11-05T09:31:52Z",
+      "lastSuccess": "2026-11-05T09:31:52Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/INE782E01017_2026-09-30/integrated_filings-0cf1f9aeee899bbf.json"
+      "rawRef": "raw/nse/INE782E01017_2026-09-30/integrated_filings-2edc928d0b7ca33d.json"
     },
     "PREV_QUARTER": {
       "lastAttempt": "2026-10-28T08:33:10Z",
@@ -289,23 +317,29 @@
   },
   "derived": {
     "score": 24,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "ATTRACTIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -313,13 +347,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -361,10 +395,10 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 177,
-        "momentum63dMedian": -0.88,
-        "relativeToMarket": 5.87,
-        "declared": 85,
+        "stocks": 178,
+        "momentum63dMedian": -0.72,
+        "relativeToMarket": 6.17,
+        "declared": 89,
         "strongResults": 46,
         "avgReaction": 1.29,
         "tailwind": "POSITIVE"
@@ -760,9 +794,25 @@
     "NSE:HESTERBIO|2026-09-30"
   ],
   "nseResultListing": {
-    "fetchedAt": "2026-11-05T03:19:49Z",
+    "fetchedAt": "2026-11-05T09:31:52Z",
     "v": 2,
     "rows": [
+      {
+        "periodEnd": "2026-09-30",
+        "fromDate": "2026-07-01",
+        "basis": "CONSOLIDATED",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1753372_05112026120401_WEB.xml",
+        "filedAt": "2026-11-05T12:02:10+05:30"
+      },
+      {
+        "periodEnd": "2026-09-30",
+        "fromDate": "2026-07-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1753370_05112026120347_WEB.xml",
+        "filedAt": "2026-11-05T12:01:11+05:30"
+      },
       {
         "periodEnd": "2026-06-30",
         "fromDate": "2026-04-01",
@@ -858,6 +908,45 @@
         "cumulative": false,
         "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1434942_09052025045327_WEB.xml",
         "filedAt": "2025-05-09T16:53:27+05:30"
+      }
+    ]
+  },
+  "filings": [
+    {
+      "source": "NSE_INTEGRATED_FILING",
+      "filedAt": "2026-11-05T12:01:11+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "EXCHANGE_PERIOD_FIELD",
+      "basis": "STANDALONE",
+      "cumulative": false,
+      "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1753370_05112026120347_WEB.xml",
+      "headline": "Integrated Filing - Financials Standalone Original",
+      "rawRef": "raw/nse/INE782E01017_2026-09-30/integrated_filings-2edc928d0b7ca33d.json",
+      "seenAt": "2026-11-05T09:59:35Z"
+    },
+    {
+      "source": "NSE_INTEGRATED_FILING",
+      "filedAt": "2026-11-05T12:02:10+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "EXCHANGE_PERIOD_FIELD",
+      "basis": "CONSOLIDATED",
+      "cumulative": false,
+      "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1753372_05112026120401_WEB.xml",
+      "headline": "Integrated Filing - Financials Consolidated Original",
+      "rawRef": "raw/nse/INE782E01017_2026-09-30/integrated_filings-2edc928d0b7ca33d.json",
+      "seenAt": "2026-11-05T09:59:35Z"
+    }
+  ],
+  "lateDeclaredAt": "2026-11-05T09:31:52Z",
+  "fieldHistory": {
+    "filing_timestamp": [
+      {
+        "value": "2026-11-05T12:02:10+05:30",
+        "source": "NSE_INTEGRATED_FILING",
+        "fetchedAt": "2026-11-05T09:31:52Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-05T09:59:35Z"
       }
     ]
   }

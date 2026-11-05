@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:SAGARSYST|2026-09-30",
   "createdAt": "2026-10-31T03:25:59Z",
-  "updatedAt": "2026-11-05T03:43:38Z",
+  "updatedAt": "2026-11-05T09:59:49Z",
   "security": {
     "symbol": "SAGARSYST",
     "bseSymbol": "SAGARSYST",
@@ -13,7 +13,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -24,49 +24,123 @@
       "state": "SCHEDULED",
       "at": "2026-10-31T03:25:59Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-05T09:29:58Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-05T09:59:49Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-05",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-05T03:18:03Z",
+      "fetchedAt": "2026-11-05T09:30:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-8b4e1f5521bdc789.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-05T14:26:49.987000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": null
+    },
+    "reaction_session": {
+      "value": "2026-11-06",
+      "source": "DERIVED",
+      "fetchedAt": "2026-11-05T09:59:39Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "INTRADAY"
+    },
+    "filing_session": {
+      "value": "INTRADAY",
+      "source": "DERIVED",
+      "fetchedAt": "2026-11-05T09:59:39Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": null
+    },
+    "reaction_window_start": {
+      "value": "2026-11-05",
+      "source": "DERIVED",
+      "fetchedAt": "2026-11-05T09:59:39Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "intraday filing"
     }
   },
   "fetch": {},
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Result came during market hours, so the reaction is measured over 05 Nov and 06 Nov. The plan is ready after the 06 Nov close.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -132,5 +206,19 @@
     "reasons": [],
     "risks": []
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-05T14:26:49.987000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial Results for the Quarter and Half year ended 30th September 2026 Sagar Systech Ltd - 511254 - Results-Financial Results For The Quarter And Half-Year Ended 30Th September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "seenAt": "2026-11-05T09:59:39Z"
+    }
+  ]
 }

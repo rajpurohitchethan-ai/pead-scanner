@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE571A01020|2026-09-30",
   "createdAt": "2026-10-22T06:49:59Z",
-  "updatedAt": "2026-11-05T03:43:36Z",
+  "updatedAt": "2026-11-05T09:59:47Z",
   "security": {
     "symbol": "IPCALAB",
     "nseSymbol": "IPCALAB",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -40,16 +40,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-23T02:50:49Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-05T09:29:58Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-05T09:59:47Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-05",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-05T03:18:02Z",
+      "fetchedAt": "2026-11-05T09:30:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-8b4e1f5521bdc789.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
       "note": null
     },
     "reaction_session": {
@@ -210,6 +220,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE571A01020_2026-09-30/integrated_filings-7ca35caeffab1a79.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-05T13:48:33.380000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": null
     }
   },
   "fetch": {
@@ -250,23 +287,29 @@
   },
   "derived": {
     "score": 15,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -274,13 +317,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -322,10 +365,10 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 177,
-        "momentum63dMedian": -0.88,
-        "relativeToMarket": 5.87,
-        "declared": 85,
+        "stocks": 178,
+        "momentum63dMedian": -0.72,
+        "relativeToMarket": 6.17,
+        "declared": 89,
         "strongResults": 46,
         "avgReaction": 1.29,
         "tailwind": "POSITIVE"
@@ -801,5 +844,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:IPCALAB|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-05T13:48:33.380000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Standalone and Consolidated Financial Results for second quarter and half year ended 30.09.2026 Ipca Laboratories Ltd - 524494 - Standalone And Consolidated Financial Results For Second Quarter And Half Year Ended 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "seenAt": "2026-11-05T09:59:32Z"
+    }
   ]
 }

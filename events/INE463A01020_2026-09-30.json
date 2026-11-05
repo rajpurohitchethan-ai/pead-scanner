@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE463A01020|2026-09-30",
   "createdAt": "2026-10-07T08:19:51Z",
-  "updatedAt": "2026-11-05T03:43:36Z",
+  "updatedAt": "2026-11-05T09:59:47Z",
   "security": {
     "symbol": "BERGEPAINT",
     "nseSymbol": "BERGEPAINT",
@@ -26,7 +26,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -157,16 +157,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:14Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-05T09:29:58Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-05T09:59:47Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-05",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-05T03:18:02Z",
+      "fetchedAt": "2026-11-05T09:30:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-8b4e1f5521bdc789.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
       "note": null
     },
     "reaction_session": {
@@ -354,6 +364,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE463A01020_2026-09-30/integrated_filings-34e573d05a4f4c0a.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-05T14:47:23.207000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": null
     }
   },
   "fetch": {
@@ -416,23 +453,29 @@
   },
   "derived": {
     "score": 16,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -440,9 +483,9 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
         "signal": "NO_ENTRY",
@@ -480,10 +523,10 @@
       "sectorKey": "Consumer Durables",
       "sector": {
         "sector": "Consumer Durables",
-        "stocks": 150,
-        "momentum63dMedian": -9.59,
-        "relativeToMarket": -2.84,
-        "declared": 52,
+        "stocks": 151,
+        "momentum63dMedian": -9.62,
+        "relativeToMarket": -2.73,
+        "declared": 53,
         "strongResults": 17,
         "avgReaction": -1.18,
         "tailwind": "NEUTRAL"
@@ -1002,5 +1045,19 @@
         "filedAt": "2025-05-14T19:40:50+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-05T14:47:23.207000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please find attached letter dated 05.11.2026 Berger Paints India Ltd - 509480 - Financial Results For The Quarter And Half Year Ended 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "seenAt": "2026-11-05T09:59:30Z"
+    }
+  ]
 }

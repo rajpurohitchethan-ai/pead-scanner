@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE195F01027|2026-09-30",
   "createdAt": "2026-10-27T03:32:08Z",
-  "updatedAt": "2026-11-05T03:43:35Z",
+  "updatedAt": "2026-11-05T09:59:46Z",
   "security": {
     "symbol": "SELLWIN",
     "bseSymbol": "SELLWIN",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-27T03:32:08Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-05T09:29:58Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-05T09:59:46Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-05",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-05T03:18:03Z",
+      "fetchedAt": "2026-11-05T09:30:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-8b4e1f5521bdc789.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
       "note": null
     },
     "reaction_session": {
@@ -141,6 +151,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE195F01027_2026-09-30/scrip_results-d2cfc72c79454dab.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-05T14:32:37.090000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T09:29:58Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "note": null
     }
   },
   "fetch": {
@@ -174,30 +211,40 @@
   },
   "derived": {
     "score": 2,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -235,8 +282,8 @@
       "sector": {
         "sector": "Services",
         "stocks": 232,
-        "momentum63dMedian": -3.49,
-        "relativeToMarket": 3.26,
+        "momentum63dMedian": -3.63,
+        "relativeToMarket": 3.25,
         "declared": 44,
         "strongResults": 15,
         "avgReaction": -0.83,
@@ -599,5 +646,19 @@
     "replayedFromRaw": true,
     "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-05T14:32:37.090000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Submission of Standalone and Consolidated Unaudited Financial Results for the second quarter and Half Year ended on 30.09.2026 Sellwin Traders Ltd - 538875 - Submission Of Standalone And Consolidated Unaudited Financial Results For The Second Quarter And Half Year Ended On 30.09.2026 And Disclosure ",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7530a8d83bac671e.json",
+      "seenAt": "2026-11-05T09:59:26Z"
+    }
+  ]
 }
