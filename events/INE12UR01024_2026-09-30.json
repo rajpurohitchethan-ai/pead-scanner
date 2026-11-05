@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE12UR01024|2026-09-30",
   "createdAt": "2026-11-02T13:14:35Z",
-  "updatedAt": "2026-11-05T17:41:17Z",
+  "updatedAt": "2026-11-05T18:31:46Z",
   "security": {
     "symbol": "UTLSOLAR",
     "nseSymbol": "UTLSOLAR",
@@ -17,7 +17,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -38,16 +38,21 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T03:26:59Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-05T18:04:51Z",
+      "reason": "official exchange result filing found in the company's NSE listing"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-05",
-      "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-05T17:14:39Z",
+      "source": "NSE_INTEGRATED_FILING",
+      "fetchedAt": "2026-11-05T18:04:51Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-f43754f5e6a9a2ef.json",
+      "rawRef": "raw/nse/INE12UR01024_2026-09-30/integrated_filings-6fc57f33042e90e8.json",
       "note": null
     },
     "reaction_session": {
@@ -121,6 +126,24 @@
       "rank": 105,
       "rawRef": "raw/bse_price/INE12UR01024_2026-09-30/price_volume_12m-502145e1105e3171.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "NSE_INTEGRATED_FILING",
+      "fetchedAt": "2026-11-05T18:04:51Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse/INE12UR01024_2026-09-30/integrated_filings-6fc57f33042e90e8.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-05T19:14:10+05:30",
+      "source": "NSE_INTEGRATED_FILING",
+      "fetchedAt": "2026-11-05T18:31:19Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse/INE12UR01024_2026-09-30/integrated_filings-6fc57f33042e90e8.json",
+      "note": null
     }
   },
   "fetch": {
@@ -137,37 +160,61 @@
       "status": "FAILED",
       "error": "Yahoo fundamentals budget exhausted for this run",
       "rawRef": null
+    },
+    "NSE_INTEGRATED_FILING": {
+      "lastAttempt": "2026-11-05T18:04:51Z",
+      "lastSuccess": "2026-11-05T18:04:51Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE12UR01024_2026-09-30/integrated_filings-6fc57f33042e90e8.json"
+    },
+    "NSE_RESULT_LISTING": {
+      "lastAttempt": "2026-11-05T18:04:51Z",
+      "lastSuccess": "2026-11-05T18:04:51Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/nse/INE12UR01024_2026-09-30/integrated_filings-6fc57f33042e90e8.json"
     }
   },
   "derived": {
     "score": 15,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -566,5 +613,106 @@
     "computedAt": "2026-11-04T23:07:26Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "NSE_INTEGRATED_FILING",
+      "filedAt": "2026-11-05T19:14:10+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "EXCHANGE_PERIOD_FIELD",
+      "basis": "STANDALONE",
+      "cumulative": false,
+      "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1754046_05112026071420_WEB.xml",
+      "headline": "Integrated Filing - Financials Standalone Original",
+      "rawRef": "raw/nse/INE12UR01024_2026-09-30/integrated_filings-6fc57f33042e90e8.json",
+      "seenAt": "2026-11-05T18:31:19Z"
+    },
+    {
+      "source": "NSE_INTEGRATED_FILING",
+      "filedAt": "2026-11-05T19:14:14+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "EXCHANGE_PERIOD_FIELD",
+      "basis": "CONSOLIDATED",
+      "cumulative": false,
+      "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1754047_05112026071454_WEB.xml",
+      "headline": "Integrated Filing - Financials Consolidated Original",
+      "rawRef": "raw/nse/INE12UR01024_2026-09-30/integrated_filings-6fc57f33042e90e8.json",
+      "seenAt": "2026-11-05T18:31:19Z"
+    }
+  ],
+  "nseResultListing": {
+    "fetchedAt": "2026-11-05T18:04:51Z",
+    "v": 2,
+    "rows": [
+      {
+        "periodEnd": "2026-09-30",
+        "fromDate": "2026-07-01",
+        "basis": "CONSOLIDATED",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1754047_05112026071454_WEB.xml",
+        "filedAt": "2026-11-05T19:14:14+05:30"
+      },
+      {
+        "periodEnd": "2026-09-30",
+        "fromDate": "2026-07-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1754046_05112026071420_WEB.xml",
+        "filedAt": "2026-11-05T19:14:10+05:30"
+      },
+      {
+        "periodEnd": "2026-06-30",
+        "fromDate": "2026-04-01",
+        "basis": "CONSOLIDATED",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1714128_13082026090556_WEB.xml",
+        "filedAt": "2026-08-13T21:05:11+05:30"
+      },
+      {
+        "periodEnd": "2026-06-30",
+        "fromDate": "2026-04-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1714125_13082026090528_WEB.xml",
+        "filedAt": "2026-08-13T21:04:12+05:30"
+      },
+      {
+        "periodEnd": "2026-03-31",
+        "fromDate": "2026-01-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1667400_14052026091741_WEB.xml",
+        "filedAt": "2026-05-14T21:15:08+05:30"
+      },
+      {
+        "periodEnd": "2025-12-31",
+        "fromDate": "2025-10-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1615727_31012026061222_WEB.xml",
+        "filedAt": "2026-01-31T18:12:17+05:30"
+      },
+      {
+        "periodEnd": "2025-09-30",
+        "fromDate": "2025-07-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1583959_08122025071505_WEB.xml",
+        "filedAt": "2025-12-08T19:15:05+05:30"
+      }
+    ]
+  },
+  "lateDeclaredAt": "2026-11-05T18:04:51Z",
+  "fieldHistory": {
+    "filing_timestamp": [
+      {
+        "value": "2026-11-05T19:14:14+05:30",
+        "source": "NSE_INTEGRATED_FILING",
+        "fetchedAt": "2026-11-05T18:04:51Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-05T18:31:19Z"
+      }
+    ]
   }
 }
