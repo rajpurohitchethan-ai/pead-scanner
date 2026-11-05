@@ -2846,6 +2846,18 @@ class LargeCompaniesFirstInBacklogTests(unittest.TestCase):
         self.assertGreaterEqual(p.ENRICH_SLOTS_DECLARED_SURGE, 95)
 
 
+class WorkflowCheckoutTests(unittest.TestCase):
+    """5 Nov 2026: a run dispatched while another was running waited in the
+    queue, checked out the commit it was queued on, spent 30 minutes on the old
+    event store, and its push failed on a rebase conflict with the first run's
+    data: the whole run was lost."""
+
+    def test_engine_run_starts_from_the_branch_tip(self):
+        wf = (Path(__file__).resolve().parents[1] / ".github/workflows/scan.yml").read_text(encoding="utf-8")
+        checkout = wf[wf.index("actions/checkout@v4"):wf.index("Set up Python")]
+        self.assertIn("ref: ${{ github.ref_name }}", checkout)
+
+
 class LivePlansOnFreshPricesTests(unittest.TestCase):
     """2.9.39 (evening check, 3 Nov 2026): 163 of 196 live Radar plans of liquid
     companies were priced on a close older than 2 Nov (JSWSTEEL, ADANIPOWER,

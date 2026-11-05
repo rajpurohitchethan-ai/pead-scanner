@@ -45,6 +45,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # The branch tip, not the commit the run was queued on: a run queued
+          # behind another one otherwise starts from the old event store and
+          # loses its work (or overwrites the newer data) when it pushes.
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
       - name: Set up Python
