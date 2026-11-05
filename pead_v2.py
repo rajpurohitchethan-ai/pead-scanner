@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.41"
+ENGINE_VERSION = "2.9.42"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1730,7 +1730,10 @@ ENRICH_SLOTS_UPCOMING = int(os.getenv("ENRICH_SLOTS_UPCOMING", "45"))   # B: rep
 # 2.9.38: peak of the season. When more liquid reactions / unread figures are
 # due than A has slots, A borrows from C (then B) up to this; the total stays
 # MAX_ACTIVE_ENRICH_EVENTS. RELIANCE's 2 Nov reaction waited among 254 due rows.
-ENRICH_SLOTS_DECLARED_SURGE = int(os.getenv("ENRICH_SLOTS_DECLARED_SURGE", "70"))
+# 2.9.42: 70 -> 95. 527 rows were urgent on 5 Nov; pre-result prices of upcoming
+# companies wait with no harm (a result's pass re-reads the whole history).
+ENRICH_SLOTS_DECLARED_SURGE = int(os.getenv("ENRICH_SLOTS_DECLARED_SURGE", "95"))
+ENRICH_LARGE_CAP_CR = 5000        # 2.9.42: urgent rows of this size or more go first
 ENRICH_UPCOMING_WINDOW_DAYS = 7
 ENRICH_RECENT_RESULT_DAYS = 5     # declared this recently: concall / transcript / reaction still moving
 REACTION_DUE_TRADED_DAYS = 10   # 2.9.34: reaction-due rank only for stocks that traded this recently
@@ -1978,7 +1981,11 @@ def select_for_enrichment(candidates: list[dict[str, Any]], cap: int, today: dat
             order = _a_order(rank, sub, _live_plan(ev), known_illiquid)
             if rank < 0 or (rank == 0 and sub <= 1 and not illiquid) or order == 2:
                 urgent += 1
-            key = (order, sub if order == 1 else 0, illiquid, last, dist, eid)
+            # 2.9.42: inside the urgent order large tradable companies go first.
+            # HDFCBANK and LT (declared late, listing read just stamped them)
+            # sat behind ~390 smaller rows for three runs without figures.
+            small = order == 1 and (known_illiquid or (safe_num(meta_value(ev, "market_cap_cr")) or 0) < ENRICH_LARGE_CAP_CR)
+            key = (order, small, sub if order == 1 else 0, illiquid, last, dist, eid)
         elif g in ("B", "C"):
             # Pure rotation, least recently enriched first. A result due now
             # jumps the queue only when not looked at for 3 h (the per-company

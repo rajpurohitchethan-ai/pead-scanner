@@ -2789,6 +2789,63 @@ class ReactionBacklogSurgeTests(unittest.TestCase):
         self.assertEqual(counts["selectedDeclared"], p.ENRICH_SLOTS_DECLARED)
 
 
+class LargeCompaniesFirstInBacklogTests(unittest.TestCase):
+    """2.9.42: HDFCBANK, LT, WIPRO ... (declared late on 4 Nov by 2.9.40) were
+    still without figures after three runs: rank A0 sorted reaction-due rows
+    first and all rows least recently enriched first, and the listing read had
+    just stamped them, so ~390 smaller rows went ahead at 45 free slots a run."""
+
+    def _ev(self, i, mcap, due=True, late=None, attempt="2026-11-03T14:00:00Z", liquid=True):
+        ev = {"eventId": f"E{i:04d}", "period": {"end": "2026-09-30"},
+              "security": {"nseSymbol": f"S{i}", "exchangeSector": "Information Technology"},
+              "fields": {"result_date": {"value": "2026-10-17", "status": "OK"},
+                         "results_released": {"value": True, "status": "OK"},
+                         "market_cap_cr": {"value": mcap, "status": "OK"}},
+              "plus": {"price": {"last_session": "2026-11-02" if due else "2026-11-04"}},
+              "derived": {"plus": {"liquidity": {"pass": liquid}}},
+              "fetch": {"PRICE_HISTORY": {"lastAttempt": attempt},
+                        "NSE_RESULT_LISTING": {"lastAttempt": late or attempt}}}
+        ev["fields"]["reaction_session"] = {"value": "2026-11-04" if due else "2026-10-19", "status": "OK"}
+        if late:
+            ev["lateDeclaredAt"] = late
+        return ev
+
+    def _select(self, cands):
+        from datetime import datetime as _dt
+        now = _dt(2026, 11, 5, 21, 0, tzinfo=p.IST)
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            return p.select_for_enrichment(cands, 120, now.date())
+
+    def test_late_declared_large_company_beats_small_reaction_backlog(self):
+        small = [self._ev(i, 1500) for i in range(300)]
+        hdfc = self._ev(900, 1068200, due=False, late="2026-11-04T16:21:34Z", attempt="2026-10-24T09:54:25Z")
+        sel, _ = self._select(small + [hdfc])
+        self.assertIn(hdfc["eventId"], [e["eventId"] for e in sel[:p.ENRICH_SLOTS_DECLARED]])
+
+    def test_large_reaction_due_goes_before_large_figures_only(self):
+        big_fig = self._ev(1, 50000, due=False, late="2026-11-04T16:21:34Z")
+        big_due = self._ev(2, 50000)
+        sel, _ = self._select([big_fig, big_due])
+        self.assertEqual([e["eventId"] for e in sel[:2]], [big_due["eventId"], big_fig["eventId"]])
+
+    def test_unknown_or_illiquid_never_counts_as_large(self):
+        unknown = self._ev(1, None)
+        illiquid = self._ev(2, 50000, liquid=False)
+        large = self._ev(3, 50000, attempt="2026-11-04T20:00:00Z")
+        sel, _ = self._select([unknown, illiquid, large])
+        self.assertEqual(sel[0]["eventId"], large["eventId"])
+        self.assertEqual(sel[-1]["eventId"], illiquid["eventId"])
+
+    def test_large_backlog_borrows_up_to_the_surge(self):
+        rows = [self._ev(i, 8000) for i in range(300)]
+        up = [{"eventId": f"U{i}", "period": {"end": "2026-09-30"}, "security": {"nseSymbol": f"U{i}"},
+               "fields": {"result_date": {"value": "2026-11-07", "status": "OK"}}} for i in range(100)]
+        _, counts = self._select(rows + up)
+        self.assertEqual(counts["selectedDeclared"], p.ENRICH_SLOTS_DECLARED_SURGE)
+        self.assertEqual(counts["selectedUpcoming"], 120 - p.ENRICH_SLOTS_DECLARED_SURGE)
+        self.assertGreaterEqual(p.ENRICH_SLOTS_DECLARED_SURGE, 95)
+
+
 class LivePlansOnFreshPricesTests(unittest.TestCase):
     """2.9.39 (evening check, 3 Nov 2026): 163 of 196 live Radar plans of liquid
     companies were priced on a close older than 2 Nov (JSWSTEEL, ADANIPOWER,
