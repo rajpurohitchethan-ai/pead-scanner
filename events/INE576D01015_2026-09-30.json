@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE576D01015|2026-09-30",
   "createdAt": "2026-10-23T02:50:49Z",
-  "updatedAt": "2026-11-05T18:31:48Z",
+  "updatedAt": "2026-11-06T00:09:13Z",
   "security": {
     "symbol": "UNJHAFOR",
     "bseSymbol": "UNJHAFOR",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,21 @@
       "state": "SCHEDULED",
       "at": "2026-10-23T02:50:49Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-05T23:42:55Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-05",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-05T18:03:55Z",
+      "fetchedAt": "2026-11-05T23:42:55Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-f43754f5e6a9a2ef.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-eb75c56d1ddced9c.json",
       "note": null
     },
     "reaction_session": {
@@ -174,6 +179,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE576D01015_2026-09-30/scrip_results-9704e7db9b8b825a.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T23:42:55Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-eb75c56d1ddced9c.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-05T15:29:04.403000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T23:42:55Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-eb75c56d1ddced9c.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T23:42:55Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-eb75c56d1ddced9c.json",
+      "note": null
     }
   },
   "fetch": {
@@ -206,24 +238,30 @@
     }
   },
   "derived": {
-    "score": 5,
-    "completenessPct": 33.3,
+    "score": 2,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -231,13 +269,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -280,12 +318,12 @@
       "sector": {
         "sector": "Healthcare",
         "stocks": 178,
-        "momentum63dMedian": -0.22,
-        "relativeToMarket": 6.33,
-        "declared": 95,
-        "strongResults": 57,
-        "avgReaction": 1.15,
-        "tailwind": "STRONG"
+        "momentum63dMedian": 0.24,
+        "relativeToMarket": 6.72,
+        "declared": 100,
+        "strongResults": 58,
+        "avgReaction": 1.27,
+        "tailwind": "POSITIVE"
       },
       "identity": {
         "macroSector": "Healthcare",
@@ -354,9 +392,7 @@
     },
     "valuationInputCount": 2,
     "expectationFullWindow": false,
-    "reasons": [
-      "Sector tailwind: Healthcare peers are outperforming."
-    ],
+    "reasons": [],
     "risks": [
       "20D average turnover under ₹1 lakh/day is thin.",
       "Illiquid: under ₹1 lakh/day."
@@ -658,5 +694,19 @@
     "replayedFromRaw": true,
     "plusVersion": "2.9.38",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-05T15:29:04.403000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "REGULATION 33 OF SEBI (LODR) REGU 2015 Unjha Formulations Ltd - 531762 -  Approval Of Un-Audited Financial Results Of The Company For Quarter Ended And Half Year Ended On 30Th September,2026  And  Out Come Of Board Meeting  Held On  5Th, November ,2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-eb75c56d1ddced9c.json",
+      "seenAt": "2026-11-06T00:08:49Z"
+    }
+  ]
 }

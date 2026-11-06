@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE191P01017|2026-09-30",
   "createdAt": "2026-10-12T16:34:12Z",
-  "updatedAt": "2026-11-05T18:31:46Z",
+  "updatedAt": "2026-11-06T00:09:11Z",
   "security": {
     "symbol": "GCMCAPI",
     "bseSymbol": "GCMCAPI",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,36 @@
       "state": "SCHEDULED",
       "at": "2026-10-12T16:34:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-05T23:42:47Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-05",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-05T18:03:54Z",
+      "fetchedAt": "2026-11-05T23:42:47Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-f43754f5e6a9a2ef.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-eb75c56d1ddced9c.json",
       "note": null
     },
     "reaction_session": {
-      "value": "2026-11-03",
+      "value": "2026-11-06",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-02T16:17:28Z",
+      "fetchedAt": "2026-11-06T00:08:39Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-02T16:17:28Z",
+      "fetchedAt": "2026-11-06T00:08:39Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -105,6 +110,33 @@
       "rank": 88,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T23:42:47Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-eb75c56d1ddced9c.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-05T17:46:09.923000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T23:42:47Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-eb75c56d1ddced9c.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-05T23:42:47Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-eb75c56d1ddced9c.json",
+      "note": null
     }
   },
   "fetch": {
@@ -117,7 +149,6 @@
     },
     "PRICE_HISTORY": {
       "lastAttempt": "2026-11-02T16:17:30Z",
-      "lastSuccess": "2026-11-02T16:17:30Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE191P01017_2026-09-30/price_volume_12m-a4062d25eebb9f88.json"
@@ -146,33 +177,43 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -215,11 +256,11 @@
       "sector": {
         "sector": "Financial Services",
         "stocks": 439,
-        "momentum63dMedian": -7.36,
-        "relativeToMarket": -0.82,
-        "declared": 158,
+        "momentum63dMedian": -7.37,
+        "relativeToMarket": -0.88,
+        "declared": 160,
         "strongResults": 89,
-        "avgReaction": -0.91,
+        "avgReaction": -0.93,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -526,5 +567,41 @@
     "computedAt": "2026-11-02T16:17:30Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-05T17:46:09.923000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please find attached Unaudited Financial Results for HYE Sept 30, 2026 GCM Capital Advisors Ltd - 538319 - Unaudited Financial Results For HYE Sept 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-eb75c56d1ddced9c.json",
+      "seenAt": "2026-11-06T00:08:39Z"
+    }
+  ],
+  "fieldHistory": {
+    "reaction_session": [
+      {
+        "value": "2026-11-03",
+        "source": "DERIVED",
+        "fetchedAt": "2026-11-02T16:17:28Z",
+        "status": "OK",
+        "note": "UNKNOWN_TIME_NEXT_SESSION",
+        "replacedAt": "2026-11-06T00:08:39Z"
+      }
+    ],
+    "filing_session": [
+      {
+        "value": "UNKNOWN_TIME_NEXT_SESSION",
+        "source": "DERIVED",
+        "fetchedAt": "2026-11-02T16:17:28Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-06T00:08:39Z"
+      }
+    ]
   }
 }
