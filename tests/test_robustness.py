@@ -948,7 +948,9 @@ class OverdueFilingCheckTests(_StoreCase):
         now = _dt(2026, 11, 4, 21, 0, tzinfo=p.IST)
         with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
             self.assertEqual(p.enrichment_group(e, now.date()), ("A", 0))
-        e["lateDeclaredAt"] = "2026-10-25T14:00:00Z"   # the jump is only for the first days
+        # the repeat jump is only for the first days once it has had a real pass
+        # (2.9.43: until then it keeps its place, however old the declaration)
+        e["lateDeclaredAt"] = "2026-10-20T14:00:00Z"
         with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
             self.assertNotEqual(p.enrichment_group(e, now.date()), ("A", 0))
 
@@ -981,6 +983,263 @@ class OverdueFilingCheckTests(_StoreCase):
         check = [c for c in out["checks"] if c["check"].startswith("Result date passed")][0]
         self.assertEqual(check["status"], "WARN")
         self.assertEqual(check["examples"], ["HDFCBANK"])
+
+class SplitWithRisingDayTests(unittest.TestCase):
+    """2.9.43: GNRL's 10:1 split on 5 Nov (106.16 -> open 10.99, close 12.20,
+    +15% on the adjusted base) was off the ratio by 15% at the close, so the
+    adjuster skipped it: reaction -88.51% and a 52-week high of 114 on a
+    Rs 12 stock."""
+
+    def _frame(self, opens, highs, closes):
+        import pandas as pd
+        days = pd.date_range("2026-10-26", periods=len(closes), freq="B")
+        return pd.DataFrame({"Date": days, "Open": opens, "High": highs, "Low": [c * 0.95 for c in closes],
+                             "Close": closes, "Volume": [100] * len(closes)})
+
+    def test_split_day_that_closes_up_is_adjusted(self):
+        import pead_plus as pp
+        f = self._frame([104, 105, 108, 10.99], [105, 108, 108, 12.63], [103.95, 105.76, 106.16, 12.20])
+        out = pp.adjust_corporate_actions(f)
+        self.assertEqual(out.attrs["corporateActions"][0]["factor"], 0.1)
+        self.assertAlmostEqual(out["Close"].iloc[2], 10.616)
+        self.assertAlmostEqual(out["Close"].iloc[3] / out["Close"].iloc[2] - 1, 0.1492, places=3)
+
+    def test_gap_down_collapse_is_not_a_split(self):
+        import pead_plus as pp
+        # opens -30%, closes -45%: the open is nowhere near a ratio below 0.65
+        f = self._frame([100, 101, 102, 71], [101, 102, 103, 72], [100, 101, 102, 56])
+        self.assertEqual(pp.adjust_corporate_actions(f)["Close"].iloc[0], 100)
+
+    def test_close_only_frame_still_works(self):
+        import pead_plus as pp
+        f = self._frame([None] * 4, [None] * 4, [100, 101, 102, 51])
+        self.assertAlmostEqual(pp.adjust_corporate_actions(f)["Close"].iloc[0], 50)
+
+
+class ReactionReplayTests(_StoreCase):
+    """2.9.43: the reaction of a stock whose saved prices already cover the
+    session was left empty until its next fetch: MUTHOOTFIN (filing time
+    corrected 3 Nov -> 2 Nov, values revoked "recompute") and every company
+    declared late by 2.9.40 (HDFCBANK-type rows, session weeks old)."""
+
+    def _rows(self):
+        out = []
+        for i, (d, c) in enumerate([("28-Oct-2026", 100), ("29-Oct-2026", 101), ("30-Oct-2026", 100),
+                                    ("02-Nov-2026", 104), ("03-Nov-2026", 106)]):
+            out.append({"mtimestamp": d, "chOpeningPrice": c, "chTradeHighPrice": c + 1, "chTradeLowPrice": c - 1,
+                        "chClosingPrice": c, "chTotTradedQty": 1000 + i, "chTotTradedVal": 1e6, "chSymbol": "AAA", "chSeries": "EQ"})
+        return out
+
+    def _event(self, tmp):
+        ev = {"eventId": "INEAAA|2026-09-30", "period": {"end": "2026-09-30"},
+              "security": {"nseSymbol": "AAA", "symbol": "AAA"}, "fields": {}, "fetch": {},
+              "plus": {"price": {"last_session": "2026-11-03"}}}
+        for k, v in (("results_released", True), ("result_date", "2026-10-31"), ("reaction_session", "2026-11-02")):
+            ev["fields"][k] = {"value": v, "source": "DERIVED", "status": "OK", "rank": 10}
+        ev["fields"]["result_day_return_pct"] = {"value": 6.0, "source": "NSE_PRICE", "status": "REVOKED", "rank": 105}
+        folder = Path(tmp) / "nse_price" / "INEAAA_2026-09-30"
+        folder.mkdir(parents=True)
+        (folder / "equity_history-x.json").write_text(json.dumps(self._rows()))
+        return ev
+
+    def _run(self, ev, tmp):
+        from datetime import datetime as _dt
+        self.store.save(ev)
+        with mock.patch.object(p, "now_ist", return_value=_dt(2026, 11, 4, 21, 0, tzinfo=p.IST)):
+            n = p.replay_missing_reactions(self.store, raw_root=Path(tmp))
+        return n, self.store.load(ev["eventId"])
+
+    def test_revoked_reaction_is_measured_from_saved_prices(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            n, ev = self._run(self._event(tmp), tmp)
+        self.assertEqual(n, 1)
+        self.assertEqual(self.store.value(ev, "result_day_return_pct"), 4.0)
+
+    def test_prices_that_do_not_cover_the_session_are_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ev = self._event(tmp)
+            ev["plus"]["price"]["last_session"] = "2026-10-30"
+            ev["fields"]["reaction_session"]["value"] = "2026-11-03"
+            n, ev = self._run(ev, tmp)
+        self.assertEqual(n, 0)
+
+    def test_session_not_closed_or_not_declared_never_gets_a_reaction(self):
+        from datetime import datetime as _dt
+        with tempfile.TemporaryDirectory() as tmp:
+            ev = self._event(tmp)
+            ev["fields"]["results_released"]["value"] = False
+            n, ev2 = self._run(ev, tmp)
+            self.assertEqual(n, 0)
+            self.assertIsNone(self.store.value(ev2, "result_day_return_pct"))
+            ev["fields"]["results_released"]["value"] = True
+            self.store.save(ev)
+            with mock.patch.object(p, "now_ist", return_value=_dt(2026, 11, 2, 11, 0, tzinfo=p.IST)):
+                self.assertEqual(p.replay_missing_reactions(self.store, raw_root=Path(tmp)), 0)
+
+    def test_impossible_reaction_from_an_unadjusted_split_is_remeasured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ev = self._event(tmp)
+            ev["fields"]["result_day_return_pct"] = {"value": -88.51, "source": "NSE_PRICE", "status": "OK", "rank": 105}
+            rows = self._rows()
+            for r in rows[3:]:
+                r["chClosingPrice"] /= 10
+                r["chOpeningPrice"] /= 10
+                r["chTradeHighPrice"] /= 10
+                r["chTradeLowPrice"] /= 10
+            (Path(tmp) / "nse_price" / "INEAAA_2026-09-30" / "equity_history-x.json").write_text(json.dumps(rows))
+            n, ev = self._run(ev, tmp)
+        self.assertEqual(n, 1)
+        self.assertEqual(self.store.value(ev, "result_day_return_pct"), 4.0)
+
+    def test_tried_once_per_last_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ev = self._event(tmp)
+            ev["reactionReplayAt"] = "2026-11-03"
+            n, _ = self._run(ev, tmp)
+        self.assertEqual(n, 0)
+
+
+class StalePricesNotUntradedTests(unittest.TestCase):
+    """2.9.43: UNIVCABLES (Rs 4,400 Cr) was last priced 21 Oct by rotation; its
+    5 Nov reaction session was 15 days after that, which the "traded within 10
+    days" guard read as an untraded scrip, so the reaction was not "due"."""
+
+    def _ev(self, ls="2026-10-21", attempt="2026-10-22T03:02:00Z"):
+        return {"eventId": "E", "period": {"end": "2026-09-30"}, "security": {"nseSymbol": "UC"},
+                "fields": {"result_date": {"value": "2026-11-02", "status": "OK"},
+                           "results_released": {"value": True, "status": "OK"},
+                           "revenue_cr": {"value": 10, "status": "OK"}, "pat_cr": {"value": 1, "status": "OK"},
+                           "revenue_yoy_pct": {"value": 1, "status": "OK"},
+                           "reaction_session": {"value": "2026-11-05", "status": "OK"}},
+                "plus": {"price": {"last_session": ls}}, "fetch": {"PRICE_HISTORY": {"lastAttempt": attempt}}}
+
+    def _group(self, ev):
+        from datetime import datetime as _dt, date as _d
+        now = _dt(2026, 11, 7, 12, 0, tzinfo=p.IST)
+        with mock.patch.object(p, "now_ist", return_value=now):
+            return p.enrichment_group(ev, _d(2026, 11, 7), _d(2026, 11, 6), set()), p._a0_subrank(ev, _d(2026, 11, 6))
+
+    def test_not_fetched_since_the_session_is_due(self):
+        self.assertEqual(self._group(self._ev()), (("A", 0), 0))
+
+    def test_fetched_after_the_session_and_still_no_bar_is_not_due(self):
+        grp, sub = self._group(self._ev(attempt="2026-11-06T18:00:00Z"))
+        self.assertNotEqual(sub, 0)
+        self.assertNotEqual(grp, ("A", 0))
+
+
+class LateDeclaredNeverExpiresUnservedTests(unittest.TestCase):
+    """2.9.43: the 3-day priority of a late declaration lapsed even when the
+    event had never had a real pass (capacity), dropping it to rotation."""
+
+    def test_no_pass_since_declaration_stays_first_after_the_window(self):
+        from datetime import datetime as _dt, date as _d
+        ev = {"eventId": "E", "period": {"end": "2026-09-30"}, "security": {"nseSymbol": "GL"},
+              "lateDeclaredAt": "2026-11-04T17:30:00Z",
+              "fields": {"result_date": {"value": "2026-10-28", "status": "OK"},
+                         "results_released": {"value": True, "status": "OK"},
+                         "reaction_session": {"value": "2026-10-29", "status": "OK"}},
+              "plus": {"price": {"last_session": "2026-10-30"}},
+              "fetch": {"PRICE_HISTORY": {"lastAttempt": "2026-10-30T15:11:00Z"},
+                        "NSE_RESULT_LISTING": {"lastAttempt": "2026-11-09T09:00:00Z"}}}
+        now = _dt(2026, 11, 9, 10, 0, tzinfo=p.IST)
+        with mock.patch.object(p, "now_ist", return_value=now):
+            self.assertEqual(p.enrichment_group(ev, _d(2026, 11, 9), _d(2026, 11, 6), set()), ("A", 0))
+        ev["fetch"]["PRICE_HISTORY"]["lastAttempt"] = "2026-11-06T09:00:00Z"
+        with mock.patch.object(p, "now_ist", return_value=now):
+            self.assertNotEqual(p.enrichment_group(ev, _d(2026, 11, 9), _d(2026, 11, 6), set()), ("A", 0))
+
+
+class SeriesSwitchWithinAWeekTests(unittest.TestCase):
+    """2.9.43: OMNI (BSE group T) stopped in NSE's EQ history on 2 Nov; a fetch
+    on 6 Nov still counted as fresh (<= 7 days), so its 5 Nov reaction never
+    filled. Three or more missed sessions now ask NSE for the active series."""
+
+    def _rows(self, dates, series="EQ"):
+        return [{"mtimestamp": d, "chClosingPrice": 100, "chSeries": series, "chSymbol": "OMNI"} for d in dates]
+
+    def test_sessions_missed_counts_trading_days(self):
+        from datetime import date as _d
+        self.assertEqual(p.nse_sessions_missed(_d(2026, 11, 2), _d(2026, 11, 6)), 4)
+        self.assertEqual(p.nse_sessions_missed(_d(2026, 11, 6), _d(2026, 11, 9)), 1)   # weekend
+        self.assertEqual(p.nse_sessions_missed(_d(2026, 11, 9), _d(2026, 11, 11)), 1)  # 10 Nov holiday
+
+    def test_series_switch_is_fetched(self):
+        from datetime import date as _d
+        calls = []
+
+        class Client:
+            def fetch_equity_historical_data(s, symbol, from_date, to_date, series=None):
+                calls.append(series)
+                if series == "be":
+                    return SeriesSwitchWithinAWeekTests._rows(self, ["03-Nov-2026", "04-Nov-2026", "05-Nov-2026"], "BE")
+                return SeriesSwitchWithinAWeekTests._rows(self, ["29-Oct-2026", "30-Oct-2026", "02-Nov-2026"])
+
+            def equity_meta_info(s, symbol):
+                return {"activeSeries": ["BE"]}
+
+        nse = p.NSEAdapter.__new__(p.NSEAdapter)
+        nse.client = Client()
+        nse._call = lambda name, fn, **kw: (fn(), None)
+        p._SERIES_CALLS["n"] = 0
+        rows, _ = nse.history("OMNI", _d(2026, 1, 1), _d(2026, 11, 6), "E")
+        self.assertEqual(calls, [None, "be"])
+        self.assertEqual(p.nse_rows_last_date(rows), _d(2026, 11, 5))
+        self.assertEqual(nse.last_series, "BE")
+
+
+class DiscoveryBudgetTests(unittest.TestCase):
+    """2.9.43: the 21:00 IST run of 6 Nov spent all 40 minutes in discovery and
+    the overdue-filing check while NSE crawled, enriched 0 of 120 and left the
+    open trades judged on the 5 Nov close. Discovery now has its own deadline."""
+
+    def setUp(self):
+        p.RUN_GUARD.reset()
+
+    def tearDown(self):
+        p.RUN_GUARD.reset()
+
+    def test_calls_past_the_discovery_deadline_are_skipped_then_allowed_again(self):
+        p.RUN_GUARD.deadline = p.RUN_GUARD.elapsed() - 1
+        with self.assertRaises(p.SourceSkipped):
+            p.with_retry(lambda: 1, source="NSE")
+        self.assertFalse(p.RUN_GUARD.budget_hit)
+        p.RUN_GUARD.deadline = None
+        self.assertEqual(p.with_retry(lambda: 1, source="NSE"), 1)
+
+    def test_discovery_keeps_the_budget_for_enrichment(self):
+        self.assertLessEqual(p.OVERDUE_CUTOFF_SEC, p.RUN_BUDGET_SEC / 2)
+        self.assertLess(p.DISCOVERY_BUDGET_SEC, p.OVERDUE_CUTOFF_SEC)
+
+    def test_overdue_check_stops_at_its_cutoff(self):
+        with mock.patch.object(p, "OVERDUE_CUTOFF_SEC", -1), \
+                mock.patch.object(p, "nse_result_listing") as listing:
+            ev = {"eventId": "E", "period": {"end": "2026-09-30"}, "security": {"nseSymbol": "A"},
+                  "fields": {"result_date": {"value": "2026-10-20", "status": "OK"}}, "fetch": {}}
+            store = mock.Mock()
+            store.value.side_effect = lambda e, f: (e["fields"].get(f) or {}).get("value")
+            stats = p.check_overdue_filings([ev], store, mock.Mock())
+        listing.assert_not_called()
+        self.assertEqual((stats["overdue"], stats["checked"]), (1, 0))
+
+
+class LiveQuoteOrderTests(unittest.TestCase):
+    """2.9.43: picks were cut at LIVE_QUOTE_MAX (40) in store order. With 200+
+    live plans in season, open trades (2.9.12: "always quote") and A-grade
+    setups could fall outside: on 6 Nov only INDHOTEL of 6 trades got a quote."""
+
+    def _ev(self, sym, signal, mcap=1000):
+        return {"eventId": sym, "security": {"nseSymbol": sym},
+                "derived": {"plus": {"plan": {"signal": signal}}},
+                "fields": {"market_cap_cr": {"value": mcap, "status": "OK"}}}
+
+    def test_open_trades_then_closest_setups_first(self):
+        picks = [(self._ev(f"W{i}", "WATCH", 90000), f"W{i}") for i in range(50)]
+        picks += [(self._ev("NEAR", "NEAR_ENTRY", 2000), "NEAR"), (self._ev("BIG", "ENTRY_EARLY", 5000), "BIG"),
+                  (self._ev("SMALL", "ENTRY_EARLY", 1000), "SMALL"), (self._ev("MINE", "NO_ENTRY", 10), "MINE")]
+        out = [s for _, s in p.order_live_quotes(picks, {"MINE"})]
+        self.assertEqual(out[:4], ["MINE", "BIG", "SMALL", "NEAR"])
+
 
 if __name__ == "__main__":
     unittest.main()

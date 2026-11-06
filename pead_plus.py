@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.42"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.43"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -932,6 +932,7 @@ def adjust_corporate_actions(frame):
     f = frame.sort_values("Date").reset_index(drop=True).copy()
     closes = f["Close"].astype(float).tolist()
     highs = f["High"].tolist() if "High" in f else [None] * len(f)
+    opens = f["Open"].tolist() if "Open" in f else [None] * len(f)
     factor_after = [1.0] * len(f)
     events = []
     for i in range(1, len(f)):
@@ -947,6 +948,16 @@ def adjust_corporate_actions(frame):
         best = min(_SPLIT_FACTORS, key=lambda k: abs(r / k - 1))
         if abs(r / best - 1) <= 0.06:
             events.append((i, best))
+            continue
+        # 2.9.43: the first session after a split can move up to its 20% band
+        # on the new base, so the close misses the ratio (GNRL 10:1 on 5 Nov:
+        # 106.16 -> open 10.99, close 12.20). The open still sits on it.
+        op = opens[i]
+        if op is not None and op == op and float(op) > 0:
+            ro = float(op) / prev
+            best = min(_SPLIT_FACTORS, key=lambda k: abs(ro / k - 1))
+            if ro <= 0.65 and abs(ro / best - 1) <= 0.06:
+                events.append((i, best))
     if not events:
         return f
     mult = [1.0] * len(f)

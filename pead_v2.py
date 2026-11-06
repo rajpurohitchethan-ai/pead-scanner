@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.42"
+ENGINE_VERSION = "2.9.43"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1157,6 +1157,10 @@ EXPLICIT_PERIOD_SOURCES = frozenset({"FILING_TEXT", "EXCHANGE_PERIOD_FIELD"})
 # once the run's network budget is spent remaining calls are skipped, so the
 # run still saves the store and publishes what it has.
 RUN_BUDGET_SEC = float(os.getenv("RUN_BUDGET_MIN", "40")) * 60
+# 2.9.43: discovery and the overdue-filing check must leave time for enrichment
+# (6 Nov 21:00 IST: all 40 minutes went there, 0 of 120 events enriched).
+DISCOVERY_BUDGET_SEC = float(os.getenv("DISCOVERY_BUDGET_MIN", "12")) * 60
+OVERDUE_CUTOFF_SEC = float(os.getenv("OVERDUE_CUTOFF_MIN", "16")) * 60
 SOURCE_BREAKER_ATTEMPTS = int(os.getenv("SOURCE_BREAKER_ATTEMPTS", "12"))
 SOURCE_BREAKER_FAIL_SEC = float(os.getenv("SOURCE_BREAKER_FAIL_SEC", "300"))
 
@@ -1176,6 +1180,7 @@ class RunGuard:
         self.down: dict[str, str] = {}
         self.skipped: dict[str, int] = {}
         self.budget_hit = False
+        self.deadline: float | None = None   # 2.9.43: a phase's own limit (elapsed seconds)
 
     @staticmethod
     def host(source: str | None) -> str:
@@ -1194,6 +1199,9 @@ class RunGuard:
             self.budget_hit = True
             self.skipped[h] = self.skipped.get(h, 0) + 1
             raise SourceSkipped(f"run budget of {RUN_BUDGET_SEC / 60:.0f} min spent")
+        if self.deadline is not None and self.elapsed() >= self.deadline:
+            self.skipped[h] = self.skipped.get(h, 0) + 1
+            raise SourceSkipped("phase budget spent")
         if h in self.down:
             self.skipped[h] = self.skipped.get(h, 0) + 1
             raise SourceSkipped(f"{h} switched off for this run: {self.down[h]}")
@@ -1427,7 +1435,10 @@ class NSEAdapter:
         def go():
             rows = list(fn(symbol=symbol, from_date=start, to_date=end) or [])
             last = nse_rows_last_date(rows)
-            fresh = last is not None and (end - last).days <= NSE_SERIES_STALE_DAYS
+            # 2.9.43: also stale after NSE_SERIES_MISSED_SESSIONS missed sessions
+            # (OMNI left EQ on 2 Nov; on 6 Nov "<= 7 days" still called it fresh).
+            fresh = (last is not None and (end - last).days <= NSE_SERIES_STALE_DAYS
+                     and nse_sessions_missed(last, end) < NSE_SERIES_MISSED_SESSIONS)
             gapped = bool(nse_rows_gaps(rows))
             if fresh and not gapped:
                 self.last_series = "EQ"
@@ -1825,11 +1836,14 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
         # 2.9.40: declared late by check_overdue_filings; the result date is old,
         # so nothing else here would bring its figures forward in season.
         late = parse_datetime(event.get("lateDeclaredAt"))
-        if no_figures and late is not None and (now_ist() - late).total_seconds() < LATE_DECLARED_PRIORITY_DAYS * 86400:
+        if no_figures and late is not None:
             # 2.9.41: the listing read that declared it stamps lastAttempt; only
             # a real pass since then (prices are always attempted) counts as tried.
             passed = parse_datetime(((event.get("fetch") or {}).get("PRICE_HISTORY") or {}).get("lastAttempt"))
-            if not tried_recently or passed is None or passed < late:
+            unserved = passed is None or passed < late
+            # 2.9.43: the window only limits repeats; a declaration that has
+            # not had one real pass keeps its place however long the queue is.
+            if unserved or ((now_ist() - late).total_seconds() < LATE_DECLARED_PRIORITY_DAYS * 86400 and not tried_recently):
                 return "A", 0
         # 2.9.34: a closed reaction session the stored prices do not cover yet
         # is as urgent as a fresh result. "age <= 2" counts calendar days, so
@@ -1837,9 +1851,7 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
         # Monday evening and COFORGE's reaction was still unmeasured on
         # Tuesday. Only for stocks that traded within REACTION_DUE_TRADED_DAYS
         # of the session (untraded scrips never fill it) and not tried < 2 h.
-        rs = parse_date(meta_value(event, "reaction_session"))
-        if (rs is not None and rs <= last_session and ls is not None and ls < rs
-                and (rs - ls).days <= REACTION_DUE_TRADED_DAYS and not tried_recently):
+        if _reaction_bar_due(event, last_session) and not tried_recently:
             return "A", 0
         if behind and live:
             return "A", 1
@@ -1865,6 +1877,22 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
     return "D", 1
 
 
+def _reaction_bar_due(event: dict[str, Any], last_session: date) -> bool:
+    """A closed reaction session the stored prices do not cover. The stock must
+    have traded within REACTION_DUE_TRADED_DAYS of it, so untraded scrips never
+    fill the queue. 2.9.43: prices that are old only because nobody fetched them
+    since the session say nothing about trading (UNIVCABLES: priced 21 Oct by
+    rotation, session 5 Nov, read as untraded)."""
+    ls = parse_date(((event.get("plus") or {}).get("price") or {}).get("last_session"))
+    rs = parse_date(meta_value(event, "reaction_session"))
+    if rs is None or rs > last_session or ls is None or ls >= rs:
+        return False
+    if (rs - ls).days <= REACTION_DUE_TRADED_DAYS:
+        return True
+    tried = parse_datetime(((event.get("fetch") or {}).get("PRICE_HISTORY") or {}).get("lastAttempt"))
+    return tried is None or tried.astimezone(IST).date() <= rs
+
+
 def _xbrl_reread_pending(event: dict[str, Any]) -> bool:
     """A stored, not rejected XBRL snapshot parsed by an older XBRL parser."""
     for src in ("NSE_XBRL", "BSE_XBRL"):
@@ -1881,11 +1909,7 @@ def _a0_subrank(event: dict[str, Any], last_session: date) -> int:
     1 = figures not read, 2 = only behind by the latest bar (reaction already
     measured). TATACAP's 28 Oct reaction waited behind ~80 results of 26 Oct
     that only needed the new bar."""
-    price = (event.get("plus") or {}).get("price") or {}
-    ls = parse_date(price.get("last_session"))
-    rs = parse_date(meta_value(event, "reaction_session"))
-    if (rs is not None and rs <= last_session and ls is not None and ls < rs
-            and (rs - ls).days <= REACTION_DUE_TRADED_DAYS):
+    if _reaction_bar_due(event, last_session):
         return 0
     if meta_value(event, "revenue_cr") is None or meta_value(event, "pat_cr") is None:
         return 1
@@ -3276,6 +3300,14 @@ def _nse_row_date(r: dict[str, Any]) -> date | None:
 def nse_rows_last_date(rows: list[Any]) -> date | None:
     ds = [d for d in (_nse_row_date(r) for r in rows if isinstance(r, dict)) if d]
     return max(ds) if ds else None
+
+
+NSE_SERIES_MISSED_SESSIONS = 3   # today's and yesterday's bar may still be unposted
+
+
+def nse_sessions_missed(last: date, end: date) -> int:
+    """Trading sessions after `last` up to and including `end`."""
+    return sum(1 for n in range(1, (end - last).days + 1) if is_trading_day(last + timedelta(days=n)))
 
 
 NSE_GAP_DAYS = 10            # > 10 calendar days between sessions = missing data, not a holiday
@@ -5478,6 +5510,17 @@ def quote_last_price(payload: Any) -> float | None:
     return safe_num(first(payload, "lastPrice", "ltp")) or None
 
 
+def order_live_quotes(picks: list[tuple[dict[str, Any], str]], held: set[str]) -> list[tuple[dict[str, Any], str]]:
+    """2.9.43: who gets one of the LIVE_QUOTE_MAX quotes: open trades, then
+    fresh entries, near-trigger setups, the other live plans; larger first."""
+    def key(pick):
+        e, sym = pick
+        signal = str((((e.get("derived") or {}).get("plus") or {}).get("plan") or {}).get("signal") or "")
+        tier = 0 if signal.startswith("ENTRY_") and signal != "ENTRY_TRIGGERED" else 1 if signal in ("NEAR_ENTRY", "PULLBACK_ZONE") else 2
+        return (sym not in held, tier, -(safe_num(meta_value(e, "market_cap_cr")) or 0.0), sym)
+    return sorted(picks, key=key)
+
+
 def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
     """2.7.0: during market hours, read the live NSE price of every declared
     company that has an entry plan (for the 3 pm entry alert and the card's
@@ -5499,7 +5542,7 @@ def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
         return 0
     try:
         with NSEAdapter(ctx) as nse:
-            for e, sym in picks[:LIVE_QUOTE_MAX]:
+            for e, sym in order_live_quotes(picks, held)[:LIVE_QUOTE_MAX]:
                 try:
                     payload, raw_ref = nse.quote(sym, e["eventId"], series=(e.get("security") or {}).get("nseSeries"))
                     price = quote_last_price(payload)
@@ -6189,7 +6232,7 @@ def check_overdue_filings(events: list[dict[str, Any]], store: "EventStore", ctx
     used_before = _EXTRA_CALLS_USED["n"]
     try:
         for event in due[:OVERDUE_CHECK_MAX]:
-            if RUN_GUARD.elapsed() >= RUN_BUDGET_SEC or "NSE" in RUN_GUARD.down:
+            if RUN_GUARD.elapsed() >= min(RUN_BUDGET_SEC, OVERDUE_CUTOFF_SEC) or "NSE" in RUN_GUARD.down:
                 break
             stats["checked"] += 1
             nse_result_listing(event, store, ctx)
@@ -7282,7 +7325,8 @@ def _payload_symbol_ok(payload: Any, sec: dict[str, Any]) -> bool:
     return got in ok - {None, ""}
 
 
-def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Path = RAW_DIR) -> bool:
+def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Path = RAW_DIR,
+                          any_source: bool = False) -> bool:
     """Recompute price analytics from the newest saved price payload (NSE OHLC
     preferred, BSE close-only fallback). Used when no fresh fetch happened, so
     stored events get engine-2.4 features without extra network calls."""
@@ -7335,14 +7379,14 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
         if m_all.get(field) is not None:
             store.force_field(event, field, m_all[field], source=source, note="replayed from saved price data")
     # OHLC from NSE fixes result-day high/low that were close-only before.
-    if traded and source == "NSE_PRICE":
+    if traded and (source == "NSE_PRICE" or any_source):
         m = price_metrics(frame, reaction, wstart)
         m.pop("_preResultStale", None)
         m.pop("_preResultGap", None)
         for field in ("result_day_low", "result_day_high", "result_day_return_pct", "result_day_rvol",
                       "post_result_hold_5d", "post_result_hold_10d", "box_high", "box_breakout"):
             if m.get(field) is not None:
-                store.merge_field(event, field, m[field], source="NSE_PRICE", note="replayed from saved NSE OHLC")
+                store.merge_field(event, field, m[field], source=source, note=f"replayed from saved {source}")
     return True
 
 
@@ -7358,6 +7402,34 @@ def replay_plus(store: EventStore) -> int:
         if rebuild_plus_from_raw(store, event):
             store.save(event)
             n += 1
+    return n
+
+
+def replay_missing_reactions(store: EventStore, raw_root: Path = RAW_DIR) -> int:
+    """2.9.43: measure a missing reaction from prices already saved, without
+    waiting for the event's turn in the enrichment queue. Covers a reaction
+    revoked after its filing time was corrected (MUTHOOTFIN) and companies
+    declared late, whose session passed while they were still "scheduled".
+    Tried once per stored last session; never for an undeclared result or a
+    session that has not closed."""
+    n = 0
+    for event in store.all():
+        if not dashboard_activity(event) or boolish(store.value(event, "results_released")) is not True:
+            continue
+        reaction = parse_date(store.value(event, "reaction_session"))
+        stored = safe_num(store.value(event, "result_day_return_pct"))
+        # An impossible stored reaction is re-measured too (GNRL -88.51%: a 10:1
+        # split the adjuster of its day missed).
+        if reaction is None or not session_closed(reaction) or (stored is not None and abs(stored) < 40):
+            continue
+        last = parse_date(((event.get("plus") or {}).get("price") or {}).get("last_session"))
+        if last is None or last < reaction or event.get("reactionReplayAt") == last.isoformat():
+            continue
+        event["reactionReplayAt"] = last.isoformat()
+        if rebuild_plus_from_raw(store, event, raw_root=raw_root, any_source=True) \
+                and safe_num(store.value(event, "result_day_return_pct")) != stored:
+            n += 1
+        store.save(event)
     return n
 
 
@@ -8354,7 +8426,12 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
     discovery_stats = {"skipped": True, "errors": []}
     enrichment_stats = {"skipped": True, "errors": []}
     if not skip_network:
-        discovery_stats = discover_events(store, master, ctx)
+        RUN_GUARD.deadline = DISCOVERY_BUDGET_SEC
+        try:
+            discovery_stats = discover_events(store, master, ctx)
+        finally:
+            RUN_GUARD.deadline = None
+        print(f"Discovery done at {RUN_GUARD.elapsed() / 60:.1f} min", flush=True)
         print("Discovery:", json.dumps(discovery_stats, default=str))
         enrichment_stats = enrich_events(store, master, ctx)
         print("Enrichment:", json.dumps(enrichment_stats, default=str))
@@ -8377,6 +8454,7 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
     print(f"Market caps repaired from saved quotes: {repair_quote_market_caps(store)}")   # 2.9.16
     replayed = replay_plus(store)
     print(f"Analytics replayed from saved price files for {replayed} events")
+    print(f"Reactions measured from saved prices: {replay_missing_reactions(store)}")   # 2.9.43
     score_stats = score_all(store)
     print("Scoring:", score_stats)
 
