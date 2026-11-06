@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE910G01027|2026-09-30",
   "createdAt": "2026-11-03T03:26:59Z",
-  "updatedAt": "2026-11-06T18:21:50Z",
+  "updatedAt": "2026-11-06T23:37:31Z",
   "security": {
     "symbol": "MUNCAPM",
     "bseSymbol": "MUNCAPM",
@@ -15,7 +15,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -26,31 +26,41 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T03:26:59Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-06T23:11:33Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-06T23:37:31Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-06",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-06T17:55:01Z",
+      "fetchedAt": "2026-11-06T23:11:33Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-0d3340f752e2f05d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7707f692cb6d7694.json",
       "note": null
     },
     "reaction_session": {
-      "value": "2026-11-06",
+      "value": "2026-11-09",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-05T18:28:14Z",
+      "fetchedAt": "2026-11-06T23:37:13Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-05T18:28:14Z",
+      "fetchedAt": "2026-11-06T23:37:13Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -82,6 +92,33 @@
       "rank": 105,
       "rawRef": "raw/bse_price/INE910G01027_2026-09-30/price_volume_12m-f7832d0717a2fc4c.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-06T23:11:33Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7707f692cb6d7694.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-06T18:46:00.290000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-06T23:11:33Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7707f692cb6d7694.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-06T23:11:33Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7707f692cb6d7694.json",
+      "note": null
     }
   },
   "fetch": {
@@ -101,7 +138,6 @@
     },
     "PRICE_HISTORY": {
       "lastAttempt": "2026-11-05T18:28:15Z",
-      "lastSuccess": "2026-11-05T18:28:15Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE910G01027_2026-09-30/price_volume_12m-f7832d0717a2fc4c.json"
@@ -116,30 +152,40 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -438,5 +484,41 @@
     "computedAt": "2026-11-05T18:28:15Z",
     "plusVersion": "2.9.38",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-06T18:46:00.290000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Submission of Financial Results for the Quarter and Half-year ended on 30th September, 2026 Munoth Capital Markets Ltd - 511200 - Outcome Of Board Meeting Held Today I.E. Friday, 6Th November, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7707f692cb6d7694.json",
+      "seenAt": "2026-11-06T23:37:13Z"
+    }
+  ],
+  "fieldHistory": {
+    "reaction_session": [
+      {
+        "value": "2026-11-06",
+        "source": "DERIVED",
+        "fetchedAt": "2026-11-05T18:28:14Z",
+        "status": "OK",
+        "note": "UNKNOWN_TIME_NEXT_SESSION",
+        "replacedAt": "2026-11-06T23:37:13Z"
+      }
+    ],
+    "filing_session": [
+      {
+        "value": "UNKNOWN_TIME_NEXT_SESSION",
+        "source": "DERIVED",
+        "fetchedAt": "2026-11-05T18:28:14Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-06T23:37:13Z"
+      }
+    ]
   }
 }
