@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE042C01010|2026-09-30",
   "createdAt": "2026-10-29T03:57:54Z",
-  "updatedAt": "2026-11-07T09:15:43Z",
+  "updatedAt": "2026-11-07T16:14:20Z",
   "security": {
     "symbol": "ALFAICA",
     "bseSymbol": "ALFAICA",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-29T03:57:54Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-07T15:44:55Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-07T16:14:20Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-07",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-07T08:51:03Z",
+      "fetchedAt": "2026-11-07T15:45:42Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-96d74980c286b28b.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0700ae24473a90d3.json",
       "note": null
     },
     "reaction_session": {
@@ -141,6 +151,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE042C01010_2026-09-30/scrip_results-117d5b327661a95c.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-07T15:44:55Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0700ae24473a90d3.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-07T15:53:35.320000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-07T15:44:55Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0700ae24473a90d3.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-07T15:44:55Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0700ae24473a90d3.json",
+      "note": null
     }
   },
   "fetch": {
@@ -174,23 +211,29 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -198,9 +241,9 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_REPEAD",
-        "label": "Watch: re-PEAD",
-        "why": "Q1 setup faded. Strong Q2 could restart the drift."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
         "signal": "NO_ENTRY",
@@ -238,11 +281,11 @@
       "sectorKey": "Capital Goods",
       "sector": {
         "sector": "Capital Goods",
-        "stocks": 455,
-        "momentum63dMedian": -4.83,
-        "relativeToMarket": 1.48,
-        "declared": 195,
-        "strongResults": 95,
+        "stocks": 459,
+        "momentum63dMedian": -4.86,
+        "relativeToMarket": 1.34,
+        "declared": 197,
+        "strongResults": 96,
         "avgReaction": -1.44,
         "tailwind": "NEUTRAL"
       },
@@ -615,5 +658,19 @@
     "plusVersion": "2.9.38",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-07T15:53:35.320000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Board meeting for UFS for quarter and half year ended September 30,2026 Alfa Ica India Ltd - 530973 - Unaudited Financial Results For Quarter And Half Year Ended September 30,2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0700ae24473a90d3.json",
+      "seenAt": "2026-11-07T16:13:27Z"
+    }
+  ]
 }

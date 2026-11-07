@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE335A01012|2026-09-30",
   "createdAt": "2026-10-29T10:55:39Z",
-  "updatedAt": "2026-11-07T09:15:45Z",
+  "updatedAt": "2026-11-07T16:14:22Z",
   "security": {
     "symbol": "SURYAROSNI",
     "nseSymbol": "SURYAROSNI",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -40,16 +40,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-30T04:08:59Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-07T15:45:08Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-07T16:14:22Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-07",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-07T08:51:03Z",
+      "fetchedAt": "2026-11-07T15:45:42Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-96d74980c286b28b.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0700ae24473a90d3.json",
       "note": null
     },
     "reaction_session": {
@@ -204,6 +214,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE335A01012_2026-09-30/integrated_filings-1678fb2961b01560.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-07T15:45:08Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0700ae24473a90d3.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-07T14:50:36.380000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-07T15:45:08Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0700ae24473a90d3.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-07T15:45:08Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0700ae24473a90d3.json",
+      "note": null
     }
   },
   "fetch": {
@@ -252,23 +289,29 @@
   },
   "derived": {
     "score": 28,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -276,13 +319,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -326,9 +369,9 @@
         "sector": "Metals & Mining",
         "stocks": 83,
         "momentum63dMedian": -7.88,
-        "relativeToMarket": -1.57,
-        "declared": 32,
-        "strongResults": 16,
+        "relativeToMarket": -1.68,
+        "declared": 34,
+        "strongResults": 17,
         "avgReaction": -0.68,
         "tailwind": "NEUTRAL"
       },
@@ -805,5 +848,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:SURYAROSNI|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-07T14:50:36.380000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited quarterly / half yearly financial results for the period ended 30th September, 2026 Surya Roshni Ltd - 500336 - Unaudited Quarterly Results",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0700ae24473a90d3.json",
+      "seenAt": "2026-11-07T16:13:43Z"
+    }
   ]
 }
