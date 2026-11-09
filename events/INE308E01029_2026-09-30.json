@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE308E01029|2026-09-30",
   "createdAt": "2026-10-31T10:44:50Z",
-  "updatedAt": "2026-11-09T10:17:01Z",
+  "updatedAt": "2026-11-09T21:14:04Z",
   "security": {
     "symbol": "SVPGLOB",
     "nseSymbol": "SVPGLOB",
@@ -18,7 +18,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -39,16 +39,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T03:27:00Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-09T20:48:23Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-09T21:14:04Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-09",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-09T09:48:17Z",
+      "fetchedAt": "2026-11-09T20:48:23Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-eb56bc3d9d75efcb.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a4075fbe80b56ffe.json",
       "note": null
     },
     "reaction_session": {
@@ -194,6 +204,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE308E01029_2026-09-30/integrated_filings-21f0b4cb13a1762a.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-09T20:48:23Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a4075fbe80b56ffe.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-09T16:34:41.360000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-09T20:48:23Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a4075fbe80b56ffe.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-09T20:48:23Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a4075fbe80b56ffe.json",
+      "note": null
     }
   },
   "fetch": {
@@ -241,23 +278,29 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PRICED IN",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -265,13 +308,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -315,10 +358,10 @@
         "sector": "Textiles",
         "stocks": 210,
         "momentum63dMedian": -4.1,
-        "relativeToMarket": 2.08,
-        "declared": 36,
+        "relativeToMarket": 2.18,
+        "declared": 35,
         "strongResults": 17,
-        "avgReaction": 1.15,
+        "avgReaction": 1.07,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -829,5 +872,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:SVPGLOB|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-09T16:34:41.360000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial Results Quarter and Half Year ended 30.09.2026 SVP Global Textiles Ltd - 505590 - Financial Results Quareter And Half Year Ended 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a4075fbe80b56ffe.json",
+      "seenAt": "2026-11-09T21:13:33Z"
+    }
   ]
 }

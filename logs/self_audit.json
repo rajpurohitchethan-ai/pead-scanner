@@ -1,6 +1,6 @@
 {
   "status": "FAIL",
-  "checkedOn": "2026-11-09",
+  "checkedOn": "2026-11-10",
   "checks": [
     {
       "check": "All files from the same release",
@@ -11,9 +11,11 @@
     },
     {
       "check": "Last run finished in time with every source answering",
-      "status": "OK",
-      "count": 0,
-      "examples": [],
+      "status": "WARN",
+      "count": 1,
+      "examples": [
+        "NSE switched off (12 failures in a row, 162 s spent failing; last: RemoteProtocolError)"
+      ],
       "note": "Data already stored is kept; skipped companies are refreshed next hour."
     },
     {
@@ -47,14 +49,14 @@
     {
       "check": "Declared results of stocks that are not trading",
       "status": "OK",
-      "count": 116,
+      "count": 110,
       "examples": [
+        "WHIRLPOOL",
         "SRPML",
         "RIGASUG",
         "REVAMEDIA",
         "MLINDLTD",
         "GUJHYSPIN",
-        "GOLDIAM",
         "BLOOM",
         "ALFAICA"
       ],
@@ -63,23 +65,23 @@
     {
       "check": "Declared results have revenue/profit (filed 2+ days ago)",
       "status": "FAIL",
-      "count": 71,
+      "count": 39,
       "examples": [
         "TATACHEM",
-        "SURYAROSNI",
-        "PROSTARM",
-        "MAWANASUG",
-        "INFRAX",
-        "ASMTEC",
         "ANDHRSUGAR",
-        "SUDARSCHEM"
+        "KUSUMGAR",
+        "ZUARI",
+        "VIVIANA",
+        "UYFINCORP",
+        "MMP",
+        "KKCL"
       ],
       "note": "Exchange filing not parsed; check the NSE_XBRL / BSE_RESULTS_SNAPSHOT fetch errors."
     },
     {
       "check": "Illiquid or unpriced results not parsed (2+ days)",
       "status": "WARN",
-      "count": 610,
+      "count": 607,
       "examples": [
         "YUG",
         "WARDINMOBI",
@@ -94,9 +96,18 @@
     },
     {
       "check": "Declared results have revenue/profit (filed in last 2 days)",
-      "status": "OK",
-      "count": 0,
-      "examples": [],
+      "status": "WARN",
+      "count": 11,
+      "examples": [
+        "VENTURA",
+        "THRIVE",
+        "SVPGLOB",
+        "RMDRIP",
+        "OLECTRA",
+        "NICCOPAR",
+        "MEDICO",
+        "MANRAJH"
+      ],
       "note": "Normal for a few hours after filing; the engine re-checks every run."
     },
     {
@@ -134,16 +145,16 @@
     {
       "check": "Declared results have year-on-year figures",
       "status": "WARN",
-      "count": 806,
+      "count": 826,
       "examples": [
+        "SURYAROSNI",
         "RSTL",
+        "RIDDHICORP",
+        "RAJNISH",
         "PHYCHEM",
-        "HBLENGINE",
-        "NVENTURES",
-        "NEXOME",
-        "MYSORPETRO",
-        "MTL",
-        "INGERRAND"
+        "PGCRL",
+        "MOPSHOP",
+        "MAWANASUG"
       ],
       "note": "Shown as quarter-on-quarter until the year-ago figures are found."
     },
@@ -157,8 +168,11 @@
     {
       "check": "Reaction measured once the session has closed",
       "status": "FAIL",
-      "count": 2,
+      "count": 5,
       "examples": [
+        "TATACHEM",
+        "ANDHRSUGAR",
+        "CORDSCABLE",
         "CNL",
         "ANTELOPUS"
       ],
@@ -167,23 +181,23 @@
     {
       "check": "Reaction not measurable (no price history or illiquid)",
       "status": "WARN",
-      "count": 244,
+      "count": 495,
       "examples": [
-        "PROZONER",
-        "ZSARVAMA",
-        "ZSARACOM",
-        "ZHINDHSG",
-        "ZHEMHOLD",
-        "YOGISUNG",
-        "YOGI",
-        "WITS"
+        "YUG",
+        "WARDINMOBI",
+        "VINNY",
+        "VELOX",
+        "UNIVSTAR",
+        "TRANSFD",
+        "SUCROSA",
+        "SSPRL"
       ],
       "note": "No usable prices for the reaction session; not a trade candidate."
     },
     {
       "check": "Every company has price history",
       "status": "WARN",
-      "count": 1484,
+      "count": 1480,
       "examples": [
         "CRL",
         "GVPTECH",
@@ -199,7 +213,7 @@
     {
       "check": "Prices fresh for companies reporting within 7 days",
       "status": "WARN",
-      "count": 432,
+      "count": 434,
       "examples": [
         "BGDL",
         "VEERHEALTH",
@@ -214,31 +228,40 @@
     },
     {
       "check": "Live plans priced on a recent close",
-      "status": "OK",
-      "count": 0,
-      "examples": [],
+      "status": "WARN",
+      "count": 151,
+      "examples": [
+        "UNICHEMLAB",
+        "TENNIND",
+        "STOVEKRAFT",
+        "SMSPHARMA",
+        "SIS",
+        "SAREGAMA",
+        "SANATHAN",
+        "REDINGTON"
+      ],
       "note": "Updated in rotation; the card and Radar row show the close's date. Read it before acting on a trigger."
     },
     {
       "check": "Result date passed, no filing read (2+ days)",
       "status": "WARN",
-      "count": 24,
+      "count": 25,
       "examples": [
         "IRBINVIT",
         "ONEGLOBAL",
         "AMAL",
+        "EXHICON",
         "SHARVAYA",
         "NHIT",
         "CITIUSINVT",
-        "VANS",
-        "ROADSTAR"
+        "VANS"
       ],
       "note": "Shown as awaiting result. The company's NSE listing is re-read every few hours; a postponed meeting stays here until a new date is filed."
     },
     {
       "check": "Sector known",
       "status": "WARN",
-      "count": 1587,
+      "count": 1591,
       "examples": [
         "CRL",
         "GVPTECH",
