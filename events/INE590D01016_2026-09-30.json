@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE590D01016|2026-09-30",
   "createdAt": "2026-10-07T04:24:35Z",
-  "updatedAt": "2026-11-09T21:14:05Z",
+  "updatedAt": "2026-11-10T10:16:21Z",
   "security": {
     "symbol": "DHPIND",
     "bseSymbol": "DHPIND",
@@ -21,7 +21,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -142,16 +142,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-08T14:30:14Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-10T09:49:31Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-10T10:16:21Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-10",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-09T20:48:36Z",
+      "fetchedAt": "2026-11-10T09:49:33Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-36ae88d500b3bfb5.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2d099871c6ce6d6b.json",
       "note": null
     },
     "reaction_session": {
@@ -279,6 +289,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE590D01016_2026-09-30/scrip_results-134c8c2fec7e0459.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-10T09:49:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2d099871c6ce6d6b.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-10T12:12:18.977000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-10T09:49:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2d099871c6ce6d6b.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-10T09:49:31Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2d099871c6ce6d6b.json",
+      "note": null
     }
   },
   "fetch": {
@@ -327,23 +364,29 @@
   },
   "derived": {
     "score": 16,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -351,13 +394,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -400,8 +443,8 @@
       "sector": {
         "sector": "Oil, Gas & Consumable Fuels",
         "stocks": 45,
-        "momentum63dMedian": -2.21,
-        "relativeToMarket": 4.08,
+        "momentum63dMedian": -2.17,
+        "relativeToMarket": 4.09,
         "declared": 32,
         "strongResults": 20,
         "avgReaction": -0.66,
@@ -817,6 +860,20 @@
       "timestamp": "2026-11-09T21:10:45Z",
       "price": 499.55,
       "source": "BSE_PRICE"
+    }
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-10T12:12:18.977000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "APPROVAL OF UNAUDITED FINANCIAL RESULTS (WITH LIMITED REVIEU BY ADUITORS) OF SECOND QUARTER AND FIRST HALF-YEAR ENDED 30/09/2026 APPROVED ON TODAYS BOARD MEETING DT.10/11/2026 - LIMITED .... DHP India Ltd - 531306 - APPROVAL OF UNAUDITED FINANCIAL RESULTS (WITH LIMITED REVIEW BY AUDITORS) OF SECOND ",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2d099871c6ce6d6b.json",
+      "seenAt": "2026-11-10T10:15:49Z"
     }
   ]
 }
