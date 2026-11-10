@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE539B01017|2026-09-30",
   "createdAt": "2026-11-02T13:14:34Z",
-  "updatedAt": "2026-11-10T10:16:21Z",
+  "updatedAt": "2026-11-10T18:19:28Z",
   "security": {
     "symbol": "VIRINCHI",
     "nseSymbol": "VIRINCHI",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T03:27:00Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-10T17:53:40Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-10T18:19:28Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-10",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-10T09:49:33Z",
+      "fetchedAt": "2026-11-10T17:53:53Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-3877c6ce545cb3a5.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0cf02d0ffb3cc003.json",
       "note": null
     },
     "reaction_session": {
@@ -225,6 +235,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE539B01017_2026-09-30/integrated_filings-583aefb95b52fa95.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-10T17:53:40Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0cf02d0ffb3cc003.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-10T20:36:31.820000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-10T17:53:40Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0cf02d0ffb3cc003.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-10T17:53:40Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0cf02d0ffb3cc003.json",
+      "note": null
     }
   },
   "fetch": {
@@ -265,33 +302,43 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -333,9 +380,9 @@
       "sectorKey": "Information Technology",
       "sector": {
         "sector": "Information Technology",
-        "stocks": 176,
-        "momentum63dMedian": -10.87,
-        "relativeToMarket": -4.6,
+        "stocks": 179,
+        "momentum63dMedian": -10.8,
+        "relativeToMarket": -4.71,
         "declared": 69,
         "strongResults": 26,
         "avgReaction": 0.71,
@@ -842,5 +889,19 @@
         "filedAt": "2025-05-28T23:56:23+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-10T20:36:31.820000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please find enclosed Virinchi Ltd - 532372 - Unaudited Financial Results For The Qtr And Half Year Ended 30Th September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0cf02d0ffb3cc003.json",
+      "seenAt": "2026-11-10T18:18:52Z"
+    }
+  ]
 }
