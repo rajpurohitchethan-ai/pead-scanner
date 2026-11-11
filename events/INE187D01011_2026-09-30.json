@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE187D01011|2026-09-30",
   "createdAt": "2026-11-02T11:10:00Z",
-  "updatedAt": "2026-11-11T09:54:33Z",
+  "updatedAt": "2026-11-11T18:25:49Z",
   "security": {
     "symbol": "TALBROAUTO",
     "nseSymbol": "TALBROAUTO",
@@ -17,7 +17,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -38,16 +38,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T03:27:00Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-11T17:58:28Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-11T18:25:49Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-11",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-11T09:24:42Z",
+      "fetchedAt": "2026-11-11T17:58:28Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-edf60c0aee557c52.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
       "note": null
     },
     "reaction_session": {
@@ -121,6 +131,33 @@
       "rank": 105,
       "rawRef": "raw/nse_price/INE187D01011_2026-09-30/equity_history-bf88e4c7d9fc944e.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-11T14:03:25.957000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:28Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": null
     }
   },
   "fetch": {
@@ -147,34 +184,44 @@
     }
   },
   "derived": {
-    "score": 17,
-    "completenessPct": 66.7,
+    "score": 15,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -216,13 +263,13 @@
       "sectorKey": "Automobile and Auto Components",
       "sector": {
         "sector": "Automobile and Auto Components",
-        "stocks": 143,
-        "momentum63dMedian": -6.41,
-        "relativeToMarket": -0.24,
-        "declared": 73,
+        "stocks": 144,
+        "momentum63dMedian": -6.2,
+        "relativeToMarket": -0.11,
+        "declared": 75,
         "strongResults": 44,
-        "avgReaction": 1.59,
-        "tailwind": "POSITIVE"
+        "avgReaction": 1.54,
+        "tailwind": "NEUTRAL"
       },
       "identity": {
         "macroSector": null,
@@ -685,5 +732,19 @@
         "filedAt": "2025-05-27T11:59:34+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-11T14:03:25.957000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Un-audited Standalone and Consolidated Financial Results for the second quarter and half year ended September 30, 2026. Talbros Automotive Components Ltd - 505160 - Un-Audited Standalone And Consolidated Financial Results For The Second Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "seenAt": "2026-11-11T18:25:06Z"
+    }
+  ]
 }

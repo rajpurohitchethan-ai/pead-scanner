@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE186H01014|2026-09-30",
   "createdAt": "2026-10-23T10:39:57Z",
-  "updatedAt": "2026-11-11T09:54:33Z",
+  "updatedAt": "2026-11-11T18:25:49Z",
   "security": {
     "symbol": "BASML",
     "nseSymbol": "BASML",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -40,16 +40,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-24T02:51:05Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-11T17:58:28Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-11T18:25:49Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-11",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-11T09:24:41Z",
+      "fetchedAt": "2026-11-11T17:58:32Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-edf60c0aee557c52.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
       "note": null
     },
     "reaction_session": {
@@ -210,6 +220,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE186H01014_2026-09-30/integrated_filings-cba679669ca5de4e.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-11T18:15:51.983000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:28Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": null
     }
   },
   "fetch": {
@@ -250,23 +287,29 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -274,13 +317,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -322,9 +365,9 @@
       "sectorKey": "Textiles",
       "sector": {
         "sector": "Textiles",
-        "stocks": 219,
+        "stocks": 220,
         "momentum63dMedian": -4.18,
-        "relativeToMarket": 1.99,
+        "relativeToMarket": 1.91,
         "declared": 35,
         "strongResults": 17,
         "avgReaction": 1.07,
@@ -869,5 +912,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:BASML|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-11T18:15:51.983000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Submission of Unaudited Results - Limited Review Report - for the quarter ended 30.9.2026 Bannari Amman Spinning Mills Ltd - 532674 - Submission Of Unaudited Results - Limited Review Report - For The Quarter Ended 30.9.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "seenAt": "2026-11-11T18:25:06Z"
+    }
   ]
 }

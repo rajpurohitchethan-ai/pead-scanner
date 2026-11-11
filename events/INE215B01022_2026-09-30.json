@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE215B01022|2026-09-30",
   "createdAt": "2026-10-31T10:44:50Z",
-  "updatedAt": "2026-11-11T09:54:33Z",
+  "updatedAt": "2026-11-11T18:25:49Z",
   "security": {
     "symbol": "ORCHASP",
     "nseSymbol": "ORCHASP",
@@ -18,7 +18,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -39,16 +39,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T03:27:00Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-11T17:58:26Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-11T18:25:49Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-11",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-11T09:24:42Z",
+      "fetchedAt": "2026-11-11T17:58:32Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-edf60c0aee557c52.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
       "note": null
     },
     "reaction_session": {
@@ -203,6 +213,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE215B01022_2026-09-30/integrated_filings-abed02d19ac78e69.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:26Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-11T22:56:41.160000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:26Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:26Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": null
     }
   },
   "fetch": {
@@ -250,23 +287,29 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -274,13 +317,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -324,7 +367,7 @@
         "sector": "Information Technology",
         "stocks": 182,
         "momentum63dMedian": -10.7,
-        "relativeToMarket": -4.53,
+        "relativeToMarket": -4.61,
         "declared": 69,
         "strongResults": 26,
         "avgReaction": 0.71,
@@ -823,5 +866,31 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:ORCHASP|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-11T22:56:41.160000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "The Board of Directors has adopted the Unaudited Finacial Results for the Quarter Ending 30-09-2026- Consolidated and Standalone. Orchasp Ltd - 532271 - Unaudited Quarter Results For The Financial Results Ason  30-09-2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "seenAt": "2026-11-11T18:25:08Z"
+    },
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-11T22:57:45.210000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "The Board of Directors has adopted the Unaudited Finacial Results for the Quarter Ending 30-09-2026- Consolidated and Standalone. Orchasp Ltd - 532271 - Unaudited Quarter Results For The Financial Results Ason  30-09-2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "seenAt": "2026-11-11T18:25:08Z"
+    }
   ]
 }

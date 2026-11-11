@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:INDPRUD|2026-09-30",
   "createdAt": "2026-10-23T02:50:49Z",
-  "updatedAt": "2026-11-11T09:54:36Z",
+  "updatedAt": "2026-11-11T18:25:54Z",
   "security": {
     "symbol": "INDPRUD",
     "bseSymbol": "INDPRUD",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -33,16 +33,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-23T02:50:49Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-11T17:58:28Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-11T18:25:54Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-11",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-11T09:24:42Z",
+      "fetchedAt": "2026-11-11T17:58:32Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-edf60c0aee557c52.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
       "note": null
     },
     "reaction_session": {
@@ -212,6 +222,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_INDPRUD_2026-09-30/scrip_results-8d0f95a4db7544c3.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-11T17:07:26.920000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-11T17:58:28Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "note": null
     }
   },
   "fetch": {
@@ -259,23 +296,29 @@
   },
   "derived": {
     "score": 4,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "live": null,
@@ -283,13 +326,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -331,9 +374,9 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 483,
+        "stocks": 484,
         "momentum63dMedian": -6.73,
-        "relativeToMarket": -0.56,
+        "relativeToMarket": -0.64,
         "declared": 164,
         "strongResults": 90,
         "avgReaction": -0.97,
@@ -713,5 +756,31 @@
     "fetchedAt": "2026-11-11T09:25:10Z",
     "v": 2,
     "rows": []
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-11T17:07:26.920000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please find attached the financial results for quarter and half year ended 30th September, 2026. Industrial & Prudential Investment Company Ltd - 501298 - Financial Results - Standalone & Consolidated Results For Half Year And Quarter Ended 30Th September 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "seenAt": "2026-11-11T18:25:33Z"
+    },
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-11T17:21:27.503000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please find enclosed revision in the outcome of board meeting along with the financial results for the quarter and half year ended 30 September, 2026. Industrial & Prudential Investment Company Ltd - 501298 - Revision In The Outcome Of Board Meeting Dated 11.11.2026.\r\n\r\nFinancial Results - Standalon",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbd453680d1e0461.json",
+      "seenAt": "2026-11-11T18:25:33Z"
+    }
+  ]
 }
