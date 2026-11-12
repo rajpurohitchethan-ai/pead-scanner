@@ -3415,3 +3415,7 @@ class StrongHandsTests(unittest.TestCase):
         self.assertEqual(with_rs["checks"][-1]["status"], "bad")
         self.assertEqual(with_rs["known"], full["known"] + 1)
         self.assertEqual(pp.hands_with_rs(with_rs, {"relativePct": 1.0})["known"], with_rs["known"])   # not added twice
+
+    def test_no_result_day_gain_is_not_counted(self):
+        h = self._hands([100.0] * 30 + [99, 100, 101, 102, 103], [1000] * 35, 30)
+        self.assertEqual({c["key"]: c["status"] for c in h["checks"]}["held"], "na")

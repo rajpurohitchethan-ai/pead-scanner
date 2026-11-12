@@ -166,7 +166,7 @@ def strong_hands(f, ri: int, pre_close: Any) -> dict[str, Any] | None:
         add("held", "Holds the gain", kept >= 50,
             f"Lowest close since the result kept {kept:.0f}% of the result-day gain (needs 50%).")
     else:
-        add("held", "Holds the gain", False, "No result-day gain to hold.")
+        add("held", "Holds the gain", None, "No result-day gain to hold.")
 
     ch = close.diff().iloc[ri + 1:]
     vol = f["Volume"].iloc[ri + 1:]
