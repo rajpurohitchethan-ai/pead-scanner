@@ -302,6 +302,18 @@ def http_get(url: str, ua: str, timeout: int = 30) -> bytes:
         return r.read()
 
 
+def curl_get(url: str, ua: str, timeout: int = 30) -> bytes:
+    """Nasdaq's API answers curl but refuses Python's urllib (HTTP 403 from
+    GitHub's runners, 12 Nov 2026), so the calendar is fetched with curl."""
+    import subprocess
+    res = subprocess.run(["curl", "-sS", "--fail", "--compressed", "-m", str(timeout), "-H", f"User-Agent: {ua}",
+                          "-H", "Accept: application/json, text/plain, */*", "-H", "Accept-Language: en-US,en;q=0.9", url],
+                         capture_output=True, timeout=timeout + 10)
+    if res.returncode != 0:
+        raise RuntimeError(f"curl exit {res.returncode}: {res.stderr.decode('utf-8', 'replace').strip()[:120]}")
+    return res.stdout
+
+
 def load_json(path: Path, default: Any) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -352,7 +364,7 @@ def refresh_calendar(today: date, universe_keys: set[str]) -> dict[str, dict[str
         stored = load_json(path, None)
         if stored is None or not stored.get("final"):
             try:
-                payload = json.loads(http_get(f"https://api.nasdaq.com/api/calendar/earnings?date={day.isoformat()}", BROWSER_UA))
+                payload = json.loads(curl_get(f"https://api.nasdaq.com/api/calendar/earnings?date={day.isoformat()}", BROWSER_UA))
                 rows = parse_calendar(payload, day, universe_keys)
                 old = {r["key"]: r for r in (stored or {}).get("rows", [])}
                 for r in rows:                      # the calendar drops the time once the day has passed: keep it
