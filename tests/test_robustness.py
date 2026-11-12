@@ -714,22 +714,32 @@ class PositionTrackerTests(unittest.TestCase):
     """2.9.12 My trades: HCLTECH bought 14 Oct at 1331.80, stop 1225.82."""
     POS = {"symbol": "HCLTECH", "entryDate": "2026-10-14", "entryPrice": 1331.80, "stop": 1225.82}
 
-    def item(self, close, live=None, e21=1242.8, e63=1257.66):
+    def item(self, close, live=None, e10=None, e20=None):
         return {"symbol": "HCLTECH", "resultDayLow": 1238.2, "priceContext": {"lastClose": close},
-                "plus": {"price": {"ema21": e21, "ema63": e63, "last_session": "2026-10-20"}, "live": {"price": live, "at": "x"} if live else {}}}
+                "plus": {"price": {"ema10": e10, "ema20": e20, "ema21": 1242.8, "ema63": 1257.66, "last_session": "2026-10-20"},
+                         "live": {"price": live, "at": "x"} if live else {}}}
 
-    def test_hold_then_trail_and_stops_never_drop(self):
+    def test_hold_then_cost_then_ten_and_twenty_ema(self):
+        """2.9.48, the owner's rule: stop until +1R, then cost; half out on a
+        close below the 10 EMA, the rest on a close below the 20 EMA."""
         import pead_plus as pp
-        v, st = pp.position_view(self.POS, self.item(1326.0, live=1351.9), None, date(2026, 10, 14))
+        v, st = pp.position_view(self.POS, self.item(1326.0, live=1351.9, e10=1300, e20=1280), None, date(2026, 10, 14))
         self.assertEqual(v["status"], "HOLD")
-        self.assertEqual((v["oneR"], v["swingStop"]), (1437.78, 1225.82))
+        self.assertEqual((v["oneR"], v["swingStop"], v["halfStop"]), (1437.78, 1225.82, None))   # EMAs do not act before +1R
         self.assertAlmostEqual(v["rNow"], 0.19, places=2)
-        v, st = pp.position_view(self.POS, self.item(1445.0, e21=1360, e63=1300), st, date(2026, 10, 20))
+        v, st = pp.position_view(self.POS, self.item(1445.0, e10=1400, e20=1360), st, date(2026, 10, 20))
         self.assertEqual(v["status"], "TRAILING")
-        self.assertEqual((v["swingStop"], v["positionStop"]), (1360.0, 1331.8))   # cost floor for the 63 EMA leg
-        v, st = pp.position_view(self.POS, self.item(1420.0, e21=1340, e63=1290), st, date(2026, 10, 21))
-        self.assertEqual(v["swingStop"], 1360.0)          # never moves down
+        self.assertEqual((v["halfStop"], v["restStop"], v["swingStop"]), (1400.0, 1360.0, 1360.0))
+        v, st = pp.position_view(self.POS, self.item(1395.0, e10=1405, e20=1365), st, date(2026, 10, 21))
+        self.assertEqual(v["status"], "SELL_HALF")                       # closed under the 10 EMA, above the 20
+        self.assertIn("sell half", v["note"].lower())
+        v, st = pp.position_view(self.POS, self.item(1420.0, e10=1404, e20=1368), st, date(2026, 10, 22))
         self.assertEqual(v["status"], "TRAILING")
+        self.assertTrue(v["halfHit"])                                    # remembered after the price recovers
+        v, st = pp.position_view(self.POS, self.item(1362.0, e10=1400, e20=1370), st, date(2026, 10, 23))
+        self.assertEqual(v["status"], "EXIT")                            # closed under the 20 EMA: the rest goes
+        v, st = pp.position_view(self.POS, self.item(1340.0, e10=1335, e20=1320), st, date(2026, 10, 26))
+        self.assertEqual(v["restStop"], 1331.8)                          # 20 EMA under cost: cost is the floor
 
     def test_close_below_stop_says_exit(self):
         import pead_plus as pp
@@ -3423,7 +3433,8 @@ class StrongHandsTests(unittest.TestCase):
 
 class GradeMoversAndBookHalfTests(unittest.TestCase):
     """2.9.46 (owner-approved 12 Nov 2026): the Radar grade counts what
-    separated movers from non-movers this quarter, and the trail books half at +2R."""
+    separated movers from non-movers this quarter. (The +2R book-half rule of
+    2.9.46 was replaced by the owner's 10 / 20 EMA trail in 2.9.48.)"""
 
     def _it(self, pc=None, price=None):
         base_pc = {"lastClose": 615.4, "resultDayPct": 6.0, "relativeVolume": 3.0}
@@ -3449,21 +3460,6 @@ class GradeMoversAndBookHalfTests(unittest.TestCase):
         self.assertTrue(any("climax volume" in c for c in bad["cons"]))
         self.assertTrue(any("ran up 15%" in c for c in bad["cons"]))
         self.assertTrue(any("31% below its 52-week high" in c for c in bad["cons"]))
-
-    def test_book_half_once_a_close_reaches_two_r(self):
-        import pead_plus as pp
-        pos = {"symbol": "X", "entryDate": "2026-10-22", "entryPrice": 100.0, "stop": 95.0}
-        def item(close):
-            return {"resultDayLow": 96.0, "priceContext": {"lastClose": close},
-                    "plus": {"price": {"ema21": 101.0, "ema63": 98.0, "last_session": "2026-11-10"}, "plan": {}}}
-        v, st = pp.position_view(pos, item(107.0), None, date(2026, 11, 10))
-        self.assertFalse(v["twoRHit"])
-        self.assertNotIn("book half", v["note"].lower())
-        v, st = pp.position_view(pos, item(110.5), st, date(2026, 11, 11))
-        self.assertTrue(v["twoRHit"])
-        self.assertIn("book half", v["note"].lower())
-        v, st = pp.position_view(pos, item(106.0), st, date(2026, 11, 12))      # stays reached after a dip
-        self.assertTrue(v["twoRHit"])
 
 
 class ComparativeCopyOfCurrentTests(unittest.TestCase):
@@ -3576,3 +3572,30 @@ class KnownFilingUnreadTests(unittest.TestCase):
         with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
             self.assertNotEqual(p.enrichment_group(rejected, now.date()), ("A", 0))
             self.assertNotEqual(p.enrichment_group(recent, now.date()), ("A", 0))
+
+
+class TrendStageTests(unittest.TestCase):
+    """2.9.48: the owner prefers stage 2 stocks."""
+
+    def test_stage_two_four_and_neither(self):
+        import pandas as pd
+        import pead_plus as pp
+        up = pd.Series([100 + i * 0.5 for i in range(260)])
+        down = pd.Series([300 - i * 0.5 for i in range(260)])
+        flat = pd.Series([100.0 + (i % 7) for i in range(260)])
+        self.assertEqual(pp.trend_stage(up)["stage"], 2)
+        self.assertEqual(pp.trend_stage(down)["stage"], 4)
+        self.assertIsNone(pp.trend_stage(flat)["stage"])
+        self.assertEqual(pp.trend_stage(flat)["label"], "Not stage 2")
+        self.assertIsNone(pp.trend_stage(up.head(150)))               # not enough history: no label
+
+    def test_stage_moves_the_grade(self):
+        import pead_plus as pp
+        def it(stage):
+            return {"symbol": "X", "marketCapCr": 26266.0, "priceContext": {"lastClose": 615.4, "resultDayPct": 6.0, "relativeVolume": 3.0},
+                    "plus": {"strength": "STRONG", "plan": {"signal": "ENTRY_PULLBACK", "entry": 607.05, "sl": 584.6, "stage": "FULL", "redFlags": []},
+                             "price": {"stage": {"stage": stage} if stage else None}}}
+        base = pp.radar_grade(it(None))["score"]
+        self.assertEqual(pp.radar_grade(it(2))["score"], base + 6)
+        self.assertEqual(pp.radar_grade(it(4))["score"], base - 6)
+        self.assertIn("stage 2 uptrend", pp.radar_grade(it(2))["pros"])

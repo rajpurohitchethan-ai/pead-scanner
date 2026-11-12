@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.47"
+ENGINE_VERSION = "2.9.48"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5666,6 +5666,7 @@ def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, A
         view, st = pead_plus.position_view(p_, it, state.get(key), today)
         state[key] = st
         view["hands"] = ((it or {}).get("plus") or {}).get("hands")   # 2.9.45
+        view["stage"] = (((it or {}).get("plus") or {}).get("price") or {}).get("stage")   # 2.9.48
         try:                                                          # 2.9.15
             pl = (it or {}).get("plus") or {}
             sym = str(p_["symbol"]).upper()
@@ -7485,7 +7486,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
-PLUS_VERSION = "2.9.45"   # bump to rebuild every stored chart/price analytic once
+PLUS_VERSION = "2.9.48"   # bump to rebuild every stored chart/price analytic once
 
 
 def replay_plus(store: EventStore) -> int:

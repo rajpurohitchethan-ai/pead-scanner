@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.47"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.48"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -232,6 +232,35 @@ def hands_with_rs(hands: dict[str, Any] | None, rs: dict[str, Any] | None) -> di
     return _hands_total(h)
 
 
+def trend_stage(close: Any) -> dict[str, Any] | None:
+    """2.9.48 (owner: "love stocks in stage 2"): Weinstein-style stage from the
+    50 / 150 / 200-day averages. Stage 2 = price above the 50 above the 150
+    above the 200, with the 200 rising. Stage 4 = price and the 50 under a
+    falling 200. Anything else is left unnamed (stage 1 or 3). Needs 220 sessions."""
+    c = close.dropna()
+    if len(c) < 220:
+        return None
+    last = _num(c.iloc[-1])
+    s50, s150 = _num(c.tail(50).mean()), _num(c.tail(150).mean())
+    s200, s200_prev = _num(c.tail(200).mean()), _num(c.iloc[-220:-20].mean())
+    if None in (last, s50, s150, s200, s200_prev):
+        return None
+    rising = s200 > s200_prev
+    if last > s50 > s150 > s200 and rising:
+        stage, label = 2, "Stage 2"
+        note = "Price above the 50-day, above the 150-day, above a rising 200-day average: an established uptrend."
+    elif last < s200 and s50 < s200 and not rising:
+        stage, label = 4, "Stage 4"
+        note = "Price and the 50-day average are under a falling 200-day average: a downtrend."
+    else:
+        stage, label = None, "Not stage 2"
+        note = ("The averages are not lined up: " + ("price is under the 200-day average" if last < s200 else
+                "the 200-day average is not rising" if not rising else "the 50 / 150 / 200-day order is broken")
+                + " (stage 1 or 3).")
+    return {"stage": stage, "label": label, "note": note, "sma50": _r2(s50), "sma150": _r2(s150), "sma200": _r2(s200),
+            "sma200Rising": rising}
+
+
 def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
                       q1_reaction_date: date | None = None, q2_boundary: date | None = None,
                       window_start: date | None = None, q1_window_start: date | None = None) -> dict[str, Any]:
@@ -245,6 +274,8 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
     last = _num(close.iloc[-1])
     out: dict[str, Any] = {
         "ema10": _ema(close, 10), "ema21": _ema(close, 21), "ema63": _ema(close, 63),
+        "ema20": _ema(close, 20),                       # 2.9.48: the owner's trail (10 EMA half, 20 EMA rest)
+        "stage": trend_stage(close),                    # 2.9.48: Stage 2 check
         # 2.9.21: the previous session, to recognise a breakout day out of the pullback zone
         "prev_close": _r2(close.iloc[-2]) if len(close) >= 2 else None,
         "prev_ema10": _ema(close.iloc[:-1], 10) if len(close) > 11 else None,
@@ -1939,44 +1970,53 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
         st["peakClose"] = max(_num(st.get("peakClose")) or close, close)
     one_r_hit = bool(st.get("oneRHit")) or ((_num(st.get("peakClose")) or 0) >= one_r)
     st["oneRHit"] = one_r_hit
-    two_r = entry + 2 * risk                       # 2.9.46: book half on a close at +2R, trail the rest
-    two_r_hit = bool(st.get("twoRHit")) or ((_num(st.get("peakClose")) or 0) >= two_r)
-    st["twoRHit"] = two_r_hit
-    swing = position = stop0
+    # 2.9.48 (owner's rule, 12 Nov 2026; replaces "+2R book half" and the 21 / 63
+    # EMA trail): the stop stands until a close reaches +1R, then it moves to
+    # cost. From there, a close below the 10 EMA sells half and a close below
+    # the 20 EMA (or below cost) sells the rest. Daily closes only.
+    e10, e20 = _num(px.get("ema10")), _num(px.get("ema20"))
+    rest = stop0
     if one_r_hit:
-        e21, e63 = view["ema21"], view["ema63"]
-        swing = max(entry, e21) if e21 is not None else entry
-        position = max(entry, e63) if e63 is not None else entry
-    # Never lower a stop that was already raised.
-    swing = max(swing, _num(st.get("swingStop")) or swing)
-    position = max(position, _num(st.get("positionStop")) or position)
-    st["swingStop"], st["positionStop"] = _r2(swing), _r2(position)
+        rest = max(entry, e20) if e20 is not None else entry
+    half = max(rest, e10) if (one_r_hit and e10 is not None) else None
+    below_half = bool(one_r_hit and half is not None and close is not None and close < half)
+    half_hit = bool(st.get("halfHit")) or below_half
+    if one_r_hit:
+        st["halfHit"] = half_hit
+    st["swingStop"], st["positionStop"] = _r2(rest), _r2(rest)
     r_now = (last - entry) / risk if last is not None else None
     view.update({"riskPerShare": _r2(risk), "riskPct": _r2(risk / entry * 100), "oneR": _r2(one_r),
-                 "twoR": _r2(entry + 2 * risk), "swingStop": _r2(swing), "positionStop": _r2(position),
+                 "twoR": _r2(entry + 2 * risk), "swingStop": _r2(rest), "positionStop": _r2(rest),
+                 "halfStop": _r2(half), "restStop": _r2(rest), "ema10": e10, "ema20": e20, "halfHit": half_hit,
                  "rNow": _r2(r_now), "pnlPct": _r2(_pct(last, entry)) if last is not None else None,
-                 "peakClose": _r2(_num(st.get("peakClose"))), "oneRHit": one_r_hit, "twoRHit": two_r_hit})
+                 "peakClose": _r2(_num(st.get("peakClose"))), "oneRHit": one_r_hit})
     if last is None:
         view["note"] = "No price for this stock yet."
-    elif close is not None and close < swing:
-        view["status"], view["note"] = "EXIT_SWING", (
-            f"Closed at {close:,.2f}, below the {'swing trail' if one_r_hit else 'stop'} {swing:,.2f}: the plan says exit"
-            + (" the swing part (position part trails the 63 EMA)." if one_r_hit and close >= position else "."))
-        if close < position:
-            view["status"] = "EXIT"
-    elif two_r_hit:
-        view["status"], view["note"] = "TRAILING", (f"+2R reached ({two_r:,.2f}): book half if you have not yet. Trail the "
-                                                    f"rest at {swing:,.2f} (21 EMA, never below cost), on a closing basis.")
+    elif close is not None and close < rest:
+        what = ("the 20 EMA" if e20 is not None and rest == e20 else "cost") if one_r_hit else "the stop"
+        view["status"], view["note"] = "EXIT", (f"Closed at {close:,.2f}, below {what} {rest:,.2f}: the plan says sell "
+                                                + ("everything that is left." if one_r_hit else "."))
+    elif below_half:
+        view["status"], view["note"] = "SELL_HALF", (f"Closed at {close:,.2f}, below the 10 EMA {half:,.2f}: sell half. "
+                                                     f"The rest goes on a close below {rest:,.2f} "
+                                                     f"({'20 EMA' if e20 is not None and rest == e20 else 'cost'}).")
+    elif one_r_hit and half is not None and half <= rest:
+        view["status"], view["note"] = "TRAILING", (f"+1R reached: stop at cost. The 10 EMA is not above "
+                                                    f"{'the 20 EMA' if e20 is not None and rest == e20 else 'your cost'} yet, "
+                                                    f"so a close below {rest:,.2f} sells everything.")
     elif one_r_hit:
-        view["status"], view["note"] = "TRAILING", (f"+1R reached: stop at cost or better. Trail swing {swing:,.2f} "
-                                                    f"(21 EMA) / position {position:,.2f} (63 EMA), on a closing basis.")
+        view["status"], view["note"] = "TRAILING", (
+            f"+1R reached: stop at cost. Sell half on a close below the 10 EMA ({half:,.2f}) and the rest on a close "
+            f"below {rest:,.2f} ({'20 EMA' if e20 is not None and rest == e20 else 'cost'})."
+            + (" Half was due earlier on a close below the 10 EMA." if half_hit else "")) if half is not None else (
+            f"+1R reached: stop at cost {rest:,.2f}.")
     elif last is not None and last < entry:
         view["status"], view["note"] = "BELOW_ENTRY", (f"Below entry; the stop {stop0:,.2f} (1% under the result-day "
                                                        f"low {low:,.2f}) stands until +1R at {one_r:,.2f}." if low else
                                                        f"Below entry; stop {stop0:,.2f} stands until +1R at {one_r:,.2f}.")
     else:
-        view["status"], view["note"] = "HOLD", (f"Hold. Stop {stop0:,.2f} until +1R at {one_r:,.2f}; then move the stop "
-                                                f"to cost and trail the 21 EMA. Book half at +2R ({two_r:,.2f}).")
+        view["status"], view["note"] = "HOLD", (f"Hold. Stop {stop0:,.2f} until a close at +1R ({one_r:,.2f}); then the stop "
+                                                f"moves to cost, half goes on a close below the 10 EMA and the rest below the 20 EMA.")
     return view, st
 
 
@@ -2539,6 +2579,11 @@ def radar_grade(item: dict[str, Any], *, min_mcap_cr: float = 1000.0, last_price
     runup = _num(pc.get("pre20dPct"))
     if runup is not None and runup >= GRADE_RUNUP_PCT:
         score -= 6; cons.append(f"ran up {runup:.0f}% before the result")
+    stage = (px.get("stage") or {}).get("stage")          # 2.9.48: the owner prefers stage 2
+    if stage == 2:
+        score += 6; pros.append("stage 2 uptrend")
+    elif stage == 4:
+        score -= 6; cons.append("stage 4 downtrend")
 
     # 5 Volume behaviour since
     pr = (px.get("pressure") or {}).get("label")

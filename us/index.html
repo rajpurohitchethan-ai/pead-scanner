@@ -97,7 +97,7 @@ footer{margin-top:28px;color:var(--ink-2);font-size:13px;line-height:1.55}
   </header>
   <div id="app" aria-live="polite"></div>
   <footer>
-    <p><b>How to read it.</b> Stocks are the S&amp;P 500, 400 and 600. A result counts when earnings grew (revenue and net income against the same quarter last year) and the price reacted well. The entry, the stop (1% under the result-day low, judged on the close), the targets and the grade follow the same rules as the Indian page. Target 1 is +1R: on a close above it the stop moves to cost. Book half on a close above Target 2 (+2R) and trail the rest on the 21-day EMA.</p>
+    <p><b>How to read it.</b> Stocks are the S&amp;P 500, 400 and 600. A result counts when earnings grew (revenue and net income against the same quarter last year) and the price reacted well. The entry, the stop (1% under the result-day low, judged on the close), the targets and the grade follow the same rules as the Indian page. Target 1 is +1R: on a close above it the stop moves to cost. After that, sell half on a close below the 10-day EMA and the rest on a close below the 20-day EMA.</p>
     <p><b>Data.</b> Result dates and EPS from Nasdaq's earnings calendar; prices and quarterly figures from Yahoo. Growth figures can take a few days to appear after a result; until then the stock shows "growth pending" and no levels. A dash means the value is not available. Prices are daily closes, not live.</p>
     <p>A mechanical screen for study, not investment advice.</p>
   </footer>
@@ -146,7 +146,7 @@ footer{margin-top:28px;color:var(--ink-2);font-size:13px;line-height:1.55}
     const byRisk = cap && rk ? Math.floor(cap * rk / 100 / r) : 0, byCap = cap ? Math.floor(cap * 0.15 / e) : 0, qty = Math.min(byRisk, byCap);
     const size = qty >= 1 ? `<br><span class="meta">Size: <b>${qty.toLocaleString('en-US')} shares</b> ≈ ${usd(qty * e, 0)}, risking ${usd(qty * r, 0)}${byCap < byRisk ? ' (held to 15% of capital)' : ` (${rk}% of capital)`}.</span>` : '';
     return `<div class="lv n">Entry <b>${usd(e)}</b> · Stop <b>${usd(sl)}</b> <span class="meta">(${(r / e * 100).toFixed(1)}%)</span> · Target 1 <b>${usd(e + r)}</b> <span class="meta">+1R</span> · Target 2 <b>${usd(e + 2 * r)}</b> <span class="meta">+2R</span>
-      <br><span class="meta">Stop to cost after a close over Target 1. Book half over Target 2, trail the rest on the 21 EMA${ema !== undefined ? ` (now ${usd(ema)})` : ''}.</span>${size}</div>`;
+      <br><span class="meta">Stop to cost after a close over Target 1. After that sell half on a close below the 10 EMA and the rest below the 20 EMA${ema !== undefined ? ` (21 EMA now ${usd(ema)})` : ''}.</span>${size}</div>`;
   }
   function row(it) {
     const g = it.grade || {}, pl = it.plan || {}, rx = it.reaction || {}, h = it.hands, s = SIG[pl.signal] || [pl.signal || '—', ''];

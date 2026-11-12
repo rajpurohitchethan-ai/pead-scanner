@@ -199,6 +199,28 @@ td.r,th.r{text-align:right}
   .sectbl td,.sectbl th{white-space:normal}.sectbl td:first-child{max-width:132px;overflow-wrap:anywhere}.sectbl .tag{white-space:normal;font-size:11px;line-height:1.25}.tscroll table.sectbl{min-width:0}.sectbl .sdetail td{max-width:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* 2.9.48: livelier page (owner request) - motion is small and off under reduced-motion */
+.tabs{position:sticky;top:0;z-index:20;padding:8px 0;margin:10px 0 12px;background:color-mix(in srgb,var(--paper) 86%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.tab{transition:background .18s,color .18s,transform .12s}.tab:active{transform:scale(.96)}
+.card{transition:transform .18s,box-shadow .18s}
+@media (hover:hover){.card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(21,35,63,.12)}}
+.row{transition:background .15s}.row:active,.row[aria-expanded="true"]{background:var(--sheet-2)}
+.row-detail{animation:detail-in .22s ease-out}
+@keyframes detail-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+#view.enter>*{animation:rise .3s ease-out both}
+#view.enter>*:nth-child(2){animation-delay:.04s}#view.enter>*:nth-child(3){animation-delay:.08s}#view.enter>*:nth-child(n+4){animation-delay:.12s}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.dot.on{animation:pulse 2.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--gain) 55%,transparent)}50%{box-shadow:0 0 0 6px transparent}}
+.rbar{margin:14px 0 6px}.rbar-track{position:relative;height:8px;border-radius:999px;background:var(--line-2)}
+.rbar-fill{position:absolute;top:0;bottom:0;border-radius:999px}.rbar-fill.up{background:var(--gain)}.rbar-fill.down{background:var(--loss)}
+.rbar-mark{position:absolute;top:-3px;width:2px;height:14px;background:var(--ink-3);transform:translateX(-1px)}.rbar-mark.cost{background:var(--ink)}
+.rbar-dot{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--sheet)}.rbar-dot.up{background:var(--gain)}.rbar-dot.down{background:var(--loss)}
+.rbar-lab{position:relative;height:16px;margin-top:6px;font-size:11px;color:var(--ink-3)}.rbar-lab span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.rbar-lab span:first-child{transform:none}.rbar-lab span:last-child{transform:translateX(-100%)}
+.stage-line{margin:8px 0}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -255,6 +277,6 @@ td.r,th.r{text-align:right}
 
   <p class="foot" id="foot">A mechanical screen, not advice. Levels appear only when a rule-based setup exists; missing data shows as —, never as zero.</p>
 </main>
-<script src="intelligence.js?v=86"></script>
+<script src="intelligence.js?v=87"></script>
 </body>
 </html>

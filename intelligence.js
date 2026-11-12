@@ -243,6 +243,26 @@
       <div class="td-row">${h.checks.map(c => `<span class="tdc ${c.status}" title="${esc(c.note)}"><i aria-hidden="true">${TD_ICON[c.status] || '–'}</i>${esc(c.label)}</span>`).join('')}</div>
       <details class="td-more"><summary>What each check says</summary><ul class="td-notes">${h.checks.map(c => `<li><b>${esc(c.label)}:</b> ${esc(c.note)}</li>`).join('')}</ul><p class="meta">A guide to how the stock is behaving, not a signal: it does not change the plan or the grade.</p></details></div>`;
   }
+  // 2.9.48: Stage 2 check (the owner prefers stage 2 stocks) and the trade's progress bar.
+  function stageTag(st) {
+    if (!st || !st.label) return '';
+    return ` <span class="tag ${st.stage === 2 ? 'good' : st.stage === 4 ? 'bad' : ''}" title="${esc(st.note || '')}">${esc(st.label)}</span>`;
+  }
+  function stageLine(st) {
+    if (!st || !st.label) return '';
+    return `<p class="meta stage-line"><span class="tag ${st.stage === 2 ? 'good' : st.stage === 4 ? 'bad' : ''}">${esc(st.label)}</span> ${esc(st.note || '')}${num(st.sma200) !== null ? ` <span class="n">50-day ${inr(st.sma50)}, 150-day ${inr(st.sma150)}, 200-day ${inr(st.sma200)}.</span>` : ''}</p>`;
+  }
+  function rBar(p) {
+    const e = num(p.entryPrice), s0 = num(p.initialStop), last = num(p.last), r1 = num(p.oneR), r2 = num(p.twoR);
+    if ([e, s0, last, r1, r2].some(v => v === null) || !(e > s0)) return '';
+    const lo = Math.min(s0, last), hi = Math.max(r2, last), x = v => (v - lo) / (hi - lo) * 100;
+    const a = Math.min(e, last), b = Math.max(e, last);
+    return `<div class="rbar" role="img" aria-label="Price ${inr(last)} between the stop ${inr(s0)} and +2R ${inr(r2)}">
+      <div class="rbar-track"><i class="rbar-fill ${last >= e ? 'up' : 'down'}" style="left:${x(a).toFixed(1)}%;width:${(x(b) - x(a)).toFixed(1)}%"></i>
+        <i class="rbar-mark" style="left:${x(s0).toFixed(1)}%"></i><i class="rbar-mark cost" style="left:${x(e).toFixed(1)}%"></i><i class="rbar-mark" style="left:${x(r1).toFixed(1)}%"></i><i class="rbar-mark" style="left:${x(r2).toFixed(1)}%"></i>
+        <i class="rbar-dot ${last >= e ? 'up' : 'down'}" style="left:${x(last).toFixed(1)}%"></i></div>
+      <div class="rbar-lab n"><span style="left:${x(s0).toFixed(1)}%">Stop</span><span style="left:${x(e).toFixed(1)}%">Cost</span><span style="left:${x(r1).toFixed(1)}%">+1R</span><span style="left:${x(r2).toFixed(1)}%">+2R</span></div></div>`;
+  }
   function peersLine(it) {
     const pe = P(it).peers;
     if (!pe || !pe.count) return '';
@@ -324,7 +344,7 @@
     const levels = num(plan.entry) !== null ? `<div class="levels">
         ${lv('Entry above', inr(plan.entry), 'e')}${lv('Stop loss', inr(plan.sl), 's')}
         ${lv('Risk', pct(plan.riskPct).replace('+', ''))}${lv('Trail swing / position', `${inr(plan.tslSwing, 0)} / ${inr(plan.tslPosition, 0)}`)}
-      </div><p class="qty">Trail stays at the stop until the trade is up 1R, then moves to cost and follows the 21 EMA (swing) or 63 EMA (position).</p>${sizing(plan)}` : '';
+      </div><p class="qty">The stop stands until a close at +1R, then moves to cost. After that: sell half on a close below the 10 EMA and the rest on a close below the 20 EMA.</p>${sizing(plan)}` : '';
     const reasons = (it.reasons || []).slice(0, 6), risks = (it.risks || []).slice(0, 6);
     const links = p.links || {};
     const linkHtml = [['screener', 'Screener'], ['tradingview', 'TradingView'], ['nse', 'NSE'], ['bse', 'BSE']]
@@ -340,7 +360,7 @@
       ${tvChart(it)}
       ${facts}
       ${lensBlock(it)}
-      ${topDownStrip(it)}${handsStrip(P(it).hands)}
+      ${topDownStrip(it)}${stageLine(px(it).stage)}${handsStrip(P(it).hands)}
       ${sectorCompact(it)}
       ${peersLine(it)}
       <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}${plan.stage === 'STARTER' && num(plan.entry) !== null ? ' <span class="tag warn">Starter, 1/3 size</span>' : plan.stage === 'FULL' && num(plan.entry) !== null ? ' <span class="tag go">Full size</span>' : ''}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
@@ -427,14 +447,14 @@
   function radarLevels(it) {
     const pl = P(it).plan || {}, e = num(pl.entry), sl = num(pl.sl);
     if (e === null || sl === null || !(e > sl)) return '';
-    const r = e - sl, ema = (P(it).chart?.ema21 || []).map(num).filter(v => v !== null).pop();
+    const r = e - sl, e10 = num(px(it).ema10), e20 = num(px(it).ema20);
     // 2.9.46: shares to buy from the capital and risk-per-trade set at the top of the page (this browser only)
     const cap = num(store.get('cap', 1000000)), rk = num(store.get('risk', 1)), frac = num(pl.sizeFraction) ?? 1;
     const byRisk = cap && rk ? Math.floor(Math.floor(cap * rk / 100 / r) * frac) : 0;
     const capPct = num(store.get('pcap', 15)) ?? 15, byCap = cap ? Math.floor(cap * capPct / 100 / e) : 0;   // one trade never above the PEAD budget
     const qty = Math.min(byRisk, byCap);
     const size = qty >= 1 ? `<br><span class="meta">Size: <b>${qty.toLocaleString('en-IN')} shares</b>${frac < 1 ? ' (starter 1/3)' : ''} ≈ ${inr(qty * e, 0)}, risking ${inr(qty * r, 0)}${byCap < byRisk ? ` (held to ${capPct}% of capital)` : ` (${rk}% of capital)`}. Set capital and risk at the top of the page.</span>` : '';
-    return `<div class="radar-why radar-lv">Entry <b>${inr(e)}</b> · Stop <b>${inr(sl)}</b> <span class="meta">(${(r / e * 100).toFixed(1)}%)</span> · Target 1 <b>${inr(e + r)}</b> <span class="meta">+1R</span> · Target 2 <b>${inr(e + 2 * r)}</b> <span class="meta">+2R</span><br><span class="meta">TSL: the stop above until a close over Target 1; then cost ${inr(e)}. Book half on a close over Target 2 and trail the rest on the 21 EMA${ema !== undefined ? ` (now ${inr(ema)})` : ''}, closing basis.</span>${size}</div>`;
+    return `<div class="radar-why radar-lv">Entry <b>${inr(e)}</b> · Stop <b>${inr(sl)}</b> <span class="meta">(${(r / e * 100).toFixed(1)}%)</span> · Target 1 <b>${inr(e + r)}</b> <span class="meta">+1R</span> · Target 2 <b>${inr(e + 2 * r)}</b> <span class="meta">+2R</span><br><span class="meta">TSL: the stop above until a close over Target 1; then cost ${inr(e)}. After that sell half on a close below the 10 EMA${e10 !== null ? ` (now ${inr(e10)})` : ''} and the rest below the 20 EMA${e20 !== null ? ` (now ${inr(e20)})` : ''}.</span>${size}</div>`;
   }
   function radarRow(it) {
         const pl = P(it).plan || {}, s = sig(it), pc = it.priceContext || {}, live = P(it).live;
@@ -445,7 +465,7 @@
         const trig = hp ? num(hp.oneR) : num(pl.entry), toTrig = last !== null && trig ? (trig / last - 1) * 100 : null;
         const open = S.open.has(it.eventId);
         return `<div class="row radar-row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">
-          <div><div class="s">${esc(it.symbol)} <span class="gpill g${grade(it).tier}" title="Radar grade">${grade(it).tier} ${grade(it).score}</span></div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${(P(it).themes || []).map(t => ` <span class="tag theme">${esc(t)}</span>`).join('')}${handsTag(P(it).hands)}${hp ? ' <span class="tag go">You hold</span>' : ''}${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
+          <div><div class="s">${esc(it.symbol)} <span class="gpill g${grade(it).tier}" title="Radar grade">${grade(it).tier} ${grade(it).score}</span></div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${(P(it).themes || []).map(t => ` <span class="tag theme">${esc(t)}</span>`).join('')}${stageTag(px(it).stage)}${handsTag(P(it).hands)}${hp ? ' <span class="tag go">You hold</span>' : ''}${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
           <div><div class="k">Reaction</div><div class="v ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}${num(pc.relativeVolume) !== null ? ` <span class="meta">${num(pc.relativeVolume).toFixed(1)}x vol</span>` : ''}</div></div>
           <div><div class="k">${live?.price ? 'Live' : 'Last close'}</div><div class="v">${inr(last)}${oldClose(it)}</div></div>
           <div class="opt"><div class="k">Base (result-day low)</div><div class="v">${inr(low)}${toBase !== null ? ` <span class="meta">${pct(toBase)}</span>` : ''}</div></div>
@@ -458,11 +478,11 @@
   // 2.9.12: My trades. Entry/stop come from master/positions.json (public repo:
   // symbol, date, price only); quantity is kept in this browser only.
   const POS = { HOLD: ['Hold', 'go'], TRAILING: ['Trailing (past +1R)', 'go'], BELOW_ENTRY: ['Below entry', 'watch'],
-    EXIT_SWING: ['Exit swing part', 'bad'], EXIT: ['Exit: closed below stop', 'bad'], NO_DATA: ['Waiting for data', 'pending'] };
+    SELL_HALF: ['Sell half: closed below the 10 EMA', 'warn'], EXIT_SWING: ['Exit', 'bad'], EXIT: ['Exit: closed below the stop', 'bad'], NO_DATA: ['Waiting for data', 'pending'] };
   function viewTrades() {
     const list = S.data.positions || [];
     if (!list.length) return closedBlock() + `<div class="empty">No open trades. Tell Claude when you buy, and the trade is tracked here against the screener's plan.</div>`;
-    return `<p class="note">Your open trades, checked every hour against the screener's plan: stop 1% under the result-day low until +1R, then stop to cost and trail the 21 EMA (swing) or 63 EMA (position). Stops are judged on closing prices and never move down. Quantity stays on this device only.</p>
+    return `<p class="note">Your open trades, checked every hour against the screener's plan: stop 1% under the result-day low until a close at +1R, then the stop moves to cost. After that, half is sold on a close below the 10 EMA and the rest on a close below the 20 EMA. Everything is judged on daily closing prices. Quantity stays on this device only.</p>
       ${tradesRisk(list)}<div class="grid">${list.map(p => {
         const st = POS[p.status] || [p.status, ''];
         let qty = null; try { qty = num(localStorage.getItem('qty:' + p.symbol)); } catch (e) { /* storage blocked */ }
@@ -475,9 +495,9 @@
           <div class="tags"><span class="tag ${st[1]}">${esc(st[0])}</span></div>
           <div class="meta">${priceState(!!p.live, p.at)} ${inr(p.last)}${p.live && num(p.lastClose) !== null ? ` · prev close ${inr(p.lastClose)} · <span class="${cls(dayPct(p.last, p.lastClose))}">day ${pct(dayPct(p.last, p.lastClose))}</span>` : ''}</div>
           <p class="plan-why">${esc(p.note || '')}</p>
-          <div class="levels">${lv('Stop now (swing)', inr(p.swingStop), 's')}${lv('Position stop', inr(p.positionStop), 's')}
-            ${lv('+1R (stop to cost)', inr(p.oneR), 'e')}${lv(p.twoRHit ? '+2R reached: book half' : '+2R (book half)', inr(p.twoR))}</div>
-          <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 21 EMA ${inr(p.ema21)}, 63 EMA ${inr(p.ema63)}.</p>
+          ${rBar(p)}<div class="levels">${lv(p.oneRHit ? 'Sell half below (10 EMA)' : 'Stop now', inr(p.oneRHit ? p.halfStop : p.swingStop), 's')}${lv(p.oneRHit ? 'Sell rest below (20 EMA / cost)' : 'After +1R: stop at', inr(p.oneRHit ? p.restStop : p.entryPrice), 's')}
+            ${lv(p.oneRHit ? '+1R reached' : '+1R (stop to cost)', inr(p.oneR), 'e')}${lv('+2R', inr(p.twoR))}</div>
+          <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 10 EMA ${inr(p.ema10)}, 20 EMA ${inr(p.ema20)}.</p>${stageLine(p.stage)}
           <div class="sizing"><label>Quantity <input type="number" min="0" step="1" inputmode="numeric" class="pos-qty" data-sym="${esc(p.symbol)}" value="${qty ?? ''}"></label>
             ${qty ? `<span class="meta">P&amp;L ${money(pnl)} · at the stop ${money(atRisk)}</span>` : '<span class="meta">enter quantity for rupee P&amp;L</span>'}</div>
           ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${p.rsSector ? rsLine(null, p.rsSector) : ''}${p.sectorFavour && p.sectorFavour.status !== 'NOT_ENOUGH' ? `<p class="meta"><b>Sector:</b> ${esc(p.sectorFavour.sector)} ${favTag(p.sectorFavour)} ${esc(p.sectorFavour.note)}</p>` : ''}${handsStrip(p.hands)}${rsiBlock(p.watch && p.watch.rsi)}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
@@ -566,7 +586,7 @@
     const warn = [r.weekly, r.monthly].some(x => x && x.divergence === 'BEARISH');
     return `<div class="td rsib"><div class="td-h"><b>Momentum check</b> <span class="meta">RSI 14${r.source ? ' · ' + esc(r.source) : ''}</span></div>
       <ul class="wl">${one('Weekly', r.weekly)}${one('Monthly', r.monthly)}</ul>
-      ${warn ? '<p class="meta"><b>What it means:</b> the trend is still up but each push is weaker. It is a warning, not an exit signal: keep the stop, do not add, and take it seriously if the price also loses the 21 EMA.</p>' : ''}</div>`;
+      ${warn ? '<p class="meta"><b>What it means:</b> the trend is still up but each push is weaker. It is a warning, not an exit signal: keep the stop, do not add, and take it seriously if the price also loses the 20 EMA.</p>' : ''}</div>`;
   }
   // 2.9.28: closed trades (R and % from positions.json; rupees only from quantities on this device).
   function closedBlock() {
@@ -724,7 +744,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.47';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.48';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -791,7 +811,12 @@
     $('dir').style.display = S.tab === 'setups' ? '' : 'none';
     document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
     const active = document.querySelector('.tab[aria-selected="true"]');
-    if (active && active.scrollIntoView) active.scrollIntoView({ inline: 'center', block: 'nearest' });
+    // 2.9.48: scrollIntoView also scrolled the PAGE back up to the tab bar on every render (opening a stock
+    // jumped to the top). Move the tab strip sideways only.
+    const strip = active && active.parentElement;
+    if (strip && strip.scrollTo) strip.scrollTo({ left: Math.max(0, active.offsetLeft - strip.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2) });
+    const fresh = S.lastTab !== S.tab; S.lastTab = S.tab;
+    $('view').classList.toggle('enter', fresh);
     $('view').innerHTML = { setups: viewSetups, radar: viewRadar, trades: viewTrades, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
   }
 
@@ -830,7 +855,12 @@
       return;
     }
     const srow = e.target.closest('.srow'); if (srow) { const k = 'sector:' + srow.dataset.sector; S.open.has(k) ? S.open.delete(k) : S.open.add(k); render(); return; }
-    const row = e.target.closest('.row'); if (row && !e.target.closest('a')) { const id = row.dataset.id; S.open.has(id) ? S.open.delete(id) : S.open.add(id); render(); }
+    const row = e.target.closest('.row'); if (row && !e.target.closest('a')) {
+      const id = row.dataset.id, top = row.getBoundingClientRect().top;
+      S.open.has(id) ? S.open.delete(id) : S.open.add(id); render();
+      const again = [...document.querySelectorAll('.row')].find(r => r.dataset.id === id);      // keep the tapped row where it was
+      if (again) window.scrollBy(0, again.getBoundingClientRect().top - top);
+    }
   });
   $('view').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && (e.target.classList.contains('row') || e.target.classList.contains('srow'))) { e.preventDefault(); e.target.click(); } });
   const applyTheme = t => { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; $('theme').textContent = (t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark' ? 'Light mode' : 'Dark mode'; };
