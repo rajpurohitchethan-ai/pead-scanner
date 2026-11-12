@@ -1,0 +1,47 @@
+name: US PEAD scan
+# Separate from the Indian engine (scan.yml): its own code (us/pead_us.py),
+# data (us/) and page (us/index.html). It only ever commits files under us/.
+on:
+  schedule:
+    - cron: "23 12 * * 1-5"   # about 5:53 pm IST: before the US open
+    - cron: "37 21 * * 1-5"   # about 3:07 am IST: after the US close
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: "Stocks to fetch growth figures for in this run"
+        default: "500"
+permissions:
+  contents: write
+concurrency:
+  group: pead-us-scan
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install --quiet --upgrade pip pandas yfinance
+      - name: Tests
+        run: python -m unittest us/tests/test_us.py -v
+      - name: Scan
+        run: python us/pead_us.py --fundamentals-budget "${{ github.event.inputs.budget || '500' }}"
+      - name: Commit US data
+        run: |
+          git config user.name "PEAD US bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add us
+          if git diff --cached --quiet; then echo "No US changes."; exit 0; fi
+          git commit -q -m "US PEAD: scan update"
+          for i in 1 2 3 4 5; do
+            if git push; then exit 0; fi
+            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" || { git rebase --abort; exit 1; }
+            sleep $((i * 5))
+          done
+          exit 1
