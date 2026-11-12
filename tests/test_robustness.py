@@ -3464,3 +3464,115 @@ class GradeMoversAndBookHalfTests(unittest.TestCase):
         self.assertIn("book half", v["note"].lower())
         v, st = pp.position_view(pos, item(106.0), st, date(2026, 11, 12))      # stays reached after a dip
         self.assertTrue(v["twoRHit"])
+
+
+class ComparativeCopyOfCurrentTests(unittest.TestCase):
+    """2.9.47 (12 Nov 2026): TAJGVK filed its Q2 FY27 consolidated XBRL at
+    14:18 IST and, 5 minutes earlier, a second XBRL labelled Sep-2025 with the
+    same document (same size, same figures, only the dates moved back a year).
+    listing_row takes the latest filing of a period, so the year-ago figures
+    came from that copy and the card showed revenue 0.0% / profit 0.0% YoY
+    (PROFIT_GROWTH) and YTD 0.0%. A comparative filing whose revenue and profit
+    equal this filing's to the rupee is a copy of this document, not last
+    year's quarter: it is skipped and the next filing of that period (the
+    original, filed 3 Nov 2025) is read; with none, the comparison stays
+    missing (issue COMPARATIVE_COPY_OF_CURRENT)."""
+
+    FX = Path(__file__).parent / "fixtures" / "nse"
+
+    def _parse_bytes(self, blob, pe):
+        return p.parse_xbrl_financials([blob], pe)
+
+    def _docs(self):
+        copy = (self.FX / "TAJGVK_CONS_2025-09-30_refiled_copy.xml").read_bytes()
+        # The original Sep-2025 filing (not stored): same layout, last year's figures.
+        orig = (copy.replace(b">1668100000<", b">1520000000<").replace(b">3318100000<", b">3010000000<")
+                    .replace(b">265500000<", b">231000000<").replace(b">582100000<", b">498000000<")
+                    .replace(b">211700000<", b">184000000<").replace(b">464700000<", b">402000000<"))
+        return {"copy": self._parse_bytes(copy, date(2025, 9, 30)), "orig": self._parse_bytes(orig, date(2025, 9, 30))}
+
+    def _listing(self, with_original=True):
+        rows = [{"periodEnd": "2025-09-30", "fromDate": "2025-07-01", "basis": "CONSOLIDATED", "cumulative": False,
+                 "xbrlUrl": "copy", "filedAt": "2026-11-12T14:13:22+05:30"}]
+        if with_original:
+            rows.append({"periodEnd": "2025-09-30", "fromDate": "2025-07-01", "basis": "CONSOLIDATED", "cumulative": False,
+                         "xbrlUrl": "orig", "filedAt": "2025-11-03T16:33:52+05:30"})
+        return rows
+
+    def _cur(self):
+        return self._parse_bytes((self.FX / "TAJGVK_CONS_2026-09-30.xml").read_bytes(), date(2026, 9, 30))
+
+    def test_copy_skipped_original_used(self):
+        cur = self._cur()
+        docs = self._docs()
+        p.fill_comparatives_from_listing(cur, self._listing(), date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: docs[u])
+        self.assertAlmostEqual(cur["prior_year_revenue_cr"], 152.0, places=1)
+        self.assertAlmostEqual(cur["revenue_yoy_pct"], 9.74, places=1)      # was 0.0
+        self.assertAlmostEqual(cur["pat_yoy_pct"], 15.05, places=1)          # was 0.0
+        self.assertAlmostEqual(cur["ytd_revenue_yoy_pct"], 10.24, places=1)  # was 0.0
+        self.assertEqual(cur["_meta"]["comparativeSources"]["2025-09-30"], "orig")
+        self.assertTrue(any(i.startswith("COMPARATIVE_COPY_OF_CURRENT:2025-09-30") for i in cur["_meta"]["issues"]))
+
+    def test_copy_only_leaves_yoy_missing(self):
+        cur = self._cur()
+        docs = self._docs()
+        p.fill_comparatives_from_listing(cur, self._listing(False), date(2026, 9, 30), "CONSOLIDATED", lambda u, pe: docs[u])
+        for k in ("revenue_yoy_pct", "pat_yoy_pct", "pat_trend", "prior_year_revenue_cr", "ytd_revenue_yoy_pct", "ytd_pat_yoy_pct"):
+            self.assertIsNone(cur.get(k), k)
+
+
+class KnownFilingUnreadTests(unittest.TestCase):
+    """2.9.47 (12 Nov 2026): KUSUMGAR's NSE listing (read 5 Nov) holds the
+    Sep-2026 XBRL, but the 6 Nov run that should have read it had NSE switched
+    off by the run guard (SourceSkipped). With figures missing it then rotated
+    in rank A3 behind ~110 other gaps (5 reserved slots a run) and six days
+    later the self-check still FAILed "Declared results have revenue/profit".
+    A declared result whose cached listing already names this quarter's XBRL,
+    never read (or only skipped by an outage), is one fetch from its figures:
+    rank A0 (figures not read), when not tried in the last 2 h."""
+
+    URL = "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1754156_05112026080321_WEB.xml"
+
+    def _ev(self, xbrl_fetch=None, attempt="2026-11-06T18:15:05Z"):
+        fetch = {"PRICE_HISTORY": {"lastAttempt": attempt}}
+        if xbrl_fetch is not None:
+            fetch["NSE_XBRL"] = xbrl_fetch
+        return {"eventId": "INE0ISX01025_2026-09-30", "period": {"end": "2026-09-30"},
+                "security": {"nseSymbol": "KUSUMGAR", "exchangeSector": "Textiles"},
+                "fields": {"result_date": {"value": "2026-11-05", "status": "OK"},
+                           "results_released": {"value": True, "status": "OK"},
+                           "reaction_session": {"value": "2026-11-06", "status": "OK"}},
+                "nseResultListing": {"fetchedAt": "2026-11-05T18:04:09Z", "v": 2, "rows": [
+                    {"periodEnd": "2026-09-30", "fromDate": "2026-07-01", "basis": "CONSOLIDATED",
+                     "cumulative": False, "xbrlUrl": self.URL, "filedAt": "2026-11-05T20:00:30+05:30"}]},
+                "fetch": fetch,
+                "plus": {"price": {"last_session": "2026-11-06"}}}
+
+    def _gap(self, i):
+        e = ParserBumpReReadTests()._behind(i)
+        e["fields"].pop("revenue_cr")
+        e["fields"]["result_date"]["value"] = "2026-11-03"
+        e["fetch"]["PRICE_HISTORY"]["lastAttempt"] = "2026-11-01T10:00:00Z"
+        return e
+
+    def test_skipped_xbrl_jumps_queue(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 11, 12, 21, 0, tzinfo=p.IST)
+        ev = self._ev({"lastAttempt": "2026-11-06T18:15:01Z", "status": "FAILED",
+                       "error": "SourceSkipped: NSE switched off for this run: 12 failures in a row"})
+        others = [self._gap(i) for i in range(200)]
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(ev, now.date()), ("A", 0))
+            self.assertEqual(p._a0_subrank(ev, p.last_completed_session(now.date())), 1)
+            sel, _ = p.select_for_enrichment(others + [ev], 120, now.date())
+        self.assertIn(ev, sel)
+
+    def test_real_failure_or_recent_try_does_not_jump(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 11, 12, 21, 0, tzinfo=p.IST)
+        rejected = self._ev({"lastAttempt": "2026-11-06T18:15:01Z", "status": "FAILED", "error": "XBRL rejected: HALF_YEAR_ONLY"})
+        recent = self._ev({"lastAttempt": "2026-11-12T14:30:00Z", "status": "FAILED", "error": "SourceSkipped: x"},
+                          attempt="2026-11-12T14:30:00Z")
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertNotEqual(p.enrichment_group(rejected, now.date()), ("A", 0))
+            self.assertNotEqual(p.enrichment_group(recent, now.date()), ("A", 0))

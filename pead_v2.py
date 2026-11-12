@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.46"
+ENGINE_VERSION = "2.9.47"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1833,6 +1833,11 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
         # revenue waited 24 h in rank A2/A3), so it jumps the queue once.
         if no_figures and not tried_recently and _xbrl_reread_pending(event):
             return "A", 0
+        # 2.9.47: the cached listing already names this quarter's XBRL, but it
+        # was never read (or only skipped by an outage): KUSUMGAR waited 6 days
+        # in rank A3 after the 6 Nov NSE outage skipped its read.
+        if no_figures and not tried_recently and _known_xbrl_unread(event):
+            return "A", 0
         # 2.9.40: declared late by check_overdue_filings; the result date is old,
         # so nothing else here would bring its figures forward in season.
         late = parse_datetime(event.get("lateDeclaredAt"))
@@ -1901,6 +1906,31 @@ def _xbrl_reread_pending(event: dict[str, Any]) -> bool:
                 and (snap.get("validation") or {}).get("status") != "REJECTED":
             return True
     return False
+
+
+def _known_xbrl_unread(event: dict[str, Any]) -> bool:
+    """2.9.47: the cached NSE listing has this quarter's XBRL and no read of it
+    is stored: never attempted, attempted before the listing was read, or the
+    last attempt was skipped by the run guard (outage). A parse that failed or
+    was rejected does not count (no retry loop)."""
+    pe = parse_date((event.get("period") or {}).get("end"))
+    if pe is None or not (event.get("security") or {}).get("nseSymbol"):
+        return False
+    listing = event.get("nseResultListing") or {}
+    row = listing_row(listing.get("rows") or [], pe)
+    if row is None:
+        return False
+    snap = (event.get("financialSnapshots") or {}).get("NSE_XBRL") or {}
+    if snap.get("documentUrl") == row.get("xbrlUrl"):
+        return False
+    f = (event.get("fetch") or {}).get("NSE_XBRL") or {}
+    tried = parse_datetime(f.get("lastAttempt"))
+    if tried is None:
+        return True
+    seen = parse_datetime(listing.get("fetchedAt"))
+    if seen is not None and tried < seen:
+        return True
+    return str(f.get("error") or "").startswith("SourceSkipped")
 
 
 def _a0_subrank(event: dict[str, Any], last_session: date) -> int:
@@ -5158,6 +5188,22 @@ def _drop_unit_suspect_comparatives(parsed: dict[str, Any], filled: dict[int, tu
         meta.setdefault("issues", []).append(f"COMPARATIVE_UNIT_SUSPECT:{target}")
 
 
+def _copy_of_current(parsed: dict[str, Any], other: dict[str, Any]) -> bool:
+    """2.9.47: a filing of another period whose revenue and profit equal this
+    filing's to the rupee is this document filed again under the wrong period
+    (TAJGVK 12 Nov 2026: Sep-2026 figures re-filed as Sep-2025), not that
+    quarter's own figures."""
+    vals = []
+    for key in ("revenue_cr", "pat_cr"):
+        a, b = _exact(parsed, key), _exact(other, key)
+        if a is None or b is None:
+            return False
+        vals.append((a, b))
+    if all(abs(a) < 1e-9 for a, _ in vals):
+        return False
+    return all(abs(a - b) < 1e-6 for a, b in vals)
+
+
 def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[str, Any]], period_end: date,
                                    basis: str | None, fetch_parse) -> dict[str, Any]:
     """NSE's quarterly XBRL often carries only the current period. When the
@@ -5178,13 +5224,20 @@ def fill_comparatives_from_listing(parsed: dict[str, Any], listing: list[dict[st
             continue
         before = {k: parsed.get(k) for k in COMPARATIVE_FIELDS[shift]}
         target = _shift_quarters(period_end, shift)
-        row = listing_row(listing, target, basis)
+        row, other = None, {}
+        for cand in listing_rows(listing, target, basis):
+            try:
+                doc = fetch_parse(cand["xbrlUrl"], target) or {}
+            except Exception as exc:
+                meta.setdefault("issues", []).append(f"COMPARATIVE_FETCH_FAILED:{target.isoformat()}:{type(exc).__name__}")
+                break
+            if _copy_of_current(parsed, doc):
+                # 2.9.47: TAJGVK re-filed this quarter's document labelled Sep-2025.
+                meta.setdefault("issues", []).append(f"COMPARATIVE_COPY_OF_CURRENT:{target.isoformat()}")
+                continue
+            row, other = cand, doc
+            break
         if row is None:
-            continue
-        try:
-            other = fetch_parse(row["xbrlUrl"], target) or {}
-        except Exception as exc:
-            meta.setdefault("issues", []).append(f"COMPARATIVE_FETCH_FAILED:{target.isoformat()}:{type(exc).__name__}")
             continue
         oc = (other.get("_meta") or {}).get("concepts") or {}
         other = {**other, **{k: v for k, v in ((other.get("_meta") or {}).get("exact") or {}).items() if v is not None}}
@@ -5290,8 +5343,14 @@ def enrich_financials(event: dict[str, Any], store: EventStore, ctx: SourceConte
         retry_comparatives = (comparatives_missing(ev_vals) and rd_fin is not None
                               and (now_ist().date() - rd_fin).days <= 10 and
                               (last_try is None or (now_ist() - last_try).total_seconds() > 3 * 3600))
+        # 2.9.47: a stored parse whose year-ago figures equal this quarter's
+        # (TAJGVK: comparative read from a copy of this document) is re-read
+        # once with the copy check, without a parser bump for every company.
+        copy_suspect = (ev_vals.get("revenue_cr") is not None and ev_vals.get("pat_cr") is not None
+                        and ev_vals.get("prior_year_revenue_cr") == ev_vals.get("revenue_cr")
+                        and ev_vals.get("prior_year_pat_cr") == ev_vals.get("pat_cr"))
         if (existing.get("documentUrl") != str(xbrl_url) or (existing.get("validation") or {}).get("status") == "REJECTED"
-                or existing.get("parserVersion") != XBRL_PARSER_VERSION or retry_comparatives):
+                or existing.get("parserVersion") != XBRL_PARSER_VERSION or retry_comparatives or copy_suspect):
             try:
                 parsed, raw_ref = XBRLParser(ctx).fetch_parse(str(xbrl_url), event["eventId"], period_end, source)
                 fill_comparatives_from_listing(parsed, listing, period_end, (chosen or {}).get("basis"),
@@ -6245,6 +6304,17 @@ def check_overdue_filings(events: list[dict[str, Any]], store: "EventStore", ctx
     finally:
         _EXTRA_CALLS_USED["n"] = used_before
     return stats
+
+
+def listing_rows(rows: list[dict[str, Any]], period_end: date, basis: str | None = None) -> list[dict[str, Any]]:
+    """All quarterly XBRL rows of a period in listing_row's preference order
+    (consolidated, then latest filed first). 2.9.47."""
+    want = period_end.isoformat()
+    opts = [r for r in rows if r.get("periodEnd") == want and r.get("xbrlUrl") and r.get("cumulative") is not True
+            and (not r.get("fromDate") or 80 <= (period_end - date.fromisoformat(r["fromDate"])).days <= 100)]
+    if basis in {"CONSOLIDATED", "STANDALONE"}:
+        opts = [r for r in opts if r.get("basis") == basis]
+    return sorted(opts, key=lambda r: (r.get("basis") == "CONSOLIDATED", str(r.get("filedAt") or "")), reverse=True)
 
 
 def listing_row(rows: list[dict[str, Any]], period_end: date, basis: str | None = None) -> dict[str, Any] | None:

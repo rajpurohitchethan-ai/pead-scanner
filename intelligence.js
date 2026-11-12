@@ -724,7 +724,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.46';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.47';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
