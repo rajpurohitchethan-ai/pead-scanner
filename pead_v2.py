@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.44"
+ENGINE_VERSION = "2.9.45"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5606,6 +5606,7 @@ def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, A
         it = by_sym.get(str(p_["symbol"]).upper())
         view, st = pead_plus.position_view(p_, it, state.get(key), today)
         state[key] = st
+        view["hands"] = ((it or {}).get("plus") or {}).get("hands")   # 2.9.45
         try:                                                          # 2.9.15
             pl = (it or {}).get("plus") or {}
             sym = str(p_["symbol"]).upper()
@@ -6889,6 +6890,9 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
         plan = {"signal": "NO_ENTRY", "stage": None, "why": f"No trades since {last_sess.strftime('%d %b %Y')}; "
                 "the stock is not trading, so there is no reaction to measure.", "notTrading": True}
     event["tradeLog"] = pead_plus.update_trade_log(event.get("tradeLog"), plan, last_price, now_ist().date())
+    for t_ in (event["tradeLog"] or {}).values():                    # 2.9.45: the hands label at entry, for a later scorecard
+        if isinstance(t_, dict) and t_.get("date") == now_ist().date().isoformat():
+            t_["hands"] = (px.get("hands") or {}).get("label")
     # 2.9.21: a triggered entry is held. 2.9.44: not one logged from a close-only
     # range: its stop was a close, not the result-day low (PRINCEPIPE 12 Nov).
     if not plan.get("notTrading") and not close_only_range(event):
@@ -6923,6 +6927,7 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
                                       store.value(event, "pat_yoy_pct"), store.value(event, "ytd_pat_yoy_pct"),
                                       store.value(event, "pat_trend")) if released else None,
         "relativeStrength": rs,
+        "hands": pead_plus.hands_with_rs(px.get("hands"), rs),   # 2.9.45 strong-hands checklist (display only)
         "live": live,
         "strength": strength,
         "q1Strength": q1_strength,
@@ -6953,7 +6958,7 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
         "sectorKey": key,
         "sector": (sector_info or {}).get(key) if key else None,
         "identity": {k: sec.get(k) for k in ("macroSector", "exchangeSector", "industry", "basicIndustry", "sectorIndex", "bseGroup")},
-        "price": px,
+        "price": {k: v for k, v in px.items() if k != "hands"},   # 2.9.45: published once, as plus.hands
         "deliveryPct": store.value(event, "delivery_pct"),
         "concall": event.get("concall"),
         "tradeLog": event.get("tradeLog") or None,
@@ -7410,7 +7415,7 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
     return True
 
 
-PLUS_VERSION = "2.9.38"   # bump to rebuild every stored chart/price analytic once
+PLUS_VERSION = "2.9.45"   # bump to rebuild every stored chart/price analytic once
 
 
 def replay_plus(store: EventStore) -> int:
