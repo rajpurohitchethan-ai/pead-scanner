@@ -3326,7 +3326,7 @@ class CloseOnlyResultRangeTests(unittest.TestCase):
     result-day low/high were closes, so the stop sat 1% under the entry and the
     Radar graded PRINCEPIPE / AUROPHARMA / HARSHA / COSMOFIRST "A, tight risk"."""
 
-    def _score(self, price_source):
+    def _score(self, price_source, trade_log=None):
         from datetime import timedelta
         with tempfile.TemporaryDirectory() as td:
             store = p.EventStore(Path(td) / "events")
@@ -3353,6 +3353,8 @@ class CloseOnlyResultRangeTests(unittest.TestCase):
                 ("pat_cr", 15, "NSE_RESULTS_COMPARISON"),
             ):
                 store.merge_field(e, field, value, source=source)
+            if trade_log:
+                e["tradeLog"] = trade_log
             return p.score_event(store, e), p.event_to_data_row(e)
 
     def test_nse_range_still_gives_levels(self):
@@ -3369,3 +3371,8 @@ class CloseOnlyResultRangeTests(unittest.TestCase):
         self.assertIsNone(plan["sl"])
         self.assertIn("closing prices only", plan["why"])
         self.assertIsNone(row["resultDayLow"])     # missing stays null, never a close posing as a low
+
+    def test_entry_logged_from_a_close_only_range_is_not_held(self):
+        log = {"starter": {"date": "2026-11-05", "entry": 98.0, "sl": 97.02, "signal": "ENTRY_EARLY", "minSeen": 98.0}}
+        d, _ = self._score("BSE_PRICE", trade_log=log)
+        self.assertEqual(d["plus"]["plan"]["signal"], "DATA_PENDING")

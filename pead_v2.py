@@ -6889,7 +6889,9 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
         plan = {"signal": "NO_ENTRY", "stage": None, "why": f"No trades since {last_sess.strftime('%d %b %Y')}; "
                 "the stock is not trading, so there is no reaction to measure.", "notTrading": True}
     event["tradeLog"] = pead_plus.update_trade_log(event.get("tradeLog"), plan, last_price, now_ist().date())
-    if not plan.get("notTrading"):                                    # 2.9.21: a triggered entry is held
+    # 2.9.21: a triggered entry is held. 2.9.44: not one logged from a close-only
+    # range: its stop was a close, not the result-day low (PRINCEPIPE 12 Nov).
+    if not plan.get("notTrading") and not close_only_range(event):
         plan = pead_plus.hold_triggered_entry(plan, event.get("tradeLog"), last_price, px,
                                               event.get("concall"), now_ist().date())
     key = sector_key(sec)
