@@ -406,6 +406,15 @@
       ${['A', 'B', 'C', 'D'].map(sect).join('')}
       ${held.length ? `<h3 class="radar-sub">Already in your trades <span class="meta">(${held.length})</span></h3><div class="ledger">${held.map(radarRow).join('')}</div>` : ''}`;
   }
+  // 2.9.44: the owner asked for targets and the trailing stop on every Radar
+  // row. Display only, from the existing rules: target 1 = +1R (stop moves to
+  // cost on a close above it), target 2 = +2R; trail on the 21 EMA after +1R.
+  function radarLevels(it) {
+    const pl = P(it).plan || {}, e = num(pl.entry), sl = num(pl.sl);
+    if (e === null || sl === null || !(e > sl)) return '';
+    const r = e - sl, ema = (P(it).chart?.ema21 || []).map(num).filter(v => v !== null).pop();
+    return `<div class="radar-why radar-lv">Entry <b>${inr(e)}</b> · Stop <b>${inr(sl)}</b> <span class="meta">(${(r / e * 100).toFixed(1)}%)</span> · Target 1 <b>${inr(e + r)}</b> <span class="meta">+1R</span> · Target 2 <b>${inr(e + 2 * r)}</b> <span class="meta">+2R</span><br><span class="meta">TSL: the stop above until a close over Target 1; then cost ${inr(e)}, trailed on the 21 EMA${ema !== undefined ? ` (now ${inr(ema)})` : ''}, closing basis.</span></div>`;
+  }
   function radarRow(it) {
         const pl = P(it).plan || {}, s = sig(it), pc = it.priceContext || {}, live = P(it).live;
         const last = num(live?.price) ?? num(pc.lastClose), low = num(it.resultDayLow);
@@ -422,6 +431,7 @@
           <div><div class="k">${hp ? 'Your +1R' : trig ? 'Trigger' : 'Risk'}</div><div class="v">${trig ? `${inr(trig)}${toTrig !== null ? ` <span class="meta">${toTrig > 0 ? pct(toTrig) + ' away' : 'above'}</span>` : ''}` : (num(pl.riskPct) !== null ? `${num(pl.riskPct).toFixed(1)}%` : '—')}</div></div>
           <div class="chev" aria-hidden="true">›</div></div>
           ${(grade(it).pros.length || grade(it).cons.length) && !hp ? `<div class="radar-why grade-why">${grade(it).pros.length ? `<span class="up">+ ${esc(grade(it).pros.join(', '))}</span>` : ''}${grade(it).cons.length ? `${grade(it).pros.length ? '<br>' : ''}<span class="down">− ${esc(grade(it).cons.join(', '))}</span>` : ''}</div>` : ''}
+          ${hp ? '' : radarLevels(it)}
           <div class="radar-why">${P(it).rsSector && num(P(it).rsSector.rs1m) !== null ? `<span class="${cls(P(it).rsSector.rs1m)}">RS 1M ${num(P(it).rsSector.rs1m) > 0 ? '+' : ''}${num(P(it).rsSector.rs1m).toFixed(1)} pp vs ${esc(P(it).rsSector.index)}</span>. ` : ''}${hp ? `<b>You hold</b> since ${dt(hp.entryDate)} at ${inr(hp.entryPrice)}: stop ${inr(num(hp.swingStop) ?? num(hp.initialStop))}, +1R ${inr(hp.oneR)}${num(hp.rNow) !== null ? ` (now ${num(hp.rNow).toFixed(2)}R)` : ''}.` : ''}${hp && pl.signal === 'ENTRY_TRIGGERED' ? '' : (hp ? ' Screener: ' : '') + esc(pl.why || '')}</div>${open ? `<div class="row-detail">${card(it)}</div>` : ''}`;
   }
   // 2.9.12: My trades. Entry/stop come from master/positions.json (public repo:
@@ -693,7 +703,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.43';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.44';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

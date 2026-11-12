@@ -3117,6 +3117,22 @@ class WorkflowCheckoutTests(unittest.TestCase):
         self.assertIn("ref: ${{ github.ref_name }}", checkout)
 
 
+class WorkflowQueuesNextRunTests(unittest.TestCase):
+    """2.9.44 (12 Nov 2026): GitHub's hourly schedule fired only 2-3 runs a day
+    from 6 Nov, some 6 hours late, so the page sat on 06:44 data at 13:28. A
+    finished run queues the next one during the session window."""
+
+    def test_finished_run_dispatches_the_next(self):
+        wf = (Path(__file__).resolve().parents[1] / ".github/workflows/scan.yml").read_text(encoding="utf-8")
+        self.assertIn("actions: write", wf)
+        step = wf[wf.index("name: Queue the next run"):]
+        self.assertIn("success()", step)
+        self.assertIn("actions/workflows/scan.yml/dispatches", step)
+        self.assertIn("inputs[mode]=run", step)
+        self.assertIn("Asia/Kolkata", step)          # window in IST, not runner time
+        self.assertIn("status=${st}", step)          # never stacks a second waiting run
+
+
 class LivePlansOnFreshPricesTests(unittest.TestCase):
     """2.9.39 (evening check, 3 Nov 2026): 163 of 196 live Radar plans of liquid
     companies were priced on a close older than 2 Nov (JSWSTEEL, ADANIPOWER,

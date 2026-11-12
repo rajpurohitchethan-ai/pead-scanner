@@ -31,6 +31,7 @@ on:
 
 permissions:
   contents: write
+  actions: write   # 2.9.44: a finished run queues the next one (see the last step)
 
 concurrency:
   group: pead-v2-event-engine
@@ -151,3 +152,26 @@ jobs:
             sleep $((i * 5))
           done
           exit 1
+
+      # 2.9.44: GitHub's schedule fired only 2-3 of the 16 hourly runs a day
+      # from 6 Nov (runs started up to 6 hours late; a newer pending run
+      # replaces an older one), so the page sat on morning data all day. A run
+      # that finishes during the session window queues the next one itself.
+      # workflow_dispatch is one of the two events GITHUB_TOKEN may trigger.
+      - name: Queue the next run
+        if: success() && (github.event_name == 'schedule' || github.event.inputs.mode == 'run' || github.event.inputs.mode == '')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          H=$(TZ=Asia/Kolkata date +%-H); D=$(TZ=Asia/Kolkata date +%u)
+          if [ "$D" -gt 6 ] || [ "$H" -lt 7 ] || [ "$H" -gt 22 ]; then
+            echo "Outside Mon-Sat 07:00-22:59 IST: not queuing."; exit 0
+          fi
+          waiting=0
+          for st in queued pending waiting requested; do
+            n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/scan.yml/runs?status=${st}&per_page=1" --jq '.total_count' || echo 0)
+            waiting=$((waiting + n))
+          done
+          if [ "$waiting" -gt 0 ]; then echo "A run is already waiting: not queuing."; exit 0; fi
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/scan.yml/dispatches" -f ref="${GITHUB_REF_NAME}" -f 'inputs[mode]=run'
+          echo "Next run queued."
