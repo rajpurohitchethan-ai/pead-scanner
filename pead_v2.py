@@ -6765,6 +6765,16 @@ def enrich_events(store: EventStore, master: SymbolMaster, ctx: SourceContext) -
 # ---------------------------------------------------------------------------
 
 
+CLOSE_ONLY_SOURCES = {"BSE_PRICE"}   # 2.9.44: feeds without a daily high/low
+CLOSE_ONLY_WHY = ("Result-day high/low not available yet (the BSE feed has closing prices only): "
+                  "entry and stop wait for the NSE day range.")
+
+
+def close_only_range(event: dict[str, Any]) -> bool:
+    """2.9.44: the stored result-day range came from closes, not a day's high/low."""
+    return field_source(event, "result_day_low") in CLOSE_ONLY_SOURCES
+
+
 def field_source(event: dict[str, Any], field: str) -> str | None:
     meta = event.get("fields", {}).get(field)
     return meta.get("source") if isinstance(meta, dict) else None
@@ -7203,10 +7213,18 @@ def score_event(store: EventStore, event: dict[str, Any], sector_info: dict[str,
     # Engine 2.4 plan replaces the box-only entry model: early entry on a
     # strong reaction, pullback to the 10/21 EMA, or post-result box breakout,
     # with the SL under the result-day low and TSL on the 21/63 EMA.
+    # 2.9.44: BSE's price feed has closes only, so a BSE-sourced result-day
+    # "low" and "high" are closes: the stop landed 1% under the entry and the
+    # Radar graded it A for "tight risk" (PRINCEPIPE, AUROPHARMA, HARSHA,
+    # COSMOFIRST, 12 Nov). No plan until the NSE day range is in.
+    close_only = close_only_range(event)
     plus = build_plus(store, event, released=released, result_label=result_label, price_label=price_label,
                       sector_info=sector_info, box_high=box_high, last_price=last_price, result_ret=result_ret,
-                      rvol=rvol, result_low=result_low, result_high=store.value(event, "result_day_high"))
+                      rvol=rvol, result_low=None if close_only else result_low,
+                      result_high=None if close_only else store.value(event, "result_day_high"))
     plan = plus["plan"]
+    if close_only and plan.get("signal") == "DATA_PENDING":
+        plan["why"] = CLOSE_ONLY_WHY
     entry_signal = plan.get("signal") or entry_signal
     entry_trigger_price = plan.get("entry")
     entry_distance_pct = plan.get("distancePct")
@@ -7597,8 +7615,8 @@ def event_to_data_row(event: dict[str, Any]) -> dict[str, Any]:
         "relativeVolume": round2(meta_value(event, "result_day_rvol")),
         "distanceFrom52wHighPct": round2(meta_value(event, "distance_52w_high_pct")),
         "avgTurnover20dCr": round2(meta_value(event, "avg_turnover_20d_cr")),
-        "resultDayLow": round2(meta_value(event, "result_day_low")),
-        "resultDayHigh": round2(meta_value(event, "result_day_high")),
+        "resultDayLow": None if close_only_range(event) else round2(meta_value(event, "result_day_low")),   # 2.9.44
+        "resultDayHigh": None if close_only_range(event) else round2(meta_value(event, "result_day_high")),
         "holdAboveResultLow5d": meta_value(event, "post_result_hold_5d"),
         "holdAboveResultLow10d": meta_value(event, "post_result_hold_10d"),
         "darvasBoxHigh": round2(meta_value(event, "box_high")),

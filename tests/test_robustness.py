@@ -3319,3 +3319,53 @@ class StopAboveEntryTests(unittest.TestCase):
         chk = [c for c in audit["checks"] if c["check"] == "Stop below entry on every published plan"]
         self.assertEqual(chk[0]["status"], "FAIL")
         self.assertEqual(chk[0]["examples"], ["X"])
+
+
+class CloseOnlyResultRangeTests(unittest.TestCase):
+    """2.9.44 (12 Nov 2026): BSE's price feed has closes only. A BSE-sourced
+    result-day low/high were closes, so the stop sat 1% under the entry and the
+    Radar graded PRINCEPIPE / AUROPHARMA / HARSHA / COSMOFIRST "A, tight risk"."""
+
+    def _score(self, price_source):
+        from datetime import timedelta
+        with tempfile.TemporaryDirectory() as td:
+            store = p.EventStore(Path(td) / "events")
+            e = store.ensure_event(security={"symbol": "RANGETEST", "nseSymbol": "RANGETEST"}, period_end=date(2026, 9, 30))
+            for field, value, source in (
+                ("results_released", True, "NSE_FINANCIAL_RESULTS"),
+                ("result_date", p.now_ist().date().isoformat(), "NSE_FINANCIAL_RESULTS"),
+                ("revenue_yoy_pct", 25, "NSE_RESULTS_COMPARISON"),
+                ("pat_trend", "PROFIT_GROWTH", "DERIVED"),
+                ("pat_yoy_pct", 35, "DERIVED"),
+                ("pre_result_20d_pct", 4, price_source),
+                ("result_day_return_pct", 5, price_source),
+                ("result_day_rvol", 2, price_source),
+                ("reaction_session", (p.now_ist().date() - timedelta(days=7)).isoformat(), "DERIVED"),
+                ("result_day_low", 95, price_source),
+                ("result_day_high", 98, price_source),
+                ("post_result_hold_5d", True, price_source),
+                ("box_high", 100, price_source),
+                ("box_breakout", False, price_source),
+                ("last_price", 99.5, price_source),
+                ("market_cap_cr", 5000, "YAHOO_FUNDAMENTALS"),
+                ("avg_turnover_20d_cr", 10, price_source),
+                ("revenue_cr", 100, "NSE_RESULTS_COMPARISON"),
+                ("pat_cr", 15, "NSE_RESULTS_COMPARISON"),
+            ):
+                store.merge_field(e, field, value, source=source)
+            return p.score_event(store, e), p.event_to_data_row(e)
+
+    def test_nse_range_still_gives_levels(self):
+        d, row = self._score("NSE_PRICE")
+        plan = d["plus"]["plan"]
+        self.assertEqual((plan["entry"], plan["sl"]), (100, 94.05))
+        self.assertEqual(row["resultDayLow"], 95)
+
+    def test_close_only_range_gives_no_levels(self):
+        d, row = self._score("BSE_PRICE")
+        plan = d["plus"]["plan"]
+        self.assertEqual(plan["signal"], "DATA_PENDING")
+        self.assertIsNone(plan["entry"])
+        self.assertIsNone(plan["sl"])
+        self.assertIn("closing prices only", plan["why"])
+        self.assertIsNone(row["resultDayLow"])     # missing stays null, never a close posing as a low
