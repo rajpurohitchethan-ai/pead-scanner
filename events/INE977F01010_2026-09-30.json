@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE977F01010|2026-09-30",
   "createdAt": "2026-10-31T03:25:59Z",
-  "updatedAt": "2026-11-12T11:54:07Z",
+  "updatedAt": "2026-11-12T12:24:08Z",
   "security": {
     "symbol": "DHANCOT",
     "bseSymbol": "DHANCOT",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-31T03:25:59Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-12T12:01:39Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-12T12:24:08Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T11:26:10Z",
+      "fetchedAt": "2026-11-12T12:01:41Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-edfe211fd0a9e0c0.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
       "note": null
     },
     "reaction_session": {
@@ -168,6 +178,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE977F01010_2026-09-30/scrip_results-98ad7f3f27a2dbba.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-12T12:01:39Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T17:05:39.943000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-12T12:01:39Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-12T12:01:39Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "note": null
     }
   },
   "fetch": {
@@ -201,23 +238,29 @@
   },
   "derived": {
     "score": 8,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "EXPENSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -226,13 +269,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_REPEAD",
-        "label": "Watch: re-PEAD",
-        "why": "Q1 setup faded. Strong Q2 could restart the drift."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -274,9 +317,9 @@
       "sectorKey": "Services",
       "sector": {
         "sector": "Services",
-        "stocks": 298,
-        "momentum63dMedian": -4.76,
-        "relativeToMarket": 1.04,
+        "stocks": 301,
+        "momentum63dMedian": -5.14,
+        "relativeToMarket": 0.66,
         "declared": 56,
         "strongResults": 23,
         "avgReaction": -0.28,
@@ -664,5 +707,19 @@
     "replayedFromRaw": true,
     "plusVersion": "2.9.45",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T17:05:39.943000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "In terms of Regulation 30 read with 33 of the SEBI (LODR) Regulations, 2015 as amended the attached is the Unaudited Standalone Financials Results for the quarter and half yearly ended .... Dhanlaxmi Cotex Ltd - 512485 - Unaudited Standalone Financial Results For Quarter And Half Yearly Ended 30.09.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "seenAt": "2026-11-12T12:23:42Z"
+    }
+  ]
 }

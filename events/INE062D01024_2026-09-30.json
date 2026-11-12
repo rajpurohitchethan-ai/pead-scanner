@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE062D01024|2026-09-30",
   "createdAt": "2026-10-27T12:52:38Z",
-  "updatedAt": "2026-11-12T11:54:02Z",
+  "updatedAt": "2026-11-12T12:24:02Z",
   "security": {
     "symbol": "ALICON",
     "nseSymbol": "ALICON",
@@ -17,7 +17,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -38,16 +38,26 @@
       "state": "SCHEDULED",
       "at": "2026-10-28T03:56:20Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-12T12:01:39Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-12T12:24:02Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T11:26:10Z",
+      "fetchedAt": "2026-11-12T12:01:41Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-edfe211fd0a9e0c0.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
       "note": null
     },
     "reaction_session": {
@@ -127,6 +137,33 @@
       "rank": 105,
       "rawRef": "raw/nse_price/INE062D01024_2026-09-30/equity_history-da5a2297d30d9295.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-12T12:01:39Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T16:51:49.723000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-12T12:01:39Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-12T12:01:39Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "note": null
     }
   },
   "fetch": {
@@ -154,23 +191,29 @@
   },
   "derived": {
     "score": 7,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -178,10 +221,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -223,12 +270,12 @@
       "sectorKey": "Automobile and Auto Components",
       "sector": {
         "sector": "Automobile and Auto Components",
-        "stocks": 147,
-        "momentum63dMedian": -4.78,
-        "relativeToMarket": 1.02,
-        "declared": 75,
+        "stocks": 148,
+        "momentum63dMedian": -4.49,
+        "relativeToMarket": 1.31,
+        "declared": 76,
         "strongResults": 46,
-        "avgReaction": 1.54,
+        "avgReaction": 1.62,
         "tailwind": "POSITIVE"
       },
       "identity": {
@@ -738,5 +785,19 @@
         "filedAt": "2025-05-12T20:57:02+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T16:51:49.723000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial Result for quarter ended 30th September, 2026 is enclosed. Alicon Castalloy Ltd - 531147 - Results- Financial Result For 30Th September, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "seenAt": "2026-11-12T12:23:00Z"
+    }
+  ]
 }

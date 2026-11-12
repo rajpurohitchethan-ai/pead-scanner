@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE567A01010|2026-09-30",
   "createdAt": "2026-11-02T12:01:43Z",
-  "updatedAt": "2026-11-12T11:54:05Z",
+  "updatedAt": "2026-11-12T12:24:06Z",
   "security": {
     "symbol": "NIPPOBATRY",
     "nseSymbol": "NIPPOBATRY",
@@ -17,7 +17,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -38,16 +38,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T03:27:00Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-12T12:03:54Z",
+      "reason": "official exchange result filing found in the company's NSE listing"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-12T12:24:06Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
-      "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T11:26:10Z",
+      "source": "NSE_INTEGRATED_FILING",
+      "fetchedAt": "2026-11-12T12:03:54Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-edfe211fd0a9e0c0.json",
+      "rawRef": "raw/nse/INE567A01010_2026-09-30/integrated_filings-ff1984e9b1b45ac3.json",
       "note": null
     },
     "reaction_session": {
@@ -121,6 +131,24 @@
       "rank": 105,
       "rawRef": "raw/nse_price/INE567A01010_2026-09-30/equity_history-460028abe56b8579.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "NSE_INTEGRATED_FILING",
+      "fetchedAt": "2026-11-12T12:03:54Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse/INE567A01010_2026-09-30/integrated_filings-ff1984e9b1b45ac3.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T15:53:34+05:30",
+      "source": "NSE_INTEGRATED_FILING",
+      "fetchedAt": "2026-11-12T12:23:27Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/nse/INE567A01010_2026-09-30/integrated_filings-ff1984e9b1b45ac3.json",
+      "note": null
     }
   },
   "fetch": {
@@ -132,39 +160,45 @@
       "rawRef": "raw/nse_price/INE567A01010_2026-09-30/equity_history-460028abe56b8579.json"
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-11-12T08:49:21Z",
-      "lastSuccess": "2026-11-12T08:49:21Z",
+      "lastAttempt": "2026-11-12T12:03:54Z",
+      "lastSuccess": "2026-11-12T12:03:54Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/INE567A01010_2026-09-30/integrated_filings-01cefb79886c1961.json"
+      "rawRef": "raw/nse/INE567A01010_2026-09-30/integrated_filings-ff1984e9b1b45ac3.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-11-12T08:49:21Z",
-      "lastSuccess": "2026-11-12T08:49:21Z",
+      "lastAttempt": "2026-11-12T12:03:54Z",
+      "lastSuccess": "2026-11-12T12:03:54Z",
       "status": "OK",
       "error": null,
-      "rawRef": "raw/nse/INE567A01010_2026-09-30/integrated_filings-01cefb79886c1961.json"
+      "rawRef": "raw/nse/INE567A01010_2026-09-30/integrated_filings-ff1984e9b1b45ac3.json"
     }
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -172,10 +206,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -217,12 +255,12 @@
       "sectorKey": "Capital Goods",
       "sector": {
         "sector": "Capital Goods",
-        "stocks": 531,
-        "momentum63dMedian": -4.54,
-        "relativeToMarket": 1.26,
-        "declared": 221,
+        "stocks": 533,
+        "momentum63dMedian": -4.49,
+        "relativeToMarket": 1.31,
+        "declared": 224,
         "strongResults": 112,
-        "avgReaction": -1.25,
+        "avgReaction": -1.08,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -589,9 +627,25 @@
     "NSE:NIPPOBATRY|2026-09-30"
   ],
   "nseResultListing": {
-    "fetchedAt": "2026-11-12T08:49:21Z",
+    "fetchedAt": "2026-11-12T12:03:54Z",
     "v": 2,
     "rows": [
+      {
+        "periodEnd": "2026-09-30",
+        "fromDate": "2026-07-01",
+        "basis": "CONSOLIDATED",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1756538_12112026035550_WEB.xml",
+        "filedAt": "2026-11-12T15:55:50+05:30"
+      },
+      {
+        "periodEnd": "2026-09-30",
+        "fromDate": "2026-07-01",
+        "basis": "STANDALONE",
+        "cumulative": false,
+        "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1756533_12112026035334_WEB.xml",
+        "filedAt": "2026-11-12T15:53:34+05:30"
+      },
       {
         "periodEnd": "2026-06-30",
         "fromDate": "2026-04-01",
@@ -711,6 +765,45 @@
         "cumulative": false,
         "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1476319_02072025024113_WEB.xml",
         "filedAt": "2025-07-02T14:41:13+05:30"
+      }
+    ]
+  },
+  "filings": [
+    {
+      "source": "NSE_INTEGRATED_FILING",
+      "filedAt": "2026-11-12T15:53:34+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "EXCHANGE_PERIOD_FIELD",
+      "basis": "STANDALONE",
+      "cumulative": false,
+      "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1756533_12112026035334_WEB.xml",
+      "headline": "Integrated Filing - Financials Standalone Original",
+      "rawRef": "raw/nse/INE567A01010_2026-09-30/integrated_filings-ff1984e9b1b45ac3.json",
+      "seenAt": "2026-11-12T12:23:27Z"
+    },
+    {
+      "source": "NSE_INTEGRATED_FILING",
+      "filedAt": "2026-11-12T15:55:50+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "EXCHANGE_PERIOD_FIELD",
+      "basis": "CONSOLIDATED",
+      "cumulative": false,
+      "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1756538_12112026035550_WEB.xml",
+      "headline": "Integrated Filing - Financials Consolidated Original",
+      "rawRef": "raw/nse/INE567A01010_2026-09-30/integrated_filings-ff1984e9b1b45ac3.json",
+      "seenAt": "2026-11-12T12:23:27Z"
+    }
+  ],
+  "lateDeclaredAt": "2026-11-12T12:03:54Z",
+  "fieldHistory": {
+    "filing_timestamp": [
+      {
+        "value": "2026-11-12T15:55:50+05:30",
+        "source": "NSE_INTEGRATED_FILING",
+        "fetchedAt": "2026-11-12T12:03:54Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-12T12:23:27Z"
       }
     ]
   }

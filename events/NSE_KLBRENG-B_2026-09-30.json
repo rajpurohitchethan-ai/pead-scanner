@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:KLBRENG-B|2026-09-30",
   "createdAt": "2026-11-05T23:43:02Z",
-  "updatedAt": "2026-11-12T11:54:07Z",
+  "updatedAt": "2026-11-12T12:24:09Z",
   "security": {
     "symbol": "KLBRENG-B",
     "bseSymbol": "KLBRENG-B",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -33,16 +33,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-05T23:43:02Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-12T12:01:39Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-12T12:24:09Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T11:26:10Z",
+      "fetchedAt": "2026-11-12T12:01:41Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-edfe211fd0a9e0c0.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
       "note": null
     },
     "reaction_session": {
@@ -215,6 +225,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_KLBRENG-B_2026-09-30/scrip_results-b2f303f9b170b98b.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-12T12:01:39Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T17:04:18.813000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-12T12:01:39Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-12T12:01:39Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "note": null
     }
   },
   "fetch": {
@@ -269,23 +306,29 @@
   },
   "derived": {
     "score": 26,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -294,13 +337,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -342,12 +385,12 @@
       "sectorKey": "Capital Goods",
       "sector": {
         "sector": "Capital Goods",
-        "stocks": 531,
-        "momentum63dMedian": -4.54,
-        "relativeToMarket": 1.26,
-        "declared": 221,
+        "stocks": 533,
+        "momentum63dMedian": -4.49,
+        "relativeToMarket": 1.31,
+        "declared": 224,
         "strongResults": 112,
-        "avgReaction": -1.25,
+        "avgReaction": -1.08,
         "tailwind": "NEUTRAL"
       },
       "identity": {
@@ -723,5 +766,19 @@
     "fetchedAt": "2026-11-12T11:12:26Z",
     "v": 2,
     "rows": []
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T17:04:18.813000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "This is to inform you that pursuant to Regulation 33 and other applicable provisions of the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements) Regulations, .... Kilburn Engineering Ltd - 522101 - Unaudited Financial Results (Standalone And Consolidated) Of The C",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-4b417bd350c7866e.json",
+      "seenAt": "2026-11-12T12:23:45Z"
+    }
+  ]
 }
