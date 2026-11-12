@@ -417,7 +417,7 @@
     const byTier = t => rest.filter(it => grade(it).tier === t).sort((x, y) => grade(y).score - grade(x).score);
     const sect = t => { const l = byTier(t); return l.length ? `<h3 class="radar-sub"><span class="tag ${TIER[t][1]}">${t}</span> ${esc(TIER[t][0])} <span class="meta">(${l.length})</span></h3><div class="ledger">${l.map(radarRow).join('')}</div>` : ''; };
     const nA = byTier('A').length;
-    return copyBar(rest, 'radar') + `<p class="note">Ranked best to worst for taking only a few trades: how ready the setup is, earnings quality, risk from today's price to the stop, the reaction, volume since, strength against its sector index, sector favour and red flags. ${nA ? `<b>${nA} in the top group.</b>` : '<b>Nothing in the top group right now: waiting is fine.</b>'} Tap a row for the full card. A ranking to help you choose, not a rule.</p>
+    return copyBar(rest, 'radar') + `<p class="note">Ranked best to worst for taking only a few trades: how ready the setup is, earnings quality, risk from today's price to the stop, the reaction and where the result day closed, distance from the 52-week high, climax volume, run-up before the result, volume since, strength against its sector index, sector favour and red flags. ${nA ? `<b>${nA} in the top group.</b>` : '<b>Nothing in the top group right now: waiting is fine.</b>'} Tap a row for the full card. A ranking to help you choose, not a rule.</p>
       ${['A', 'B', 'C', 'D'].map(sect).join('')}
       ${held.length ? `<h3 class="radar-sub">Already in your trades <span class="meta">(${held.length})</span></h3><div class="ledger">${held.map(radarRow).join('')}</div>` : ''}`;
   }
@@ -428,7 +428,13 @@
     const pl = P(it).plan || {}, e = num(pl.entry), sl = num(pl.sl);
     if (e === null || sl === null || !(e > sl)) return '';
     const r = e - sl, ema = (P(it).chart?.ema21 || []).map(num).filter(v => v !== null).pop();
-    return `<div class="radar-why radar-lv">Entry <b>${inr(e)}</b> · Stop <b>${inr(sl)}</b> <span class="meta">(${(r / e * 100).toFixed(1)}%)</span> · Target 1 <b>${inr(e + r)}</b> <span class="meta">+1R</span> · Target 2 <b>${inr(e + 2 * r)}</b> <span class="meta">+2R</span><br><span class="meta">TSL: the stop above until a close over Target 1; then cost ${inr(e)}, trailed on the 21 EMA${ema !== undefined ? ` (now ${inr(ema)})` : ''}, closing basis.</span></div>`;
+    // 2.9.46: shares to buy from the capital and risk-per-trade set at the top of the page (this browser only)
+    const cap = num(store.get('cap', 1000000)), rk = num(store.get('risk', 1)), frac = num(pl.sizeFraction) ?? 1;
+    const byRisk = cap && rk ? Math.floor(Math.floor(cap * rk / 100 / r) * frac) : 0;
+    const capPct = num(store.get('pcap', 15)) ?? 15, byCap = cap ? Math.floor(cap * capPct / 100 / e) : 0;   // one trade never above the PEAD budget
+    const qty = Math.min(byRisk, byCap);
+    const size = qty >= 1 ? `<br><span class="meta">Size: <b>${qty.toLocaleString('en-IN')} shares</b>${frac < 1 ? ' (starter 1/3)' : ''} ≈ ${inr(qty * e, 0)}, risking ${inr(qty * r, 0)}${byCap < byRisk ? ` (held to ${capPct}% of capital)` : ` (${rk}% of capital)`}. Set capital and risk at the top of the page.</span>` : '';
+    return `<div class="radar-why radar-lv">Entry <b>${inr(e)}</b> · Stop <b>${inr(sl)}</b> <span class="meta">(${(r / e * 100).toFixed(1)}%)</span> · Target 1 <b>${inr(e + r)}</b> <span class="meta">+1R</span> · Target 2 <b>${inr(e + 2 * r)}</b> <span class="meta">+2R</span><br><span class="meta">TSL: the stop above until a close over Target 1; then cost ${inr(e)}. Book half on a close over Target 2 and trail the rest on the 21 EMA${ema !== undefined ? ` (now ${inr(ema)})` : ''}, closing basis.</span>${size}</div>`;
   }
   function radarRow(it) {
         const pl = P(it).plan || {}, s = sig(it), pc = it.priceContext || {}, live = P(it).live;
@@ -470,7 +476,7 @@
           <div class="meta">${priceState(!!p.live, p.at)} ${inr(p.last)}${p.live && num(p.lastClose) !== null ? ` · prev close ${inr(p.lastClose)} · <span class="${cls(dayPct(p.last, p.lastClose))}">day ${pct(dayPct(p.last, p.lastClose))}</span>` : ''}</div>
           <p class="plan-why">${esc(p.note || '')}</p>
           <div class="levels">${lv('Stop now (swing)', inr(p.swingStop), 's')}${lv('Position stop', inr(p.positionStop), 's')}
-            ${lv('+1R (stop to cost)', inr(p.oneR), 'e')}${lv('+2R', inr(p.twoR))}</div>
+            ${lv('+1R (stop to cost)', inr(p.oneR), 'e')}${lv(p.twoRHit ? '+2R reached: book half' : '+2R (book half)', inr(p.twoR))}</div>
           <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 21 EMA ${inr(p.ema21)}, 63 EMA ${inr(p.ema63)}.</p>
           <div class="sizing"><label>Quantity <input type="number" min="0" step="1" inputmode="numeric" class="pos-qty" data-sym="${esc(p.symbol)}" value="${qty ?? ''}"></label>
             ${qty ? `<span class="meta">P&amp;L ${money(pnl)} · at the stop ${money(atRisk)}</span>` : '<span class="meta">enter quantity for rupee P&amp;L</span>'}</div>
@@ -718,7 +724,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.45';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.46';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

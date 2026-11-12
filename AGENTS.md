@@ -381,3 +381,10 @@ Engine 2.9.45 (owner request, 12 Nov 2026)
 - PLUS_VERSION 2.9.45 rebuilds stored price analytics once. plus.price no longer repeats hands.
 - Tests: StrongHandsTests.
 - Findings reported to the owner the same day (this quarter, liquid, positive reactions of 3%+ on 1.5x volume, n=111, a rising market): result day closing in the top 30% of its range +6.7% / 86% up since the reaction close vs +1.5% / 67%; within 10% of the 52-week high +7.9% / 92% vs +1.6% / 57% when 25%+ below; yearly-record volume +0.3%; the closing-basis stop under the result-day low was hit by 13 of 94 and those averaged +1% afterwards (3 recovered). None of these is in radar_grade yet: owner's decision.
+
+Engine 2.9.46 (owner-approved rule changes, 12 Nov 2026: "All yes" to the five proposals)
+- radar_grade (section 4b) now counts what separated movers from non-movers this quarter: +6 result day closed in the top 30% of its range (close_in_range_pct >= 70, positive reaction); +6 within 10% of the 52-week high, -6 when 25% or more below; -6 climax volume (hv_label HVY/HVE); -6 a 20-day run-up of 10%+ into the result. Constants GRADE_*. Tier rules unchanged; pros/cons lists carry 6 items.
+- Exit rule: book half on a close at +2R, trail the rest on the 21 EMA (never below cost). position_view keeps twoRHit in the position state and says so in the note; the page labels +2R "(book half)". The engine cannot see quantities, so the note reads "book half if you have not yet".
+- Radar rows show shares to buy from the page's capital / risk-per-trade settings (browser only), held to the PEAD budget (pcap, default 15% of capital).
+- The 3 pm alert scheduled task was updated with the book-half rule.
+- Tests: GradeMoversAndBookHalfTests.

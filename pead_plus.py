@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.45"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.46"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -1939,6 +1939,9 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
         st["peakClose"] = max(_num(st.get("peakClose")) or close, close)
     one_r_hit = bool(st.get("oneRHit")) or ((_num(st.get("peakClose")) or 0) >= one_r)
     st["oneRHit"] = one_r_hit
+    two_r = entry + 2 * risk                       # 2.9.46: book half on a close at +2R, trail the rest
+    two_r_hit = bool(st.get("twoRHit")) or ((_num(st.get("peakClose")) or 0) >= two_r)
+    st["twoRHit"] = two_r_hit
     swing = position = stop0
     if one_r_hit:
         e21, e63 = view["ema21"], view["ema63"]
@@ -1952,7 +1955,7 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
     view.update({"riskPerShare": _r2(risk), "riskPct": _r2(risk / entry * 100), "oneR": _r2(one_r),
                  "twoR": _r2(entry + 2 * risk), "swingStop": _r2(swing), "positionStop": _r2(position),
                  "rNow": _r2(r_now), "pnlPct": _r2(_pct(last, entry)) if last is not None else None,
-                 "peakClose": _r2(_num(st.get("peakClose"))), "oneRHit": one_r_hit})
+                 "peakClose": _r2(_num(st.get("peakClose"))), "oneRHit": one_r_hit, "twoRHit": two_r_hit})
     if last is None:
         view["note"] = "No price for this stock yet."
     elif close is not None and close < swing:
@@ -1961,6 +1964,9 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
             + (" the swing part (position part trails the 63 EMA)." if one_r_hit and close >= position else "."))
         if close < position:
             view["status"] = "EXIT"
+    elif two_r_hit:
+        view["status"], view["note"] = "TRAILING", (f"+2R reached ({two_r:,.2f}): book half if you have not yet. Trail the "
+                                                    f"rest at {swing:,.2f} (21 EMA, never below cost), on a closing basis.")
     elif one_r_hit:
         view["status"], view["note"] = "TRAILING", (f"+1R reached: stop at cost or better. Trail swing {swing:,.2f} "
                                                     f"(21 EMA) / position {position:,.2f} (63 EMA), on a closing basis.")
@@ -1970,7 +1976,7 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
                                                        f"Below entry; stop {stop0:,.2f} stands until +1R at {one_r:,.2f}.")
     else:
         view["status"], view["note"] = "HOLD", (f"Hold. Stop {stop0:,.2f} until +1R at {one_r:,.2f}; then move the stop "
-                                                f"to cost and trail the 21 / 63 EMA.")
+                                                f"to cost and trail the 21 EMA. Book half at +2R ({two_r:,.2f}).")
     return view, st
 
 
@@ -2448,6 +2454,12 @@ FRESH_ENTRY = {"ENTRY_EARLY", "ENTRY_PULLBACK", "ENTRY_BREAKOUT"}
 READY = {"NEAR_ENTRY", "PULLBACK_ZONE"}
 
 
+GRADE_CLOSE_TOP_PCT = 70.0   # result day closed in the top 30% of its range
+GRADE_NEAR_HIGH_PCT = 10.0   # within 10% of the 52-week high
+GRADE_FAR_HIGH_PCT = 25.0    # 25% or more below it
+GRADE_RUNUP_PCT = 10.0       # 20-day rise into the result
+
+
 def radar_grade(item: dict[str, Any], *, min_mcap_cr: float = 1000.0, last_price: Any = None) -> dict[str, Any]:
     """Score 0-100 and tier A-D with the reasons for and against."""
     pl = item.get("plus") or {}
@@ -2510,6 +2522,24 @@ def radar_grade(item: dict[str, Any], *, min_mcap_cr: float = 1000.0, last_price
     elif ret is not None and ret < 0:
         score -= 5; cons.append(f"fell {abs(ret):.1f}% on the result")
 
+    # 4b (2.9.46, owner-approved 12 Nov 2026) What separated movers from
+    # non-movers this quarter: where the result day closed, distance from the
+    # 52-week high, climax volume and a run-up into the result.
+    cir = _num(px.get("close_in_range_pct"))
+    if cir is not None and cir >= GRADE_CLOSE_TOP_PCT and ret is not None and ret > 0:
+        score += 6; pros.append("closed near the result-day high")
+    d52 = _num(pc.get("distanceFrom52wHighPct"))
+    if d52 is not None:
+        if d52 >= -GRADE_NEAR_HIGH_PCT:
+            score += 6; pros.append("near its 52-week high")
+        elif d52 <= -GRADE_FAR_HIGH_PCT:
+            score -= 6; cons.append(f"{abs(d52):.0f}% below its 52-week high")
+    if px.get("hv_label") in ("HVY", "HVE"):
+        score -= 6; cons.append("climax volume on the result (highest in a year)")
+    runup = _num(pc.get("pre20dPct"))
+    if runup is not None and runup >= GRADE_RUNUP_PCT:
+        score -= 6; cons.append(f"ran up {runup:.0f}% before the result")
+
     # 5 Volume behaviour since
     pr = (px.get("pressure") or {}).get("label")
     if pr == "ACCUMULATION":
@@ -2558,7 +2588,7 @@ def radar_grade(item: dict[str, Any], *, min_mcap_cr: float = 1000.0, last_price
     else:
         tier = "D"
     return {"score": round(score), "tier": tier, "label": dict(RADAR_TIERS)[tier], "riskNowPct": _r2(risk_now),
-            "pros": pros[:5], "cons": cons[:5]}
+            "pros": pros[:6], "cons": cons[:6]}
 
 
 # ---------------------------------------------------------------------------

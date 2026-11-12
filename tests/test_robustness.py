@@ -3419,3 +3419,48 @@ class StrongHandsTests(unittest.TestCase):
     def test_no_result_day_gain_is_not_counted(self):
         h = self._hands([100.0] * 30 + [99, 100, 101, 102, 103], [1000] * 35, 30)
         self.assertEqual({c["key"]: c["status"] for c in h["checks"]}["held"], "na")
+
+
+class GradeMoversAndBookHalfTests(unittest.TestCase):
+    """2.9.46 (owner-approved 12 Nov 2026): the Radar grade counts what
+    separated movers from non-movers this quarter, and the trail books half at +2R."""
+
+    def _it(self, pc=None, price=None):
+        base_pc = {"lastClose": 615.4, "resultDayPct": 6.0, "relativeVolume": 3.0}
+        base_px = {"pressure": {"label": None}}
+        return {"symbol": "X", "marketCapCr": 26266.0, "priceContext": {**base_pc, **(pc or {})},
+                "plus": {"strength": "STRONG", "bucket": {"code": "FRESH_PEAD"},
+                         "plan": {"signal": "ENTRY_PULLBACK", "entry": 607.05, "sl": 584.6, "stage": "FULL", "redFlags": []},
+                         "price": {**base_px, **(price or {})}}}
+
+    def test_movers_score_above_the_same_setup_without_them(self):
+        import pead_plus as pp
+        base = pp.radar_grade(self._it())
+        good = pp.radar_grade(self._it(pc={"distanceFrom52wHighPct": -4.0}, price={"close_in_range_pct": 85.0}))
+        self.assertEqual(good["score"], base["score"] + 12)
+        self.assertIn("closed near the result-day high", good["pros"])
+        self.assertIn("near its 52-week high", good["pros"])
+
+    def test_climax_runup_and_far_from_high_score_below(self):
+        import pead_plus as pp
+        base = pp.radar_grade(self._it())
+        bad = pp.radar_grade(self._it(pc={"distanceFrom52wHighPct": -31.0, "pre20dPct": 14.6}, price={"hv_label": "HVY"}))
+        self.assertEqual(bad["score"], base["score"] - 18)
+        self.assertTrue(any("climax volume" in c for c in bad["cons"]))
+        self.assertTrue(any("ran up 15%" in c for c in bad["cons"]))
+        self.assertTrue(any("31% below its 52-week high" in c for c in bad["cons"]))
+
+    def test_book_half_once_a_close_reaches_two_r(self):
+        import pead_plus as pp
+        pos = {"symbol": "X", "entryDate": "2026-10-22", "entryPrice": 100.0, "stop": 95.0}
+        def item(close):
+            return {"resultDayLow": 96.0, "priceContext": {"lastClose": close},
+                    "plus": {"price": {"ema21": 101.0, "ema63": 98.0, "last_session": "2026-11-10"}, "plan": {}}}
+        v, st = pp.position_view(pos, item(107.0), None, date(2026, 11, 10))
+        self.assertFalse(v["twoRHit"])
+        self.assertNotIn("book half", v["note"].lower())
+        v, st = pp.position_view(pos, item(110.5), st, date(2026, 11, 11))
+        self.assertTrue(v["twoRHit"])
+        self.assertIn("book half", v["note"].lower())
+        v, st = pp.position_view(pos, item(106.0), st, date(2026, 11, 12))      # stays reached after a dip
+        self.assertTrue(v["twoRHit"])
