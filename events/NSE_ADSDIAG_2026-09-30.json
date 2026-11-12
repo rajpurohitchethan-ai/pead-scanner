@@ -2,12 +2,14 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:ADSDIAG|2026-09-30",
   "createdAt": "2026-11-05T23:43:02Z",
-  "updatedAt": "2026-11-12T09:17:31Z",
+  "updatedAt": "2026-11-12T09:55:54Z",
   "security": {
     "symbol": "ADSDIAG",
     "bseSymbol": "ADSDIAG",
     "bseCode": "523031",
-    "name": "A D S Diagnostics Ltd"
+    "name": "A D S Diagnostics Ltd",
+    "isin": "0",
+    "yahooTicker": "523031.BO"
   },
   "period": {
     "end": "2026-09-30",
@@ -30,14 +32,81 @@
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T08:47:17Z",
+      "fetchedAt": "2026-11-12T09:24:33Z",
       "status": "OK",
       "rank": 110,
       "rawRef": "raw/bse/DISCOVERY/result_calendar-5d47faae245e3b04.json",
       "note": null
+    },
+    "reaction_session": {
+      "value": "2026-11-13",
+      "source": "DERIVED",
+      "fetchedAt": "2026-11-12T09:48:25Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "UNKNOWN_TIME_NEXT_SESSION"
+    },
+    "filing_session": {
+      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "source": "DERIVED",
+      "fetchedAt": "2026-11-12T09:48:25Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": null
+    },
+    "distance_52w_high_pct": {
+      "value": 0.0,
+      "source": "BSE_PRICE",
+      "fetchedAt": "2026-11-12T09:48:28Z",
+      "status": "OK",
+      "rank": 105,
+      "rawRef": "raw/bse_price/NSE_ADSDIAG_2026-09-30/price_volume_12m-042b63a7adc0a269.json",
+      "note": null
+    },
+    "last_price": {
+      "value": 11.34,
+      "source": "BSE_PRICE",
+      "fetchedAt": "2026-11-12T09:48:28Z",
+      "status": "OK",
+      "rank": 105,
+      "rawRef": "raw/bse_price/NSE_ADSDIAG_2026-09-30/price_volume_12m-042b63a7adc0a269.json",
+      "note": null
+    },
+    "avg_turnover_20d_cr": {
+      "value": 0.0001,
+      "source": "BSE_PRICE",
+      "fetchedAt": "2026-11-12T09:48:28Z",
+      "status": "OK",
+      "rank": 105,
+      "rawRef": "raw/bse_price/NSE_ADSDIAG_2026-09-30/price_volume_12m-042b63a7adc0a269.json",
+      "note": null
     }
   },
-  "fetch": {},
+  "fetch": {
+    "BSE_LOOKUP": {
+      "lastAttempt": "2026-11-12T09:48:25Z",
+      "lastSuccess": "2026-11-12T09:48:25Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/NSE_ADSDIAG_2026-09-30/lookup-ed440d24488907ee.json"
+    },
+    "PRICE_HISTORY": {
+      "lastAttempt": "2026-11-12T09:48:28Z",
+      "lastSuccess": "2026-11-12T09:48:28Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse_price/NSE_ADSDIAG_2026-09-30/price_volume_12m-042b63a7adc0a269.json"
+    },
+    "YAHOO_FUNDAMENTALS": {
+      "lastAttempt": "2026-11-12T09:48:28Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "Yahoo fundamentals budget exhausted for this run",
+      "rawRef": null
+    }
+  },
   "derived": {
     "score": 0,
     "completenessPct": 33.3,
@@ -52,7 +121,7 @@
     "verdict": "AWAIT RESULT — WATCHLIST",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
@@ -65,22 +134,14 @@
       "q1Setup": null,
       "bucket": null,
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
-        "entry": null,
-        "sl": null,
-        "riskPct": null,
-        "tslSwing": null,
-        "tslPosition": null,
-        "rNow": null,
-        "style": null,
+        "signal": "NO_ENTRY",
         "stage": null,
-        "sizeFraction": null,
-        "redFlags": []
+        "why": "No trades since 17 Apr 2014; the stock is not trading, so there is no reaction to measure.",
+        "notTrading": true
       },
       "liquidity": {
-        "pass": null,
-        "label": "—"
+        "pass": false,
+        "label": "Illiquid: under ₹1 lakh/day"
       },
       "valuation": {
         "label": "UNVERIFIED",
@@ -115,7 +176,34 @@
         "sectorIndex": null,
         "bseGroup": null
       },
-      "price": {},
+      "price": {
+        "ema10": null,
+        "ema21": null,
+        "ema63": null,
+        "prev_close": null,
+        "prev_ema10": null,
+        "prev_ema21": null,
+        "ret_5d_pct": null,
+        "d5_from": null,
+        "d21_from": null,
+        "ret_21d_pct": null,
+        "ret_63d_pct": null,
+        "ret_126d_pct": null,
+        "high_52w": 11.34,
+        "low_52w": 11.34,
+        "last_session": "2014-04-17",
+        "breakout_recent": null,
+        "breakout_failed": null,
+        "nh52_recent": null,
+        "nh52_prior": null,
+        "rsi_weekly": {
+          "timeframe": "weekly",
+          "rsi": null,
+          "divergence": null,
+          "note": "Not enough weekly history (1 bars; needs 20)."
+        },
+        "pressure": null
+      },
       "deliveryPct": null,
       "concall": null,
       "tradeLog": null,
@@ -130,7 +218,65 @@
     "valuationInputCount": 0,
     "expectationFullWindow": false,
     "reasons": [],
-    "risks": []
+    "risks": [
+      "20D average turnover under ₹1 lakh/day is thin.",
+      "Illiquid: under ₹1 lakh/day."
+    ]
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "priceTrail": [
+    {
+      "timestamp": "2026-11-12T09:48:28Z",
+      "price": 11.34,
+      "source": "BSE_PRICE"
+    }
+  ],
+  "plus": {
+    "price": {
+      "ema10": null,
+      "ema21": null,
+      "ema63": null,
+      "prev_close": null,
+      "prev_ema10": null,
+      "prev_ema21": null,
+      "ret_5d_pct": null,
+      "d5_from": null,
+      "d21_from": null,
+      "ret_21d_pct": null,
+      "ret_63d_pct": null,
+      "ret_126d_pct": null,
+      "high_52w": 11.34,
+      "low_52w": 11.34,
+      "last_session": "2014-04-17",
+      "breakout_recent": null,
+      "breakout_failed": null,
+      "nh52_recent": null,
+      "nh52_prior": null,
+      "rsi_weekly": {
+        "timeframe": "weekly",
+        "rsi": null,
+        "divergence": null,
+        "note": "Not enough weekly history (1 bars; needs 20)."
+      },
+      "pressure": null
+    },
+    "chart": {
+      "from": "2014-04-17",
+      "to": "2014-04-17",
+      "close": [
+        11.34
+      ],
+      "ema21": [
+        11.34
+      ],
+      "reactionIndex": null,
+      "volume": [
+        100
+      ]
+    },
+    "priceSource": "BSE_PRICE",
+    "computedAt": "2026-11-12T09:48:28Z",
+    "plusVersion": "2.9.38",
+    "corporateActions": null
+  }
 }
