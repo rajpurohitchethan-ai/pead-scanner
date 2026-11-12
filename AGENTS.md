@@ -411,3 +411,8 @@ Engine 2.9.48 (owner's rules, 12 Nov 2026) - REPLACES the 2.9.46 "+2R book half"
 - An edit in this session truncated the test file and dropped the evening check's ComparativeCopyOfCurrentTests / KnownFilingUnreadTests; they were restored from git before the commit. Append tests; never cut the file at an index.
 - The 3 pm alert scheduled task carries the same exit rule. The US page text follows it too.
 - Tests: PositionView test_hold_then_cost_then_ten_and_twenty_ema, TrendStageTests.
+
+Engine 2.9.49 (owner request, 12 Nov 2026: "one webpage, easy to access, like a stock screener") - page only
+- New first tab "Screener" (viewScreen in intelligence.js): one sortable table of every liquid declared result that has a Radar grade. Columns: stock, grade, signal, stage, hands, last, trigger (and distance), stop, risk from today's price, Target 1, reaction, revenue / profit YoY, distance from the 52-week high, result date. Quick filters (SCR_FILTERS, combined with AND, kept in this browser): setup alive (default on), grade A or B, entry now, near entry, Stage 2, strong hands, strong earnings, risk up to 5%, near the 52-week high, sector not out of favour, hide my trades. Tap a header to sort (missing values always last), tap a row for the levels line and the full card. The first column and the header stay in place while the table scrolls; the copy bar exports the filtered list.
+- Display only: it reads the same items as the Radar and changes no rule. The Screener is the landing tab the first time the new page loads; after that the last tab used is remembered as before.
+- No engine logic changed (versions bumped together for the install check).

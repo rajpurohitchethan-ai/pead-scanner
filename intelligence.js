@@ -430,6 +430,87 @@
   const TIER = { A: ['Best: take on the trigger', 'go'], B: ['Good: wait for the trigger', 'act'],
     C: ['Watch only', 'watch'], D: ['Weak: skip for now', 'pending'] };
   const grade = it => P(it).grade || { score: 0, tier: 'D', pros: [], cons: [] };
+  // 2.9.49: Screener (owner request: "one page, easy to access, like a stock screener"). One sortable
+  // table of every liquid declared result with quick filters. Display only: same data as the Radar.
+  const SCR_FILTERS = [
+    ['alive', 'Setup alive', it => (P(it).plan?.signal in RADAR) && !px(it).base_broken],
+    ['ab', 'Grade A or B', it => ['A', 'B'].includes(grade(it).tier)],
+    ['entry', 'Entry now', it => /^ENTRY_(EARLY|PULLBACK|BREAKOUT)$/.test(P(it).plan?.signal || '')],
+    ['near', 'Near entry', it => ['NEAR_ENTRY', 'PULLBACK_ZONE'].includes(P(it).plan?.signal)],
+    ['stage2', 'Stage 2', it => px(it).stage?.stage === 2],
+    ['hands', 'Strong hands', it => P(it).hands?.label === 'STRONG'],
+    ['strong', 'Strong earnings', it => P(it).strength === 'STRONG'],
+    ['risk5', 'Risk up to 5%', it => num(grade(it).riskNowPct) !== null && grade(it).riskNowPct <= 5],
+    ['high', 'Near 52-week high', it => num(it.priceContext?.distanceFrom52wHighPct) !== null && it.priceContext.distanceFrom52wHighPct >= -10],
+    ['fav', 'Sector not out of favour', it => !['OUT_OF_FAVOUR', 'DETERIORATING'].includes(P(it).favour?.status)],
+    ['nothold', 'Hide my trades', it => !heldPos(it)]
+  ];
+  const scrLast = it => num(P(it).live?.price) ?? num(it.priceContext?.lastClose);
+  const SCR_COLS = [
+    ['sym', 'Stock', it => it.symbol, 'text'],
+    ['grade', 'Grade', it => grade(it).score],
+    ['signal', 'Signal', it => -(RADAR[P(it).plan?.signal] ?? 99)],
+    ['stage', 'Stage', it => px(it).stage?.stage === 2 ? 2 : px(it).stage?.stage === 4 ? -1 : px(it).stage ? 0 : null],
+    ['hands', 'Hands', it => P(it).hands?.known ? P(it).hands.passed / P(it).hands.known : null],
+    ['last', 'Last', scrLast],
+    ['trig', 'Trigger', it => { const e = num(P(it).plan?.entry), l = scrLast(it); return e !== null && l ? (e / l - 1) * 100 : null; }],
+    ['stop', 'Stop', it => num(P(it).plan?.sl)],
+    ['risk', 'Risk', it => num(grade(it).riskNowPct)],
+    ['t1', 'Target 1', it => { const e = num(P(it).plan?.entry), sl = num(P(it).plan?.sl); return e !== null && sl !== null ? e + (e - sl) : null; }],
+    ['react', 'Reaction', it => num(it.priceContext?.resultDayPct)],
+    ['rev', 'Rev YoY', it => num(it.revenueYoY)],
+    ['pat', 'Profit YoY', it => num(it.patYoY)],
+    ['high', 'vs 52w high', it => num(it.priceContext?.distanceFrom52wHighPct)],
+    ['date', 'Result', it => it.resultDate, 'text']
+  ];
+  function scrState() {
+    if (!S.scr) { let f = {}; try { f = JSON.parse(store.get('scr', '{"alive":true}')) || {}; } catch (e) { f = { alive: true }; }
+      S.scr = { f, sort: store.get('scrSort', 'grade'), dir: store.get('scrDir', 'desc'), shown: 60 }; }
+    return S.scr;
+  }
+  function viewScreen() {
+    const st = scrState();
+    const base = declared().filter(it => P(it).grade && liquidOk(it)).filter(matches);
+    let list = base.filter(it => SCR_FILTERS.every(([k, , fn]) => !st.f[k] || fn(it)));
+    const col = SCR_COLS.find(c => c[0] === st.sort) || SCR_COLS[1], sgn = st.dir === 'asc' ? 1 : -1;
+    list = list.slice().sort((a, b) => {
+      const x = col[2](a), y = col[2](b);
+      if (x === null || x === undefined) return (y === null || y === undefined) ? 0 : 1;      // missing values last, either way
+      if (y === null || y === undefined) return -1;
+      return (col[3] === 'text' ? String(x).localeCompare(String(y)) : x - y) * sgn || grade(b).score - grade(a).score;
+    });
+    const n = SCR_FILTERS.filter(([k]) => st.f[k]).length;
+    const cell = (it, k) => {
+      const pl = P(it).plan || {}, g = grade(it), h = P(it).hands, sg = px(it).stage, last = scrLast(it), e = num(pl.entry), sl = num(pl.sl), s = sig(it);
+      switch (k) {
+        case 'sym': return `<td class="scr-sym"><b>${esc(it.symbol)}</b>${heldPos(it) ? ' <span class="tag go">held</span>' : ''}<span>${esc(P(it).sectorKey || it.sector || '')}</span></td>`;
+        case 'grade': return `<td><span class="gpill g${g.tier}">${g.tier} ${g.score}</span></td>`;
+        case 'signal': return `<td><span class="tag ${s[1]}">${esc(s[0])}</span></td>`;
+        case 'stage': return `<td>${sg ? `<span class="tag ${sg.stage === 2 ? 'good' : sg.stage === 4 ? 'bad' : ''}">${sg.stage === 2 ? 'Stage 2' : sg.stage === 4 ? 'Stage 4' : 'No'}</span>` : '—'}</td>`;
+        case 'hands': return `<td>${h && HANDS[h.label] ? `<span class="tag ${HANDS[h.label][1]}">${h.passed}/${h.known}</span>` : '—'}</td>`;
+        case 'last': return `<td class="n">${inr(last)}</td>`;
+        case 'trig': return `<td class="n">${e !== null ? `${inr(e)}<span>${last ? (e > last ? `${((e / last - 1) * 100).toFixed(1)}% away` : 'above') : ''}</span>` : '—'}</td>`;
+        case 'stop': return `<td class="n">${inr(sl)}</td>`;
+        case 'risk': return `<td class="n">${num(g.riskNowPct) !== null ? num(g.riskNowPct).toFixed(1) + '%' : '—'}</td>`;
+        case 't1': return `<td class="n">${e !== null && sl !== null ? inr(e + (e - sl)) : '—'}</td>`;
+        case 'react': return `<td class="n ${cls(it.priceContext?.resultDayPct)}">${pct(it.priceContext?.resultDayPct)}<span>${num(it.priceContext?.relativeVolume) !== null ? num(it.priceContext.relativeVolume).toFixed(1) + 'x vol' : ''}</span></td>`;
+        case 'rev': return `<td class="n ${cls(it.revenueYoY)}">${pct(it.revenueYoY)}</td>`;
+        case 'pat': return `<td class="n ${cls(it.patYoY)}">${it.patYoYTurnaround ? 'turnaround' : pct(it.patYoY)}</td>`;
+        case 'high': return `<td class="n">${pct(it.priceContext?.distanceFrom52wHighPct)}</td>`;
+        case 'date': return `<td class="n">${dt(it.resultDate)}</td>`;
+        default: return '<td></td>';
+      }
+    };
+    const rows = list.slice(0, st.shown).map(it => {
+      const open = S.open.has(it.eventId);
+      return `<tr class="scr-row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">${SCR_COLS.map(c => cell(it, c[0])).join('')}</tr>${open ? `<tr class="scr-detail"><td colspan="${SCR_COLS.length}"><div class="scr-detail-in">${radarLevels(it)}${card(it)}</div></td></tr>` : ''}`;
+    }).join('');
+    return `<div class="scr-chips" role="group" aria-label="Quick filters">${SCR_FILTERS.map(([k, label]) => `<button type="button" class="scr-chip" data-scr="${k}" aria-pressed="${!!st.f[k]}">${label}</button>`).join('')}${n ? '<button type="button" class="scr-chip clear" data-scr="__clear">Clear</button>' : ''}</div>
+      <p class="note"><b>${list.length}</b> of ${base.length} liquid results${n ? ` match ${n} filter${n > 1 ? 's' : ''}` : ''}. Tap a column to sort, tap a stock for its plan and chart. Swipe the table sideways for more columns.</p>
+      ${copyBar(list, 'screen')}
+      ${list.length ? `<div class="tscroll scr-wrap"><table class="scr"><thead><tr>${SCR_COLS.map(c => `<th data-scrsort="${c[0]}" role="button" tabindex="0" aria-sort="${st.sort === c[0] ? (st.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">${c[1]}${st.sort === c[0] ? (st.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+      ${list.length > st.shown ? `<button type="button" class="scr-more" data-scr="__more">Show ${Math.min(60, list.length - st.shown)} more</button>` : ''}` : '<div class="empty">No stock passes every filter. Remove one to widen the list.</div>'}`;
+  }
   function viewRadar() {
     const all = radarAll().filter(matches);
     const held = all.filter(it => heldPos(it)), rest = all.filter(it => !heldPos(it));
@@ -744,7 +825,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.48';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.49';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -801,7 +882,7 @@
   function render() {
     if (!S.data) return;
     header(); chips();
-    $('controls').style.display = ['setups', 'radar', 'watch', 'sectors'].includes(S.tab) ? '' : 'none';
+    $('controls').style.display = ['screen', 'setups', 'radar', 'watch', 'sectors'].includes(S.tab) ? '' : 'none';
     $('sizing').style.display = S.tab === 'setups' ? '' : 'none';
     // 2.9.19: a hint only; the risk input keeps whatever the viewer typed.
     const rOff = (S.data.regime || {}).label === 'RISK-OFF', rNow = num(store.get('risk', 1));
@@ -817,7 +898,7 @@
     if (strip && strip.scrollTo) strip.scrollTo({ left: Math.max(0, active.offsetLeft - strip.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2) });
     const fresh = S.lastTab !== S.tab; S.lastTab = S.tab;
     $('view').classList.toggle('enter', fresh);
-    $('view').innerHTML = { setups: viewSetups, radar: viewRadar, trades: viewTrades, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
+    $('view').innerHTML = { screen: viewScreen, setups: viewSetups, radar: viewRadar, trades: viewTrades, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
   }
 
   // ---------- events ----------
@@ -854,6 +935,30 @@
       render(); const m = $('qty-msg'); if (m) m.textContent = n ? `Saved ${n} quantit${n > 1 ? 'ies' : 'y'} on this device.` : 'Nothing recognised (format HCLTECH=114;GROWW=750).';
       return;
     }
+    const sc = e.target.closest('[data-scr]');
+    if (sc) {
+      const st = scrState(), k = sc.dataset.scr;
+      if (k === '__more') st.shown += 60; else { if (k === '__clear') st.f = {}; else st.f[k] = !st.f[k]; st.shown = 60; store.set('scr', JSON.stringify(st.f)); }
+      const cl = document.querySelector('.scr-chips')?.scrollLeft || 0, y = window.scrollY;
+      render(); const c2 = document.querySelector('.scr-chips'); if (c2) c2.scrollLeft = cl; window.scrollTo(0, y); return;
+    }
+    const sh = e.target.closest('[data-scrsort]');
+    if (sh) {
+      const st = scrState(), k = sh.dataset.scrsort, left = sh.closest('.tscroll')?.scrollLeft || 0;
+      if (st.sort === k) st.dir = st.dir === 'asc' ? 'desc' : 'asc'; else { st.sort = k; st.dir = ['sym', 'risk', 'trig'].includes(k) ? 'asc' : 'desc'; }
+      store.set('scrSort', st.sort); store.set('scrDir', st.dir); render();
+      const w = document.querySelector('.scr-wrap'); if (w) w.scrollLeft = left;
+      return;
+    }
+    const srw = e.target.closest('.scr-row');
+    if (srw && !e.target.closest('a')) {
+      const id = srw.dataset.id, top = srw.getBoundingClientRect().top, left = srw.closest('.tscroll')?.scrollLeft || 0;
+      S.open.has(id) ? S.open.delete(id) : S.open.add(id); render();
+      const w = document.querySelector('.scr-wrap'); if (w) w.scrollLeft = left;
+      const again = [...document.querySelectorAll('.scr-row')].find(r => r.dataset.id === id);
+      if (again) window.scrollBy(0, again.getBoundingClientRect().top - top);
+      return;
+    }
     const srow = e.target.closest('.srow'); if (srow) { const k = 'sector:' + srow.dataset.sector; S.open.has(k) ? S.open.delete(k) : S.open.add(k); render(); return; }
     const row = e.target.closest('.row'); if (row && !e.target.closest('a')) {
       const id = row.dataset.id, top = row.getBoundingClientRect().top;
@@ -867,7 +972,7 @@
   $('theme').addEventListener('click', () => { const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); const next = cur === 'dark' ? 'light' : 'dark'; store.set('theme', next); applyTheme(next); });
 
   // ---------- boot ----------
-  S.tab = store.get('tab', 'setups'); S.liquid = store.get('liquid', true); S.sort = store.get('sort', 'conviction');
+  S.tab = store.get('tab', 'screen'); if (!store.get('seenScreen', false)) { S.tab = 'screen'; store.set('seenScreen', true); } S.liquid = store.get('liquid', true); S.sort = store.get('sort', 'conviction');
   S.dir = store.get('dir', 'desc');
   if (!$('sort').querySelector(`option[value="${S.sort}"]`)) S.sort = 'conviction';
   $('liquid').checked = S.liquid; $('sort').value = S.sort; showDir();
