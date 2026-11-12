@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.44"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.45"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -140,6 +140,98 @@ def _chart(f, reaction_idx: int | None, points: int = 75) -> dict[str, Any]:
             "close": closes, "ema21": ema21, "reactionIndex": marker, "volume": vols}
 
 
+def strong_hands(f, ri: int, pre_close: Any) -> dict[str, Any] | None:
+    """2.9.45: "strong hands" checklist for the sessions after a result reaction
+    (how little the stock gives back when tested). DISPLAY ONLY: it does not
+    change the plan, the grade or any ranking. `f` is a cleaned frame, `ri` the
+    reaction session's index, `pre_close` the close before the reaction window."""
+    n_after = len(f) - 1 - ri
+    close = f["Close"]
+    r_close, pre, last = _num(close.iloc[ri]), _num(pre_close), _num(close.iloc[-1])
+    if r_close is None or pre is None or last is None:
+        return None
+    if n_after < 3:
+        return {"label": None, "passed": 0, "known": 0, "sessions": int(n_after), "checks": [],
+                "note": "Too early: needs 3 sessions after the result."}
+    after = f.iloc[ri + 1:]
+    checks: list[dict[str, Any]] = []
+
+    def add(key: str, label: str, ok: bool | None, note: str) -> None:
+        checks.append({"key": key, "label": label, "status": "na" if ok is None else ("ok" if ok else "bad"), "note": note})
+
+    gain = r_close - pre
+    low_close = _num(after["Close"].min())
+    if gain > 0 and low_close is not None:
+        kept = (low_close - pre) / gain * 100
+        add("held", "Holds the gain", kept >= 50,
+            f"Lowest close since the result kept {kept:.0f}% of the result-day gain (needs 50%).")
+    else:
+        add("held", "Holds the gain", None, "No result-day gain to hold.")
+
+    ch = close.diff().iloc[ri + 1:]
+    vol = f["Volume"].iloc[ri + 1:]
+    ups, dns = vol[(ch > 0) & vol.notna()], vol[(ch < 0) & vol.notna()]
+    if len(ups) and len(dns) and dns.mean() > 0:
+        ratio = ups.mean() / dns.mean()
+        add("volume", "Volume on up days", ratio > 1, f"Up days average {ratio:.1f}x the volume of down days since the result.")
+    elif len(ups) and not len(dns):
+        add("volume", "Volume on up days", True, "No down day since the result.")
+    else:
+        add("volume", "Volume on up days", None, "Not enough up and down days yet.")
+
+    if close.notna().sum() >= 22:
+        ema21 = close.ewm(span=21, adjust=False).mean()
+        below = int((after["Close"] < ema21.iloc[ri + 1:]).sum())
+        add("ema", "Respects the 21 EMA", below == 0,
+            "No close below the 21 EMA since the result." if below == 0 else f"{below} close(s) below the 21 EMA since the result.")
+    else:
+        add("ema", "Respects the 21 EMA", None, "Not enough price history.")
+
+    post_high = _num(f["Close"].iloc[ri:].max())
+    if post_high:
+        dd = (last / post_high - 1) * 100
+        add("nearHigh", "Near its post-result high", dd >= -5, f"{abs(dd):.1f}% below its highest close since the result (needs within 5%).")
+
+    win = after.tail(10)
+    rng = win["High"] - win["Low"]
+    okr = rng.notna() & (rng > 0)
+    if int(okr.sum()) >= 3 and float((rng[okr] / win["Close"][okr]).median()) > 0.002:
+        share = float((((win["Close"] - win["Low"]) / rng)[okr] >= 0.5).mean()) * 100
+        add("closes", "Closes in the upper half", share >= 60, f"{share:.0f}% of the last {int(okr.sum())} sessions closed in the upper half of the day's range (needs 60%).")
+    else:
+        add("closes", "Closes in the upper half", None, "No daily high/low for these sessions.")
+
+    if n_after >= 10:
+        lows = f["Low"].where(f["Low"].notna(), close)
+        recent, prior = _num(lows.iloc[-5:].min()), _num(lows.iloc[-10:-5].min())
+        add("higherLows", "Higher lows", bool(recent > prior) if recent is not None and prior is not None else None,
+            f"Low of the last 5 sessions {recent:,.2f} vs {prior:,.2f} for the 5 before.")
+    else:
+        add("higherLows", "Higher lows", None, "Needs 10 sessions after the result.")
+    return _hands_total({"sessions": int(n_after), "checks": checks})
+
+
+def _hands_total(h: dict[str, Any]) -> dict[str, Any]:
+    known = [c for c in h["checks"] if c["status"] != "na"]
+    passed = sum(1 for c in known if c["status"] == "ok")
+    h["passed"], h["known"] = passed, len(known)
+    h["label"] = (None if len(known) < 4 else "STRONG" if passed / len(known) >= 0.8
+                  else "MIXED" if passed / len(known) >= 0.5 else "WEAK")
+    return h
+
+
+def hands_with_rs(hands: dict[str, Any] | None, rs: dict[str, Any] | None) -> dict[str, Any] | None:
+    """2.9.45: adds "beats the index since the result" to the strong-hands list."""
+    if not hands or not hands.get("checks"):
+        return hands
+    h = {**hands, "checks": [c for c in hands["checks"] if c.get("key") != "rs"]}
+    rel = _num((rs or {}).get("relativePct"))
+    h["checks"].append({"key": "rs", "label": "Beats the index", "status": "na" if rel is None else ("ok" if rel > 0 else "bad"),
+                        "note": "Index data not current." if rel is None else
+                        f"{rel:+.1f} pp against the NIFTY 500 since the result."})
+    return _hands_total(h)
+
+
 def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
                       q1_reaction_date: date | None = None, q2_boundary: date | None = None,
                       window_start: date | None = None, q1_window_start: date | None = None) -> dict[str, Any]:
@@ -222,6 +314,10 @@ def extended_features(frame: Any, reaction_date: date | None, *, released: bool,
         for n in (5, 20, 60):
             j = ri + n
             out[f"fwd_{n}d_pct"] = _r2(_pct(close.iloc[j], pre_close)) if j < len(f) else None
+        try:                                       # 2.9.45 strong-hands checklist (display only)
+            out["hands"] = strong_hands(f, ri, pre_close)
+        except Exception:
+            out["hands"] = None
 
     # Previous quarter (Q1) reaction replayed on this chart.
     qi = _idx_on_or_after(f, q1_reaction_date)

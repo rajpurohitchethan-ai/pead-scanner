@@ -3376,3 +3376,46 @@ class CloseOnlyResultRangeTests(unittest.TestCase):
         log = {"starter": {"date": "2026-11-05", "entry": 98.0, "sl": 97.02, "signal": "ENTRY_EARLY", "minSeen": 98.0}}
         d, _ = self._score("BSE_PRICE", trade_log=log)
         self.assertEqual(d["plus"]["plan"]["signal"], "DATA_PENDING")
+
+
+class StrongHandsTests(unittest.TestCase):
+    """2.9.45 (12 Nov 2026): "strong hands" checklist after a result reaction
+    (owner request, from the 10-signs infographic). Display only."""
+
+    def _hands(self, closes, vols, reaction_i):
+        import pead_plus as pp
+        f = pp._clean(_frame(closes, date(2026, 8, 3), vols))
+        return pp.strong_hands(f, reaction_i, closes[reaction_i - 1])
+
+    def test_strong_holds_gain_on_quiet_pullbacks(self):
+        base = [100.0] * 30
+        closes = base + [110, 111, 110.5, 112, 111.5, 113, 112.6, 114, 113.7, 115, 116]
+        vols = [1000] * 30 + [5000, 2000, 600, 2200, 500, 2100, 550, 2300, 500, 2400, 2500]
+        h = self._hands(closes, vols, 30)
+        st = {c["key"]: c["status"] for c in h["checks"]}
+        self.assertEqual((st["held"], st["volume"], st["ema"], st["nearHigh"], st["higherLows"]), ("ok",) * 5)
+        self.assertEqual(h["label"], "STRONG")
+
+    def test_weak_gives_the_gain_back_on_volume(self):
+        closes = [100.0] * 30 + [115, 113, 110, 108, 104, 102, 101, 100, 99, 98, 97]
+        vols = [1000] * 30 + [5000, 3000, 3200, 3500, 4000, 3000, 2500, 2600, 2400, 2500, 2600]
+        h = self._hands(closes, vols, 30)
+        st = {c["key"]: c["status"] for c in h["checks"]}
+        self.assertEqual((st["held"], st["nearHigh"], st["higherLows"]), ("bad",) * 3)
+        self.assertEqual(h["label"], "WEAK")
+
+    def test_too_early_and_index_check(self):
+        import pead_plus as pp
+        h = self._hands([100.0] * 30 + [110, 111], [1000] * 32, 30)
+        self.assertIsNone(h["label"])
+        self.assertEqual(h["checks"], [])
+        self.assertEqual(pp.hands_with_rs(h, {"relativePct": 3.0}), h)       # nothing to add to yet
+        full = self._hands([100.0] * 30 + [110, 111, 112, 113, 114], [1000] * 35, 30)
+        with_rs = pp.hands_with_rs(full, {"relativePct": -2.5})
+        self.assertEqual(with_rs["checks"][-1]["status"], "bad")
+        self.assertEqual(with_rs["known"], full["known"] + 1)
+        self.assertEqual(pp.hands_with_rs(with_rs, {"relativePct": 1.0})["known"], with_rs["known"])   # not added twice
+
+    def test_no_result_day_gain_is_not_counted(self):
+        h = self._hands([100.0] * 30 + [99, 100, 101, 102, 103], [1000] * 35, 30)
+        self.assertEqual({c["key"]: c["status"] for c in h["checks"]}["held"], "na")

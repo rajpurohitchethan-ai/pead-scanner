@@ -228,6 +228,21 @@
       <div class="td-row">${td.checks.map(c => `<span class="tdc ${c.status}" title="${esc(c.note)}"><i aria-hidden="true">${TD_ICON[c.status] || '–'}</i>${esc(c.label)}</span>`).join('')}</div>
       <details class="td-more"><summary>What each check says</summary><ul class="td-notes">${td.checks.map(c => `<li><b>${esc(c.label)}:</b> ${esc(c.note)}</li>`).join('')}</ul></details></div>`;
   }
+  // 2.9.45: "strong hands" checklist (how little a stock gives back after its
+  // result). Display only: it does not change the plan or the Radar grade.
+  const HANDS = { STRONG: ['Strong hands', 'good'], MIXED: ['Mixed hands', 'watch'], WEAK: ['Weak hands', 'bad'] };
+  function handsTag(h) {
+    if (!h || !HANDS[h.label]) return '';
+    return ` <span class="tag ${HANDS[h.label][1]}" title="Strong-hands checklist: ${h.passed} of ${h.known} pass">${HANDS[h.label][0]} ${h.passed}/${h.known}</span>`;
+  }
+  function handsStrip(h) {
+    if (!h) return '';
+    if (!(h.checks || []).length) return h.note ? `<p class="meta"><b>Strong hands:</b> ${esc(h.note)}</p>` : '';
+    return `<div class="td" aria-label="Strong-hands check: ${h.passed} of ${h.known} pass">
+      <div class="td-h"><b>Strong-hands check</b> <span class="meta">${h.passed} of ${h.known} pass · ${h.sessions} sessions since the result</span></div>
+      <div class="td-row">${h.checks.map(c => `<span class="tdc ${c.status}" title="${esc(c.note)}"><i aria-hidden="true">${TD_ICON[c.status] || '–'}</i>${esc(c.label)}</span>`).join('')}</div>
+      <details class="td-more"><summary>What each check says</summary><ul class="td-notes">${h.checks.map(c => `<li><b>${esc(c.label)}:</b> ${esc(c.note)}</li>`).join('')}</ul><p class="meta">A guide to how the stock is behaving, not a signal: it does not change the plan or the grade.</p></details></div>`;
+  }
   function peersLine(it) {
     const pe = P(it).peers;
     if (!pe || !pe.count) return '';
@@ -325,7 +340,7 @@
       ${tvChart(it)}
       ${facts}
       ${lensBlock(it)}
-      ${topDownStrip(it)}
+      ${topDownStrip(it)}${handsStrip(P(it).hands)}
       ${sectorCompact(it)}
       ${peersLine(it)}
       <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}${plan.stage === 'STARTER' && num(plan.entry) !== null ? ' <span class="tag warn">Starter, 1/3 size</span>' : plan.stage === 'FULL' && num(plan.entry) !== null ? ' <span class="tag go">Full size</span>' : ''}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
@@ -424,7 +439,7 @@
         const trig = hp ? num(hp.oneR) : num(pl.entry), toTrig = last !== null && trig ? (trig / last - 1) * 100 : null;
         const open = S.open.has(it.eventId);
         return `<div class="row radar-row" role="button" tabindex="0" aria-expanded="${open}" data-id="${esc(it.eventId)}">
-          <div><div class="s">${esc(it.symbol)} <span class="gpill g${grade(it).tier}" title="Radar grade">${grade(it).tier} ${grade(it).score}</span></div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${(P(it).themes || []).map(t => ` <span class="tag theme">${esc(t)}</span>`).join('')}${hp ? ' <span class="tag go">You hold</span>' : ''}${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
+          <div><div class="s">${esc(it.symbol)} <span class="gpill g${grade(it).tier}" title="Radar grade">${grade(it).tier} ${grade(it).score}</span></div><div class="nm"><span class="tag ${s[1]}">${esc(s[0])}</span>${(P(it).themes || []).map(t => ` <span class="tag theme">${esc(t)}</span>`).join('')}${handsTag(P(it).hands)}${hp ? ' <span class="tag go">You hold</span>' : ''}${pl.stage === 'STARTER' ? ' <span class="tag watch">Starter 1/3</span>' : ''}${bigEnough(it) ? '' : ` <span class="tag pending">${num(it.marketCapCr) !== null ? `₹${Math.round(num(it.marketCapCr)).toLocaleString('en-IN')} Cr` : 'Mcap unknown'}</span>`}</div></div>
           <div><div class="k">Reaction</div><div class="v ${cls(pc.resultDayPct)}">${pct(pc.resultDayPct)}${num(pc.relativeVolume) !== null ? ` <span class="meta">${num(pc.relativeVolume).toFixed(1)}x vol</span>` : ''}</div></div>
           <div><div class="k">${live?.price ? 'Live' : 'Last close'}</div><div class="v">${inr(last)}${oldClose(it)}</div></div>
           <div class="opt"><div class="k">Base (result-day low)</div><div class="v">${inr(low)}${toBase !== null ? ` <span class="meta">${pct(toBase)}</span>` : ''}</div></div>
@@ -459,7 +474,7 @@
           <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 21 EMA ${inr(p.ema21)}, 63 EMA ${inr(p.ema63)}.</p>
           <div class="sizing"><label>Quantity <input type="number" min="0" step="1" inputmode="numeric" class="pos-qty" data-sym="${esc(p.symbol)}" value="${qty ?? ''}"></label>
             ${qty ? `<span class="meta">P&amp;L ${money(pnl)} · at the stop ${money(atRisk)}</span>` : '<span class="meta">enter quantity for rupee P&amp;L</span>'}</div>
-          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${p.rsSector ? rsLine(null, p.rsSector) : ''}${p.sectorFavour && p.sectorFavour.status !== 'NOT_ENOUGH' ? `<p class="meta"><b>Sector:</b> ${esc(p.sectorFavour.sector)} ${favTag(p.sectorFavour)} ${esc(p.sectorFavour.note)}</p>` : ''}${rsiBlock(p.watch && p.watch.rsi)}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
+          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${p.rsSector ? rsLine(null, p.rsSector) : ''}${p.sectorFavour && p.sectorFavour.status !== 'NOT_ENOUGH' ? `<p class="meta"><b>Sector:</b> ${esc(p.sectorFavour.sector)} ${favTag(p.sectorFavour)} ${esc(p.sectorFavour.note)}</p>` : ''}${handsStrip(p.hands)}${rsiBlock(p.watch && p.watch.rsi)}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
       }).join('')}</div>
       <details class="td qtx"><summary>Move quantities to another device</summary>
         <p class="meta">Quantities stay in this browser only (the repo is public). Copy them here and paste them on your other phone or laptop.</p>
@@ -611,7 +626,7 @@
       <div class="chev" aria-hidden="true">›</div></div>`;
     if (!open) return row;
     const v = P(it).valuation || {}, liq = P(it).liquidity || {};
-    return row + `<div class="row-detail">${chart(it, 100)}${tvChart(it)}${topDownStrip(it)}${peersLine(it)}
+    return row + `<div class="row-detail">${chart(it, 100)}${tvChart(it)}${topDownStrip(it)}${handsStrip(P(it).hands)}${peersLine(it)}
       <p class="note">${b ? esc(b.why) + ' ' : ''}${num(x1.q1_reaction_return_pct) !== null ? `Q1 result day ${pct(x1.q1_reaction_return_pct)}${num(x1.q1_reaction_rvol) !== null ? ` on ${x(x1.q1_reaction_rvol)} usual volume` : ''}; ${pct(x1.q1_return_to_q2_pct)} from before the Q1 result to now. ` : 'Q1 result date not found yet. '}${num(v.pe) !== null ? `P/E ${num(v.pe).toFixed(1)}x${num(v.sectorPe) !== null ? ` against sector ${num(v.sectorPe).toFixed(1)}x` : ''}. ` : ''}Liquidity ${esc(liq.label || '—')}${num(it.marketCapCr) !== null ? `, market cap ${cr(it.marketCapCr)}` : ''}.</p>
       <div class="links">${[['screener', 'Screener'], ['tradingview', 'TradingView'], ['nse', 'NSE'], ['bse', 'BSE']].filter(([k]) => P(it).links?.[k]).map(([k, l]) => `<a href="${esc(P(it).links[k])}" target="_blank" rel="noopener">${l}</a>`).join('')}</div></div>`;
   }
@@ -703,7 +718,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.44';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.45';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
