@@ -63,7 +63,7 @@ h2 small{font-weight:500;color:var(--ink-2)}
 .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .name{min-width:0}
 .name b{font-size:16px}
-.name span{display:block;color:var(--ink-2);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52vw}
+.name .co{display:block;color:var(--ink-2);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:min(52vw,440px)}
 .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .tag{font-size:12px;font-weight:600;border-radius:6px;padding:2px 7px;background:var(--sheet-2);color:var(--ink-2);white-space:nowrap}
 .tag.go{background:var(--act-bg);color:var(--act)} .tag.good{background:var(--gain-bg);color:var(--gain)}
@@ -153,7 +153,7 @@ footer{margin-top:28px;color:var(--ink-2);font-size:13px;line-height:1.55}
     const tv = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(it.symbol.replace('.', '.'))}`;
     return `<article class="row">
       <div class="top"><div class="name"><b><a href="${tv}" target="_blank" rel="noopener">${esc(it.symbol)}</a></b> ${g.tier ? `<span class="pill ${g.tier}" title="${esc(TIER[g.tier])}">${g.tier} ${g.score}</span>` : ''}
-        <span>${esc(it.name || '')} · ${esc(it.sector || '—')} · ${esc(it.index || '')}</span>
+        <span class="co">${esc(it.name || '')} · ${esc(it.sector || '—')} · ${esc(it.index || '')}</span>
         <div class="tags"><span class="tag ${s[1]}">${esc(s[0])}</span>${it.strength ? `<span class="tag ${it.strength === 'STRONG' ? 'good' : it.strength === 'WEAK' ? 'bad' : ''}">${it.strength === 'STRONG' ? 'Strong earnings' : it.strength === 'AVERAGE+' ? 'Earnings average+' : it.strength === 'WEAK' ? 'Weak earnings' : 'Earnings average'}</span>` : ''}${h && HANDS[h.label] ? `<span class="tag ${HANDS[h.label][1]}">${HANDS[h.label][0]} ${h.passed}/${h.known}</span>` : ''}</div></div>
         ${spark(it.chart)}</div>
       <div class="kv n">

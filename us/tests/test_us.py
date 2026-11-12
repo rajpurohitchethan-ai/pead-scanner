@@ -42,8 +42,9 @@ WIKI = """{| class="wikitable sortable" id="constituents"
 
 class ParsingTests(unittest.TestCase):
     def test_wiki_rows(self):
-        rows = us.parse_wiki_constituents(WIKI, "S&P 500")
-        self.assertEqual([r["symbol"] for r in rows], ["MMM", "AAPL", "BRK.B"])          # duplicate row dropped
+        intro = "Cross referenced with index funds: Vanguard ({{NYSE Arca|VIOO}}) and SPDR ({{NYSE Arca|SPSM}}).\n\n"
+        rows = us.parse_wiki_constituents(intro + WIKI, "S&P 500")
+        self.assertEqual([r["symbol"] for r in rows], ["MMM", "AAPL", "BRK.B"])          # duplicate row and intro ETFs dropped
         self.assertEqual(rows[1], {"symbol": "AAPL", "name": "Apple", "sector": "Information Technology", "index": "S&P 500"})
         self.assertEqual(rows[2]["sector"], "Financials")
 

@@ -103,7 +103,9 @@ def parse_wiki_constituents(wikitext: str, index_name: str) -> list[dict[str, An
     """Rows of the constituents table: symbol (exchange template), company (first link after it), GICS sector."""
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for row in re.split(r"\n\|-", wikitext or ""):
+    text = wikitext or ""
+    start = text.find("{|")                 # the intro of the S&P 600 page names ETFs with the same templates (VIOO)
+    for row in re.split(r"\n\|-", text[start:] if start >= 0 else ""):
         m = _SYM_RX.search(row)
         if not m:
             continue
