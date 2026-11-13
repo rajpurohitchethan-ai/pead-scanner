@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE119201023|2026-09-30",
   "createdAt": "2026-11-04T09:09:51Z",
-  "updatedAt": "2026-11-13T05:51:39Z",
+  "updatedAt": "2026-11-13T06:23:05Z",
   "security": {
     "symbol": "PARKHOSPS",
     "nseSymbol": "PARKHOSPS",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-04T22:44:08Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T06:02:04Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-13T06:23:05Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-13",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-13T05:32:33Z",
+      "fetchedAt": "2026-11-13T06:02:18Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-b6c899c14c594b2b.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2c84f2f9346b72c5.json",
       "note": null
     },
     "reaction_session": {
@@ -189,6 +199,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE119201023_2026-09-30/integrated_filings-59f73e007ecbdc90.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T06:02:04Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2c84f2f9346b72c5.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-13T11:24:16.987000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T06:02:04Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2c84f2f9346b72c5.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T06:02:04Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2c84f2f9346b72c5.json",
+      "note": null
     }
   },
   "fetch": {
@@ -236,23 +273,29 @@
   },
   "derived": {
     "score": 23,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -261,13 +304,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -309,10 +352,10 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 260,
+        "stocks": 263,
         "momentum63dMedian": -0.35,
-        "relativeToMarket": 3.97,
-        "declared": 128,
+        "relativeToMarket": 4.01,
+        "declared": 129,
         "strongResults": 74,
         "avgReaction": 0.97,
         "tailwind": "POSITIVE"
@@ -760,5 +803,19 @@
         "filedAt": "2026-01-28T17:28:17+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-13T11:24:16.987000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Outcome of Board Meeting held on November 13, 2026 for the financial results for the Quarter and half year ended September 30, 2026 Park Medi World Ltd - 544645 - Outcome Of Board Meeting Held On November 13, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-2c84f2f9346b72c5.json",
+      "seenAt": "2026-11-13T06:21:44Z"
+    }
+  ]
 }
