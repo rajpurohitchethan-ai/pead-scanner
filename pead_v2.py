@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.52"
+ENGINE_VERSION = "2.9.53"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -504,6 +504,20 @@ def load_holidays() -> set[date]:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         values = raw if isinstance(raw, list) else raw.get("holidays", [])
+        return {d for d in (parse_date(x) for x in values) if d is not None}
+    except Exception:
+        return set()
+
+
+def load_special_sessions() -> set[date]:
+    """2.9.53: exchange sessions held on a weekend (Muhurat trading, Sun 8 Nov
+    2026). Only the end-of-day file fetch uses them: NSE's own history carries
+    the bar, so a history ending before it can only be extended through it.
+    They never count as trading days for reaction sessions."""
+    path = MASTER_DIR / "nse_holidays.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        values = raw.get("specialSessions", []) if isinstance(raw, dict) else []
         return {d for d in (parse_date(x) for x in values) if d is not None}
     except Exception:
         return set()
@@ -7495,18 +7509,34 @@ def parse_bse_bhav(text: str) -> dict[str, list[float | None]]:
     return out
 
 
-def eod_wanted_sessions(now: datetime, holidays: set[date], n: int = EOD_SESSIONS) -> list[date]:
+def eod_wanted_sessions(now: datetime, holidays: set[date], n: int = EOD_SESSIONS,
+                        special: set[date] | None = None) -> list[date]:
     """The last n trading days whose file can exist: weekdays that are not
-    holidays; today only from 18:00 IST (the files appear in the evening)."""
+    holidays; today only from 18:00 IST (the files appear in the evening).
+    2.9.53: special weekend sessions (Muhurat) inside that window are added."""
     out: list[date] = []
     d = now.date()
     if (now.hour, now.minute) < (18, 0):
         d -= timedelta(days=1)
+    end = d
     while len(out) < n:
         if d.weekday() < 5 and d not in holidays:
             out.append(d)
         d -= timedelta(days=1)
+    if out:
+        out += [x for x in (special or set()) if min(out) < x <= end and x not in out]
     return sorted(out)
+
+
+def eod_signature(days: list[dict[str, Any]]) -> str:
+    """What replay_eod stamps as eodTried: the newest file date, plus any
+    special session stored, so adding the Muhurat file re-tries the stocks that
+    could not be extended without it."""
+    if not days:
+        return ""
+    latest = days[-1]["date"].isoformat()
+    extra = [d["date"].isoformat() for d in days if d["date"].weekday() >= 5]
+    return latest + ("+" + ",".join(extra) if extra else "")
 
 
 def _eod_get(url: str) -> str:
@@ -7521,7 +7551,7 @@ def refresh_eod(now: datetime | None = None) -> dict[str, int]:
     parsed (1,000+ stocks); BSE's is added when it arrives and retried 4 times."""
     now = now or now_ist()
     EOD_DIR.mkdir(parents=True, exist_ok=True)
-    wanted = eod_wanted_sessions(now, load_holidays())
+    wanted = eod_wanted_sessions(now, load_holidays(), special=load_special_sessions())
     stats = {"fetched": 0, "failed": 0, "stored": 0}
     budget = EOD_FETCH_MAX
     for d in reversed(wanted):                       # newest first
@@ -7688,12 +7718,13 @@ def replay_eod(store: "EventStore", *, budget_seconds: float | None = None) -> d
     if not days:
         return out
     latest = days[-1]["date"].isoformat()
+    signature = eod_signature(days)
     todo = []
     for event in store.all():
         if not dashboard_activity(event):
             continue
         plus = event.get("plus") or {}
-        if plus.get("eodTried") == latest:
+        if plus.get("eodTried") == signature:
             continue
         last = str((plus.get("price") or {}).get("last_session") or "")[:10]
         if last >= latest and not close_only_range(event):
@@ -7711,7 +7742,7 @@ def replay_eod(store: "EventStore", *, budget_seconds: float | None = None) -> d
             out["waiting"] = len(todo) - n
             break
         ok = rebuild_plus_from_raw(store, event)
-        event.setdefault("plus", {})["eodTried"] = latest
+        event.setdefault("plus", {})["eodTried"] = signature
         store.save(event)
         out["rebuilt"] += 1 if ok else 0
     return out

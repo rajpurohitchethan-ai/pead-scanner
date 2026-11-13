@@ -3739,3 +3739,54 @@ class StaleTradeLogTests(unittest.TestCase):
         self.assertEqual(pp.drop_stale_trade_log(log, None), log)          # no range known: nothing to judge by
         mixed = {**log, "full": {"date": "2026-10-27", "entry": 900.0, "sl": 891.0}}
         self.assertEqual(list(pp.drop_stale_trade_log(mixed, 846.5)), ["starter"])
+
+
+class MuhuratSessionEodTests(unittest.TestCase):
+    """2.9.53 (13 Nov 2026): NSE traded a Muhurat session on Sunday 8 Nov 2026
+    and its own history has that bar, but the daily files were only fetched
+    for weekdays. A history ending 6 Nov met the 9 Nov file, whose previous
+    close is the Muhurat close (THERMAX 2,746.3 -> 2,839.8, +3.4%), failed the
+    2% continuity check and stayed on 6 Nov (33 liquid declared results)."""
+
+    def _frame(self, closes, start):
+        import pandas as pd
+        days = pd.bdate_range(start, periods=len(closes))
+        return pd.DataFrame({"Date": days, "Open": closes, "High": [c * 1.01 for c in closes],
+                             "Low": [c * 0.99 for c in closes], "Close": closes, "Volume": [1000.0] * len(closes)})
+
+    def test_wanted_sessions_include_a_special_weekend_session(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("Asia/Kolkata")
+        got = p.eod_wanted_sessions(datetime(2026, 11, 13, 18, 30, tzinfo=tz), {date(2026, 11, 10)}, 5,
+                                    special={date(2026, 11, 8), date(2025, 10, 21)})
+        self.assertEqual(got, [date(2026, 11, 6), date(2026, 11, 8), date(2026, 11, 9), date(2026, 11, 11),
+                               date(2026, 11, 12), date(2026, 11, 13)])
+        # without special sessions nothing changes
+        self.assertEqual(p.eod_wanted_sessions(datetime(2026, 11, 13, 18, 30, tzinfo=tz), {date(2026, 11, 10)}, 2),
+                         [date(2026, 11, 12), date(2026, 11, 13)])
+
+    def test_history_ending_before_muhurat_appends_through_it(self):
+        f = self._frame([3282.3, 3319.7, 2746.3], "2026-11-04")              # Wed 4 -> Fri 6 Nov
+        days = [{"date": date(2026, 11, 8), "nse": {"THERMAX": [2760.0, 2850.0, 2755.0, 2839.8, 2746.3, 90000.0]}, "bse": {}},
+                {"date": date(2026, 11, 9), "nse": {"THERMAX": [2839.8, 2842.0, 2723.2, 2785.9, 2839.8, 399928.0]}, "bse": {}}]
+        out, info = p.overlay_eod(f, "THERMAX", None, days, {date(2026, 11, 10)})
+        self.assertEqual(info["appended"], 2)
+        self.assertEqual(out["Close"].iloc[-1], 2785.9)
+        # without the Muhurat file the continuity check still refuses (no silent hole)
+        out, info = p.overlay_eod(f, "THERMAX", None, days[1:], {date(2026, 11, 10)})
+        self.assertEqual(info["appended"], 0)
+
+    def test_special_sessions_are_read_and_do_not_become_trading_days(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "nse_holidays.json"
+            path.write_text(json.dumps({"holidays": ["2026-11-10"], "specialSessions": ["2026-11-08"]}), encoding="utf-8")
+            with mock.patch.object(p, "MASTER_DIR", Path(tmp)):
+                self.assertEqual(p.load_special_sessions(), {date(2026, 11, 8)})
+                self.assertFalse(p.is_trading_day(date(2026, 11, 8)))       # reaction sessions unchanged
+
+    def test_replay_signature_changes_when_a_special_day_is_added(self):
+        a = [{"date": date(2026, 11, 12)}, {"date": date(2026, 11, 13)}]
+        b = [{"date": date(2026, 11, 8)}] + a
+        self.assertNotEqual(p.eod_signature(a), p.eod_signature(b))
+        self.assertEqual(p.eod_signature(a), "2026-11-13")                    # unchanged form for normal days
