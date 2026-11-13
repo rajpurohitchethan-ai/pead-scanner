@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.49"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.50"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -1792,6 +1792,9 @@ FAVOUR_LABELS = {"IN_FAVOUR": "In favour", "NEUTRAL": "Neutral", "OUT_OF_FAVOUR"
                  "DETERIORATING": "Fundamentals deteriorating", "NOT_ENOUGH": "Not enough data"}
 
 
+SECTOR_BENCH_MIN = 30   # liquid priced stocks needed to use the market median as the yardstick
+
+
 def sector_favour(items: list[dict[str, Any]], sectors: dict[str, dict[str, Any]], regime: dict[str, Any] | None,
                   today: date) -> None:
     """2.9.20, after @SureshKBN's "How to know when a sector is out of favour".
@@ -1826,6 +1829,20 @@ def sector_favour(items: list[dict[str, Any]], sectors: dict[str, dict[str, Any]
     def liquid(it):
         return ((it.get("plus") or {}).get("liquidity") or {}).get("pass") is not False
 
+    # 2.9.50 (13 Nov 2026): every sector read "out of favour". Relative strength
+    # compared the MEDIAN stock of a sector with the cap-weighted NIFTY 500, which
+    # a few heavyweights had lifted +8.3% in a month while the median liquid stock
+    # was -3.0%: no sector's median could keep up. The yardstick is now the median
+    # liquid stock across all sectors (same universe, same price dates), so about
+    # half the sectors lead and half lag. The index is the fallback for small sets.
+    _px = lambda it: (it.get("plus") or {}).get("price") or {}
+    universe = [it for it in items if liquid(it) and fresh(it)]
+    u1 = [v for v in (_num(_px(it).get("ret_21d_pct")) for it in universe) if v is not None]
+    u3 = [v for v in (_num(_px(it).get("ret_63d_pct")) for it in universe) if v is not None]
+    bench = "the median liquid stock" if len(u1) >= SECTOR_BENCH_MIN else "NIFTY 500"
+    if len(u1) >= SECTOR_BENCH_MIN:
+        idx1, idx3 = _median(u1), (_median(u3) if len(u3) >= SECTOR_BENCH_MIN else None)
+
     for name, members in by.items():
         priced = [it for it in members if liquid(it) and fresh(it)]
         px = lambda it: (it.get("plus") or {}).get("price") or {}
@@ -1840,7 +1857,7 @@ def sector_favour(items: list[dict[str, Any]], sectors: dict[str, dict[str, Any]
             lag = [x for x in (r1, r3) if x is not None]
             st = "bad" if all(x <= -3 for x in lag) else "warn" if any(x <= -2 for x in lag) else "ok"
             sig.append({"key": "relative", "label": "Relative strength", "status": st,
-                        "note": f"Median move 1M {m1:+.1f}% vs NIFTY 500 {idx1:+.1f}%"
+                        "note": f"Median move 1M {m1:+.1f}% vs {bench} {idx1:+.1f}%"
                                 + (f"; 3M {m3:+.1f}% vs {idx3:+.1f}%." if r3 is not None else ".")})
         else:
             sig.append({"key": "relative", "label": "Relative strength", "status": "na", "note": "Too few priced stocks or no index data."})

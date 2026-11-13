@@ -3599,3 +3599,38 @@ class TrendStageTests(unittest.TestCase):
         self.assertEqual(pp.radar_grade(it(2))["score"], base + 6)
         self.assertEqual(pp.radar_grade(it(4))["score"], base - 6)
         self.assertIn("stage 2 uptrend", pp.radar_grade(it(2))["pros"])
+
+
+class SectorYardstickTests(unittest.TestCase):
+    """2.9.50 (13 Nov 2026, owner: "all sectors showing out of favour"): the
+    median stock of a sector was compared with the cap-weighted NIFTY 500
+    (+8.3% in a month on a few heavyweights) while the median liquid stock was
+    -3.0%, so every sector lagged. The yardstick is the median liquid stock."""
+
+    def _items(self):
+        def it(sym, sector, r21, r63):
+            return {"symbol": sym, "resultsReleased": False, "priceContext": {"lastClose": 100.0},
+                    "plus": {"sectorKey": sector, "liquidity": {"pass": True},
+                             "price": {"last_session": "2026-11-12", "ret_21d_pct": r21, "ret_63d_pct": r63, "ema63": 90.0}}}
+        lead = [it(f"L{i}", "Leaders", 2.0, 1.0) for i in range(20)]
+        lag = [it(f"G{i}", "Laggards", -9.0, -12.0) for i in range(20)]
+        return lead + lag
+
+    def test_a_sector_ahead_of_the_median_stock_is_not_out_of_favour(self):
+        import pead_plus as pp
+        secs = {"Leaders": {}, "Laggards": {}}
+        pp.sector_favour(self._items(), secs, {"ret20dPct": 8.3, "ret63dPct": 0.8}, date(2026, 11, 13))
+        lead = {s["key"]: s for s in secs["Leaders"]["favour"]["signals"]}["relative"]
+        lag = {s["key"]: s for s in secs["Laggards"]["favour"]["signals"]}["relative"]
+        self.assertEqual(lead["status"], "ok")                 # +2.0% vs a median of -3.5%, though the index did +8.3%
+        self.assertIn("the median liquid stock", lead["note"])
+        self.assertEqual(lag["status"], "bad")
+        self.assertNotEqual(secs["Leaders"]["favour"]["status"], "OUT_OF_FAVOUR")
+
+    def test_small_universe_falls_back_to_the_index(self):
+        import pead_plus as pp
+        secs = {"Leaders": {}}
+        pp.sector_favour(self._items()[:10], secs, {"ret20dPct": 8.3, "ret63dPct": 0.8}, date(2026, 11, 13))
+        rel = {s["key"]: s for s in secs["Leaders"]["favour"]["signals"]}["relative"]
+        self.assertIn("NIFTY 500", rel["note"])
+        self.assertEqual(rel["status"], "warn")                # 1M lags the index by 6.3 points, 3M does not
