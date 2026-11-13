@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE460H01021|2026-09-30",
   "createdAt": "2026-10-26T10:48:57Z",
-  "updatedAt": "2026-11-13T12:03:28Z",
+  "updatedAt": "2026-11-13T12:35:56Z",
   "security": {
     "symbol": "STARCEMENT",
     "nseSymbol": "STARCEMENT",
@@ -127,27 +127,27 @@
       "note": null
     },
     "distance_52w_high_pct": {
-      "value": -28.49,
+      "value": -28.04,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
       "note": "replayed from saved price data"
     },
     "last_price": {
-      "value": 176.21,
+      "value": 176.06,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
       "note": "replayed from saved price data"
     },
     "avg_turnover_20d_cr": {
-      "value": 3.99,
+      "value": 4.002,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
@@ -507,7 +507,7 @@
     "result_day_return_pct": {
       "value": -2.22,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
@@ -516,7 +516,7 @@
     "result_day_rvol": {
       "value": 9.94,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
@@ -525,7 +525,7 @@
     "result_day_low": {
       "value": 166.3,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
@@ -534,7 +534,7 @@
     "result_day_high": {
       "value": 180.3,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
@@ -543,7 +543,7 @@
     "box_high": {
       "value": 181.0,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
@@ -552,7 +552,7 @@
     "box_breakout": {
       "value": false,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
@@ -561,7 +561,7 @@
     "post_result_hold_5d": {
       "value": true,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
@@ -570,7 +570,7 @@
     "post_result_hold_10d": {
       "value": true,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-13T02:21:02Z",
+      "fetchedAt": "2026-11-13T12:33:16Z",
       "status": "OK",
       "rank": 105,
       "rawRef": null,
@@ -684,18 +684,56 @@
           "Both revenue and profit fell from last quarter (check if the business is seasonal)."
         ]
       },
-      "relativeStrength": {
-        "indexReturnPct": 2.76,
-        "relativePct": -4.91,
-        "indexAsOf": "2026-11-12"
-      },
+      "relativeStrength": null,
       "hands": {
-        "label": null,
-        "passed": 0,
-        "known": 0,
-        "sessions": 2,
-        "checks": [],
-        "note": "Too early: needs 3 sessions after the result."
+        "sessions": 3,
+        "checks": [
+          {
+            "key": "held",
+            "label": "Holds the gain",
+            "status": "na",
+            "note": "No result-day gain to hold."
+          },
+          {
+            "key": "volume",
+            "label": "Volume on up days",
+            "status": "bad",
+            "note": "Up days average 0.5x the volume of down days since the result."
+          },
+          {
+            "key": "ema",
+            "label": "Respects the 21 EMA",
+            "status": "ok",
+            "note": "No close below the 21 EMA since the result."
+          },
+          {
+            "key": "nearHigh",
+            "label": "Near its post-result high",
+            "status": "ok",
+            "note": "0.1% below its highest close since the result (needs within 5%)."
+          },
+          {
+            "key": "closes",
+            "label": "Closes in the upper half",
+            "status": "ok",
+            "note": "67% of the last 3 sessions closed in the upper half of the day's range (needs 60%)."
+          },
+          {
+            "key": "higherLows",
+            "label": "Higher lows",
+            "status": "na",
+            "note": "Needs 10 sessions after the result."
+          },
+          {
+            "key": "rs",
+            "label": "Beats the index",
+            "status": "na",
+            "note": "Index data not current."
+          }
+        ],
+        "passed": 3,
+        "known": 4,
+        "label": "MIXED"
       },
       "live": null,
       "strength": "WEAK",
@@ -751,9 +789,9 @@
       "sector": {
         "sector": "Construction Materials",
         "stocks": 63,
-        "momentum63dMedian": -7.4,
-        "relativeToMarket": -3.03,
-        "declared": 24,
+        "momentum63dMedian": -7.99,
+        "relativeToMarket": -3.36,
+        "declared": 25,
         "strongResults": 6,
         "avgReaction": -0.38,
         "tailwind": "WEAK"
@@ -767,32 +805,32 @@
         "bseGroup": "B"
       },
       "price": {
-        "ema10": 173.9,
-        "ema21": 172.89,
-        "ema63": 180.74,
-        "ema20": 172.84,
+        "ema10": 174.29,
+        "ema21": 173.17,
+        "ema63": 180.59,
+        "ema20": 173.14,
         "stage": {
           "stage": 4,
           "label": "Stage 4",
           "note": "Price and the 50-day average are under a falling 200-day average: a downtrend.",
-          "sma50": 178.0,
-          "sma150": 200.06,
-          "sma200": 203.09,
+          "sma50": 177.81,
+          "sma150": 199.8,
+          "sma200": 202.89,
           "sma200Rising": false
         },
-        "prev_close": 174.99,
-        "prev_ema10": 173.39,
-        "prev_ema21": 172.55,
-        "ret_5d_pct": -2.15,
-        "d5_from": "2026-11-05",
-        "d21_from": "2026-10-13",
-        "ret_21d_pct": 4.8,
-        "ret_63d_pct": -11.78,
-        "ret_126d_pct": -18.72,
-        "high_52w": 246.4,
+        "prev_close": 176.21,
+        "prev_ema10": 173.9,
+        "prev_ema21": 172.89,
+        "ret_5d_pct": 2.06,
+        "d5_from": "2026-11-06",
+        "d21_from": "2026-10-14",
+        "ret_21d_pct": 3.35,
+        "ret_63d_pct": -12.54,
+        "ret_126d_pct": -18.34,
+        "high_52w": 244.65,
         "low_52w": 157.97,
-        "last_session": "2026-11-12",
-        "atr14": 5.85,
+        "last_session": "2026-11-13",
+        "atr14": 5.9,
         "hvq": false,
         "hvy": false,
         "hve": null,
@@ -803,15 +841,15 @@
         "gap_pct": -1.5,
         "gap_held": false,
         "close_in_range_pct": 69.86,
-        "sessions_since_reaction": 2,
-        "return_since_result_pct": -2.15,
+        "sessions_since_reaction": 3,
+        "return_since_result_pct": -2.23,
         "pre_result_session": "2026-11-05",
         "post_result_high": 181.0,
         "post_result_low": 166.3,
-        "prev_session_high": 177.0,
-        "day_before_high": 181.0,
+        "prev_session_high": 178.0,
+        "day_before_high": 177.0,
         "reclaimed_prev_high": false,
-        "drawdown_from_post_high_pct": -2.65,
+        "drawdown_from_post_high_pct": -2.73,
         "base_broken": false,
         "fwd_5d_pct": null,
         "fwd_20d_pct": null,
@@ -828,21 +866,21 @@
         "nh52_prior": false,
         "rsi_weekly": {
           "timeframe": "weekly",
-          "rsi": 38.23,
+          "rsi": 38.11,
           "divergence": null,
           "note": "No divergence.",
-          "asOf": "2026-11-12"
+          "asOf": "2026-11-13"
         },
         "pressure": {
           "label": "NEUTRAL",
           "distributionDays": 2,
           "accumulationDays": 5,
           "sessions": 25,
-          "upDownVolume": 0.82,
-          "lastCloseInRangePct": 70.19,
+          "upDownVolume": 0.72,
+          "lastCloseInRangePct": 54.35,
           "lastDownOnVolume": false,
-          "lastRvol": 0.42,
-          "asOf": "2026-11-12"
+          "lastRvol": 0.67,
+          "asOf": "2026-11-13"
         }
       },
       "deliveryPct": 41.88,
@@ -897,32 +935,32 @@
   ],
   "plus": {
     "price": {
-      "ema10": 173.9,
-      "ema21": 172.89,
-      "ema63": 180.74,
-      "ema20": 172.84,
+      "ema10": 174.29,
+      "ema21": 173.17,
+      "ema63": 180.59,
+      "ema20": 173.14,
       "stage": {
         "stage": 4,
         "label": "Stage 4",
         "note": "Price and the 50-day average are under a falling 200-day average: a downtrend.",
-        "sma50": 178.0,
-        "sma150": 200.06,
-        "sma200": 203.09,
+        "sma50": 177.81,
+        "sma150": 199.8,
+        "sma200": 202.89,
         "sma200Rising": false
       },
-      "prev_close": 174.99,
-      "prev_ema10": 173.39,
-      "prev_ema21": 172.55,
-      "ret_5d_pct": -2.15,
-      "d5_from": "2026-11-05",
-      "d21_from": "2026-10-13",
-      "ret_21d_pct": 4.8,
-      "ret_63d_pct": -11.78,
-      "ret_126d_pct": -18.72,
-      "high_52w": 246.4,
+      "prev_close": 176.21,
+      "prev_ema10": 173.9,
+      "prev_ema21": 172.89,
+      "ret_5d_pct": 2.06,
+      "d5_from": "2026-11-06",
+      "d21_from": "2026-10-14",
+      "ret_21d_pct": 3.35,
+      "ret_63d_pct": -12.54,
+      "ret_126d_pct": -18.34,
+      "high_52w": 244.65,
       "low_52w": 157.97,
-      "last_session": "2026-11-12",
-      "atr14": 5.85,
+      "last_session": "2026-11-13",
+      "atr14": 5.9,
       "hvq": false,
       "hvy": false,
       "hve": null,
@@ -933,26 +971,62 @@
       "gap_pct": -1.5,
       "gap_held": false,
       "close_in_range_pct": 69.86,
-      "sessions_since_reaction": 2,
-      "return_since_result_pct": -2.15,
+      "sessions_since_reaction": 3,
+      "return_since_result_pct": -2.23,
       "pre_result_session": "2026-11-05",
       "post_result_high": 181.0,
       "post_result_low": 166.3,
-      "prev_session_high": 177.0,
-      "day_before_high": 181.0,
+      "prev_session_high": 178.0,
+      "day_before_high": 177.0,
       "reclaimed_prev_high": false,
-      "drawdown_from_post_high_pct": -2.65,
+      "drawdown_from_post_high_pct": -2.73,
       "base_broken": false,
       "fwd_5d_pct": null,
       "fwd_20d_pct": null,
       "fwd_60d_pct": null,
       "hands": {
-        "label": null,
-        "passed": 0,
-        "known": 0,
-        "sessions": 2,
-        "checks": [],
-        "note": "Too early: needs 3 sessions after the result."
+        "sessions": 3,
+        "checks": [
+          {
+            "key": "held",
+            "label": "Holds the gain",
+            "status": "na",
+            "note": "No result-day gain to hold."
+          },
+          {
+            "key": "volume",
+            "label": "Volume on up days",
+            "status": "bad",
+            "note": "Up days average 0.5x the volume of down days since the result."
+          },
+          {
+            "key": "ema",
+            "label": "Respects the 21 EMA",
+            "status": "ok",
+            "note": "No close below the 21 EMA since the result."
+          },
+          {
+            "key": "nearHigh",
+            "label": "Near its post-result high",
+            "status": "ok",
+            "note": "0.1% below its highest close since the result (needs within 5%)."
+          },
+          {
+            "key": "closes",
+            "label": "Closes in the upper half",
+            "status": "ok",
+            "note": "67% of the last 3 sessions closed in the upper half of the day's range (needs 60%)."
+          },
+          {
+            "key": "higherLows",
+            "label": "Higher lows",
+            "status": "na",
+            "note": "Needs 10 sessions after the result."
+          }
+        ],
+        "passed": 3,
+        "known": 4,
+        "label": "MIXED"
       },
       "q1_reaction_date": "2026-08-10",
       "q1_reaction_return_pct": -1.5,
@@ -966,28 +1040,27 @@
       "nh52_prior": false,
       "rsi_weekly": {
         "timeframe": "weekly",
-        "rsi": 38.23,
+        "rsi": 38.11,
         "divergence": null,
         "note": "No divergence.",
-        "asOf": "2026-11-12"
+        "asOf": "2026-11-13"
       },
       "pressure": {
         "label": "NEUTRAL",
         "distributionDays": 2,
         "accumulationDays": 5,
         "sessions": 25,
-        "upDownVolume": 0.82,
-        "lastCloseInRangePct": 70.19,
+        "upDownVolume": 0.72,
+        "lastCloseInRangePct": 54.35,
         "lastDownOnVolume": false,
-        "lastRvol": 0.42,
-        "asOf": "2026-11-12"
+        "lastRvol": 0.67,
+        "asOf": "2026-11-13"
       }
     },
     "chart": {
-      "from": "2026-07-28",
-      "to": "2026-11-12",
+      "from": "2026-07-29",
+      "to": "2026-11-13",
       "close": [
-        202.01,
         203.26,
         202.53,
         202.78,
@@ -1061,10 +1134,10 @@
         175.7,
         176.08,
         174.99,
-        176.21
+        176.21,
+        176.06
       ],
       "ema21": [
-        206.38,
         206.1,
         205.77,
         205.5,
@@ -1138,11 +1211,11 @@
         171.93,
         172.31,
         172.55,
-        172.89
+        172.89,
+        173.17
       ],
-      "reactionIndex": 70,
+      "reactionIndex": 69,
       "volume": [
-        82509,
         60150,
         123814,
         151571,
@@ -1216,19 +1289,20 @@
         79473,
         406322,
         206773,
-        97685
+        97685,
+        157418
       ]
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-11-13T02:21:02Z",
+    "computedAt": "2026-11-13T12:33:16Z",
     "replayedFromRaw": true,
     "plusVersion": "2.9.48",
     "corporateActions": null,
     "eod": {
-      "appended": 2,
+      "appended": 3,
       "filled": 0
     },
-    "eodTried": "2026-11-12"
+    "eodTried": "2026-11-13"
   },
   "tradeLog": {},
   "nseResultListing": {
@@ -1363,7 +1437,7 @@
       "xbrlUrl": null,
       "headline": "Results for the Quarter and half year ended 30th September, 2026 (Standalone & Consolidated) Star Cement Ltd - 540575 - Results For The Quarter And Half Year Ended 30Th September, 2026 (Standalone & Consolidated)",
       "rawRef": "raw/bse/DISCOVERY/result_announcements-fb01dc38923dc3bf.json",
-      "seenAt": "2026-11-13T12:02:36Z"
+      "seenAt": "2026-11-13T12:30:12Z"
     },
     {
       "source": "NSE_INTEGRATED_FILING",
@@ -1375,7 +1449,7 @@
       "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1755217_06112026101316_WEB.xml",
       "headline": "Integrated Filing - Financials Standalone Original",
       "rawRef": "raw/nse/INE460H01021_2026-09-30/integrated_filings-2ef333aaf6ee0098.json",
-      "seenAt": "2026-11-13T12:02:36Z"
+      "seenAt": "2026-11-13T12:30:12Z"
     },
     {
       "source": "NSE_INTEGRATED_FILING",
@@ -1387,7 +1461,7 @@
       "xbrlUrl": "https://nsearchives.nseindia.com/corporate/xbrl/INTEGRATED_FILING_INDAS_1755222_06112026102747_WEB.xml",
       "headline": "Integrated Filing - Financials Consolidated Original",
       "rawRef": "raw/nse/INE460H01021_2026-09-30/integrated_filings-2ef333aaf6ee0098.json",
-      "seenAt": "2026-11-13T12:02:36Z"
+      "seenAt": "2026-11-13T12:30:12Z"
     }
   ],
   "financialSnapshots": {
@@ -1435,7 +1509,7 @@
     }
   },
   "financialIntegrity": {
-    "checkedAt": "2026-11-13T12:02:36Z",
+    "checkedAt": "2026-11-13T12:30:12Z",
     "snapshotsConsidered": 1,
     "status": "VERIFIED",
     "issues": [],
@@ -1470,6 +1544,14 @@
         "status": "OK",
         "note": null,
         "replacedAt": "2026-11-13T02:21:02Z"
+      },
+      {
+        "value": -28.49,
+        "source": "NSE_PRICE",
+        "fetchedAt": "2026-11-13T02:21:02Z",
+        "status": "OK",
+        "note": "replayed from saved price data",
+        "replacedAt": "2026-11-13T12:33:16Z"
       }
     ],
     "last_price": [
@@ -1480,6 +1562,14 @@
         "status": "OK",
         "note": null,
         "replacedAt": "2026-11-13T02:21:02Z"
+      },
+      {
+        "value": 176.21,
+        "source": "NSE_PRICE",
+        "fetchedAt": "2026-11-13T02:21:02Z",
+        "status": "OK",
+        "note": "replayed from saved price data",
+        "replacedAt": "2026-11-13T12:33:16Z"
       }
     ],
     "avg_turnover_20d_cr": [
@@ -1490,6 +1580,14 @@
         "status": "OK",
         "note": null,
         "replacedAt": "2026-11-13T02:21:02Z"
+      },
+      {
+        "value": 3.99,
+        "source": "NSE_PRICE",
+        "fetchedAt": "2026-11-13T02:21:02Z",
+        "status": "OK",
+        "note": "replayed from saved price data",
+        "replacedAt": "2026-11-13T12:33:16Z"
       }
     ]
   }
