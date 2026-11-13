@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.50"
+ENGINE_VERSION = "2.9.51"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -166,6 +166,7 @@ BASE_SOURCE_RANK = {
     "BSE_RESULTS_SNAPSHOT": 92,
     "NSE_PRICE": 95,
     "BSE_PRICE": 95,
+    "EOD_PRICE": 96,          # 2.9.51: the exchanges' daily end-of-day files (real open/high/low/close)
     "EXCHANGE_IDENTITY": 95,
     "NSE_QUOTE": 90,
     "BSE_META": 88,
@@ -216,6 +217,8 @@ def source_rank(field: str, source: str) -> int:
     if field in PRICE_FIELDS:
         if source in {"NSE_PRICE", "BSE_PRICE"}:
             return 105
+        if source == "EOD_PRICE":
+            return 106        # a real day range beats BSE's close-only history
         if source == "YAHOO_PRICE":
             return 60
     if field in {"results_released", "filing_timestamp", "result_date"}:
@@ -4591,7 +4594,7 @@ def repair_lookup_mismatches(store: EventStore, master: "SymbolMaster | None" = 
             sec["identityRepaired"] = {"wrongNseSymbol": n, "at": iso_now()}
             for f_name in list((e.get("fields") or {}).keys()):
                 src = str((e["fields"][f_name] or {}).get("source") or "")
-                if src.startswith(("NSE_PRICE", "NSE_QUOTE", "YAHOO", "NSE_COMPARISON", "NSE_XBRL")) or src == "DERIVED_PRICE":
+                if src.startswith(("NSE_PRICE", "NSE_QUOTE", "YAHOO", "NSE_COMPARISON", "NSE_XBRL", "EOD_PRICE")) or src == "DERIVED_PRICE":
                     e["fields"].pop(f_name, None)
             for extra in ("plus", "priceTrail", "concall", "tradeLog", "mergedFrom"):
                 e.pop(extra, None)
@@ -6579,6 +6582,11 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
         store.record_fetch(event, "PRICE_HISTORY", ok=False, raw_ref=raw_ref,
                            error=f"fetched history ends {new_last}, older than stored {stored_last}; stored prices kept")
         return
+    if price_source == "BSE_PRICE":                        # 2.9.51: give a close-only history its day ranges
+        try:
+            frame, _ = overlay_eod(frame, sec.get("nseSymbol"), sec.get("bseCode"), load_eod())
+        except Exception:
+            pass
     metrics = price_metrics(frame, price_boundary, window_start)
     drop_stale_pre_result(store, event, metrics)
     reaction_traded = released and session_closed(reaction_date)
@@ -7403,6 +7411,310 @@ def _raw_folders_for(event: dict[str, Any], base: Path) -> list[Path]:
     return [f for pre in prefixes for f in base.glob(f"{pre}_*") if f.is_dir()]
 
 
+# ---------------------------------------------------------------------------
+# 2.9.51 Daily end-of-day files (owner-approved, 13 Nov 2026)
+#
+# Each run refreshed the full price history of only ~46 stocks, so on 12 Nov
+# plus.price.last_session was current for 564 of ~1,435 liquid stocks (HDFCBANK
+# 5 Nov, INFY / TCS 26 Oct): EMAs, stage, strong hands and plan signals for the
+# rest were computed on old closes. NSE and BSE each publish ONE file a day
+# with every stock's open / high / low / close / volume. Those files are kept
+# for the last sessions (master/eod/) and laid over every stored history, which
+# also gives BSE's close-only histories a real day range.
+# ---------------------------------------------------------------------------
+EOD_DIR = MASTER_DIR / "eod"
+EOD_SESSIONS = int(os.getenv("EOD_SESSIONS", "30"))        # sessions kept and backfilled
+EOD_FETCH_MAX = int(os.getenv("EOD_FETCH_MAX", "70"))      # files fetched in one run
+EOD_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+          "Chrome/126.0 Safari/537.36")
+_NSE_SERIES_ORDER = {"EQ": 0, "BE": 1, "BZ": 2, "SM": 3, "ST": 4}
+_EOD_CACHE: dict[str, Any] = {}
+
+
+def _eod_read(path: Path) -> dict[str, Any] | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def parse_nse_bhav(text: str) -> dict[str, list[float | None]]:
+    """sec_bhavdata_full_DDMMYYYY.csv -> {SYMBOL: [open, high, low, close, prevClose, volume]}.
+    One row a stock: EQ before BE / BZ / SM / ST."""
+    lines = [ln for ln in (text or "").splitlines() if ln.strip()]
+    if not lines:
+        return {}
+    head = [h.strip().upper() for h in lines[0].split(",")]
+    need = ("SYMBOL", "SERIES", "PREV_CLOSE", "OPEN_PRICE", "HIGH_PRICE", "LOW_PRICE", "CLOSE_PRICE", "TTL_TRD_QNTY")
+    if any(k not in head for k in need):
+        return {}
+    ix = {k: head.index(k) for k in need}
+    out: dict[str, list[float | None]] = {}
+    rank: dict[str, int] = {}
+    for ln in lines[1:]:
+        c = [x.strip() for x in ln.split(",")]
+        if len(c) < len(head):
+            continue
+        series = c[ix["SERIES"]].upper()
+        if series not in _NSE_SERIES_ORDER:
+            continue
+        sym = normalize_symbol(c[ix["SYMBOL"]])
+        close = safe_num(c[ix["CLOSE_PRICE"]])
+        if not sym or close is None or close <= 0:
+            continue
+        if sym in out and rank[sym] <= _NSE_SERIES_ORDER[series]:
+            continue
+        rank[sym] = _NSE_SERIES_ORDER[series]
+        out[sym] = [safe_num(c[ix["OPEN_PRICE"]]), safe_num(c[ix["HIGH_PRICE"]]), safe_num(c[ix["LOW_PRICE"]]), close,
+                    safe_num(c[ix["PREV_CLOSE"]]), safe_num(c[ix["TTL_TRD_QNTY"]])]
+    return out
+
+
+def parse_bse_bhav(text: str) -> dict[str, list[float | None]]:
+    """BhavCopy_BSE_CM_0_0_0_YYYYMMDD_F_0000.CSV -> {scrip code: [open, high, low, close, prevClose, volume]}."""
+    lines = [ln for ln in (text or "").splitlines() if ln.strip()]
+    if not lines:
+        return {}
+    head = [h.strip().rstrip(".") for h in lines[0].split(",")]
+    need = ("FinInstrmTp", "FinInstrmId", "OpnPric", "HghPric", "LwPric", "ClsPric", "PrvsClsgPric", "TtlTradgVol")
+    if any(k not in head for k in need):
+        return {}
+    ix = {k: head.index(k) for k in need}
+    out: dict[str, list[float | None]] = {}
+    for ln in lines[1:]:
+        c = [x.strip() for x in ln.split(",")]
+        if len(c) <= max(ix.values()) or c[ix["FinInstrmTp"]] != "STK":
+            continue
+        code, close = c[ix["FinInstrmId"]], safe_num(c[ix["ClsPric"]])
+        if not code or close is None or close <= 0:
+            continue
+        out[code] = [safe_num(c[ix["OpnPric"]]), safe_num(c[ix["HghPric"]]), safe_num(c[ix["LwPric"]]), close,
+                     safe_num(c[ix["PrvsClsgPric"]]), safe_num(c[ix["TtlTradgVol"]])]
+    return out
+
+
+def eod_wanted_sessions(now: datetime, holidays: set[date], n: int = EOD_SESSIONS) -> list[date]:
+    """The last n trading days whose file can exist: weekdays that are not
+    holidays; today only from 18:00 IST (the files appear in the evening)."""
+    out: list[date] = []
+    d = now.date()
+    if (now.hour, now.minute) < (18, 0):
+        d -= timedelta(days=1)
+    while len(out) < n:
+        if d.weekday() < 5 and d not in holidays:
+            out.append(d)
+        d -= timedelta(days=1)
+    return sorted(out)
+
+
+def _eod_get(url: str) -> str:
+    resp = requests.get(url, headers={"User-Agent": EOD_UA, "Accept": "*/*", "Accept-Language": "en-US,en;q=0.9",
+                                      "Referer": "https://www.nseindia.com/"}, timeout=40)
+    resp.raise_for_status()
+    return resp.content.decode("utf-8", "replace")
+
+
+def refresh_eod(now: datetime | None = None) -> dict[str, int]:
+    """Fetch the missing end-of-day files. A day is stored once NSE's file has
+    parsed (1,000+ stocks); BSE's is added when it arrives and retried 4 times."""
+    now = now or now_ist()
+    EOD_DIR.mkdir(parents=True, exist_ok=True)
+    wanted = eod_wanted_sessions(now, load_holidays())
+    stats = {"fetched": 0, "failed": 0, "stored": 0}
+    budget = EOD_FETCH_MAX
+    for d in reversed(wanted):                       # newest first
+        path = EOD_DIR / f"{d.isoformat()}.json"
+        day = _eod_read(path) if path.exists() else None
+        if day is None:
+            day = {"date": d.isoformat(), "nse": {}, "bse": {}, "bseTries": 0}
+        changed = False
+        if not day.get("nse") and budget > 0:
+            budget -= 1
+            try:
+                rows = parse_nse_bhav(_eod_get(f"https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{d:%d%m%Y}.csv"))
+                if len(rows) >= 1000:
+                    day["nse"], changed = rows, True
+                    stats["fetched"] += 1
+                else:
+                    stats["failed"] += 1
+            except Exception as exc:
+                stats["failed"] += 1
+                print(f"EOD NSE {d}: {type(exc).__name__}: {str(exc)[:100]}")
+        if day.get("nse") and not day.get("bse") and int(day.get("bseTries") or 0) < 4 and budget > 0:
+            budget -= 1
+            day["bseTries"] = int(day.get("bseTries") or 0) + 1
+            changed = True
+            try:
+                rows = parse_bse_bhav(_eod_get(f"https://www.bseindia.com/download/BhavCopy/Equity/BhavCopy_BSE_CM_0_0_0_{d:%Y%m%d}_F_0000.CSV"))
+                if len(rows) >= 1000:
+                    day["bse"] = rows
+                    stats["fetched"] += 1
+            except Exception as exc:
+                print(f"EOD BSE {d}: {type(exc).__name__}: {str(exc)[:100]}")
+        if changed and day.get("nse"):
+            path.write_text(json.dumps(day, separators=(",", ":")) + "\n", encoding="utf-8")
+        time.sleep(0.25 if changed else 0)
+    keep = {f"{d.isoformat()}.json" for d in wanted}
+    for f in EOD_DIR.glob("*.json"):
+        if f.name not in keep:
+            f.unlink()
+    stats["stored"] = len(list(EOD_DIR.glob("*.json")))
+    _EOD_CACHE.clear()
+    return stats
+
+
+def load_eod(root: Path | None = None) -> list[dict[str, Any]]:
+    """Stored days, oldest first, cut to the newest unbroken run of sessions (a
+    missing session inside the run would put a hole in every history)."""
+    root = root or EOD_DIR
+    key = str(root)
+    if key in _EOD_CACHE:
+        return _EOD_CACHE[key]
+    days = []
+    for f in sorted(root.glob("*.json")) if root.exists() else []:
+        day = _eod_read(f)
+        d = parse_date((day or {}).get("date"))
+        if d and (day.get("nse") or day.get("bse")):
+            days.append({"date": d, "nse": day.get("nse") or {}, "bse": day.get("bse") or {}})
+    holidays = load_holidays()
+    start = 0
+    for i in range(1, len(days)):
+        if sessions_between(days[i - 1]["date"], days[i]["date"], holidays):
+            start = i
+    _EOD_CACHE[key] = days[start:]
+    return _EOD_CACHE[key]
+
+
+def sessions_between(a: date, b: date, holidays: set[date]) -> int:
+    """Trading days strictly between two dates (weekdays that are not holidays)."""
+    n, d = 0, a + timedelta(days=1)
+    while d < b:
+        if d.weekday() < 5 and d not in holidays:
+            n += 1
+        d += timedelta(days=1)
+    return n
+
+
+def overlay_eod(frame: Any, nse_symbol: str | None, bse_code: str | None, days: list[dict[str, Any]],
+                holidays: set[date] | None = None) -> tuple[Any, dict[str, Any]]:
+    """Lay the stored end-of-day rows over one stock's history.
+    - A stored date that is already in the frame without a day range (BSE's
+      close-only history) gets its open / high / low when the closes agree
+      within 1%.
+    - Later dates are appended, provided no trading day is missing between the
+      frame's last date and the first stored day, and the file's previous close
+      agrees with the frame's last close within 2% (otherwise a split or bonus
+      happened, or it is another security: the normal refresh handles it).
+    Returns (frame, {"appended", "filled", "through", "ohlc": dates with a real range})."""
+    info: dict[str, Any] = {"appended": 0, "filled": 0, "through": None, "ohlc": set()}
+    if pd is None or frame is None or getattr(frame, "empty", True) or not days:
+        return frame, info
+    sym, code = normalize_symbol(nse_symbol) if nse_symbol else None, str(bse_code or "").strip() or None
+
+    def row_for(day: dict[str, Any]) -> list[float | None] | None:
+        return (day["nse"].get(sym) if sym else None) or (day["bse"].get(code) if code else None)
+
+    f = frame.sort_values("Date").reset_index(drop=True).copy()
+    for col in ("Open", "High", "Low", "Volume"):
+        f[col] = pd.to_numeric(f[col], errors="coerce") if col in f else float("nan")
+    by_date = {ts.date(): i for i, ts in enumerate(f["Date"])}
+    last_date = f["Date"].iloc[-1].date()
+    holidays = holidays if holidays is not None else load_holidays()
+    for day in days:
+        r = row_for(day)
+        i = by_date.get(day["date"])
+        if r is None or i is None:
+            continue
+        close = safe_num(f.at[i, "Close"])
+        if not close or abs(r[3] / close - 1) > 0.01:
+            continue
+        if pd.isna(f.at[i, "High"]) or pd.isna(f.at[i, "Low"]):
+            if r[1] is not None and r[2] is not None:
+                f.at[i, "Open"] = r[0] if r[0] is not None else close
+                f.at[i, "High"], f.at[i, "Low"] = max(r[1], close), min(r[2], close)
+                if pd.isna(f.at[i, "Volume"]) and r[5] is not None:
+                    f.at[i, "Volume"] = r[5]
+                info["filled"] += 1
+                info["ohlc"].add(day["date"])
+        else:
+            info["ohlc"].add(day["date"])
+    later = [(day["date"], row_for(day)) for day in days if day["date"] > last_date]
+    later = [(d, r) for d, r in later if r is not None]
+    contiguous = bool(days) and sessions_between(last_date, days[0]["date"], holidays) == 0 if days[0]["date"] > last_date else True
+    if later and contiguous:
+        last_close = safe_num(f["Close"].iloc[-1])
+        prev = later[0][1][4]
+        if last_close and prev and abs(prev / last_close - 1) <= 0.02:
+            add = pd.DataFrame([{"Date": pd.Timestamp(d), "Open": r[0], "High": r[1], "Low": r[2], "Close": r[3], "Volume": r[5]}
+                                for d, r in later])
+            attrs = dict(getattr(frame, "attrs", {}) or {})
+            f = pd.concat([f, add], ignore_index=True)
+            f = pead_plus.adjust_corporate_actions(f)          # a split inside the appended days
+            new_actions = list((getattr(f, "attrs", {}) or {}).get("corporateActions") or [])
+            f.attrs.update(attrs)
+            if new_actions:
+                f.attrs["corporateActions"] = list(attrs.get("corporateActions") or []) + new_actions
+            info["appended"] = len(later)
+            info["ohlc"].update(d for d, r in later if r[1] is not None and r[2] is not None)
+    if not info["appended"]:
+        f.attrs.update(dict(getattr(frame, "attrs", {}) or {}))
+    info["through"] = f["Date"].iloc[-1].date()
+    return f, info
+
+
+EOD_REPLAY_SECONDS = int(os.getenv("EOD_REPLAY_SECONDS", "300"))   # a full pass is ~9 minutes: spread over runs
+
+
+def eod_replay_order(events: list[dict[str, Any]], held: set[str], turnover) -> list[dict[str, Any]]:
+    """Who is brought up to date first when the time budget cannot cover all:
+    open trades, then declared results by turnover (most traded first), then the rest."""
+    def key(e: dict[str, Any]):
+        sec = e.get("security") or {}
+        sym = normalize_symbol(sec.get("nseSymbol") or sec.get("symbol"))
+        released = boolish(((e.get("fields") or {}).get("results_released") or {}).get("value")) is True
+        return (0 if sym in held else 1 if released else 2, -(safe_num(turnover(e)) or 0))
+    return sorted(events, key=key)
+
+
+def replay_eod(store: "EventStore", *, budget_seconds: float | None = None) -> dict[str, int]:
+    """Rebuild the analytics of every stock whose stored history ends before the
+    newest end-of-day file, or whose result-day range is still close-only. Each
+    stock is tried once per file date; what does not fit the time budget waits
+    for the next run."""
+    days = load_eod()
+    out = {"rebuilt": 0, "waiting": 0}
+    if not days:
+        return out
+    latest = days[-1]["date"].isoformat()
+    todo = []
+    for event in store.all():
+        if not dashboard_activity(event):
+            continue
+        plus = event.get("plus") or {}
+        if plus.get("eodTried") == latest:
+            continue
+        last = str((plus.get("price") or {}).get("last_session") or "")[:10]
+        if last >= latest and not close_only_range(event):
+            continue
+        todo.append(event)
+    try:
+        held = {normalize_symbol(x.get("symbol")) for x in (json.loads((MASTER_DIR / "positions.json").read_text(encoding="utf-8")).get("positions") or [])
+                if str(x.get("status") or "OPEN").upper() != "CLOSED"}
+    except Exception:
+        held = set()
+    budget = EOD_REPLAY_SECONDS if budget_seconds is None else budget_seconds
+    started = time.time()
+    for n, event in enumerate(eod_replay_order(todo, held, lambda e: store.value(e, "avg_turnover_20d_cr"))):
+        if time.time() - started > budget:
+            out["waiting"] = len(todo) - n
+            break
+        ok = rebuild_plus_from_raw(store, event)
+        event.setdefault("plus", {})["eodTried"] = latest
+        store.save(event)
+        out["rebuilt"] += 1 if ok else 0
+    return out
+
+
 def _payload_symbol(payload: Any) -> str | None:
     rows = payload if isinstance(payload, list) else (payload.get("data") if isinstance(payload, dict) else None)
     if isinstance(rows, list) and rows and isinstance(rows[0], dict) and rows[0].get("chSymbol"):
@@ -7452,6 +7764,12 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
             frame, source, best_key = fr, f"{kind}_PRICE", key
     if frame is None or getattr(frame, "empty", True):
         return False
+    sec_ = event.get("security") or {}
+    try:                                                  # 2.9.51: the daily end-of-day files
+        frame, eod_info = overlay_eod(frame, sec_.get("nseSymbol"), sec_.get("bseCode"), load_eod())
+    except Exception as exc:
+        eod_info = {"appended": 0, "filled": 0, "through": None, "ohlc": set()}
+        print(f"EOD overlay {sec_.get('symbol')}: {type(exc).__name__}: {exc}")
     released = boolish(store.value(event, "results_released")) is True
     reaction = parse_date(store.value(event, "reaction_session"))
     result_date = parse_date(store.value(event, "result_date"))
@@ -7465,7 +7783,8 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
         return False
     event["plus"] = {"price": {k: v for k, v in x.items() if k != "chart"}, "chart": x.get("chart"),
                      "priceSource": source, "computedAt": iso_now(), "replayedFromRaw": True,
-                     "plusVersion": PLUS_VERSION, "corporateActions": frame.attrs.get("corporateActions")}
+                     "plusVersion": PLUS_VERSION, "corporateActions": frame.attrs.get("corporateActions"),
+                     "eod": {"appended": eod_info["appended"], "filled": eod_info["filled"]} if (eod_info["appended"] or eod_info["filled"]) else None}
     # Pre-result context (run-up, 52-week distance, turnover, last price) from
     # the same split-adjusted frame.
     m_all = price_metrics(frame, reaction or result_date, wstart)
@@ -7475,7 +7794,10 @@ def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Pa
         if m_all.get(field) is not None:
             store.force_field(event, field, m_all[field], source=source, note="replayed from saved price data")
     # OHLC from NSE fixes result-day high/low that were close-only before.
-    if traded and (source == "NSE_PRICE" or any_source):
+    range_from_eod = source != "NSE_PRICE" and reaction in eod_info["ohlc"]      # 2.9.51: a real range for a close-only history
+    if traded and (source == "NSE_PRICE" or any_source or range_from_eod):
+        if range_from_eod:
+            source = "EOD_PRICE"
         m = price_metrics(frame, reaction, wstart)
         m.pop("_preResultStale", None)
         m.pop("_preResultGap", None)
@@ -8548,6 +8870,15 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
             print_integrity_summary(post, integrity_signature(post["revocations"]))
 
     print(f"Market caps repaired from saved quotes: {repair_quote_market_caps(store)}")   # 2.9.16
+    if not skip_network:                                   # 2.9.51 daily end-of-day files
+        try:
+            print("End-of-day files:", refresh_eod())
+        except Exception as exc:
+            print(f"End-of-day files skipped: {type(exc).__name__}: {exc}")
+    try:
+        print(f"Histories brought up to date from end-of-day files: {replay_eod(store)}")
+    except Exception as exc:
+        print(f"End-of-day replay skipped: {type(exc).__name__}: {exc}")
     replayed = replay_plus(store)
     print(f"Analytics replayed from saved price files for {replayed} events")
     print(f"Reactions measured from saved prices: {replay_missing_reactions(store)}")   # 2.9.43

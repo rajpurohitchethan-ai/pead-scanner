@@ -3634,3 +3634,89 @@ class SectorYardstickTests(unittest.TestCase):
         rel = {s["key"]: s for s in secs["Leaders"]["favour"]["signals"]}["relative"]
         self.assertIn("NIFTY 500", rel["note"])
         self.assertEqual(rel["status"], "warn")                # 1M lags the index by 6.3 points, 3M does not
+
+
+class EndOfDayFilesTests(unittest.TestCase):
+    """2.9.51 (13 Nov 2026): stored price histories were days old for most
+    stocks (HDFCBANK 5 Nov, INFY 26 Oct on 12 Nov). The exchanges' daily files
+    are laid over every stored history."""
+
+    NSE = ("SYMBOL, SERIES, DATE1, PREV_CLOSE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, LAST_PRICE, CLOSE_PRICE, AVG_PRICE, TTL_TRD_QNTY, TURNOVER_LACS, NO_OF_TRADES, DELIV_QTY, DELIV_PER\n"
+           "20MICRONS, EQ, 12-Nov-2026, 188.12, 187.60, 194.49, 186.20, 187.00, 186.95, 190.42, 90907, 173.10, 2783, 38434, 42.28\n"
+           "21STCENMGM, BE, 12-Nov-2026, 56.58, 55.45, 58.39, 54.20, 55.00, 55.04, 55.97, 12850, 7.19, 129, -, -\n"
+           "RELIANCE, BE, 12-Nov-2026, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 5, 0.1, 1, -, -\n"
+           "RELIANCE, EQ, 12-Nov-2026, 1335.40, 1335.40, 1342.50, 1330.90, 1339.70, 1339.70, 1336.33, 13807921, 184519.26, 186654, 7358525, 53.29\n"
+           "SOMEBOND, N1, 12-Nov-2026, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 10, 1, 1, -, -\n")
+    BSE = ("TradDt,BizDt,Sgmt,Src,FinInstrmTp,FinInstrmId,ISIN,TckrSymb,SctySrs,XpryDt,FininstrmActlXpryDt,StrkPric,OptnTp,FinInstrmNm,OpnPric,HghPric,LwPric,ClsPric,LastPric,PrvsClsgPric,UndrlygPric,SttlmPric,OpnIntrst,ChngInOpnIntrst,TtlTradgVol,TtlTrfVal,TtlNbOfTxsExctd,SsnId,NewBrdLotQty,Rmks,Rsvd1,Rsvd2,Rsvd3,Rsvd4.\n"
+           "2026-11-12,2026-11-12,CM,BSE,STK,500002,INE117A01022,ABB,A,,,,,ABB INDIA LIMITED,6989.95,7070.00,6875.15,6950.00,6950.00,6955.00,,6923.20,,,14992,104712434.00,2141,F1,1,,,,,.\n"
+           "2026-11-12,2026-11-12,CM,BSE,IDX,1,,SENSEX,,,,,,SENSEX,1,2,1,2,2,1,,,,,0,0,0,F1,1,,,,,.\n")
+
+    def test_parsers(self):
+        n = p.parse_nse_bhav(self.NSE)
+        self.assertEqual(set(n), {"20MICRONS", "21STCENMGM", "RELIANCE"})                 # bond series dropped
+        self.assertEqual(n["RELIANCE"], [1335.4, 1342.5, 1330.9, 1339.7, 1335.4, 13807921.0])   # EQ wins over BE
+        b = p.parse_bse_bhav(self.BSE)
+        self.assertEqual(b, {"500002": [6989.95, 7070.0, 6875.15, 6950.0, 6955.0, 14992.0]})
+        self.assertEqual(p.parse_nse_bhav("<html>blocked</html>"), {})
+
+    def _frame(self, closes, start, *, close_only=False):
+        import pandas as pd
+        days = pd.bdate_range(start, periods=len(closes))
+        nan = float("nan")
+        return pd.DataFrame({"Date": days, "Open": [nan if close_only else c for c in closes],
+                             "High": [nan if close_only else c * 1.01 for c in closes],
+                             "Low": [nan if close_only else c * 0.99 for c in closes], "Close": closes,
+                             "Volume": [1000.0] * len(closes)})
+
+    def _days(self, start, rows):
+        import pandas as pd
+        return [{"date": d.date(), "nse": {"ABC": r}, "bse": {}} for d, r in zip(pd.bdate_range(start, periods=len(rows)), rows)]
+
+    def test_appends_later_sessions_when_nothing_is_missing(self):
+        f = self._frame([100.0, 101.0, 102.0], "2026-11-02")                 # ends Wed 4 Nov
+        days = self._days("2026-11-05", [[102, 104, 101, 103, 102.0, 5000], [103, 106, 102, 105, 103.0, 6000]])
+        out, info = p.overlay_eod(f, "ABC", None, days, set())
+        self.assertEqual((info["appended"], len(out)), (2, 5))
+        self.assertEqual(out["Close"].iloc[-1], 105)
+        self.assertEqual(out["Low"].iloc[-2], 101)
+        self.assertEqual(info["through"], date(2026, 11, 6))
+
+    def test_no_append_across_a_missing_session_or_a_price_break(self):
+        f = self._frame([100.0, 101.0, 102.0], "2026-11-02")
+        gap = self._days("2026-11-09", [[102, 104, 101, 103, 102.0, 5000]])  # 5 and 6 Nov are not stored
+        out, info = p.overlay_eod(f, "ABC", None, gap, set())
+        self.assertEqual((info["appended"], len(out)), (0, 3))
+        split = self._days("2026-11-05", [[51, 52, 50, 51.5, 51.0, 9000]])   # file says the previous close was 51, not 102
+        out, info = p.overlay_eod(f, "ABC", None, split, set())
+        self.assertEqual(info["appended"], 0)
+        hol = self._days("2026-11-06", [[102, 104, 101, 103, 102.0, 5000]])
+        out, info = p.overlay_eod(f, "ABC", None, hol, {date(2026, 11, 5)})  # 5 Nov was a holiday: nothing missing
+        self.assertEqual(info["appended"], 1)
+
+    def test_close_only_history_gets_its_day_range(self):
+        f = self._frame([100.0, 110.0, 111.0], "2026-11-02", close_only=True)
+        days = self._days("2026-11-03", [[101, 112, 100.5, 110.2, 100.0, 7000]])      # same day, closes agree within 1%
+        out, info = p.overlay_eod(f, "ABC", None, days, set())
+        self.assertEqual(info["filled"], 1)
+        self.assertEqual((out["High"].iloc[1], out["Low"].iloc[1], out["Close"].iloc[1]), (112, 100.5, 110.0))
+        self.assertIn(date(2026, 11, 3), info["ohlc"])
+        other = self._days("2026-11-03", [[50, 56, 50, 55, 50.0, 7000]])              # another security's prices
+        out, info = p.overlay_eod(f, "ABC", None, other, set())
+        self.assertEqual(info["filled"], 0)
+
+    def test_wanted_sessions_skip_weekends_holidays_and_today_before_evening(self):
+        ist = p.IST if hasattr(p, "IST") else None
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("Asia/Kolkata")
+        morning = p.eod_wanted_sessions(datetime(2026, 11, 13, 7, 0, tzinfo=tz), {date(2026, 11, 10)}, 4)
+        self.assertEqual(morning, [date(2026, 11, 6), date(2026, 11, 9), date(2026, 11, 11), date(2026, 11, 12)])
+        evening = p.eod_wanted_sessions(datetime(2026, 11, 13, 18, 30, tzinfo=tz), {date(2026, 11, 10)}, 2)
+        self.assertEqual(evening, [date(2026, 11, 12), date(2026, 11, 13)])
+
+    def test_replay_order_open_trades_then_declared_by_turnover(self):
+        def ev(sym, released, turnover):
+            return {"security": {"symbol": sym, "nseSymbol": sym}, "fields": {"results_released": {"value": released}}, "t": turnover}
+        events = [ev("SMALL", True, 2.0), ev("UPCOMING", False, 900.0), ev("BIG", True, 500.0), ev("HELD", False, 1.0)]
+        order = [e["security"]["symbol"] for e in p.eod_replay_order(events, {"HELD"}, lambda e: e["t"])]
+        self.assertEqual(order, ["HELD", "BIG", "SMALL", "UPCOMING"])
