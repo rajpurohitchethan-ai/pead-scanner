@@ -3720,3 +3720,22 @@ class EndOfDayFilesTests(unittest.TestCase):
         events = [ev("SMALL", True, 2.0), ev("UPCOMING", False, 900.0), ev("BIG", True, 500.0), ev("HELD", False, 1.0)]
         order = [e["security"]["symbol"] for e in p.eod_replay_order(events, {"HELD"}, lambda e: e["t"])]
         self.assertEqual(order, ["HELD", "BIG", "SMALL", "UPCOMING"])
+
+
+class StaleTradeLogTests(unittest.TestCase):
+    """2.9.52: PRINCEPIPE kept "entry triggered, stop 294.82" after the daily
+    files showed the real result-day low was 274.55."""
+
+    def test_entry_logged_from_another_range_is_dropped(self):
+        import pead_plus as pp
+        log = {"full": {"date": "2026-11-06", "entry": 297.8, "sl": 294.82, "signal": "ENTRY_EARLY"}}
+        self.assertIsNone(pp.drop_stale_trade_log(log, 274.55))
+
+    def test_entry_on_the_real_range_is_kept(self):
+        import pead_plus as pp
+        log = {"starter": {"date": "2026-10-16", "entry": 879.95, "sl": 838.03, "signal": "ENTRY_EARLY"},
+               "full": {"date": "2026-10-27", "entry": 882.4, "sl": 838.04, "signal": "ENTRY_PULLBACK"}}
+        self.assertEqual(pp.drop_stale_trade_log(log, 846.5), log)
+        self.assertEqual(pp.drop_stale_trade_log(log, None), log)          # no range known: nothing to judge by
+        mixed = {**log, "full": {"date": "2026-10-27", "entry": 900.0, "sl": 891.0}}
+        self.assertEqual(list(pp.drop_stale_trade_log(mixed, 846.5)), ["starter"])

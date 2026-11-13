@@ -85,7 +85,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.51"
+ENGINE_VERSION = "2.9.52"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -6968,6 +6968,8 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
         # traded Apr-May 2026) can never show a reaction; say so plainly.
         plan = {"signal": "NO_ENTRY", "stage": None, "why": f"No trades since {last_sess.strftime('%d %b %Y')}; "
                 "the stock is not trading, so there is no reaction to measure.", "notTrading": True}
+    if not close_only_range(event):                                 # 2.9.52: entries logged from a wrong range
+        event["tradeLog"] = pead_plus.drop_stale_trade_log(event.get("tradeLog"), result_low)
     event["tradeLog"] = pead_plus.update_trade_log(event.get("tradeLog"), plan, last_price, now_ist().date())
     for t_ in (event["tradeLog"] or {}).values():                    # 2.9.45: the hands label at entry, for a later scorecard
         if isinstance(t_, dict) and t_.get("date") == now_ist().date().isoformat():

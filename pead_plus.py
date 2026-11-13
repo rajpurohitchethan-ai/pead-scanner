@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.51"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.52"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -938,6 +938,23 @@ def result_red_flags(*, rev_yoy: Any, pat_yoy: Any, pat_trend: Any, margin_chang
     if financial_status == "FLAGGED":
         flags.append("figures flagged for review")
     return flags
+
+
+def drop_stale_trade_log(log: dict[str, Any] | None, result_low: Any) -> dict[str, Any] | None:
+    """2.9.52 (13 Nov 2026): an entry logged while the result-day range was
+    wrong (BSE close-only prices) keeps its fake stop for ever through
+    hold_triggered_entry (PRINCEPIPE: stop 294.82 logged, real result-day low
+    274.55; 26 such plans once the daily files supplied the real range). The
+    stop is always 1% under the result-day low, so a logged stop more than
+    0.5% away from that was built on another range: the entry is dropped and
+    the plan is worked out afresh."""
+    low = _num(result_low)
+    if not log or low is None or low <= 0:
+        return log
+    want = low * (1 - SL_BUFFER_PCT / 100)
+    out = {k: t for k, t in log.items()
+           if not (isinstance(t, dict) and _num(t.get("sl")) is not None and abs(_num(t["sl"]) / want - 1) > 0.005)}
+    return out or None
 
 
 def update_trade_log(log: dict[str, Any] | None, plan: dict[str, Any], last_price: Any, today: date) -> dict[str, Any]:

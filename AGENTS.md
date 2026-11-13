@@ -430,3 +430,7 @@ Engine 2.9.51 (owner-approved, 13 Nov 2026): daily end-of-day files
 - A result day whose range came from a file is written with source EOD_PRICE (rank 96 / 106 for price fields, above BSE_PRICE), which is not in CLOSE_ONLY_SOURCES: "levels pending" from 2.9.44 clears for those stocks.
 - replay_eod rebuilds every stock whose history ends before the newest file (or whose range is close-only), once per file date (plus.eodTried), inside EOD_REPLAY_SECONDS = 300 a run: open trades first, then declared results by turnover, then the rest (a full pass is ~9 minutes, so it takes two or three runs each evening).
 - Tests: EndOfDayFilesTests. Not used yet from the files: delivery %.
+
+Engine 2.9.52 (found checking the first 2.9.51 run, 13 Nov 2026)
+- 2.9.51's first live run: 30 days of NSE + BSE files stored (13 MB), liquid stocks with history to 12 Nov went from 564 to 1,421, BHARTIARTL got real levels.
+- But 26 "entry triggered" plans kept a stop logged while the result-day range was wrong (PRINCEPIPE stop 294.82 vs the real low 274.55; AUROPHARMA 1,770.42 vs 1,696.00; XPROINDIA, GRWRHITECH ...): hold_triggered_entry replays the logged entry and stop for ever. pead_plus.drop_stale_trade_log drops a logged entry whose stop is more than 0.5% away from 1% under the current result-day low (called in build_plus before update_trade_log, never while the range is close-only); the plan is then computed afresh. Tests: StaleTradeLogTests.
