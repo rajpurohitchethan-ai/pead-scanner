@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:SAINIK|2026-09-30",
   "createdAt": "2026-11-03T22:23:12Z",
-  "updatedAt": "2026-11-13T01:46:15Z",
+  "updatedAt": "2026-11-13T02:24:08Z",
   "security": {
     "symbol": "SAINIK",
     "bseSymbol": "SAINIK",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,16 +30,21 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T22:23:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T01:56:00Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T10:34:31Z",
+      "fetchedAt": "2026-11-13T01:56:00Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-012fe4ba19d2e6cb.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
       "note": null
     },
     "reaction_session": {
@@ -158,6 +163,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_SAINIK_2026-09-30/scrip_results-7df9b178b73c1c57.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:56:00Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T13:35:58.380000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:56:00Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:56:00Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "note": null
     }
   },
   "fetch": {
@@ -192,23 +224,29 @@
   },
   "derived": {
     "score": 8,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -217,13 +255,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -265,9 +303,9 @@
       "sectorKey": "Construction Materials",
       "sector": {
         "sector": "Construction Materials",
-        "stocks": 59,
-        "momentum63dMedian": -10.09,
-        "relativeToMarket": -4.55,
+        "stocks": 60,
+        "momentum63dMedian": -6.88,
+        "relativeToMarket": -2.2,
         "declared": 23,
         "strongResults": 6,
         "avgReaction": -0.3,
@@ -670,5 +708,19 @@
     "replayedFromRaw": true,
     "plusVersion": "2.9.48",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T13:35:58.380000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Submission of unaudited financial results of the Company for the quarter /half year ended 30.09.2026 Sainik Finance & Industries Ltd - 530265 - Submission Of Unaudited Financial Results Of The Company For The Quarter / Half Year Ended 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "seenAt": "2026-11-13T02:18:11Z"
+    }
+  ]
 }

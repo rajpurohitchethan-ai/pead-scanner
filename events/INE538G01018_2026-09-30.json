@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE538G01018|2026-09-30",
   "createdAt": "2026-10-29T03:57:54Z",
-  "updatedAt": "2026-11-13T01:46:12Z",
+  "updatedAt": "2026-11-13T02:24:05Z",
   "security": {
     "symbol": "GOTHIPL",
     "bseSymbol": "GOTHIPL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,21 @@
       "state": "SCHEDULED",
       "at": "2026-10-29T03:57:54Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T01:56:01Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T18:21:56Z",
+      "fetchedAt": "2026-11-13T01:56:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-804f91e8479e4049.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
       "note": null
     },
     "reaction_session": {
@@ -159,6 +164,33 @@
       "rank": 105,
       "rawRef": "raw/bse_price/INE538G01018_2026-09-30/price_volume_12m-1d526785efa394b5.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:56:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T13:17:41.730000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:56:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:56:01Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "note": null
     }
   },
   "fetch": {
@@ -200,23 +232,29 @@
   },
   "derived": {
     "score": 4,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS (PARTIAL)",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -225,13 +263,13 @@
       "q1Strength": null,
       "q1Setup": true,
       "bucket": {
-        "code": "WATCH_REPEAD",
-        "label": "Watch: re-PEAD",
-        "why": "Q1 setup faded. Strong Q2 could restart the drift."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -273,11 +311,11 @@
       "sectorKey": "Consumer Durables",
       "sector": {
         "sector": "Consumer Durables",
-        "stocks": 218,
-        "momentum63dMedian": -5.1,
-        "relativeToMarket": 0.44,
-        "declared": 84,
-        "strongResults": 40,
+        "stocks": 219,
+        "momentum63dMedian": -5.11,
+        "relativeToMarket": -0.44,
+        "declared": 86,
+        "strongResults": 41,
         "avgReaction": -0.75,
         "tailwind": "NEUTRAL"
       },
@@ -661,5 +699,19 @@
     "plusVersion": "2.9.48",
     "corporateActions": null
   },
-  "tradeLog": {}
+  "tradeLog": {},
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T13:17:41.730000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "PFA THE DOCUMENT Gothi Plascon India Ltd - 531111 - RESULTS FOR PERIOD ENDED 30/09/2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "seenAt": "2026-11-13T02:17:49Z"
+    }
+  ]
 }

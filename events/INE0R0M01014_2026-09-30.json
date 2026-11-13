@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0R0M01014|2026-09-30",
   "createdAt": "2026-11-06T23:11:47Z",
-  "updatedAt": "2026-11-13T01:46:09Z",
+  "updatedAt": "2026-11-13T02:24:02Z",
   "security": {
     "symbol": "SPML",
     "bseSymbol": "SPML",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,21 @@
       "state": "SCHEDULED",
       "at": "2026-11-06T23:11:47Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T01:55:56Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T18:21:56Z",
+      "fetchedAt": "2026-11-13T01:55:56Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-804f91e8479e4049.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
       "note": null
     },
     "reaction_session": {
@@ -132,6 +137,33 @@
       "rank": 88,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:55:56Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T16:30:42.287000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:55:56Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:55:56Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "note": null
     }
   },
   "fetch": {
@@ -173,23 +205,29 @@
   },
   "derived": {
     "score": 6,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -197,10 +235,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -242,12 +284,12 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 243,
+        "stocks": 245,
         "momentum63dMedian": -0.38,
-        "relativeToMarket": 5.16,
-        "declared": 120,
-        "strongResults": 69,
-        "avgReaction": 0.83,
+        "relativeToMarket": 4.29,
+        "declared": 128,
+        "strongResults": 74,
+        "avgReaction": 0.97,
         "tailwind": "POSITIVE"
       },
       "identity": {
@@ -611,5 +653,19 @@
     "replayedFromRaw": true,
     "plusVersion": "2.9.48",
     "corporateActions": null
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T16:30:42.287000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "We hereby submit the Standalone Unaudited Financial Result for the half year ended on September 30, 2026 Speciality Medicines Ltd - 544738 - Results-Financial Result For The Half Year Ended On September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-01f9776ff5630921.json",
+      "seenAt": "2026-11-13T02:17:25Z"
+    }
+  ]
 }
