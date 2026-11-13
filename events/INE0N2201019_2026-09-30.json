@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0N2201019|2026-09-30",
   "createdAt": "2026-11-09T20:46:28Z",
-  "updatedAt": "2026-11-13T17:59:02Z",
+  "updatedAt": "2026-11-13T23:52:07Z",
   "security": {
     "symbol": "FUSIONCX",
     "nseSymbol": "FUSIONCX",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-10T09:49:34Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T23:38:14Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-13T23:52:07Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
-      "value": "2026-11-13",
+      "value": "2026-11-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-13T17:50:26Z",
+      "fetchedAt": "2026-11-13T23:38:14Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7846c818e0ee39a1.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
       "note": null
     },
     "reaction_session": {
@@ -162,6 +172,33 @@
       "rank": 90,
       "rawRef": "raw/nse/INE0N2201019_2026-09-30/quote-8cce82c6f8de6161.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:14Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-14T00:06:18.923000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:14Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:14Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
     }
   },
   "fetch": {
@@ -210,23 +247,29 @@
   },
   "derived": {
     "score": 13,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "ELEVATED SHORT-TERM",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -234,10 +277,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -279,10 +326,10 @@
       "sectorKey": "Services",
       "sector": {
         "sector": "Services",
-        "stocks": 415,
-        "momentum63dMedian": -4.15,
-        "relativeToMarket": 0.4,
-        "declared": 72,
+        "stocks": 416,
+        "momentum63dMedian": -4.06,
+        "relativeToMarket": 0.5,
+        "declared": 78,
         "strongResults": 28,
         "avgReaction": 0.23,
         "tailwind": "NEUTRAL"
@@ -506,5 +553,19 @@
         "replacedAt": "2026-11-13T13:35:54Z"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-14T00:06:18.923000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Pursuant to Regulation 30 and 33 of SEBI (LODR) Regulations, we wish to inform that the Board of Directors of Fusion CX Limited at it''s meeting held today, i.e., Friday, November 13, 2026\r\n1. .... Fusion CX Ltd - 544995 - Disclosure Under Regulations 30 And 33 Of The Securities And Exchange Board O",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "seenAt": "2026-11-13T23:51:11Z"
+    }
+  ]
 }

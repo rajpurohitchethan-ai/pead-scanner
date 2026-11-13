@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE512R01010|2026-09-30",
   "createdAt": "2026-11-12T00:45:17Z",
-  "updatedAt": "2026-11-13T17:59:05Z",
+  "updatedAt": "2026-11-13T23:52:09Z",
   "security": {
     "symbol": "AARSHYAM",
     "bseSymbol": "AARSHYAM",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-12T00:45:17Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T23:38:33Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-13T23:52:09Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-13",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-13T17:50:26Z",
+      "fetchedAt": "2026-11-13T23:38:33Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7846c818e0ee39a1.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
       "note": null
     },
     "reaction_session": {
@@ -132,6 +142,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE512R01010_2026-09-30/scrip_results-d7f6c7f6c15ba5d4.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:33Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-13T17:03:07.363000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:33Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:33Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
     }
   },
   "fetch": {
@@ -173,23 +210,29 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -197,10 +240,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -242,11 +289,11 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 640,
-        "momentum63dMedian": -3.98,
+        "stocks": 641,
+        "momentum63dMedian": -3.99,
         "relativeToMarket": 0.57,
         "declared": 187,
-        "strongResults": 105,
+        "strongResults": 106,
         "avgReaction": -0.64,
         "tailwind": "NEUTRAL"
       },
@@ -409,5 +456,19 @@
       "filled": 4
     },
     "eodTried": "2026-11-13+2026-11-08"
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-13T17:03:07.363000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Pursuant to the provisions of Regulation 30 of the Securities and Exchange Board of India (Listing \r\nObligations and Disclosure Requirements) Regulations, 2015, this is to inform you that .... Aar Shyam India Investment Company Ltd - 542377 - Unaudited Financial Results (Standalone) For The Quarter ",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "seenAt": "2026-11-13T23:51:31Z"
+    }
+  ]
 }

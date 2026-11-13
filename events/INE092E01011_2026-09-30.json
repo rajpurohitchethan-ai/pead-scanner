@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE092E01011|2026-09-30",
   "createdAt": "2026-11-03T22:23:12Z",
-  "updatedAt": "2026-11-13T17:59:02Z",
+  "updatedAt": "2026-11-13T23:52:07Z",
   "security": {
     "symbol": "KAKTEX",
     "bseSymbol": "KAKTEX",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T22:23:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T23:38:25Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-13T23:52:07Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-13",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-13T17:50:26Z",
+      "fetchedAt": "2026-11-13T23:38:25Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7846c818e0ee39a1.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
       "note": null
     },
     "reaction_session": {
@@ -168,6 +178,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE092E01011_2026-09-30/scrip_results-10e6f8d552109fe7.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:25Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-13T18:32:57.940000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:25Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:25Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
     }
   },
   "fetch": {
@@ -209,23 +246,29 @@
   },
   "derived": {
     "score": 14,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -234,13 +277,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -282,9 +325,9 @@
       "sectorKey": "Textiles",
       "sector": {
         "sector": "Textiles",
-        "stocks": 289,
-        "momentum63dMedian": -2.67,
-        "relativeToMarket": 1.88,
+        "stocks": 292,
+        "momentum63dMedian": -3.0,
+        "relativeToMarket": 1.56,
         "declared": 46,
         "strongResults": 26,
         "avgReaction": -0.18,
@@ -679,6 +722,20 @@
       "timestamp": "2026-11-13T14:55:39Z",
       "price": 8.02,
       "source": "BSE_PRICE"
+    }
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-13T18:32:57.940000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial Results for the quarter ended on 30th September, 2026 Kakatiya Textiles Ltd - 521054 - Submission Of Un-Audited Financial Results For The Second Quarter And Half Year Ended On 30\" September, 2026 As Per The Provisions Of SEBI (LODR) Regulations,\r\n2015.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "seenAt": "2026-11-13T23:51:08Z"
     }
   ]
 }

@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE728J01019|2026-09-30",
   "createdAt": "2026-11-09T09:48:18Z",
-  "updatedAt": "2026-11-13T17:59:06Z",
+  "updatedAt": "2026-11-13T23:52:10Z",
   "security": {
     "symbol": "UNIWSEC",
     "bseSymbol": "UNIWSEC",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-09T09:48:18Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T23:38:24Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-13T23:52:10Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-13",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-13T17:50:26Z",
+      "fetchedAt": "2026-11-13T23:38:24Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7846c818e0ee39a1.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
       "note": null
     },
     "reaction_session": {
@@ -114,6 +124,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE728J01019_2026-09-30/scrip_results-484ed396838b5cb5.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:24Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-13T19:02:59.430000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:24Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:24Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
     }
   },
   "fetch": {
@@ -155,23 +192,29 @@
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -179,7 +222,11 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -216,9 +263,9 @@
       "sectorKey": "Textiles",
       "sector": {
         "sector": "Textiles",
-        "stocks": 289,
-        "momentum63dMedian": -2.67,
-        "relativeToMarket": 1.88,
+        "stocks": 292,
+        "momentum63dMedian": -3.0,
+        "relativeToMarket": 1.56,
         "declared": 46,
         "strongResults": 26,
         "avgReaction": -0.18,
@@ -350,6 +397,20 @@
       "timestamp": "2026-11-13T16:19:52Z",
       "price": 10.05,
       "source": "BSE_PRICE"
+    }
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-13T19:02:59.430000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial Results Uniworth Securities Ltd - 512408 - 1. Unaudited Financial Results Of The Company For The Quarter Ended On September 30, 2026.\r\n2. Limited Review Report For The Quarter Ended On September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "seenAt": "2026-11-13T23:51:38Z"
     }
   ]
 }

@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE135H01029|2026-09-30",
   "createdAt": "2026-11-05T23:43:03Z",
-  "updatedAt": "2026-11-13T17:59:03Z",
+  "updatedAt": "2026-11-13T23:52:08Z",
   "security": {
     "symbol": "TTGIL",
     "bseSymbol": "TTGIL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-05T23:43:03Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T23:38:34Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-13T23:52:08Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-13",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-13T17:50:26Z",
+      "fetchedAt": "2026-11-13T23:38:34Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-7846c818e0ee39a1.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
       "note": null
     },
     "reaction_session": {
@@ -168,6 +178,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE135H01029_2026-09-30/scrip_results-c75e9e52782f2c6b.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:34Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-13T12:33:45.383000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:34Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:34Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
     }
   },
   "fetch": {
@@ -209,23 +246,29 @@
   },
   "derived": {
     "score": 4,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -234,13 +277,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -282,11 +325,11 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 640,
-        "momentum63dMedian": -3.98,
+        "stocks": 641,
+        "momentum63dMedian": -3.99,
         "relativeToMarket": 0.57,
         "declared": 187,
-        "strongResults": 105,
+        "strongResults": 106,
         "avgReaction": -0.64,
         "tailwind": "NEUTRAL"
       },
@@ -687,6 +730,20 @@
       "timestamp": "2026-11-13T16:19:39Z",
       "price": 8.33,
       "source": "BSE_PRICE"
+    }
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-13T12:33:45.383000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "With reference to the captioned matter, kindly find enclosed herewith Unaudited Standalone and Consolidated Financial Results and Limited review report in terms of Regulation 33 of SEBI .... Tomorrow Technologies Global Innovations Ltd - 512018 - Submission Of Unaudited Standalone And Consolidated F",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "seenAt": "2026-11-13T23:51:15Z"
     }
   ]
 }

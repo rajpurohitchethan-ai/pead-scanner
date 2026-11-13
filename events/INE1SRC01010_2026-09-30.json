@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE1SRC01010|2026-09-30",
   "createdAt": "2026-11-04T22:44:08Z",
-  "updatedAt": "2026-11-13T17:59:03Z",
+  "updatedAt": "2026-11-13T23:52:08Z",
   "security": {
     "symbol": "MILLWORKS",
     "bseSymbol": "MILLWORKS",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-11-04T22:44:08Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T23:38:16Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-13T23:52:08Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
-      "value": "2026-11-12",
+      "value": "2026-11-13",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T18:21:56Z",
+      "fetchedAt": "2026-11-13T23:38:16Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-804f91e8479e4049.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
       "note": null
     },
     "reaction_session": {
-      "value": "2026-11-13",
+      "value": "2026-11-16",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-13T17:03:59Z",
+      "fetchedAt": "2026-11-13T23:51:18Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-13T17:03:59Z",
+      "fetchedAt": "2026-11-13T23:51:18Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -114,6 +124,33 @@
       "rank": 105,
       "rawRef": "raw/bse_price/INE1SRC01010_2026-09-30/price_volume_12m-fa9ae1ed4706accc.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:16Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-13T20:56:21.037000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:16Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:16Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
     }
   },
   "fetch": {
@@ -126,7 +163,6 @@
     },
     "PRICE_HISTORY": {
       "lastAttempt": "2026-11-13T17:04:00Z",
-      "lastSuccess": "2026-11-13T17:04:00Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE1SRC01010_2026-09-30/price_volume_12m-fa9ae1ed4706accc.json"
@@ -155,23 +191,29 @@
   },
   "derived": {
     "score": 20,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -179,10 +221,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -224,10 +270,10 @@
       "sectorKey": "Capital Goods",
       "sector": {
         "sector": "Capital Goods",
-        "stocks": 664,
-        "momentum63dMedian": -4.05,
+        "stocks": 666,
+        "momentum63dMedian": -4.06,
         "relativeToMarket": 0.5,
-        "declared": 267,
+        "declared": 277,
         "strongResults": 135,
         "avgReaction": -0.93,
         "tailwind": "NEUTRAL"
@@ -609,5 +655,41 @@
     "computedAt": "2026-11-13T17:04:00Z",
     "plusVersion": "2.9.48",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-13T20:56:21.037000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Un-audited Standalone Financial Results of the company for the half-year ended on 30th September 2026 Millworks Technologies Ltd - 544826 - Un-Audited Standalone Financial Results Of The Company For The Half-Year Ended On 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "seenAt": "2026-11-13T23:51:18Z"
+    }
+  ],
+  "fieldHistory": {
+    "reaction_session": [
+      {
+        "value": "2026-11-13",
+        "source": "DERIVED",
+        "fetchedAt": "2026-11-13T17:03:59Z",
+        "status": "OK",
+        "note": "UNKNOWN_TIME_NEXT_SESSION",
+        "replacedAt": "2026-11-13T23:51:18Z"
+      }
+    ],
+    "filing_session": [
+      {
+        "value": "UNKNOWN_TIME_NEXT_SESSION",
+        "source": "DERIVED",
+        "fetchedAt": "2026-11-13T17:03:59Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-13T23:51:18Z"
+      }
+    ]
   }
 }

@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:INDRENEW|2026-09-30",
   "createdAt": "2026-10-29T03:57:54Z",
-  "updatedAt": "2026-11-13T17:59:07Z",
+  "updatedAt": "2026-11-13T23:52:11Z",
   "security": {
     "symbol": "INDRENEW",
     "bseSymbol": "INDRENEW",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -30,31 +30,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-29T03:57:54Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T23:38:14Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-13T23:52:11Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
-      "value": "2026-11-04",
+      "value": "2026-11-13",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-04T17:29:34Z",
+      "fetchedAt": "2026-11-13T23:38:14Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-786e891a55248bea.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
       "note": null
     },
     "reaction_session": {
-      "value": "2026-11-05",
+      "value": "2026-11-16",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-04T03:32:59Z",
+      "fetchedAt": "2026-11-13T23:51:49Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-04T03:32:59Z",
+      "fetchedAt": "2026-11-13T23:51:49Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -140,6 +150,33 @@
       "rank": 98,
       "rawRef": "raw/bse/NSE_INDRENEW_2026-09-30/scrip_results-d54399f6fb0b200f.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:14Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-13T22:54:14.453000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:14Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T23:38:14Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "note": null
     }
   },
   "fetch": {
@@ -179,24 +216,30 @@
     }
   },
   "derived": {
-    "score": 13,
-    "completenessPct": 66.7,
+    "score": 11,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -205,13 +248,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -255,11 +298,11 @@
         "sector": "Power",
         "stocks": 47,
         "momentum63dMedian": -7.33,
-        "relativeToMarket": -2.79,
-        "declared": 25,
+        "relativeToMarket": -2.78,
+        "declared": 26,
         "strongResults": 15,
         "avgReaction": 1.05,
-        "tailwind": "POSITIVE"
+        "tailwind": "NEUTRAL"
       },
       "identity": {
         "macroSector": "Utilities",
@@ -734,6 +777,40 @@
         "note": null,
         "replacedAt": "2026-11-13T03:32:07Z"
       }
+    ],
+    "reaction_session": [
+      {
+        "value": "2026-11-05",
+        "source": "DERIVED",
+        "fetchedAt": "2026-11-04T03:32:59Z",
+        "status": "OK",
+        "note": "UNKNOWN_TIME_NEXT_SESSION",
+        "replacedAt": "2026-11-13T23:51:49Z"
+      }
+    ],
+    "filing_session": [
+      {
+        "value": "UNKNOWN_TIME_NEXT_SESSION",
+        "source": "DERIVED",
+        "fetchedAt": "2026-11-04T03:32:59Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-13T23:51:49Z"
+      }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-13T22:54:14.453000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Results IND Renewable Energy Ltd - 536709 - Results: Unaudited Financial Results For The Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-dc5458cb66f1a56d.json",
+      "seenAt": "2026-11-13T23:51:49Z"
+    }
+  ]
 }
