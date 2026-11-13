@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE791H01011|2026-09-30",
   "createdAt": "2026-11-06T23:11:47Z",
-  "updatedAt": "2026-11-12T18:40:07Z",
+  "updatedAt": "2026-11-13T01:46:13Z",
   "security": {
     "symbol": "IRONWOOD",
     "bseSymbol": "IRONWOOD",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,36 @@
       "state": "SCHEDULED",
       "at": "2026-11-06T23:11:47Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T01:20:01Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T15:50:14Z",
+      "fetchedAt": "2026-11-13T01:20:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-75e8d120c2bf32f8.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-13",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-12T15:40:09Z",
+      "fetchedAt": "2026-11-13T01:39:48Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-12T15:40:09Z",
+      "fetchedAt": "2026-11-13T01:39:48Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -168,6 +173,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE791H01011_2026-09-30/scrip_results-0fcc09a97c9bbff6.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T21:07:05.070000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": null
     }
   },
   "fetch": {
@@ -179,10 +211,10 @@
       "rawRef": "raw/bse/NSE_IRONWOOD_2026-09-30/lookup-36a7cd91fb5c9442.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-11-12T15:40:11Z",
+      "lastAttempt": "2026-11-13T01:39:48Z",
       "lastSuccess": "2026-11-12T15:40:11Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError; 508918.BO: RuntimeError: empty history",
       "rawRef": "raw/bse_price/INE791H01011_2026-09-30/price_volume_12m-30ad6c2c0439a9c5.json"
     },
     "EXCHANGE_META": {
@@ -200,32 +232,59 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-11-12T15:40:11Z",
+      "lastAttempt": "2026-11-13T01:39:48Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "Yahoo fundamentals budget exhausted for this run",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-11-13T01:39:48Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-11-13T01:39:48Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "Yahoo quarterly budget exhausted for this run",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-11-13T01:39:48Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError",
       "rawRef": null
     }
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -234,13 +293,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -282,9 +341,9 @@
       "sectorKey": "Consumer Services",
       "sector": {
         "sector": "Consumer Services",
-        "stocks": 185,
-        "momentum63dMedian": -7.56,
-        "relativeToMarket": -2.01,
+        "stocks": 188,
+        "momentum63dMedian": -7.04,
+        "relativeToMarket": -1.5,
         "declared": 71,
         "strongResults": 36,
         "avgReaction": -1.16,
@@ -686,5 +745,26 @@
     "replayedFromRaw": true,
     "plusVersion": "2.9.48",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T21:07:05.070000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial Result (standalone and consolidation) of the Company for the quarter and half year ended September 30, 2026 along with the Limited Review Report Ironwood Education Ltd - 508918 - Unaudited Financial Results (Standalone And Consolidated) Of The Company For The Quarter  And Half Ye",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "seenAt": "2026-11-13T01:45:42Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-11-13T01:39:48Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
   }
 }

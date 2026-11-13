@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0DRT01018|2026-09-30",
   "createdAt": "2026-11-05T23:43:02Z",
-  "updatedAt": "2026-11-12T18:40:03Z",
+  "updatedAt": "2026-11-13T01:46:08Z",
   "security": {
     "symbol": "FABINO",
     "bseSymbol": "FABINO",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,36 @@
       "state": "SCHEDULED",
       "at": "2026-11-05T23:43:02Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T01:20:01Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T18:21:56Z",
+      "fetchedAt": "2026-11-13T01:20:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-804f91e8479e4049.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-13",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-12T15:19:09Z",
+      "fetchedAt": "2026-11-13T01:38:11Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-12T15:19:09Z",
+      "fetchedAt": "2026-11-13T01:38:11Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -105,6 +110,33 @@
       "rank": 88,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T18:32:11.700000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": null
     }
   },
   "fetch": {
@@ -116,10 +148,10 @@
       "rawRef": "raw/bse/NSE_FABINO_2026-09-30/lookup-54165d6b83f244a5.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-11-12T15:19:11Z",
+      "lastAttempt": "2026-11-13T01:38:11Z",
       "lastSuccess": "2026-11-12T15:19:11Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError; 543444.BO: RuntimeError: empty history",
       "rawRef": "raw/bse_price/INE0DRT01018_2026-09-30/price_volume_12m-391645029c600130.json"
     },
     "EXCHANGE_META": {
@@ -137,32 +169,59 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-11-12T15:19:11Z",
+      "lastAttempt": "2026-11-13T01:38:11Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "Yahoo fundamentals budget exhausted for this run",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-11-13T01:38:11Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-11-13T01:38:11Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "543444.BO: RuntimeError: quarterly statement empty",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-11-13T01:38:11Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError",
       "rawRef": null
     }
   },
   "derived": {
     "score": 2,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -170,7 +229,11 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -207,9 +270,9 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 242,
-        "momentum63dMedian": -0.51,
-        "relativeToMarket": 5.04,
+        "stocks": 243,
+        "momentum63dMedian": -0.38,
+        "relativeToMarket": 5.16,
         "declared": 120,
         "strongResults": 69,
         "avgReaction": 0.83,
@@ -503,5 +566,26 @@
     "replayedFromRaw": true,
     "plusVersion": "2.9.48",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T18:32:11.700000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Fabino Enterprises Limited has informed the Exchange regarding Unaudited Standalone and Consolidated Financial Results for the Half year Ended 30.09.2026. Fabino Enterprises Ltd - 543444 - Results- Financial Results For Half Year Ended September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "seenAt": "2026-11-13T01:45:04Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-11-13T01:38:11Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
   }
 }

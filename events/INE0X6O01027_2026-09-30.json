@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE0X6O01027|2026-09-30",
   "createdAt": "2026-11-04T22:44:09Z",
-  "updatedAt": "2026-11-12T18:40:03Z",
+  "updatedAt": "2026-11-13T01:46:09Z",
   "security": {
     "symbol": "LESL",
     "bseSymbol": "LESL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,36 @@
       "state": "SCHEDULED",
       "at": "2026-11-04T22:44:09Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T01:20:01Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T18:21:56Z",
+      "fetchedAt": "2026-11-13T01:20:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-804f91e8479e4049.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-13",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-12T15:40:37Z",
+      "fetchedAt": "2026-11-13T01:39:48Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-12T15:40:37Z",
+      "fetchedAt": "2026-11-13T01:39:48Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -114,6 +119,33 @@
       "rank": 105,
       "rawRef": "raw/bse_price/INE0X6O01027_2026-09-30/price_volume_12m-9b4014a15494e117.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T19:50:19.207000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": null
     }
   },
   "fetch": {
@@ -125,10 +157,10 @@
       "rawRef": "raw/bse/NSE_LESL_2026-09-30/lookup-b4e4c633e4aa4e1b.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-11-12T15:40:38Z",
+      "lastAttempt": "2026-11-13T01:39:49Z",
       "lastSuccess": "2026-11-12T15:40:38Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError; 544797.BO: RuntimeError: empty history",
       "rawRef": "raw/bse_price/INE0X6O01027_2026-09-30/price_volume_12m-9b4014a15494e117.json"
     },
     "EXCHANGE_META": {
@@ -146,32 +178,59 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-11-12T15:40:38Z",
+      "lastAttempt": "2026-11-13T01:39:49Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "Yahoo fundamentals budget exhausted for this run",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-11-13T01:39:48Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-11-13T01:39:48Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "Yahoo quarterly budget exhausted for this run",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-11-13T01:39:49Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError",
       "rawRef": null
     }
   },
   "derived": {
     "score": 8,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -179,10 +238,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -224,9 +287,9 @@
       "sectorKey": "Construction",
       "sector": {
         "sector": "Construction",
-        "stocks": 124,
-        "momentum63dMedian": -10.7,
-        "relativeToMarket": -5.15,
+        "stocks": 125,
+        "momentum63dMedian": -11.09,
+        "relativeToMarket": -5.55,
         "declared": 41,
         "strongResults": 21,
         "avgReaction": -0.01,
@@ -601,5 +664,26 @@
     "replayedFromRaw": true,
     "plusVersion": "2.9.48",
     "corporateActions": null
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T19:50:19.207000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "STANDALONE",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited standalone financial results of the Company for the half year ended September 30, 2026 along with the limited review report is enclosed herewith. Leapfrog Engineering Services Ltd - 544797 - Results - Financial Results For Half Year Ended September 30, 2026.",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "seenAt": "2026-11-13T01:45:09Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-11-13T01:39:48Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
   }
 }

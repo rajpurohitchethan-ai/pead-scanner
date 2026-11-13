@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE802A01037|2026-09-30",
   "createdAt": "2026-10-07T04:23:51Z",
-  "updatedAt": "2026-11-12T18:40:07Z",
+  "updatedAt": "2026-11-13T01:46:13Z",
   "security": {
     "symbol": "BAMPSL",
     "bseSymbol": "BAMPSL",
@@ -21,7 +21,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -52,50 +52,49 @@
       "state": "SCHEDULED",
       "at": "2026-10-30T04:08:59Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T01:20:01Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "results_released": {
       "value": true,
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T08:19:47Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": null,
-      "note": "migrated last-known-good v1 release proof",
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-06-30"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": "re-verified from saved exchange evidence"
     },
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T18:21:56Z",
+      "fetchedAt": "2026-11-13T01:20:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-804f91e8479e4049.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
       "note": null
     },
     "filing_timestamp": {
-      "value": "2026-11-09T23:01:45.877000+05:30",
+      "value": "2026-11-12T18:11:08.290000+05:30",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T04:23:51Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-e39d1b0043af9dcb.json",
-      "note": null,
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-06-30"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": null
     },
     "result_source": {
       "value": "BSE_RESULT_ANNOUNCEMENT",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T04:23:51Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
       "rank": 98,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-e39d1b0043af9dcb.json",
-      "note": null,
-      "revokedAt": "2026-10-08T04:31:06Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-06-30"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": null
     },
     "reaction_session": {
       "value": "2026-11-13",
@@ -370,23 +369,29 @@
   },
   "derived": {
     "score": 8,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "EXPENSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -395,13 +400,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -443,9 +448,9 @@
       "sectorKey": "Financial Services",
       "sector": {
         "sector": "Financial Services",
-        "stocks": 563,
-        "momentum63dMedian": -6.09,
-        "relativeToMarket": -0.54,
+        "stocks": 564,
+        "momentum63dMedian": -6.1,
+        "relativeToMarket": -0.56,
         "declared": 175,
         "strongResults": 96,
         "avgReaction": -0.91,
@@ -1033,5 +1038,19 @@
   "tradeLog": {},
   "mergedFrom": [
     "NSE:BAMPSL|2026-09-30"
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T18:11:08.290000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "submission of financial results for the quarter ended 30september 2026 Bampsl Securities Ltd - 531591 - Results For The Quarter Ended 30 September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "seenAt": "2026-11-13T01:45:42Z"
+    }
   ]
 }

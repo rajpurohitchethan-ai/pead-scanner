@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE670C01026|2026-09-30",
   "createdAt": "2026-11-04T09:09:50Z",
-  "updatedAt": "2026-11-12T18:40:06Z",
+  "updatedAt": "2026-11-13T01:46:12Z",
   "security": {
     "symbol": "IIRM",
     "nseSymbol": "IIRM",
@@ -17,7 +17,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -38,31 +38,36 @@
       "state": "SCHEDULED",
       "at": "2026-11-04T22:44:09Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-13T01:20:01Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-12",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-12T18:21:56Z",
+      "fetchedAt": "2026-11-13T01:20:01Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-804f91e8479e4049.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-13",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-12T09:10:39Z",
+      "fetchedAt": "2026-11-13T01:41:32Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-12T09:10:39Z",
+      "fetchedAt": "2026-11-13T01:41:32Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -112,57 +117,132 @@
       "rank": 105,
       "rawRef": "raw/nse_price/INE670C01026_2026-09-30/equity_history-a7490ebae32cabd6.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-12T19:55:21.493000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-13T01:20:01Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "note": null
     }
   },
   "fetch": {
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-11-12T09:10:42Z",
+      "lastAttempt": "2026-11-13T01:41:32Z",
       "lastSuccess": "2026-11-12T09:10:42Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "NSE: SourceSkipped: NSE switched off for this run: 12 failures in a row, 159 s spent failing; last: RemoteProtocolError; BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError; Yahoo price budget exhausted for this run",
       "rawRef": "raw/nse_price/INE670C01026_2026-09-30/equity_history-a7490ebae32cabd6.json"
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-11-12T09:10:42Z",
+      "lastAttempt": "2026-11-13T01:41:32Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "Yahoo fundamentals budget exhausted for this run",
       "rawRef": null
     },
     "NSE_INTEGRATED_FILING": {
-      "lastAttempt": "2026-11-12T15:50:19Z",
+      "lastAttempt": "2026-11-13T01:40:40Z",
       "lastSuccess": "2026-11-12T15:50:19Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "RemoteProtocolError: <StreamReset stream_id:1, error_code:2, remote_reset:True>",
       "rawRef": "raw/nse/INE670C01026_2026-09-30/integrated_filings-4f53cda18c2baa0c.json"
     },
     "NSE_RESULT_LISTING": {
-      "lastAttempt": "2026-11-12T15:50:21Z",
+      "lastAttempt": "2026-11-13T01:41:32Z",
       "lastSuccess": "2026-11-12T15:50:21Z",
-      "status": "OK",
-      "error": null,
+      "status": "FAILED",
+      "error": "RemoteProtocolError: <StreamReset stream_id:1, error_code:2, remote_reset:True>",
       "rawRef": "raw/nse/INE670C01026_2026-09-30/financial_results-4f53cda18c2baa0c.json"
+    },
+    "NSE_RESULTS_COMPARISON": {
+      "lastAttempt": "2026-11-13T01:41:32Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: NSE switched off for this run: 12 failures in a row, 159 s spent failing; last: RemoteProtocolError",
+      "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-11-13T01:41:32Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-11-13T01:41:32Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "Yahoo quarterly budget exhausted for this run",
+      "rawRef": null
+    },
+    "EXCHANGE_META": {
+      "lastAttempt": "2026-11-13T01:41:32Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "NSE quote: SourceSkipped: NSE switched off for this run: 12 failures in a row, 159 s spent failing; last: RemoteProtocolError; BSE meta: SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-11-13T01:41:32Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "SourceSkipped: NSE switched off for this run: 12 failures in a row, 159 s spent failing; last: RemoteProtocolError",
+      "rawRef": null
+    },
+    "PREV_QUARTER": {
+      "lastAttempt": "2026-11-13T01:41:32Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "NSE: result listing unavailable; BSE: SourceSkipped: BSE switched off for this run: 1 failures in a row, 304 s spent failing; last: TimeoutError",
+      "rawRef": null
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "ELEVATED SHORT-TERM",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -170,10 +250,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -380,5 +464,26 @@
     "fetchedAt": "2026-11-12T15:50:21Z",
     "v": 2,
     "rows": []
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-12T19:55:21.493000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Un-Audited Financial Results for the quarter and half year ended September 30, 2026 IIRM Holdings India Ltd - 526530 - Un-Audited Financial Results For The Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-c79eb5f31ecfa7ca.json",
+      "seenAt": "2026-11-13T01:45:37Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-11-13T01:41:32Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
   }
 }
