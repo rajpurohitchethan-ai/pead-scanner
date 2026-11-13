@@ -1,0 +1,27 @@
+name: EOD file probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe
+        run: |
+          BR="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          p() { echo "=== $1"; code=$(curl -sS -L -m 40 -o out.bin -w '%{http_code}' -H "User-Agent: $BR" -H "Accept: */*" -H "Accept-Language: en-US,en;q=0.9" -H "Referer: https://www.nseindia.com/" "$2" || echo ERR); echo "HTTP $code size $(wc -c < out.bin)"; head -c 700 out.bin | tr -c '[:print:]\n' '.'; echo; }
+          p full_1211 "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_12112026.csv"
+          p full_1111 "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_11112026.csv"
+          p full_2610 "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_26102026.csv"
+          p udiff_1211 "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20261112_F_0000.csv.zip"
+          p old_archives "https://archives.nseindia.com/products/content/sec_bhavdata_full_12112026.csv"
+          p bse_1211 "https://www.bseindia.com/download/BhavCopy/Equity/BhavCopy_BSE_CM_0_0_0_20261112_F_0000.CSV"
+          python3 - <<'PY'
+          import urllib.request
+          req=urllib.request.Request("https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_12112026.csv",headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36","Accept":"*/*","Referer":"https://www.nseindia.com/"})
+          try:
+              d=urllib.request.urlopen(req,timeout=40).read(); print("urllib ok",len(d)); t=d.decode("utf-8","replace").splitlines(); print(len(t),"lines"); print(t[0]); print(t[1]); print([l for l in t if l.startswith("RELIANCE,")][:2])
+          except Exception as e: print("urllib",type(e).__name__,e)
+          PY
