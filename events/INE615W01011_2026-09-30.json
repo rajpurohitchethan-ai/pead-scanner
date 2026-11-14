@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE615W01011|2026-09-30",
   "createdAt": "2026-11-03T03:27:00Z",
-  "updatedAt": "2026-11-14T17:41:43Z",
+  "updatedAt": "2026-11-14T21:12:03Z",
   "security": {
     "symbol": "PBGLOBAL",
     "bseSymbol": "PBGLOBAL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T03:27:00Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-14T20:50:50Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-14T21:12:03Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-14T17:27:21Z",
+      "fetchedAt": "2026-11-14T20:50:50Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-400046fb00b68a3d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-346c77a9068679db.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-16",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-14T14:10:55Z",
+      "fetchedAt": "2026-11-14T20:59:05Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "NON_TRADING_DAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "NON_TRADING_DAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-14T14:10:55Z",
+      "fetchedAt": "2026-11-14T20:59:05Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -87,6 +97,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE615W01011_2026-09-30/scrip_results-9085a4ad723ae461.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T20:50:50Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-346c77a9068679db.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-14T17:58:25.767000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T20:50:50Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-346c77a9068679db.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T20:50:50Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-346c77a9068679db.json",
+      "note": null
     }
   },
   "fetch": {
@@ -98,10 +135,10 @@
       "rawRef": "raw/bse/NSE_PBGLOBAL_2026-09-30/lookup-aa1318ff69fa458c.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-11-14T14:10:57Z",
+      "lastAttempt": "2026-11-14T20:59:07Z",
       "lastSuccess": null,
       "status": "FAILED",
-      "error": "506580.BO: RuntimeError: empty history",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
       "rawRef": null
     },
     "EXCHANGE_META": {
@@ -119,32 +156,59 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-11-14T14:10:59Z",
+      "lastAttempt": "2026-11-14T20:59:08Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-11-14T20:59:05Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE615W01011_2026-09-30/results_snapshot-8af4d38552aec5a2.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-11-14T20:59:05Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-11-14T20:59:08Z",
+      "lastSuccess": "2026-11-14T20:59:08Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE615W01011_2026-09-30/scrip_announcements-0c72c24d34d5a67c.json"
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -152,10 +216,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -197,10 +265,10 @@
       "sectorKey": "Chemicals",
       "sector": {
         "sector": "Chemicals",
-        "stocks": 308,
-        "momentum63dMedian": -5.95,
-        "relativeToMarket": -1.29,
-        "declared": 117,
+        "stocks": 311,
+        "momentum63dMedian": -5.93,
+        "relativeToMarket": -1.24,
+        "declared": 118,
         "strongResults": 60,
         "avgReaction": -2.29,
         "tailwind": "NEUTRAL"
@@ -215,7 +283,15 @@
       },
       "price": {},
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-11-15",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/506580/",
@@ -233,5 +309,35 @@
   "tradeLog": {},
   "plus": {
     "eodTried": "2026-11-13+2026-11-08"
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-14T17:58:25.767000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Standalone and Consolidated Financial Results PB Global Ltd - 506580 - Un-Audited Standalone & Consolidated Financial Results For The Quarter And Half Year Ended On 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-346c77a9068679db.json",
+      "seenAt": "2026-11-14T21:11:15Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-11-14T20:59:05Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-11-15",
+    "source": "BSE_ANNOUNCEMENTS"
   }
 }

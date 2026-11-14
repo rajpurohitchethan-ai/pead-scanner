@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE162701010|2026-09-30",
   "createdAt": "2026-11-05T23:43:03Z",
-  "updatedAt": "2026-11-14T17:41:41Z",
+  "updatedAt": "2026-11-14T21:12:00Z",
   "security": {
     "symbol": "ACMERAIL",
     "bseSymbol": "ACMERAIL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,46 @@
       "state": "SCHEDULED",
       "at": "2026-11-05T23:43:03Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-14T20:50:44Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "FINANCIALS_PARSED",
+      "at": "2026-11-14T21:01:12Z",
+      "reason": "verified BSE_RESULTS_SNAPSHOT snapshot applied"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-14T21:01:14Z",
+      "reason": "reaction trading session has not occurred yet"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-14T17:27:21Z",
+      "fetchedAt": "2026-11-14T20:50:44Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-400046fb00b68a3d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-346c77a9068679db.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-16",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-14T15:30:17Z",
+      "fetchedAt": "2026-11-14T21:01:12Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "NON_TRADING_DAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "NON_TRADING_DAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-14T15:30:17Z",
+      "fetchedAt": "2026-11-14T21:01:12Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -64,7 +79,7 @@
     "pre_result_5d_pct": {
       "value": 3.28,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-14T15:30:19Z",
+      "fetchedAt": "2026-11-14T21:01:14Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE162701010_2026-09-30/price_volume_12m-0a5bd481a2c2c1f4.json",
@@ -73,7 +88,7 @@
     "pre_result_10d_pct": {
       "value": -3.05,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-14T15:30:19Z",
+      "fetchedAt": "2026-11-14T21:01:14Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE162701010_2026-09-30/price_volume_12m-0a5bd481a2c2c1f4.json",
@@ -82,7 +97,7 @@
     "pre_result_20d_pct": {
       "value": -29.01,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-14T15:30:19Z",
+      "fetchedAt": "2026-11-14T21:01:14Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE162701010_2026-09-30/price_volume_12m-0a5bd481a2c2c1f4.json",
@@ -91,7 +106,7 @@
     "distance_52w_high_pct": {
       "value": -31.7,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-14T15:30:19Z",
+      "fetchedAt": "2026-11-14T21:01:14Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE162701010_2026-09-30/price_volume_12m-0a5bd481a2c2c1f4.json",
@@ -100,7 +115,7 @@
     "last_price": {
       "value": 163.5,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-14T15:30:19Z",
+      "fetchedAt": "2026-11-14T21:01:14Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE162701010_2026-09-30/price_volume_12m-0a5bd481a2c2c1f4.json",
@@ -109,11 +124,83 @@
     "avg_turnover_20d_cr": {
       "value": 1.5772,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-14T15:30:19Z",
+      "fetchedAt": "2026-11-14T21:01:14Z",
       "status": "OK",
       "rank": 105,
       "rawRef": "raw/bse_price/INE162701010_2026-09-30/price_volume_12m-0a5bd481a2c2c1f4.json",
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T20:50:44Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-346c77a9068679db.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-14T20:16:40.913000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T20:50:44Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-346c77a9068679db.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T20:50:44Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-346c77a9068679db.json",
+      "note": null
+    },
+    "pat_cr": {
+      "value": -9.33,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-11-14T21:01:12Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/INE162701010_2026-09-30/results_snapshot-4051eb223c6532e6.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "opm_pct": {
+      "value": -0.66,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-11-14T21:01:12Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/INE162701010_2026-09-30/results_snapshot-4051eb223c6532e6.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "revenue_cr": {
+      "value": 64.06,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-11-14T21:01:12Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/INE162701010_2026-09-30/results_snapshot-4051eb223c6532e6.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "basis": {
+      "value": "UNKNOWN",
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-11-14T21:01:12Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/INE162701010_2026-09-30/results_snapshot-4051eb223c6532e6.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "eps": {
+      "value": -5.16,
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-11-14T21:01:12Z",
+      "status": "OK",
+      "rank": 96,
+      "rawRef": "raw/bse/INE162701010_2026-09-30/results_snapshot-4051eb223c6532e6.json",
+      "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
     }
   },
   "fetch": {
@@ -125,8 +212,8 @@
       "rawRef": "raw/bse/NSE_ACMERAIL_2026-09-30/lookup-82f93ee7a61eba5d.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-11-14T15:30:19Z",
-      "lastSuccess": "2026-11-14T15:30:19Z",
+      "lastAttempt": "2026-11-14T21:01:14Z",
+      "lastSuccess": "2026-11-14T21:01:14Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE162701010_2026-09-30/price_volume_12m-0a5bd481a2c2c1f4.json"
@@ -151,27 +238,47 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-11-14T21:01:12Z",
+      "lastSuccess": "2026-11-14T21:01:12Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE162701010_2026-09-30/results_snapshot-4051eb223c6532e6.json"
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-11-14T21:01:16Z",
+      "lastSuccess": "2026-11-14T21:01:16Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE162701010_2026-09-30/scrip_announcements-755a67aafc5eafad.json"
     }
   },
   "derived": {
     "score": 15,
-    "completenessPct": 66.7,
+    "completenessPct": 37.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 3,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -179,10 +286,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -210,7 +321,7 @@
         "bookNote": null
       },
       "margins": {
-        "opm": null,
+        "opm": -0.66,
         "opmPrevQ": null,
         "opmPriorYear": null,
         "changeBps": null,
@@ -224,11 +335,11 @@
       "sectorKey": "Services",
       "sector": {
         "sector": "Services",
-        "stocks": 498,
-        "momentum63dMedian": -3.91,
-        "relativeToMarket": 0.75,
-        "declared": 83,
-        "strongResults": 29,
+        "stocks": 499,
+        "momentum63dMedian": -3.96,
+        "relativeToMarket": 0.73,
+        "declared": 86,
+        "strongResults": 30,
         "avgReaction": 0.23,
         "tailwind": "NEUTRAL"
       },
@@ -282,7 +393,16 @@
         }
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "SCHEDULED",
+        "callDate": null,
+        "noticeUrl": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/6e881b65-a315-430f-a577-04ec21db3379.pdf",
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-11-15",
+        "pendingUntil": "2026-11-17",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/544981/",
@@ -429,7 +549,7 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-11-14T15:30:19Z",
+    "computedAt": "2026-11-14T21:01:14Z",
     "plusVersion": "2.9.48",
     "corporateActions": null
   },
@@ -443,6 +563,87 @@
       "timestamp": "2026-11-14T15:30:19Z",
       "price": 163.5,
       "source": "BSE_PRICE"
+    },
+    {
+      "timestamp": "2026-11-14T21:01:14Z",
+      "price": 163.5,
+      "source": "BSE_PRICE"
     }
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-14T20:16:40.913000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Please find attached Unaudited Financial Results (Standalone and Consolidated) for the half year ended 30th September, 2026\r\n Acme India Industries Ltd - 544981 - Unaudited Financial Results (Standalone And Consolidated) For The Half Year Ended 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-346c77a9068679db.json",
+      "seenAt": "2026-11-14T21:10:47Z"
+    }
+  ],
+  "financialSnapshots": {
+    "BSE_RESULTS_SNAPSHOT": {
+      "source": "BSE_RESULTS_SNAPSHOT",
+      "fetchedAt": "2026-11-14T21:01:12Z",
+      "rawRef": "raw/bse/INE162701010_2026-09-30/results_snapshot-4051eb223c6532e6.json",
+      "documentUrl": null,
+      "periodEnd": "2026-09-30",
+      "basis": "UNKNOWN",
+      "revenueDefinition": "BSE_SNAPSHOT_REVENUE",
+      "concepts": {
+        "revenue": "Revenue",
+        "pat": "Net Profit"
+      },
+      "reference": {
+        "fy_revenue_cr": null,
+        "fy_pat_cr": null
+      },
+      "values": {
+        "pat_cr": -9.33,
+        "opm_pct": -0.66,
+        "revenue_cr": 64.06,
+        "eps": -5.16
+      },
+      "validation": {
+        "status": "VERIFIED",
+        "issues": [
+          "BASIS_UNKNOWN",
+          "NO_PRIOR_YEAR_COLUMN"
+        ]
+      },
+      "parserVersion": 2
+    }
+  },
+  "financialIntegrity": {
+    "checkedAt": "2026-11-14T21:10:47Z",
+    "snapshotsConsidered": 1,
+    "status": "VERIFIED",
+    "issues": [
+      "BASIS_UNKNOWN",
+      "NO_PRIOR_YEAR_COLUMN"
+    ],
+    "selectedSource": "BSE_RESULTS_SNAPSHOT",
+    "documentUrl": null,
+    "basis": "UNKNOWN",
+    "revenueDefinition": "BSE_SNAPSHOT_REVENUE",
+    "concepts": {
+      "revenue": "Revenue",
+      "pat": "Net Profit"
+    },
+    "periodEnd": "2026-09-30",
+    "crossCheck": []
+  },
+  "concall": {
+    "status": "SCHEDULED",
+    "callDate": null,
+    "noticeUrl": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/6e881b65-a315-430f-a577-04ec21db3379.pdf",
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-11-15",
+    "pendingUntil": "2026-11-17",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }
