@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE690D01014|2026-09-30",
   "createdAt": "2026-10-07T04:23:38Z",
-  "updatedAt": "2026-11-14T10:02:04Z",
+  "updatedAt": "2026-11-14T10:40:36Z",
   "security": {
     "symbol": "SUBSM",
     "bseSymbol": "SUBSM",
@@ -21,7 +21,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -47,50 +47,54 @@
       "state": "SCHEDULED",
       "at": "2026-11-05T23:43:03Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-14T10:13:12Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-14T10:40:36Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "results_released": {
       "value": true,
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T08:19:47Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-14T10:13:12Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": null,
-      "note": "migrated last-known-good v1 release proof",
-      "revokedAt": "2026-10-08T04:31:07Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-03-31"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a7622807e141f255.json",
+      "note": "re-verified from saved exchange evidence"
     },
     "result_date": {
       "value": "2026-11-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-14T09:36:43Z",
+      "fetchedAt": "2026-11-14T10:13:28Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-400046fb00b68a3d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a7622807e141f255.json",
       "note": null
     },
     "filing_timestamp": {
-      "value": "2026-12-09T18:21:11.630000+05:30",
+      "value": "2026-11-14T15:08:21.343000+05:30",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T04:23:38Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-14T10:13:12Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-e39d1b0043af9dcb.json",
-      "note": null,
-      "revokedAt": "2026-10-08T04:31:07Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-03-31"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a7622807e141f255.json",
+      "note": null
     },
     "result_source": {
       "value": "BSE_RESULT_ANNOUNCEMENT",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-10-07T04:23:38Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-14T10:13:12Z",
+      "status": "OK",
       "rank": 98,
-      "rawRef": "raw/bse/DISCOVERY/result_announcements-e39d1b0043af9dcb.json",
-      "note": null,
-      "revokedAt": "2026-10-08T04:31:07Z",
-      "revokedReason": "release evidence invalid: FUTURE_FILING_DATE; UNVERIFIED_MIGRATED_RELEASE; EVIDENCE_IS_FOR_OTHER_PERIOD:2026-03-31"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a7622807e141f255.json",
+      "note": null
     },
     "pre_result_5d_pct": {
       "value": 12.2,
@@ -199,6 +203,24 @@
       "rank": 98,
       "rawRef": "raw/bse/INE690D01014_2026-09-30/scrip_results-85b21ab860322fc9.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "reaction_session": {
+      "value": "2026-11-16",
+      "source": "DERIVED",
+      "fetchedAt": "2026-11-14T10:39:48Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": "NON_TRADING_DAY"
+    },
+    "filing_session": {
+      "value": "NON_TRADING_DAY",
+      "source": "DERIVED",
+      "fetchedAt": "2026-11-14T10:39:48Z",
+      "status": "OK",
+      "rank": 10,
+      "rawRef": null,
+      "note": null
     }
   },
   "fetch": {
@@ -211,7 +233,6 @@
     },
     "PRICE_HISTORY": {
       "lastAttempt": "2026-10-15T15:00:19Z",
-      "lastSuccess": "2026-10-15T15:00:19Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE690D01014_2026-09-30/price_volume_12m-ee8fe8d390567bef.json"
@@ -233,23 +254,29 @@
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -258,13 +285,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -306,9 +333,9 @@
       "sectorKey": "Textiles",
       "sector": {
         "sector": "Textiles",
-        "stocks": 298,
-        "momentum63dMedian": -3.09,
-        "relativeToMarket": 1.5,
+        "stocks": 300,
+        "momentum63dMedian": -3.21,
+        "relativeToMarket": 1.37,
         "declared": 46,
         "strongResults": 26,
         "avgReaction": -0.18,
@@ -966,5 +993,19 @@
         "replacedAt": "2026-11-13T03:31:15Z"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-14T15:08:21.343000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "With reference to the captioned matter, kindly find enclosed herewith Unaudited Financial Results and Limited Review Report in terms of Regulation 33 of SEBI (Listing Obligations and Disclosure .... Subhash Silk Mills Ltd - 530231 - Submission Of Unaudited Financial Results And Limited Review Report",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-a7622807e141f255.json",
+      "seenAt": "2026-11-14T10:39:48Z"
+    }
+  ]
 }
