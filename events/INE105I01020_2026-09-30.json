@@ -2,20 +2,22 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE105I01020|2026-09-30",
   "createdAt": "2026-11-13T12:44:04Z",
-  "updatedAt": "2026-11-13T23:52:07Z",
+  "updatedAt": "2026-11-14T09:28:04Z",
   "security": {
     "symbol": "SELMC",
     "nseSymbol": "SELMC",
     "name": "SEL Manufacturing Company Limited",
     "sector": "-",
     "isin": "INE105I01020",
-    "yahooTicker": "SELMC.NS"
+    "yahooTicker": "SELMC.NS",
+    "bseSymbol": "SELMC",
+    "bseCode": "532886"
   },
   "period": {
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -26,16 +28,31 @@
       "state": "SCHEDULED",
       "at": "2026-11-13T12:44:04Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "DISCOVERED",
+      "at": "2026-11-14T09:02:35Z",
+      "reason": "event created"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-14T09:02:35Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-14T09:28:04Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-14",
-      "source": "NSE_FINANCIAL_RESULTS",
-      "fetchedAt": "2026-11-13T17:49:48Z",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T09:02:37Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/nse/DISCOVERY/board_meetings-66ec6c3034c98d58.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbb37559c673767e.json",
       "note": null
     },
     "reaction_session": {
@@ -109,6 +126,33 @@
       "rank": 60,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T09:02:35Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbb37559c673767e.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-14T12:52:55.567000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T09:02:35Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbb37559c673767e.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T09:02:35Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbb37559c673767e.json",
+      "note": null
     }
   },
   "fetch": {
@@ -150,23 +194,29 @@
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -174,10 +224,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -283,8 +337,8 @@
         "screener": "https://www.screener.in/company/SELMC/",
         "tradingview": "https://www.tradingview.com/chart/?symbol=NSE%3ASELMC",
         "nse": "https://www.nseindia.com/get-quotes/equity?symbol=SELMC",
-        "bse": null,
-        "tvEmbed": null
+        "bse": "https://www.bseindia.com/stock-share-price/x/SELMC/532886/",
+        "tvEmbed": "BSE:SELMC"
       }
     },
     "valuationInputCount": 0,
@@ -597,5 +651,22 @@
       "price": 21.56,
       "source": "YAHOO_PRICE"
     }
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-14T12:52:55.567000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Outcome of Board Meeting held on 14.11.2026- Approved Financial Results for the Quarter & Half Year ended 30th September, 2026 SEL Manufacturing Company Ltd - 532886 - Financial Results For The Quarter & Half Year Ended 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-bbb37559c673767e.json",
+      "seenAt": "2026-11-14T09:27:00Z"
+    }
+  ],
+  "mergedFrom": [
+    "NSE:SELMC|2026-09-30"
   ]
 }
