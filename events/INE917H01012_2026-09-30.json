@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE917H01012|2026-09-30",
   "createdAt": "2026-11-02T07:32:23Z",
-  "updatedAt": "2026-11-14T10:40:38Z",
+  "updatedAt": "2026-11-14T11:11:07Z",
   "security": {
     "symbol": "SRHHYPOLTD",
     "nseSymbol": "SRHHYPOLTD",
@@ -17,7 +17,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -38,16 +38,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T03:27:00Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-14T10:49:21Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-14T11:11:07Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-14T10:13:28Z",
+      "fetchedAt": "2026-11-14T10:49:35Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-accee50005241d19.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
       "note": null
     },
     "reaction_session": {
@@ -121,6 +131,33 @@
       "rank": 105,
       "rawRef": null,
       "note": "replayed from saved price data"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-14T16:13:27.100000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": null
     }
   },
   "fetch": {
@@ -148,23 +185,29 @@
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -172,10 +215,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -217,9 +264,9 @@
       "sectorKey": "Chemicals",
       "sector": {
         "sector": "Chemicals",
-        "stocks": 294,
-        "momentum63dMedian": -5.63,
-        "relativeToMarket": -1.05,
+        "stocks": 299,
+        "momentum63dMedian": -5.7,
+        "relativeToMarket": -1.11,
         "declared": 116,
         "strongResults": 58,
         "avgReaction": -2.22,
@@ -824,5 +871,19 @@
         "filedAt": "2025-05-30T19:30:46+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-14T16:13:27.100000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Submission of Standalone and consolidated un- audited financial results for Second quarter / half year ending 30th September,2026. Sree Rayalaseema Hi-Strength Hypo Ltd - 532842 - Unaudited Financial Results For Second Quarter / Half Year Ended 30-09-2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "seenAt": "2026-11-14T11:10:38Z"
+    }
+  ]
 }

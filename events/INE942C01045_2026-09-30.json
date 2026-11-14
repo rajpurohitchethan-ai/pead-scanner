@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE942C01045|2026-09-30",
   "createdAt": "2026-10-27T07:15:31Z",
-  "updatedAt": "2026-11-14T10:40:38Z",
+  "updatedAt": "2026-11-14T11:11:08Z",
   "security": {
     "symbol": "GUJTHEM",
     "nseSymbol": "GUJTHEM",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,31 +43,41 @@
       "state": "SCHEDULED",
       "at": "2026-10-28T03:56:20Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-14T10:49:21Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-14T11:11:08Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-14T10:13:27Z",
+      "fetchedAt": "2026-11-14T10:49:35Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-accee50005241d19.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
       "note": null
     },
     "reaction_session": {
-      "value": "2026-11-05",
+      "value": "2026-11-16",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-28T06:24:13Z",
+      "fetchedAt": "2026-11-14T11:10:40Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "NON_TRADING_DAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "NON_TRADING_DAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-10-28T06:24:13Z",
+      "fetchedAt": "2026-11-14T11:10:40Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -234,6 +244,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE942C01045_2026-09-30/integrated_filings-1c969dee0bbf7875.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-14T16:13:27.717000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": null
     }
   },
   "fetch": {
@@ -281,23 +318,29 @@
   },
   "derived": {
     "score": 30,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "EXPENSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -306,13 +349,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -354,9 +397,9 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 280,
-        "momentum63dMedian": 0.05,
-        "relativeToMarket": 4.62,
+        "stocks": 286,
+        "momentum63dMedian": -0.06,
+        "relativeToMarket": 4.54,
         "declared": 139,
         "strongResults": 77,
         "avgReaction": 0.77,
@@ -946,6 +989,40 @@
         "note": "replayed from saved price data",
         "replacedAt": "2026-11-13T13:35:55Z"
       }
+    ],
+    "reaction_session": [
+      {
+        "value": "2026-11-05",
+        "source": "DERIVED",
+        "fetchedAt": "2026-10-28T06:24:13Z",
+        "status": "OK",
+        "note": "UNKNOWN_TIME_NEXT_SESSION",
+        "replacedAt": "2026-11-14T11:10:40Z"
+      }
+    ],
+    "filing_session": [
+      {
+        "value": "UNKNOWN_TIME_NEXT_SESSION",
+        "source": "DERIVED",
+        "fetchedAt": "2026-10-28T06:24:13Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-14T11:10:40Z"
+      }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-14T16:13:27.717000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Kindly refer to the Un-audited Standalone & Consolidated Financial Results for the quarter and half year ended 30.09.2026 Gujarat Themis Biosyn Ltd - 506879 - Results: Financial Results For The Quarter And Half Year Ended 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "seenAt": "2026-11-14T11:10:40Z"
+    }
+  ]
 }

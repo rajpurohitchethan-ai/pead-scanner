@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE201K01015|2026-09-30",
   "createdAt": "2026-11-05T09:29:19Z",
-  "updatedAt": "2026-11-14T10:40:33Z",
+  "updatedAt": "2026-11-14T11:11:04Z",
   "security": {
     "symbol": "EXPLEOSOL",
     "nseSymbol": "EXPLEOSOL",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-05T23:43:03Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-14T10:49:21Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-14T11:11:04Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-14T10:13:27Z",
+      "fetchedAt": "2026-11-14T10:49:35Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-accee50005241d19.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
       "note": null
     },
     "reaction_session": {
@@ -234,6 +244,33 @@
       "rank": 98,
       "rawRef": "raw/nse/INE201K01015_2026-09-30/integrated_filings-89d9c1c9d2a83dee.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-14T15:45:35.690000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": null
     }
   },
   "fetch": {
@@ -281,23 +318,29 @@
   },
   "derived": {
     "score": 26,
-    "completenessPct": 100.0,
+    "completenessPct": 25.0,
     "completeness": {
-      "present": 3,
-      "required": 3
+      "present": 2,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -305,10 +348,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -350,10 +397,10 @@
       "sectorKey": "Information Technology",
       "sector": {
         "sector": "Information Technology",
-        "stocks": 245,
-        "momentum63dMedian": -6.76,
-        "relativeToMarket": -2.18,
-        "declared": 81,
+        "stocks": 247,
+        "momentum63dMedian": -6.73,
+        "relativeToMarket": -2.14,
+        "declared": 82,
         "strongResults": 32,
         "avgReaction": 0.69,
         "tailwind": "NEUTRAL"
@@ -854,5 +901,19 @@
         "filedAt": "2025-05-22T23:19:02+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-14T15:45:35.690000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Financial Results for the quarter and half year ended September 30, 2026. Expleo Solutions Ltd - 533121 - Financial Results For The Quarter And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "seenAt": "2026-11-14T11:09:49Z"
+    }
+  ]
 }

@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE601B01023|2026-09-30",
   "createdAt": "2026-11-03T22:23:12Z",
-  "updatedAt": "2026-11-14T10:40:36Z",
+  "updatedAt": "2026-11-14T11:11:06Z",
   "security": {
     "symbol": "AJANTSOY",
     "bseSymbol": "AJANTSOY",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-03T22:23:12Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-14T10:49:21Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-14T11:11:06Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-14T10:13:27Z",
+      "fetchedAt": "2026-11-14T10:49:35Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-accee50005241d19.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
       "note": null
     },
     "reaction_session": {
@@ -168,6 +178,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE601B01023_2026-09-30/scrip_results-a082b5edcf907b1b.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-14T15:56:40.567000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T10:49:21Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "note": null
     }
   },
   "fetch": {
@@ -208,23 +245,29 @@
   },
   "derived": {
     "score": 11,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -232,10 +275,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -277,10 +324,10 @@
       "sectorKey": "Fast Moving Consumer Goods",
       "sector": {
         "sector": "Fast Moving Consumer Goods",
-        "stocks": 342,
-        "momentum63dMedian": -4.6,
-        "relativeToMarket": -0.02,
-        "declared": 95,
+        "stocks": 346,
+        "momentum63dMedian": -4.67,
+        "relativeToMarket": -0.08,
+        "declared": 96,
         "strongResults": 42,
         "avgReaction": -0.57,
         "tailwind": "NEUTRAL"
@@ -662,6 +709,20 @@
       "timestamp": "2026-11-14T10:31:37Z",
       "price": 20.22,
       "source": "BSE_PRICE"
+    }
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-14T15:56:40.567000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited financial Result of the Company for the quarter and half year ended 30th September, 2026 Ajanta Soya Ltd - 519216 - Unaudited Financial Results Of The Company For The Quarter And Half Year Ended 30Th September, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-96a6e6ef95838191.json",
+      "seenAt": "2026-11-14T11:10:15Z"
     }
   ]
 }
