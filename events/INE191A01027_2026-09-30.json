@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE191A01027|2026-09-30",
   "createdAt": "2026-11-11T17:57:41Z",
-  "updatedAt": "2026-11-14T11:11:04Z",
+  "updatedAt": "2026-11-14T11:34:06Z",
   "security": {
     "symbol": "ORCHPHARMA",
     "nseSymbol": "ORCHPHARMA",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,16 +43,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-12T00:45:18Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-14T11:18:55Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-14T11:34:06Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-14",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-14T10:49:35Z",
+      "fetchedAt": "2026-11-14T11:18:57Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-accee50005241d19.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-372c5dd8384dcf6b.json",
       "note": null
     },
     "reaction_session": {
@@ -180,6 +190,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE191A01027_2026-09-30/scrip_results-aa7c00dbbbc020f4.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T11:18:55Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-372c5dd8384dcf6b.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-14T16:27:57.377000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T11:18:55Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-372c5dd8384dcf6b.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-14T11:18:55Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-372c5dd8384dcf6b.json",
+      "note": null
     }
   },
   "fetch": {
@@ -227,23 +264,29 @@
   },
   "derived": {
     "score": 10,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "EXPENSIVE",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -251,10 +294,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -296,10 +343,10 @@
       "sectorKey": "Healthcare",
       "sector": {
         "sector": "Healthcare",
-        "stocks": 286,
-        "momentum63dMedian": -0.06,
-        "relativeToMarket": 4.54,
-        "declared": 139,
+        "stocks": 289,
+        "momentum63dMedian": -0.51,
+        "relativeToMarket": 4.08,
+        "declared": 138,
         "strongResults": 77,
         "avgReaction": 0.77,
         "tailwind": "POSITIVE"
@@ -828,5 +875,19 @@
         "filedAt": "2025-05-28T11:02:06+05:30"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-14T16:27:57.377000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Declaration of Financial results for quarter and half year ended on September 30, 2026 Orchid Pharma Ltd - 524372 - Declaration Of Financial Results For Quarter  And Half Year Ended On September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-372c5dd8384dcf6b.json",
+      "seenAt": "2026-11-14T11:33:05Z"
+    }
+  ]
 }
