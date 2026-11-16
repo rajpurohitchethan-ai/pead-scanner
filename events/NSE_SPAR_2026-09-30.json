@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "NSE:SPAR|2026-09-30",
   "createdAt": "2026-11-06T23:11:48Z",
-  "updatedAt": "2026-11-16T13:46:01Z",
+  "updatedAt": "2026-11-16T14:17:34Z",
   "security": {
     "symbol": "SPAR",
     "bseSymbol": "SPAR",
@@ -19,7 +19,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "REACTION_PENDING",
+  "state": "REACTION_READY",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -40,6 +40,11 @@
       "state": "REACTION_PENDING",
       "at": "2026-11-14T21:12:05Z",
       "reason": "waiting for reaction session"
+    },
+    {
+      "state": "REACTION_READY",
+      "at": "2026-11-16T14:17:34Z",
+      "reason": "reaction metrics available"
     }
   ],
   "fields": {
@@ -98,22 +103,22 @@
       "note": null
     },
     "distance_52w_high_pct": {
-      "value": -46.97,
+      "value": -47.23,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-16T08:45:21Z",
+      "fetchedAt": "2026-11-16T14:15:45Z",
       "status": "OK",
       "rank": 105,
-      "rawRef": "raw/bse_price/NSE_SPAR_2026-09-30/price_volume_12m-65279b99503715a0.json",
-      "note": null
+      "rawRef": null,
+      "note": "replayed from saved price data"
     },
     "last_price": {
-      "value": 4.02,
+      "value": 4.0,
       "source": "BSE_PRICE",
-      "fetchedAt": "2026-11-16T08:45:21Z",
+      "fetchedAt": "2026-11-16T14:15:45Z",
       "status": "OK",
       "rank": 105,
-      "rawRef": "raw/bse_price/NSE_SPAR_2026-09-30/price_volume_12m-65279b99503715a0.json",
-      "note": null
+      "rawRef": null,
+      "note": "replayed from saved price data"
     },
     "avg_turnover_20d_cr": {
       "value": 0.0016,
@@ -231,6 +236,60 @@
       "rank": 96,
       "rawRef": "raw/bse/NSE_SPAR_2026-09-30/results_snapshot-d541007c2f282194.json",
       "note": "snapshot BSE_RESULTS_SNAPSHOT basis=UNKNOWN"
+    },
+    "result_day_low": {
+      "value": 3.55,
+      "source": "EOD_PRICE",
+      "fetchedAt": "2026-11-16T14:15:45Z",
+      "status": "OK",
+      "rank": 106,
+      "rawRef": null,
+      "note": "replayed from saved EOD_PRICE"
+    },
+    "result_day_high": {
+      "value": 4.7,
+      "source": "EOD_PRICE",
+      "fetchedAt": "2026-11-16T14:15:45Z",
+      "status": "OK",
+      "rank": 106,
+      "rawRef": null,
+      "note": "replayed from saved EOD_PRICE"
+    },
+    "result_day_return_pct": {
+      "value": -0.5,
+      "source": "EOD_PRICE",
+      "fetchedAt": "2026-11-16T14:15:45Z",
+      "status": "OK",
+      "rank": 106,
+      "rawRef": null,
+      "note": "replayed from saved EOD_PRICE"
+    },
+    "result_day_rvol": {
+      "value": 0.48,
+      "source": "EOD_PRICE",
+      "fetchedAt": "2026-11-16T14:15:45Z",
+      "status": "OK",
+      "rank": 106,
+      "rawRef": null,
+      "note": "replayed from saved EOD_PRICE"
+    },
+    "box_high": {
+      "value": 4.7,
+      "source": "EOD_PRICE",
+      "fetchedAt": "2026-11-16T14:15:45Z",
+      "status": "OK",
+      "rank": 106,
+      "rawRef": null,
+      "note": "replayed from saved EOD_PRICE"
+    },
+    "box_breakout": {
+      "value": false,
+      "source": "EOD_PRICE",
+      "fetchedAt": "2026-11-16T14:15:45Z",
+      "status": "OK",
+      "rank": 106,
+      "rawRef": null,
+      "note": "replayed from saved EOD_PRICE"
     }
   },
   "fetch": {
@@ -286,14 +345,14 @@
   },
   "derived": {
     "score": 11,
-    "completenessPct": 25.0,
+    "completenessPct": 50.0,
     "completeness": {
-      "present": 2,
+      "present": 4,
       "required": 8
     },
     "resultReality": "UNVERIFIED",
     "expectationReality": "LOW EXPECTATIONS",
-    "priceResponse": "UNVERIFIED",
+    "priceResponse": "MIXED",
     "valuationReality": "LOSS-MAKING",
     "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
@@ -310,8 +369,19 @@
         "prevProfitYoY": null
       },
       "lens": null,
-      "relativeStrength": null,
-      "hands": null,
+      "relativeStrength": {
+        "indexReturnPct": 0.08,
+        "relativePct": -0.58,
+        "indexAsOf": "2026-11-16"
+      },
+      "hands": {
+        "label": null,
+        "passed": 0,
+        "known": 0,
+        "sessions": 0,
+        "checks": [],
+        "note": "Too early: needs 3 sessions after the result."
+      },
       "live": null,
       "strength": null,
       "q1Strength": null,
@@ -323,7 +393,7 @@
       },
       "plan": {
         "signal": "DATA_PENDING",
-        "why": "Price history for the reaction session is not available yet.",
+        "why": "Earnings growth not verified yet: entry levels stay hidden until YoY numbers are available.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -366,8 +436,8 @@
       "sector": {
         "sector": "Information Technology",
         "stocks": 276,
-        "momentum63dMedian": -7.62,
-        "relativeToMarket": -2.2,
+        "momentum63dMedian": -8.12,
+        "relativeToMarket": -2.66,
         "declared": 83,
         "strongResults": 33,
         "avgReaction": 0.32,
@@ -384,30 +454,53 @@
       "price": {
         "ema10": 3.98,
         "ema21": 4.03,
-        "ema63": 4.29,
+        "ema63": 4.28,
         "ema20": 4.02,
         "stage": {
           "stage": 4,
           "label": "Stage 4",
           "note": "Price and the 50-day average are under a falling 200-day average: a downtrend.",
-          "sma50": 4.2,
-          "sma150": 4.97,
+          "sma50": 4.18,
+          "sma150": 4.95,
           "sma200": 4.85,
           "sma200Rising": false
         },
-        "prev_close": 4.07,
-        "prev_ema10": 3.97,
+        "prev_close": 4.02,
+        "prev_ema10": 3.98,
         "prev_ema21": 4.03,
-        "ret_5d_pct": 3.08,
-        "d5_from": "2026-11-05",
-        "d21_from": "2026-10-13",
-        "ret_21d_pct": -4.29,
-        "ret_63d_pct": -21.64,
-        "ret_126d_pct": -28.34,
+        "ret_5d_pct": 3.9,
+        "d5_from": "2026-11-06",
+        "d21_from": "2026-10-14",
+        "ret_21d_pct": -2.44,
+        "ret_63d_pct": -21.88,
+        "ret_126d_pct": -30.07,
         "high_52w": 7.58,
         "low_52w": 3.01,
-        "last_session": "2026-11-13",
-        "atr14": 0.17,
+        "last_session": "2026-11-16",
+        "atr14": 0.16,
+        "hvq": false,
+        "hvy": false,
+        "hve": null,
+        "hv_label": null,
+        "reaction_window_sessions": 1,
+        "reaction_close": 4.0,
+        "reaction_open": 4.0,
+        "gap_pct": -0.5,
+        "gap_held": true,
+        "close_in_range_pct": 39.13,
+        "sessions_since_reaction": 0,
+        "return_since_result_pct": -0.5,
+        "pre_result_session": "2026-11-13",
+        "post_result_high": 4.7,
+        "post_result_low": 3.55,
+        "prev_session_high": 4.7,
+        "day_before_high": 4.02,
+        "reclaimed_prev_high": false,
+        "drawdown_from_post_high_pct": -14.89,
+        "base_broken": false,
+        "fwd_5d_pct": null,
+        "fwd_20d_pct": null,
+        "fwd_60d_pct": null,
         "q1_reaction_date": "2026-08-17",
         "q1_reaction_return_pct": -4.49,
         "q1_reaction_rvol": 0.38,
@@ -420,21 +513,21 @@
         "nh52_prior": false,
         "rsi_weekly": {
           "timeframe": "weekly",
-          "rsi": 40.54,
-          "divergence": "BEARISH",
-          "note": "price made a higher high (4.90 on 2026-10 vs 4.69 on 2026-10) but RSI made a lower high (39 vs 43): momentum is fading",
-          "asOf": "2026-11-13"
+          "rsi": 39.88,
+          "divergence": null,
+          "note": "No divergence.",
+          "asOf": "2026-11-16"
         },
         "pressure": {
           "label": "NEUTRAL",
           "distributionDays": 0,
           "accumulationDays": 2,
           "sessions": 25,
-          "upDownVolume": 1.08,
-          "lastCloseInRangePct": 100.0,
+          "upDownVolume": 1.01,
+          "lastCloseInRangePct": 39.13,
           "lastDownOnVolume": false,
-          "lastRvol": 0.33,
-          "asOf": "2026-11-13"
+          "lastRvol": 0.48,
+          "asOf": "2026-11-16"
         }
       },
       "deliveryPct": null,
@@ -462,6 +555,7 @@
       "Low pre-result expectation: 20D move -1.9%."
     ],
     "risks": [
+      "Result-session RVOL only 0.48x.",
       "20D average turnover under ₹1 lakh/day is thin.",
       "Illiquid: under ₹1 lakh/day."
     ]
@@ -471,30 +565,61 @@
     "price": {
       "ema10": 3.98,
       "ema21": 4.03,
-      "ema63": 4.29,
+      "ema63": 4.28,
       "ema20": 4.02,
       "stage": {
         "stage": 4,
         "label": "Stage 4",
         "note": "Price and the 50-day average are under a falling 200-day average: a downtrend.",
-        "sma50": 4.2,
-        "sma150": 4.97,
+        "sma50": 4.18,
+        "sma150": 4.95,
         "sma200": 4.85,
         "sma200Rising": false
       },
-      "prev_close": 4.07,
-      "prev_ema10": 3.97,
+      "prev_close": 4.02,
+      "prev_ema10": 3.98,
       "prev_ema21": 4.03,
-      "ret_5d_pct": 3.08,
-      "d5_from": "2026-11-05",
-      "d21_from": "2026-10-13",
-      "ret_21d_pct": -4.29,
-      "ret_63d_pct": -21.64,
-      "ret_126d_pct": -28.34,
+      "ret_5d_pct": 3.9,
+      "d5_from": "2026-11-06",
+      "d21_from": "2026-10-14",
+      "ret_21d_pct": -2.44,
+      "ret_63d_pct": -21.88,
+      "ret_126d_pct": -30.07,
       "high_52w": 7.58,
       "low_52w": 3.01,
-      "last_session": "2026-11-13",
-      "atr14": 0.17,
+      "last_session": "2026-11-16",
+      "atr14": 0.16,
+      "hvq": false,
+      "hvy": false,
+      "hve": null,
+      "hv_label": null,
+      "reaction_window_sessions": 1,
+      "reaction_close": 4.0,
+      "reaction_open": 4.0,
+      "gap_pct": -0.5,
+      "gap_held": true,
+      "close_in_range_pct": 39.13,
+      "sessions_since_reaction": 0,
+      "return_since_result_pct": -0.5,
+      "pre_result_session": "2026-11-13",
+      "post_result_high": 4.7,
+      "post_result_low": 3.55,
+      "prev_session_high": 4.7,
+      "day_before_high": 4.02,
+      "reclaimed_prev_high": false,
+      "drawdown_from_post_high_pct": -14.89,
+      "base_broken": false,
+      "fwd_5d_pct": null,
+      "fwd_20d_pct": null,
+      "fwd_60d_pct": null,
+      "hands": {
+        "label": null,
+        "passed": 0,
+        "known": 0,
+        "sessions": 0,
+        "checks": [],
+        "note": "Too early: needs 3 sessions after the result."
+      },
       "q1_reaction_date": "2026-08-17",
       "q1_reaction_return_pct": -4.49,
       "q1_reaction_rvol": 0.38,
@@ -507,28 +632,27 @@
       "nh52_prior": false,
       "rsi_weekly": {
         "timeframe": "weekly",
-        "rsi": 40.54,
-        "divergence": "BEARISH",
-        "note": "price made a higher high (4.90 on 2026-10 vs 4.69 on 2026-10) but RSI made a lower high (39 vs 43): momentum is fading",
-        "asOf": "2026-11-13"
+        "rsi": 39.88,
+        "divergence": null,
+        "note": "No divergence.",
+        "asOf": "2026-11-16"
       },
       "pressure": {
         "label": "NEUTRAL",
         "distributionDays": 0,
         "accumulationDays": 2,
         "sessions": 25,
-        "upDownVolume": 1.08,
-        "lastCloseInRangePct": 100.0,
+        "upDownVolume": 1.01,
+        "lastCloseInRangePct": 39.13,
         "lastDownOnVolume": false,
-        "lastRvol": 0.33,
-        "asOf": "2026-11-13"
+        "lastRvol": 0.48,
+        "asOf": "2026-11-16"
       }
     },
     "chart": {
-      "from": "2026-07-28",
-      "to": "2026-11-13",
+      "from": "2026-07-29",
+      "to": "2026-11-16",
       "close": [
-        4.9,
         4.91,
         4.68,
         4.7,
@@ -602,10 +726,10 @@
         3.8,
         4.01,
         4.07,
-        4.02
+        4.02,
+        4.0
       ],
       "ema21": [
-        4.87,
         4.88,
         4.86,
         4.84,
@@ -679,11 +803,11 @@
         4.03,
         4.02,
         4.03,
+        4.03,
         4.03
       ],
-      "reactionIndex": null,
+      "reactionIndex": 74,
       "volume": [
-        11757,
         17351,
         12670,
         5034,
@@ -757,13 +881,20 @@
         3265,
         17594,
         7214,
-        1474
+        1474,
+        1996
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-11-16T08:45:21Z",
+    "computedAt": "2026-11-16T14:15:45Z",
+    "replayedFromRaw": true,
     "plusVersion": "2.9.48",
-    "corporateActions": null
+    "corporateActions": null,
+    "eod": {
+      "appended": 1,
+      "filled": 29
+    },
+    "eodTried": "2026-11-16+2026-11-08"
   },
   "priceTrail": [
     {
@@ -793,7 +924,7 @@
       "xbrlUrl": null,
       "headline": "In terms of Regulation 30 read with 33 of the SEBI (LODR) Regulations, 2015 as amended the attached is the Unaudited Standalone Financials Results for the quarter and half yearly ended .... Sparc Electrex Ltd - 531370 - Unaudited Standalone Financial Results For Quarter And Half Yearly Ended 30.09.2",
       "rawRef": "raw/bse/DISCOVERY/result_announcements-d9c03464624f410f.json",
-      "seenAt": "2026-11-16T13:40:43Z"
+      "seenAt": "2026-11-16T14:15:15Z"
     }
   ],
   "financialSnapshots": {
@@ -829,7 +960,7 @@
     }
   },
   "financialIntegrity": {
-    "checkedAt": "2026-11-16T13:40:43Z",
+    "checkedAt": "2026-11-16T14:15:15Z",
     "snapshotsConsidered": 1,
     "status": "VERIFIED",
     "issues": [
@@ -855,5 +986,27 @@
     "audioUrl": null,
     "checkedOn": "2026-11-16",
     "source": "BSE_ANNOUNCEMENTS"
+  },
+  "fieldHistory": {
+    "distance_52w_high_pct": [
+      {
+        "value": -46.97,
+        "source": "BSE_PRICE",
+        "fetchedAt": "2026-11-16T08:45:21Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-16T14:15:45Z"
+      }
+    ],
+    "last_price": [
+      {
+        "value": 4.02,
+        "source": "BSE_PRICE",
+        "fetchedAt": "2026-11-16T08:45:21Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-16T14:15:45Z"
+      }
+    ]
   }
 }
