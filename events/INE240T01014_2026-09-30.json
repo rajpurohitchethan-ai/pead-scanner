@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE240T01014|2026-09-30",
   "createdAt": "2026-11-12T00:45:17Z",
-  "updatedAt": "2026-11-16T16:57:44Z",
+  "updatedAt": "2026-11-16T20:50:51Z",
   "security": {
     "symbol": "PARMAX",
     "bseSymbol": "PARMAX",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "RESULT_FILED",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,36 @@
       "state": "SCHEDULED",
       "at": "2026-11-12T00:45:17Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-16T20:36:47Z",
+      "reason": "official exchange result filing/announcement detected"
     }
   ],
   "fields": {
     "result_date": {
-      "value": "2026-11-14",
+      "value": "2026-11-16",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-14T17:27:21Z",
+      "fetchedAt": "2026-11-16T20:36:47Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-400046fb00b68a3d.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a328c35b7b8d7ab.json",
       "note": null
     },
     "reaction_session": {
-      "value": "2026-11-16",
+      "value": "2026-11-17",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-16T15:56:18Z",
+      "fetchedAt": "2026-11-16T20:49:59Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "AFTER_CLOSE"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "AFTER_CLOSE",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-16T15:56:18Z",
+      "fetchedAt": "2026-11-16T20:49:59Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -168,6 +173,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE240T01014_2026-09-30/scrip_results-319afca50f0af69a.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-16T20:36:47Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a328c35b7b8d7ab.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-16T19:30:18.237000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-16T20:36:47Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a328c35b7b8d7ab.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-16T20:36:47Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a328c35b7b8d7ab.json",
+      "note": null
     }
   },
   "fetch": {
@@ -180,7 +212,6 @@
     },
     "PRICE_HISTORY": {
       "lastAttempt": "2026-11-16T15:56:20Z",
-      "lastSuccess": "2026-11-16T15:56:20Z",
       "status": "OK",
       "error": null,
       "rawRef": "raw/bse_price/INE240T01014_2026-09-30/price_volume_12m-bdf8759d30773cb8.json"
@@ -209,23 +240,29 @@
   },
   "derived": {
     "score": 2,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PRICED IN",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -234,13 +271,13 @@
       "q1Strength": null,
       "q1Setup": false,
       "bucket": {
-        "code": "WATCH_FRESH",
-        "label": "Watch: fresh",
-        "why": "No Q1 setup. Only a sudden Q2 pivot counts."
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
       },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -698,5 +735,53 @@
       "price": 135.1,
       "source": "BSE_PRICE"
     }
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-16T19:30:18.237000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial results for quarter and half year ended 30.09.2026 Parmax Pharma Ltd - 540359 - Results-Delay in Financial Results",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a328c35b7b8d7ab.json",
+      "seenAt": "2026-11-16T20:49:59Z"
+    },
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-16T19:36:41.010000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial results for quarter and half year ended 30.09.2026 Parmax Pharma Ltd - 540359 - Unaudited Financial Results For Quarter And Half Year Ended 30.09.2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-0a328c35b7b8d7ab.json",
+      "seenAt": "2026-11-16T20:49:59Z"
+    }
+  ],
+  "fieldHistory": {
+    "reaction_session": [
+      {
+        "value": "2026-11-16",
+        "source": "DERIVED",
+        "fetchedAt": "2026-11-16T15:56:18Z",
+        "status": "OK",
+        "note": "UNKNOWN_TIME_NEXT_SESSION",
+        "replacedAt": "2026-11-16T20:49:59Z"
+      }
+    ],
+    "filing_session": [
+      {
+        "value": "UNKNOWN_TIME_NEXT_SESSION",
+        "source": "DERIVED",
+        "fetchedAt": "2026-11-16T15:56:18Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-16T20:49:59Z"
+      }
+    ]
+  }
 }
