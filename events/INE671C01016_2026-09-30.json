@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE671C01016|2026-09-30",
   "createdAt": "2026-11-03T22:23:12Z",
-  "updatedAt": "2026-11-16T13:03:27Z",
+  "updatedAt": "2026-11-16T13:45:59Z",
   "security": {
     "symbol": "SUNLOC",
     "bseSymbol": "SUNLOC",
@@ -22,7 +22,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "REACTION_PENDING",
+  "state": "REACTION_READY",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -43,6 +43,11 @@
       "state": "REACTION_PENDING",
       "at": "2026-11-13T23:52:11Z",
       "reason": "waiting for reaction session"
+    },
+    {
+      "state": "REACTION_READY",
+      "at": "2026-11-16T13:45:59Z",
+      "reason": "reaction metrics available"
     }
   ],
   "fields": {
@@ -119,13 +124,13 @@
       "note": null
     },
     "avg_turnover_20d_cr": {
-      "value": 0.0061,
+      "value": 0.0068,
       "source": "NSE_PRICE",
-      "fetchedAt": "2026-11-14T16:46:27Z",
+      "fetchedAt": "2026-11-16T13:44:51Z",
       "status": "OK",
       "rank": 105,
-      "rawRef": "raw/nse_price/INE671C01016_2026-09-30/equity_history-4ff688a83608aea6.json",
-      "note": null
+      "rawRef": null,
+      "note": "replayed from saved price data"
     },
     "market_cap_cr": {
       "value": 74.86,
@@ -342,6 +347,60 @@
       "rank": 90,
       "rawRef": "raw/nse/INE671C01016_2026-09-30/quote-0ea02489557bf62d.json",
       "note": null
+    },
+    "result_day_low": {
+      "value": 72.5,
+      "source": "NSE_PRICE",
+      "fetchedAt": "2026-11-16T13:44:51Z",
+      "status": "OK",
+      "rank": 105,
+      "rawRef": null,
+      "note": "replayed from saved NSE_PRICE"
+    },
+    "result_day_high": {
+      "value": 73.0,
+      "source": "NSE_PRICE",
+      "fetchedAt": "2026-11-16T13:44:51Z",
+      "status": "OK",
+      "rank": 105,
+      "rawRef": null,
+      "note": "replayed from saved NSE_PRICE"
+    },
+    "result_day_return_pct": {
+      "value": 0.0,
+      "source": "NSE_PRICE",
+      "fetchedAt": "2026-11-16T13:44:51Z",
+      "status": "OK",
+      "rank": 105,
+      "rawRef": null,
+      "note": "replayed from saved NSE_PRICE"
+    },
+    "result_day_rvol": {
+      "value": 2.38,
+      "source": "NSE_PRICE",
+      "fetchedAt": "2026-11-16T13:44:51Z",
+      "status": "OK",
+      "rank": 105,
+      "rawRef": null,
+      "note": "replayed from saved NSE_PRICE"
+    },
+    "box_high": {
+      "value": 73.0,
+      "source": "NSE_PRICE",
+      "fetchedAt": "2026-11-16T13:44:51Z",
+      "status": "OK",
+      "rank": 105,
+      "rawRef": null,
+      "note": "replayed from saved NSE_PRICE"
+    },
+    "box_breakout": {
+      "value": false,
+      "source": "NSE_PRICE",
+      "fetchedAt": "2026-11-16T13:44:51Z",
+      "status": "OK",
+      "rank": 105,
+      "rawRef": null,
+      "note": "replayed from saved NSE_PRICE"
     }
   },
   "fetch": {
@@ -418,14 +477,14 @@
   },
   "derived": {
     "score": 6,
-    "completenessPct": 50.0,
+    "completenessPct": 75.0,
     "completeness": {
-      "present": 4,
+      "present": 6,
       "required": 8
     },
     "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "UNVERIFIED",
+    "priceResponse": "MIXED",
     "valuationReality": "LOSS-MAKING",
     "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
@@ -455,8 +514,19 @@
         "profitStatus": null,
         "notes": []
       },
-      "relativeStrength": null,
-      "hands": null,
+      "relativeStrength": {
+        "indexReturnPct": 0.08,
+        "relativePct": -0.08,
+        "indexAsOf": "2026-11-16"
+      },
+      "hands": {
+        "label": null,
+        "passed": 0,
+        "known": 0,
+        "sessions": 0,
+        "checks": [],
+        "note": "Too early: needs 3 sessions after the result."
+      },
       "live": null,
       "strength": null,
       "q1Strength": null,
@@ -468,7 +538,7 @@
       },
       "plan": {
         "signal": "DATA_PENDING",
-        "why": "Price history for the reaction session is not available yet.",
+        "why": "Earnings growth not verified yet: entry levels stay hidden until YoY numbers are available.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -511,11 +581,11 @@
       "sector": {
         "sector": "Healthcare",
         "stocks": 302,
-        "momentum63dMedian": -1.04,
-        "relativeToMarket": 3.95,
+        "momentum63dMedian": -0.97,
+        "relativeToMarket": 4.46,
         "declared": 144,
         "strongResults": 82,
-        "avgReaction": 0.32,
+        "avgReaction": 0.27,
         "tailwind": "POSITIVE"
       },
       "identity": {
@@ -527,24 +597,47 @@
         "bseGroup": "B"
       },
       "price": {
-        "ema10": 69.76,
-        "ema21": 68.78,
-        "ema63": 69.46,
-        "ema20": 68.79,
+        "ema10": 70.35,
+        "ema21": 69.16,
+        "ema63": 69.57,
+        "ema20": 69.19,
         "stage": null,
-        "prev_close": 71.62,
-        "prev_ema10": 69.04,
-        "prev_ema21": 68.36,
-        "ret_5d_pct": 1.52,
-        "d5_from": "2026-11-05",
-        "d21_from": "2026-10-12",
-        "ret_21d_pct": 8.73,
+        "prev_close": 73.0,
+        "prev_ema10": 69.76,
+        "prev_ema21": 68.78,
+        "ret_5d_pct": 4.0,
+        "d5_from": "2026-11-06",
+        "d21_from": "2026-10-13",
+        "ret_21d_pct": 11.45,
         "ret_63d_pct": null,
         "ret_126d_pct": null,
         "high_52w": 80.76,
         "low_52w": 61.0,
-        "last_session": "2026-11-13",
-        "atr14": 5.3,
+        "last_session": "2026-11-16",
+        "atr14": 5.33,
+        "hvq": false,
+        "hvy": false,
+        "hve": null,
+        "hv_label": null,
+        "reaction_window_sessions": 1,
+        "reaction_close": 73.0,
+        "reaction_open": 72.89,
+        "gap_pct": -0.15,
+        "gap_held": true,
+        "close_in_range_pct": 100.0,
+        "sessions_since_reaction": 0,
+        "return_since_result_pct": 0.0,
+        "pre_result_session": "2026-11-13",
+        "post_result_high": 73.0,
+        "post_result_low": 72.5,
+        "prev_session_high": 73.0,
+        "day_before_high": 73.0,
+        "reclaimed_prev_high": false,
+        "drawdown_from_post_high_pct": 0.0,
+        "base_broken": false,
+        "fwd_5d_pct": null,
+        "fwd_20d_pct": null,
+        "fwd_60d_pct": null,
         "breakout_recent": null,
         "breakout_failed": null,
         "nh52_recent": null,
@@ -553,18 +646,18 @@
           "timeframe": "weekly",
           "rsi": null,
           "divergence": null,
-          "note": "Not enough weekly history (13 bars; needs 20)."
+          "note": "Not enough weekly history (14 bars; needs 20)."
         },
         "pressure": {
           "label": "NEUTRAL",
           "distributionDays": 4,
           "accumulationDays": 4,
           "sessions": 25,
-          "upDownVolume": 2.05,
-          "lastCloseInRangePct": null,
+          "upDownVolume": 2.03,
+          "lastCloseInRangePct": 100.0,
           "lastDownOnVolume": false,
-          "lastRvol": 0.01,
-          "asOf": "2026-11-13"
+          "lastRvol": 2.38,
+          "asOf": "2026-11-16"
         }
       },
       "deliveryPct": 100.0,
@@ -589,6 +682,7 @@
     "valuationInputCount": 2,
     "expectationFullWindow": true,
     "reasons": [
+      "High confirmation volume: 2.38x.",
       "Operating margin expanded +103 bps."
     ],
     "risks": [
@@ -600,24 +694,55 @@
   "tradeLog": {},
   "plus": {
     "price": {
-      "ema10": 69.76,
-      "ema21": 68.78,
-      "ema63": 69.46,
-      "ema20": 68.79,
+      "ema10": 70.35,
+      "ema21": 69.16,
+      "ema63": 69.57,
+      "ema20": 69.19,
       "stage": null,
-      "prev_close": 71.62,
-      "prev_ema10": 69.04,
-      "prev_ema21": 68.36,
-      "ret_5d_pct": 1.52,
-      "d5_from": "2026-11-05",
-      "d21_from": "2026-10-12",
-      "ret_21d_pct": 8.73,
+      "prev_close": 73.0,
+      "prev_ema10": 69.76,
+      "prev_ema21": 68.78,
+      "ret_5d_pct": 4.0,
+      "d5_from": "2026-11-06",
+      "d21_from": "2026-10-13",
+      "ret_21d_pct": 11.45,
       "ret_63d_pct": null,
       "ret_126d_pct": null,
       "high_52w": 80.76,
       "low_52w": 61.0,
-      "last_session": "2026-11-13",
-      "atr14": 5.3,
+      "last_session": "2026-11-16",
+      "atr14": 5.33,
+      "hvq": false,
+      "hvy": false,
+      "hve": null,
+      "hv_label": null,
+      "reaction_window_sessions": 1,
+      "reaction_close": 73.0,
+      "reaction_open": 72.89,
+      "gap_pct": -0.15,
+      "gap_held": true,
+      "close_in_range_pct": 100.0,
+      "sessions_since_reaction": 0,
+      "return_since_result_pct": 0.0,
+      "pre_result_session": "2026-11-13",
+      "post_result_high": 73.0,
+      "post_result_low": 72.5,
+      "prev_session_high": 73.0,
+      "day_before_high": 73.0,
+      "reclaimed_prev_high": false,
+      "drawdown_from_post_high_pct": 0.0,
+      "base_broken": false,
+      "fwd_5d_pct": null,
+      "fwd_20d_pct": null,
+      "fwd_60d_pct": null,
+      "hands": {
+        "label": null,
+        "passed": 0,
+        "known": 0,
+        "sessions": 0,
+        "checks": [],
+        "note": "Too early: needs 3 sessions after the result."
+      },
       "breakout_recent": null,
       "breakout_failed": null,
       "nh52_recent": null,
@@ -626,23 +751,23 @@
         "timeframe": "weekly",
         "rsi": null,
         "divergence": null,
-        "note": "Not enough weekly history (13 bars; needs 20)."
+        "note": "Not enough weekly history (14 bars; needs 20)."
       },
       "pressure": {
         "label": "NEUTRAL",
         "distributionDays": 4,
         "accumulationDays": 4,
         "sessions": 25,
-        "upDownVolume": 2.05,
-        "lastCloseInRangePct": null,
+        "upDownVolume": 2.03,
+        "lastCloseInRangePct": 100.0,
         "lastDownOnVolume": false,
-        "lastRvol": 0.01,
-        "asOf": "2026-11-13"
+        "lastRvol": 2.38,
+        "asOf": "2026-11-16"
       }
     },
     "chart": {
       "from": "2026-08-17",
-      "to": "2026-11-13",
+      "to": "2026-11-16",
       "close": [
         68.3,
         68.38,
@@ -700,6 +825,7 @@
         70.2,
         73.9,
         71.62,
+        73.0,
         73.0
       ],
       "ema21": [
@@ -759,9 +885,10 @@
         67.44,
         68.03,
         68.36,
-        68.78
+        68.78,
+        69.16
       ],
-      "reactionIndex": null,
+      "reactionIndex": 57,
       "volume": [
         23,
         366,
@@ -819,13 +946,20 @@
         16,
         1592,
         2726,
-        10
+        10,
+        2073
       ]
     },
     "priceSource": "NSE_PRICE",
-    "computedAt": "2026-11-14T16:46:27Z",
+    "computedAt": "2026-11-16T13:44:51Z",
+    "replayedFromRaw": true,
     "plusVersion": "2.9.48",
-    "corporateActions": null
+    "corporateActions": null,
+    "eod": {
+      "appended": 1,
+      "filled": 0
+    },
+    "eodTried": "2026-11-16+2026-11-08"
   },
   "priceTrail": [
     {
@@ -894,6 +1028,16 @@
         "note": null,
         "replacedAt": "2026-11-13T13:36:32Z"
       }
+    ],
+    "avg_turnover_20d_cr": [
+      {
+        "value": 0.0061,
+        "source": "NSE_PRICE",
+        "fetchedAt": "2026-11-14T16:46:27Z",
+        "status": "OK",
+        "note": null,
+        "replacedAt": "2026-11-16T13:44:51Z"
+      }
     ]
   },
   "filings": [
@@ -907,7 +1051,7 @@
       "xbrlUrl": null,
       "headline": "Approved Financial Results (both standalone and consolidated) for the quarter and half year ended 30.09.2026 Sunil Healthcare Ltd - 537253 - Approved Financial Results For The Quarter And Half Year Ended 30.09.2026",
       "rawRef": "raw/bse/DISCOVERY/result_announcements-e8cf44cc368257e0.json",
-      "seenAt": "2026-11-16T12:57:38Z"
+      "seenAt": "2026-11-16T13:40:25Z"
     }
   ],
   "financialSnapshots": {
@@ -949,7 +1093,7 @@
     }
   },
   "financialIntegrity": {
-    "checkedAt": "2026-11-16T12:57:38Z",
+    "checkedAt": "2026-11-16T13:40:25Z",
     "snapshotsConsidered": 1,
     "status": "VERIFIED",
     "issues": [
