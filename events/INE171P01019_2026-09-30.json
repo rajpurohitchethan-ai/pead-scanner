@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE171P01019|2026-09-30",
   "createdAt": "2026-11-04T22:44:09Z",
-  "updatedAt": "2026-11-17T13:27:08Z",
+  "updatedAt": "2026-11-17T13:55:57Z",
   "security": {
     "symbol": "PTIL",
     "bseSymbol": "PTIL",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,16 +31,26 @@
       "state": "SCHEDULED",
       "at": "2026-11-04T22:44:09Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-17T13:36:38Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-17T13:55:57Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-17",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-17T13:06:29Z",
+      "fetchedAt": "2026-11-17T13:36:52Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-997de3661fa976e4.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b0f795f77236d8a5.json",
       "note": null
     },
     "reaction_session": {
@@ -141,6 +151,33 @@
       "rank": 50,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-17T13:36:38Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b0f795f77236d8a5.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-17T19:00:50.530000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-17T13:36:38Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b0f795f77236d8a5.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-17T13:36:38Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b0f795f77236d8a5.json",
+      "note": null
     }
   },
   "fetch": {
@@ -178,27 +215,54 @@
       "status": "OK",
       "error": null,
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-11-17T13:38:12Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE171P01019_2026-09-30/results_snapshot-c23de0e9d89d2313.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-11-17T13:38:12Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "540027.BO: RuntimeError: latest statement does not match event quarter",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-11-17T13:38:13Z",
+      "lastSuccess": "2026-11-17T13:38:13Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE171P01019_2026-09-30/scrip_announcements-99b78cd438b3b314.json"
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 66.7,
+    "completenessPct": 12.5,
     "completeness": {
-      "present": 2,
-      "required": 3
+      "present": 1,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "FAIR",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
     "entrySignal": "NO_ENTRY",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -206,7 +270,11 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
         "signal": "NO_ENTRY",
         "stage": null,
@@ -244,8 +312,8 @@
       "sector": {
         "sector": "Consumer Services",
         "stocks": 228,
-        "momentum63dMedian": -6.67,
-        "relativeToMarket": -1.5,
+        "momentum63dMedian": -6.62,
+        "relativeToMarket": -1.39,
         "declared": 82,
         "strongResults": 39,
         "avgReaction": -1.05,
@@ -302,7 +370,15 @@
         }
       },
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-11-17",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/540027/",
@@ -602,9 +678,12 @@
       ]
     },
     "priceSource": "BSE_PRICE",
-    "computedAt": "2026-11-17T12:41:44Z",
+    "computedAt": "2026-11-17T13:52:47Z",
+    "replayedFromRaw": true,
     "plusVersion": "2.9.48",
-    "corporateActions": null
+    "corporateActions": null,
+    "eod": null,
+    "eodTried": "2026-11-17+2026-11-08"
   },
   "priceTrail": [
     {
@@ -657,5 +736,35 @@
       "price": 100.0,
       "source": "BSE_PRICE"
     }
-  ]
+  ],
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-17T19:00:50.530000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "CONSOLIDATED",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Un-audited standalone and consolidated financial results for the quarter ended September 30, 2026 Prabhat Technologies (India) Ltd - 540027 - Un-Audited Financial Results For Quarter  And Half Year Ended September 30, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-b0f795f77236d8a5.json",
+      "seenAt": "2026-11-17T13:51:39Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-11-17T13:38:12Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-11-17",
+    "source": "BSE_ANNOUNCEMENTS"
+  }
 }
