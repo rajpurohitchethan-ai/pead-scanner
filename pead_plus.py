@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.53"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.54"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2821,3 +2821,51 @@ def theme_tags(items: list[dict[str, Any]], themes: list[dict[str, Any]] | None)
             it.setdefault("plus", {})["themes"] = names
             n += 1
     return n
+
+
+# ---------------------------------------------------------------------------
+# 2.9.54 Slim browser copy (owner report 17 Nov 2026: "Webpage not working")
+#
+# intelligence.json grew from 31 MB (5 Nov) to 53 MB (17 Nov): full charts,
+# peers and checklists for all ~5,200 companies, two thirds of which fail the
+# liquidity test and can never be traded. A phone has to download, unpack and
+# parse all of it on every visit. page.json is what the page loads instead:
+# the same items, with price analytics cut to the fields the page reads and,
+# for illiquid stocks you do not hold, no chart / peers / checklists. The full
+# intelligence.json is still published for the alerts and the checks.
+# ---------------------------------------------------------------------------
+PAGE_PRICE_KEEP = ("stage", "ret_21d_pct", "ret_63d_pct", "base_broken", "return_since_result_pct", "hv_label",
+                   "ema10", "ema20", "ema21", "last_session", "close_in_range_pct", "sessions_since_reaction",
+                   "q1_reaction_return_pct", "q1_reaction_rvol", "q1_return_to_q2_pct")
+PAGE_ILLIQUID_DROP_PLUS = ("chart", "peers", "topDown", "hands", "links", "identity", "lens", "margins",
+                           "concall", "favour", "peerFundamentals", "valuation", "execution")
+PAGE_ILLIQUID_DROP_TOP = ("resultReality", "valuationReality", "fundamentalSnapshot")
+
+
+def page_payload(intel: dict[str, Any], held: set[str] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The browser copy of intelligence.json, in two parts (see above): page.json
+    with every liquid stock and every stock you hold, shown at once, and
+    page-more.json with the illiquid rest, fetched after the page is up. Never
+    changes a value; only leaves fields out. A stock you hold keeps everything."""
+    held = held or {str(x.get("symbol") or "").upper() for x in intel.get("positions") or []}
+    main, rest = [], []
+    for it in intel.get("items") or []:
+        plus = dict(it.get("plus") or {})
+        px = plus.get("price")
+        if isinstance(px, dict):
+            plus["price"] = {k: px[k] for k in PAGE_PRICE_KEEP if k in px}
+        pc = it.get("priceContext")
+        if isinstance(pc, dict) and "trail" in pc:              # the page never reads the price trail
+            it = {**it, "priceContext": {k: v for k, v in pc.items() if k != "trail"}}
+        liquid = (plus.get("liquidity") or {}).get("pass") is True
+        if not liquid and str(it.get("symbol") or "").upper() not in held:
+            for k in PAGE_ILLIQUID_DROP_PLUS:
+                plus.pop(k, None)
+            it = {k: v for k, v in it.items() if k not in PAGE_ILLIQUID_DROP_TOP}
+            plus["slim"] = True
+            rest.append({**it, "plus": plus})
+        else:
+            main.append({**it, "plus": plus})
+    head = {**intel, "items": main, "pageCopy": True, "moreFile": "page-more.json", "moreCount": len(rest),
+            "allCount": len(main) + len(rest)}
+    return head, {"generatedAt": intel.get("generatedAt"), "version": intel.get("version"), "items": rest}

@@ -80,12 +80,14 @@ LOG_DIR = ROOT / "logs"
 MASTER_DIR = ROOT / "master"
 DATA_PATH = ROOT / "data.json"
 INTELLIGENCE_PATH = ROOT / "intelligence.json"
+PAGE_PATH = ROOT / "page.json"          # 2.9.54: slim copy for the browser (liquid + held)
+PAGE_MORE_PATH = ROOT / "page-more.json" # 2.9.54: the illiquid rest, loaded after
 HEALTH_PATH = ROOT / "run_health.json"
 SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.53"
+ENGINE_VERSION = "2.9.54"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -8500,6 +8502,12 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
     json_dump_atomic(DATA_PATH, data_payload)
     # The dashboard feed is compact (no indentation) to keep it light on mobile.
     json_dump_atomic(INTELLIGENCE_PATH, intel_payload, compact=True)
+    try:                                                   # 2.9.54: the slim copy the page loads
+        page_main, page_more = pead_plus.page_payload(intel_payload)
+        json_dump_atomic(PAGE_MORE_PATH, page_more, compact=True)      # the rest first: page.json points at it
+        json_dump_atomic(PAGE_PATH, page_main, compact=True)
+    except Exception as exc:
+        print(f"page.json not written: {type(exc).__name__}: {exc}")
     return True, []
 
 

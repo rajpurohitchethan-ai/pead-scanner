@@ -3790,3 +3790,34 @@ class MuhuratSessionEodTests(unittest.TestCase):
         b = [{"date": date(2026, 11, 8)}] + a
         self.assertNotEqual(p.eod_signature(a), p.eod_signature(b))
         self.assertEqual(p.eod_signature(a), "2026-11-13")                    # unchanged form for normal days
+
+
+class PageCopyTests(unittest.TestCase):
+    """2.9.54 (17 Nov 2026, owner: "Webpage not working"): intelligence.json
+    reached 53 MB. The page loads a slim two-part copy instead."""
+
+    def test_split_and_slim_without_changing_values(self):
+        import pead_plus as pp
+        def it(sym, liquid):
+            return {"symbol": sym, "resultsReleased": True, "resultReality": {"x": 1},
+                    "priceContext": {"lastClose": 10.0, "trail": [{"price": 10.0}] * 50},
+                    "plus": {"liquidity": {"pass": liquid}, "chart": {"close": [1, 2]}, "hands": {"label": "STRONG"},
+                             "plan": {"signal": "WATCH"}, "price": {"stage": {"stage": 2}, "ema10": 9.5, "atr14": 0.3, "pressure": {"a": 1}}}}
+        intel = {"generatedAt": "2026-11-17T14:26:42Z", "version": "v", "positions": [{"symbol": "HELD"}],
+                 "items": [it("LIQ", True), it("ILLIQ", False), it("HELD", False)]}
+        main, more = pp.page_payload(intel)
+        self.assertEqual([i["symbol"] for i in main["items"]], ["LIQ", "HELD"])           # held stays whole even if illiquid
+        self.assertEqual([i["symbol"] for i in more["items"]], ["ILLIQ"])
+        self.assertEqual((main["moreFile"], main["moreCount"], main["allCount"]), ("page-more.json", 1, 3))
+        self.assertEqual(more["generatedAt"], intel["generatedAt"])
+        liq, ill = main["items"][0], more["items"][0]
+        self.assertEqual(liq["plus"]["price"], {"stage": {"stage": 2}, "ema10": 9.5})        # only fields the page reads
+        self.assertEqual(liq["plus"]["chart"], {"close": [1, 2]})
+        self.assertNotIn("trail", liq["priceContext"])
+        self.assertEqual(liq["priceContext"]["lastClose"], 10.0)
+        self.assertTrue(ill["plus"]["slim"])
+        self.assertNotIn("chart", ill["plus"]); self.assertNotIn("hands", ill["plus"]); self.assertNotIn("resultReality", ill)
+        self.assertEqual(ill["plus"]["plan"], {"signal": "WATCH"})
+        self.assertIn("chart", main["items"][1]["plus"])
+        self.assertIn("trail", intel["items"][0]["priceContext"])                           # the full file is untouched
+        self.assertIn("atr14", intel["items"][0]["plus"]["price"])

@@ -315,6 +315,7 @@
   // ---------- setup card ----------
   function card(it) {
     const p = P(it), x1 = px(it), plan = p.plan || {};
+    const slimNote = p.slim ? '<p class="meta">Below the liquidity test: chart and checklists are left out of the page to keep it light on phones.</p>' : '';
     const [sLabel, sTone] = sig(it);
     const rail = { go: 's-go', watch: 's-watch', no: 's-no', pending: 's-pending' }[sTone] || 's-pending';
     const b = p.bucket, st = STRENGTH[p.strength], tail = p.sector?.tailwind, liq = p.liquidity || {};
@@ -360,7 +361,7 @@
       ${tvChart(it)}
       ${facts}
       ${lensBlock(it)}
-      ${topDownStrip(it)}${stageLine(px(it).stage)}${handsStrip(P(it).hands)}
+      ${slimNote}${topDownStrip(it)}${stageLine(px(it).stage)}${handsStrip(P(it).hands)}
       ${sectorCompact(it)}
       ${peersLine(it)}
       <div class="plan"><div class="plan-top"><span class="plan-sig ${sTone}">${sLabel}${plan.stage === 'STARTER' && num(plan.entry) !== null ? ' <span class="tag warn">Starter, 1/3 size</span>' : plan.stage === 'FULL' && num(plan.entry) !== null ? ' <span class="tag go">Full size</span>' : ''}</span>${num(plan.rNow) !== null ? `<span class="n">${num(plan.rNow).toFixed(1)}R</span>` : ''}</div>
@@ -825,7 +826,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.53';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.54';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -978,8 +979,21 @@
   $('liquid').checked = S.liquid; $('sort').value = S.sort; showDir();
   $('cap').value = store.get('cap', 1000000); $('risk').value = store.get('risk', 1); $('pcap').value = store.get('pcap', 15);
   applyTheme(store.get('theme', null));
-  fetch('intelligence.json?t=' + Date.now(), { cache: 'no-store' })
-    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(d => { S.data = d; render(); })
-    .catch(err => { $('view').innerHTML = `<div class="empty">Could not load intelligence.json (${esc(err.message)}). The page shows data once the engine has published at least once.</div>`; });
+  // 2.9.54: load the slim page.json (a few MB) instead of the 50+ MB intelligence.json; fall back to the
+  // full file until the first run has written page.json. 'no-cache' revalidates, so an unchanged file
+  // is not downloaded again.
+  const getJson = f => fetch(f + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  getJson('page.json').catch(() => getJson('intelligence.json'))
+    .then(d => {
+      S.data = d; render();
+      if (!d.moreFile) return;
+      // the illiquid rest arrives after the page is up; a mismatched file (another run) is ignored
+      getJson(d.moreFile).then(m => {
+        if (!m || m.generatedAt !== d.generatedAt || !Array.isArray(m.items)) return;
+        const y = window.scrollY;
+        S.data.items = S.data.items.concat(m.items); S.data.moreLoaded = true;
+        render(); window.scrollTo(0, y);
+      }).catch(() => {});
+    })
+    .catch(err => { $('view').innerHTML = `<div class="empty">Could not load the data (${esc(err.message)}). Pull down to refresh; the page shows data once the engine has published at least once.</div>`; });
 })();
