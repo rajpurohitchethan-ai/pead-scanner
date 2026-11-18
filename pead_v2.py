@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.54"
+ENGINE_VERSION = "2.9.55"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1857,6 +1857,12 @@ def enrichment_group(event: dict[str, Any], today: date | None = None,
         # in rank A3 after the 6 Nov NSE outage skipped its read.
         if no_figures and not tried_recently and _known_xbrl_unread(event):
             return "A", 0
+        # 2.9.55: BSE table figures do not replace the exchange XBRL. LTF, JSL,
+        # SUZLON ... had the 5 Nov XBRL read skipped by the run guard after the
+        # BSE table was read; with figures present and daily files keeping
+        # prices current they sat in group D for 13 days.
+        if not tried_recently and _bse_figures_hide_xbrl(event):
+            return "A", 0
         # 2.9.40: declared late by check_overdue_filings; the result date is old,
         # so nothing else here would bring its figures forward in season.
         late = parse_datetime(event.get("lateDeclaredAt"))
@@ -1952,6 +1958,18 @@ def _known_xbrl_unread(event: dict[str, Any]) -> bool:
     return str(f.get("error") or "").startswith("SourceSkipped")
 
 
+def _bse_figures_hide_xbrl(event: dict[str, Any]) -> bool:
+    """2.9.55: the cached NSE listing names this quarter's XBRL, it was never
+    read because the run guard skipped it (outage), and no XBRL snapshot
+    exists: the visible figures come from a lower source (BSE table / Yahoo)."""
+    snaps = event.get("financialSnapshots") or {}
+    err = str((((event.get("fetch") or {}).get("NSE_XBRL") or {}).get("error")) or "")
+    # Only the documented case (last read skipped by an outage), so a filing
+    # the engine never tries to read cannot jump the queue every 2 h.
+    return (err.startswith("SourceSkipped") and not snaps.get("NSE_XBRL") and not snaps.get("BSE_XBRL")
+            and _known_xbrl_unread(event))
+
+
 def _a0_subrank(event: dict[str, Any], last_session: date) -> int:
     """2.9.35: order inside rank A0. 0 = a closed reaction session the stored
     prices do not cover yet (stock traded within REACTION_DUE_TRADED_DAYS),
@@ -1961,6 +1979,8 @@ def _a0_subrank(event: dict[str, Any], last_session: date) -> int:
     if _reaction_bar_due(event, last_session):
         return 0
     if meta_value(event, "revenue_cr") is None or meta_value(event, "pat_cr") is None:
+        return 1
+    if _bse_figures_hide_xbrl(event):
         return 1
     return 2
 
@@ -7710,6 +7730,11 @@ def eod_replay_order(events: list[dict[str, Any]], held: set[str], turnover) -> 
     return sorted(events, key=key)
 
 
+# 2.9.55: bump to try every stock still behind the newest file once more after
+# a fix to the replay path (renamed symbols' own NSE prices were rejected).
+EOD_REPLAY_REV = "2.9.55"
+
+
 def replay_eod(store: "EventStore", *, budget_seconds: float | None = None) -> dict[str, int]:
     """Rebuild the analytics of every stock whose stored history ends before the
     newest end-of-day file, or whose result-day range is still close-only. Each
@@ -7726,7 +7751,7 @@ def replay_eod(store: "EventStore", *, budget_seconds: float | None = None) -> d
         if not dashboard_activity(event):
             continue
         plus = event.get("plus") or {}
-        if plus.get("eodTried") == signature:
+        if plus.get("eodTried") == signature and plus.get("eodRev") == EOD_REPLAY_REV:
             continue
         last = str((plus.get("price") or {}).get("last_session") or "")[:10]
         if last >= latest and not close_only_range(event):
@@ -7745,16 +7770,35 @@ def replay_eod(store: "EventStore", *, budget_seconds: float | None = None) -> d
             break
         ok = rebuild_plus_from_raw(store, event)
         event.setdefault("plus", {})["eodTried"] = signature
+        event["plus"]["eodRev"] = EOD_REPLAY_REV
         store.save(event)
         out["rebuilt"] += 1 if ok else 0
     return out
 
 
 def _payload_symbol(payload: Any) -> str | None:
+    """Symbol of the NEWEST row. 2.9.55: a stock renamed inside the 12-month
+    window (GANESHHOUC -> GANESHHOU) has the old symbol on its oldest rows; the
+    first row rejected the stock's own prices."""
     rows = payload if isinstance(payload, list) else (payload.get("data") if isinstance(payload, dict) else None)
-    if isinstance(rows, list) and rows and isinstance(rows[0], dict) and rows[0].get("chSymbol"):
-        return normalize_symbol(rows[0]["chSymbol"])
-    return None
+    if not isinstance(rows, list):
+        return None
+    best, best_d = None, None
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict) or not r.get("chSymbol"):
+            continue
+        raw = str(r.get("mtimestamp") or r.get("CH_TIMESTAMP") or r.get("chTimestamp") or "")[:11]
+        d = None
+        for fmt in ("%d-%b-%Y", "%Y-%m-%d"):
+            try:
+                d = datetime.strptime(raw[:11] if fmt == "%d-%b-%Y" else raw[:10], fmt).date()
+                break
+            except ValueError:
+                continue
+        key = (d or date.min, i if d is None else 0)
+        if best_d is None or key > best_d:
+            best, best_d = r["chSymbol"], key
+    return normalize_symbol(best) if best else None
 
 
 def _payload_symbol_ok(payload: Any, sec: dict[str, Any]) -> bool:

@@ -3821,3 +3821,94 @@ class PageCopyTests(unittest.TestCase):
         self.assertIn("chart", main["items"][1]["plus"])
         self.assertIn("trail", intel["items"][0]["priceContext"])                           # the full file is untouched
         self.assertIn("atr14", intel["items"][0]["plus"]["price"])
+
+
+class SkippedXbrlWithBseFiguresTests(unittest.TestCase):
+    """2.9.55 (18 Nov 2026): the 5 Nov 17:01 IST run had NSE switched off by the
+    run guard while reading LTF, JSL, SCHAEFFLER, SONACOMS, SUZLON, HDBFS,
+    SUPREMEIND, 360ONE, JKCEMENT, KEI ... (Rs 37,000-60,000 Cr each). Their NSE
+    listings already named the Sep-2026 XBRL, but the BSE table had been read,
+    so figures were present (basis unknown, no YoY) and 2.9.47's jump needed
+    figures MISSING; the daily files kept prices current, so they sat in group D
+    and the exchange XBRL was never read again (13 days, source precedence
+    broken). A known, never-read XBRL counts as figures not read when no XBRL
+    snapshot exists at all."""
+
+    def _ev(self, snaps=None):
+        ev = KnownFilingUnreadTests()._ev({"lastAttempt": "2026-11-05T17:01:20Z", "status": "FAILED",
+                                          "error": "SourceSkipped: NSE switched off for this run: 12 failures in a row"},
+                                         attempt="2026-11-05T17:01:24Z")
+        ev["security"]["nseSymbol"] = "LTF"
+        ev["fields"]["result_date"]["value"] = "2026-10-15"
+        ev["fields"]["reaction_session"]["value"] = "2026-10-16"
+        ev["fields"]["revenue_cr"] = {"value": 4600.0, "source": "BSE_RESULTS_SNAPSHOT", "status": "OK"}
+        ev["fields"]["pat_cr"] = {"value": 780.0, "source": "BSE_RESULTS_SNAPSHOT", "status": "OK"}
+        ev["financialSnapshots"] = snaps if snaps is not None else {"BSE_RESULTS_SNAPSHOT": {"values": {"pat_cr": 780.0}}}
+        ev["plus"]["price"]["last_session"] = "2026-11-18"
+        return ev
+
+    def test_bse_figures_do_not_hide_an_unread_xbrl(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 11, 18, 21, 0, tzinfo=p.IST)
+        ev = self._ev()
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertEqual(p.enrichment_group(ev, now.date()), ("A", 0))
+            self.assertEqual(p._a0_subrank(ev, p.last_completed_session(now.date())), 1)
+
+    def test_existing_xbrl_snapshot_or_recent_try_does_not_jump(self):
+        from datetime import datetime as _dt
+        now = _dt(2026, 11, 18, 21, 0, tzinfo=p.IST)
+        with_xbrl = self._ev({"NSE_XBRL": {"documentUrl": "https://nsearchives.nseindia.com/other.xml",
+                                           "validation": {"status": "VERIFIED"}, "parserVersion": p.XBRL_PARSER_VERSION}})
+        recent = self._ev()
+        recent["fetch"]["PRICE_HISTORY"]["lastAttempt"] = "2026-11-18T14:30:00Z"
+        with mock.patch.object(p, "now_ist", return_value=now), mock.patch.object(p, "open_positions", return_value=[]):
+            self.assertNotEqual(p.enrichment_group(with_xbrl, now.date()), ("A", 0))
+            self.assertNotEqual(p.enrichment_group(recent, now.date()), ("A", 0))
+
+
+class RenamedInsideHistoryTests(unittest.TestCase):
+    """2.9.55 (18 Nov 2026): NSE renamed GANESHHOUC -> GANESHHOU (and INFIBEAM
+    -> CCAVENUE, TATAMOTORS -> TMPV ...) inside the 12-month window, so a saved
+    history's OLDEST row still carries the old symbol. _payload_symbol read
+    rows[0], rejected the stock's own NSE prices as another company's, and the
+    daily files could not extend them: GANESHHOU (Rs 5,468 Cr) was priced on
+    the 2 Nov close on 18 Nov, CCAVENUE on 9 Nov. The symbol of the newest row
+    is the one the payload belongs to."""
+
+    def _rows(self, newest_first=False):
+        rows = [{"chSymbol": "GANESHHOUC", "chSeries": "EQ", "mtimestamp": "08-Sep-2025", "chClosingPrice": 600.0},
+                {"chSymbol": "GANESHHOUC", "chSeries": "EQ", "mtimestamp": "09-Sep-2025", "chClosingPrice": 601.0},
+                {"chSymbol": "GANESHHOU", "chSeries": "EQ", "mtimestamp": "01-Oct-2025", "chClosingPrice": 650.0},
+                {"chSymbol": "GANESHHOU", "chSeries": "EQ", "mtimestamp": "02-Nov-2026", "chClosingPrice": 655.7}]
+        return list(reversed(rows)) if newest_first else rows
+
+    def test_newest_row_names_the_payload(self):
+        sec = {"nseSymbol": "GANESHHOU"}
+        self.assertTrue(p._payload_symbol_ok({"data": self._rows()}, sec))
+        self.assertTrue(p._payload_symbol_ok(self._rows(newest_first=True), sec))
+
+    def test_another_company_still_rejected(self):
+        rows = [dict(r, chSymbol="GUJALKALI") for r in self._rows()]
+        self.assertFalse(p._payload_symbol_ok({"data": rows}, {"nseSymbol": "ALKALI"}))
+        # a former symbol on every row is still accepted (ICICIPRULI, 2.9.32)
+        rows = [dict(r, chSymbol="ICICIPRULI") for r in self._rows()]
+        self.assertTrue(p._payload_symbol_ok({"data": rows}, {"nseSymbol": "ICICILIFE", "formerSymbols": ["ICICIPRULI"]}))
+
+    def test_replay_rev_retries_stocks_stamped_before_the_fix(self):
+        from datetime import date as _d
+        ev = {"eventId": "X_2026-09-30", "plus": {"eodTried": "2026-11-18", "price": {"last_session": "2026-11-02"}}}
+        done = {"eventId": "Y_2026-09-30", "plus": {"eodTried": "2026-11-18", "eodRev": p.EOD_REPLAY_REV,
+                                                     "price": {"last_session": "2026-11-02"}}}
+        store = mock.Mock()
+        store.all.return_value = [ev, done]
+        store.value.return_value = None
+        days = [{"date": _d(2026, 11, 18), "nse": {}, "bse": {}}]
+        with mock.patch.object(p, "load_eod", return_value=days), \
+                mock.patch.object(p, "dashboard_activity", return_value=True), \
+                mock.patch.object(p, "close_only_range", return_value=False), \
+                mock.patch.object(p, "rebuild_plus_from_raw", return_value=True) as rb:
+            out = p.replay_eod(store, budget_seconds=60)
+        self.assertEqual(out["rebuilt"], 1)
+        self.assertIs(rb.call_args[0][1], ev)
+        self.assertEqual(ev["plus"]["eodRev"], p.EOD_REPLAY_REV)
