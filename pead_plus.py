@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.55"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.56"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2019,6 +2019,15 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
         st["halfHit"] = half_hit
     st["swingStop"], st["positionStop"] = _r2(rest), _r2(rest)
     r_now = (last - entry) / risk if last is not None else None
+    # 2.9.56: remember the latest closing-basis exit signal (SEJALLTD closed under
+    # cost on 19 Nov, bounced on 20 Nov and the card no longer mentioned it).
+    exit_now = bool(close is not None and close < rest)
+    exit_what = ("the 20 EMA" if e20 is not None and rest == e20 else "cost") if one_r_hit else "the stop"
+    if exit_now and sess and sess >= str(pos.get("entryDate") or ""):
+        st["exitHit"] = {"date": sess, "close": _r2(close), "level": _r2(rest),
+                         "what": exit_what.replace("the ", "")}
+    exit_hit = st.get("exitHit") if isinstance(st.get("exitHit"), dict) else None
+    view["exitHit"] = exit_hit
     view.update({"riskPerShare": _r2(risk), "riskPct": _r2(risk / entry * 100), "oneR": _r2(one_r),
                  "twoR": _r2(entry + 2 * risk), "swingStop": _r2(rest), "positionStop": _r2(rest),
                  "halfStop": _r2(half), "restStop": _r2(rest), "ema10": e10, "ema20": e20, "halfHit": half_hit,
@@ -2051,6 +2060,14 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
     else:
         view["status"], view["note"] = "HOLD", (f"Hold. Stop {stop0:,.2f} until a close at +1R ({one_r:,.2f}); then the stop "
                                                 f"moves to cost, half goes on a close below the 10 EMA and the rest below the 20 EMA.")
+    if exit_hit and not exit_now and view.get("status") != "NO_DATA":
+        try:
+            d = date.fromisoformat(str(exit_hit.get("date"))[:10])
+            when = f"{d.day} {d.strftime('%b')}"
+        except ValueError:
+            when = str(exit_hit.get("date"))
+        view["note"] += (f" An exit was due on {when} (close {_num(exit_hit.get('close')):,.2f} below "
+                         f"{exit_hit.get('what')} {_num(exit_hit.get('level')):,.2f}); if you still hold, the plan's signal was given then.")
     return view, st
 
 

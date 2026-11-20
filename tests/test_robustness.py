@@ -3912,3 +3912,45 @@ class RenamedInsideHistoryTests(unittest.TestCase):
         self.assertEqual(out["rebuilt"], 1)
         self.assertIs(rb.call_args[0][1], ev)
         self.assertEqual(ev["plus"]["eodRev"], p.EOD_REPLAY_REV)
+
+
+class ExitSignalRememberedTests(unittest.TestCase):
+    """2.9.56 (evening check, 20 Nov 2026): SEJALLTD (+1R reached, stop at
+    cost 884.13) closed 877.95 on 19 Nov: My trades said EXIT. On 20 Nov it
+    closed 922.95 and the card went back to TRAILING with no word about the
+    exit signal of the day before, while the trade is still OPEN. The exit
+    signal is now remembered (like halfHit) and named on later notes. The
+    status itself still follows today's close (no rule change)."""
+    POS = {"symbol": "SEJALLTD", "entryDate": "2026-10-16", "entryPrice": 884.13, "stop": 838.03}
+
+    def item(self, close, session, e10=None, e20=None):
+        return {"symbol": "SEJALLTD", "resultDayLow": 846.5, "priceContext": {"lastClose": close},
+                "plus": {"price": {"ema10": e10, "ema20": e20, "last_session": session}}}
+
+    def test_exit_signal_is_remembered_after_a_bounce(self):
+        import pead_plus as pp
+        st = {"oneRHit": True, "peakClose": 951.95, "halfHit": True}
+        v, st = pp.position_view(self.POS, self.item(877.95, "2026-11-19", e10=895.0, e20=871.0), st, date(2026, 11, 19))
+        self.assertEqual(v["status"], "EXIT")
+        self.assertEqual(st["exitHit"], {"date": "2026-11-19", "close": 877.95, "level": 884.13, "what": "cost"})
+        v, st = pp.position_view(self.POS, self.item(922.95, "2026-11-20", e10=893.86, e20=871.0), st, date(2026, 11, 20))
+        self.assertEqual(v["status"], "TRAILING")                          # today's close decides the status
+        self.assertEqual(v["exitHit"]["date"], "2026-11-19")
+        self.assertIn("exit was due on 19 nov", v["note"].lower())
+        self.assertIn("877.95", v["note"])
+        # the latest signal is the one shown (an older one the owner already held through is replaced)
+        v, st = pp.position_view(self.POS, self.item(880.0, "2026-11-23", e10=893.0, e20=872.0), st, date(2026, 11, 23))
+        self.assertEqual(st["exitHit"]["date"], "2026-11-23")
+
+    def test_no_exit_no_note(self):
+        import pead_plus as pp
+        v, st = pp.position_view(self.POS, self.item(922.95, "2026-11-20", e10=893.86, e20=871.0),
+                                 {"oneRHit": True, "peakClose": 951.95}, date(2026, 11, 20))
+        self.assertNotIn("exitHit", st)
+        self.assertIsNone(v.get("exitHit"))
+        self.assertNotIn("exit was due", v["note"].lower())
+
+    def test_close_before_entry_date_is_not_an_exit(self):
+        import pead_plus as pp
+        v, st = pp.position_view(self.POS, self.item(830.0, "2026-10-15"), None, date(2026, 10, 16))
+        self.assertNotIn("exitHit", st)
