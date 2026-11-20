@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE109B01019|2026-09-30",
   "createdAt": "2026-11-13T01:56:15Z",
-  "updatedAt": "2026-11-20T13:10:58Z",
+  "updatedAt": "2026-11-20T13:40:33Z",
   "security": {
     "symbol": "BOSTON",
     "bseSymbol": "BOSTON",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "DISCOVERED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -36,19 +36,27 @@
       "state": "DISCOVERED",
       "at": "2026-11-20T13:04:43Z",
       "reason": "calendar date belonged to an earlier quarter"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-20T13:22:31Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-20T13:40:33Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-20",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-20T12:49:03Z",
-      "status": "REVOKED",
+      "fetchedAt": "2026-11-20T13:22:31Z",
+      "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-02f5ae0951a46d0e.json",
-      "note": null,
-      "revokedAt": "2026-11-20T13:04:43Z",
-      "revokedReason": "meeting 2026-11-20 was for period 2026-06-30 (filing 2026-11-20 names it)"
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7c081e4553829829.json",
+      "note": null
     },
     "reaction_session": {
       "value": "2026-11-23",
@@ -157,6 +165,33 @@
       "rank": 88,
       "rawRef": null,
       "note": null
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-20T13:22:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7c081e4553829829.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-20T18:20:59.023000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-20T13:22:31Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7c081e4553829829.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-20T13:22:31Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7c081e4553829829.json",
+      "note": null
     }
   },
   "fetch": {
@@ -198,23 +233,29 @@
   },
   "derived": {
     "score": 6,
-    "completenessPct": 33.3,
+    "completenessPct": 12.5,
     "completeness": {
       "present": 1,
-      "required": 3
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "PARTLY PRICED",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "LOSS-MAKING",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -222,10 +263,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -268,8 +313,8 @@
       "sector": {
         "sector": "Healthcare",
         "stocks": 302,
-        "momentum63dMedian": -2.25,
-        "relativeToMarket": 3.88,
+        "momentum63dMedian": -2.38,
+        "relativeToMarket": 3.9,
         "declared": 145,
         "strongResults": 83,
         "avgReaction": 0.24,
@@ -847,5 +892,19 @@
         "replacedAt": "2026-11-19T13:50:18Z"
       }
     ]
-  }
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-20T18:20:59.023000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Unaudited Financial Results for quarter and Half year ended 30th September 2026 Boston Commerce Ltd - 531458 - Unaudited Financial Results For Quarter And Half Year Ended 30Th September 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-7c081e4553829829.json",
+      "seenAt": "2026-11-20T13:37:05Z"
+    }
+  ]
 }
