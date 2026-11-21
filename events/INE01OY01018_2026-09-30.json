@@ -2,7 +2,7 @@
   "schemaVersion": "pead-event-v2.1",
   "eventId": "INE01OY01018|2026-09-30",
   "createdAt": "2026-11-06T23:11:48Z",
-  "updatedAt": "2026-11-21T10:48:59Z",
+  "updatedAt": "2026-11-21T11:21:40Z",
   "security": {
     "symbol": "ASIANFR",
     "bseSymbol": "ASIANFR",
@@ -20,7 +20,7 @@
     "end": "2026-09-30",
     "quarter": "Q2 FY27"
   },
-  "state": "SCHEDULED",
+  "state": "REACTION_PENDING",
   "stateHistory": [
     {
       "state": "DISCOVERED",
@@ -31,31 +31,41 @@
       "state": "SCHEDULED",
       "at": "2026-11-06T23:11:48Z",
       "reason": "board meeting/result calendar discovered"
+    },
+    {
+      "state": "RESULT_FILED",
+      "at": "2026-11-21T11:01:28Z",
+      "reason": "official exchange result filing/announcement detected"
+    },
+    {
+      "state": "REACTION_PENDING",
+      "at": "2026-11-21T11:21:40Z",
+      "reason": "waiting for reaction session"
     }
   ],
   "fields": {
     "result_date": {
       "value": "2026-11-21",
       "source": "BSE_RESULT_ANNOUNCEMENT",
-      "fetchedAt": "2026-11-21T10:25:08Z",
+      "fetchedAt": "2026-11-21T11:01:42Z",
       "status": "OK",
       "rank": 110,
-      "rawRef": "raw/bse/DISCOVERY/result_calendar-d10d57e4c9c67e66.json",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-6c0a9c972434ac1f.json",
       "note": null
     },
     "reaction_session": {
       "value": "2026-11-23",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-21T10:01:22Z",
+      "fetchedAt": "2026-11-21T11:01:46Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
-      "note": "UNKNOWN_TIME_NEXT_SESSION"
+      "note": "NON_TRADING_DAY"
     },
     "filing_session": {
-      "value": "UNKNOWN_TIME_NEXT_SESSION",
+      "value": "NON_TRADING_DAY",
       "source": "DERIVED",
-      "fetchedAt": "2026-11-21T10:01:22Z",
+      "fetchedAt": "2026-11-21T11:01:46Z",
       "status": "OK",
       "rank": 10,
       "rawRef": null,
@@ -87,6 +97,33 @@
       "rank": 98,
       "rawRef": "raw/bse/INE01OY01018_2026-09-30/scrip_results-88d000bc49e8624d.json",
       "note": "previous quarter 2026-06-30"
+    },
+    "results_released": {
+      "value": true,
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-21T11:01:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-6c0a9c972434ac1f.json",
+      "note": "re-verified from saved exchange evidence"
+    },
+    "filing_timestamp": {
+      "value": "2026-11-21T16:09:10.700000+05:30",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-21T11:01:28Z",
+      "status": "OK",
+      "rank": 110,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-6c0a9c972434ac1f.json",
+      "note": null
+    },
+    "result_source": {
+      "value": "BSE_RESULT_ANNOUNCEMENT",
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "fetchedAt": "2026-11-21T11:01:28Z",
+      "status": "OK",
+      "rank": 98,
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-6c0a9c972434ac1f.json",
+      "note": null
     }
   },
   "fetch": {
@@ -98,7 +135,7 @@
       "rawRef": "raw/bse/NSE_ASIANFR_2026-09-30/lookup-79931daa9c5d9e04.json"
     },
     "PRICE_HISTORY": {
-      "lastAttempt": "2026-11-21T10:01:24Z",
+      "lastAttempt": "2026-11-21T11:01:48Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
@@ -119,32 +156,59 @@
       "rawRef": null
     },
     "YAHOO_FUNDAMENTALS": {
-      "lastAttempt": "2026-11-21T10:01:25Z",
+      "lastAttempt": "2026-11-21T11:01:50Z",
       "lastSuccess": null,
       "status": "FAILED",
       "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
       "rawRef": null
+    },
+    "BSE_RESULTS_SNAPSHOT": {
+      "lastAttempt": "2026-11-21T11:01:46Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "snapshot has no column for event quarter",
+      "rawRef": "raw/bse/INE01OY01018_2026-09-30/results_snapshot-2064f767647d3f63.json"
+    },
+    "YAHOO_QUARTERLY": {
+      "lastAttempt": "2026-11-21T11:01:46Z",
+      "lastSuccess": null,
+      "status": "FAILED",
+      "error": "no eligible Yahoo ticker (negative-cached or unmapped)",
+      "rawRef": null
+    },
+    "CONCALL": {
+      "lastAttempt": "2026-11-21T11:01:50Z",
+      "lastSuccess": "2026-11-21T11:01:50Z",
+      "status": "OK",
+      "error": null,
+      "rawRef": "raw/bse/INE01OY01018_2026-09-30/scrip_announcements-394a030e4e9b3a85.json"
     }
   },
   "derived": {
     "score": 0,
-    "completenessPct": 33.3,
+    "completenessPct": 0.0,
     "completeness": {
-      "present": 1,
-      "required": 3
+      "present": 0,
+      "required": 8
     },
-    "resultReality": "AWAITING RESULT",
+    "resultReality": "UNVERIFIED",
     "expectationReality": "AWAITING PRICE HISTORY",
-    "priceResponse": "AWAITING RESULT",
+    "priceResponse": "UNVERIFIED",
     "valuationReality": "UNVERIFIED",
-    "verdict": "AWAIT RESULT — WATCHLIST",
+    "verdict": "DATA PENDING — RESULT VERIFIED",
     "highConviction": false,
     "entryWatch": false,
-    "entrySignal": "WAIT_RESULT",
+    "entrySignal": "WAIT_REACTION",
     "entryTriggerPrice": null,
     "entryDistancePct": null,
     "plus": {
-      "growth": null,
+      "growth": {
+        "label": null,
+        "revenueDeltaPp": null,
+        "profitDeltaPp": null,
+        "prevRevenueYoY": null,
+        "prevProfitYoY": null
+      },
       "lens": null,
       "relativeStrength": null,
       "hands": null,
@@ -152,10 +216,14 @@
       "strength": null,
       "q1Strength": null,
       "q1Setup": null,
-      "bucket": null,
+      "bucket": {
+        "code": "PENDING",
+        "label": "Q2 data pending",
+        "why": "Q2 numbers not verified yet."
+      },
       "plan": {
-        "signal": "WAIT_RESULT",
-        "why": "Results not declared yet.",
+        "signal": "WAIT_REACTION",
+        "why": "Waiting for the first trading session after the result.",
         "entry": null,
         "sl": null,
         "riskPct": null,
@@ -200,7 +268,7 @@
         "stocks": 314,
         "momentum63dMedian": -7.13,
         "relativeToMarket": -0.85,
-        "declared": 116,
+        "declared": 117,
         "strongResults": 58,
         "avgReaction": -2.22,
         "tailwind": "NEUTRAL"
@@ -215,7 +283,15 @@
       },
       "price": {},
       "deliveryPct": null,
-      "concall": null,
+      "concall": {
+        "status": "NONE_FOUND",
+        "callDate": null,
+        "noticeUrl": null,
+        "transcriptUrl": null,
+        "audioUrl": null,
+        "checkedOn": "2026-11-21",
+        "source": "BSE_ANNOUNCEMENTS"
+      },
       "tradeLog": null,
       "links": {
         "screener": "https://www.screener.in/company/524695/",
@@ -234,5 +310,35 @@
   "plus": {
     "eodTried": "2026-11-20+2026-11-08",
     "eodRev": "2.9.55"
+  },
+  "filings": [
+    {
+      "source": "BSE_RESULT_ANNOUNCEMENT",
+      "filedAt": "2026-11-21T16:09:10.700000+05:30",
+      "periodEnd": "2026-09-30",
+      "periodSource": "FILING_TEXT",
+      "basis": "UNKNOWN",
+      "cumulative": null,
+      "xbrlUrl": null,
+      "headline": "Company submit unaudited financial results along with limited review report for the quarter and half year ended 30 Sep, 2026. Asian Fertilizers Ltd - 524695 - Unaudited Financial Results For The Quarter And Half Year Ended 30 Sep, 2026",
+      "rawRef": "raw/bse/DISCOVERY/result_announcements-6c0a9c972434ac1f.json",
+      "seenAt": "2026-11-21T11:20:19Z"
+    }
+  ],
+  "financialIntegrity": {
+    "checkedAt": "2026-11-21T11:01:46Z",
+    "snapshotsConsidered": 0,
+    "status": "NO_VERIFIED_SNAPSHOT",
+    "selectedSource": null,
+    "issues": null
+  },
+  "concall": {
+    "status": "NONE_FOUND",
+    "callDate": null,
+    "noticeUrl": null,
+    "transcriptUrl": null,
+    "audioUrl": null,
+    "checkedOn": "2026-11-21",
+    "source": "BSE_ANNOUNCEMENTS"
   }
 }
