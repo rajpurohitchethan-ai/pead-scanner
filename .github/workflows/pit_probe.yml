@@ -27,19 +27,21 @@ jobs:
           t = date.today()
           f = lambda d: d.strftime("%d-%m-%Y")
           tries = {
-            "dates_7d": ("corporates-pit", {"index": "equities", "from_date": f(t - timedelta(days=7)), "to_date": f(t)}),
-            "dates_30d": ("corporates-pit", {"index": "equities", "from_date": f(t - timedelta(days=30)), "to_date": f(t)}),
-            "no_dates": ("corporates-pit", {"index": "equities"}),
-            "symbol": ("corporates-pit", {"index": "equities", "symbol": "RELIANCE"}),
-            "period_1m": ("corporates-pit", {"index": "equities", "period": "1M"}),
+            "sym_nodates": ("corporates-pit", {"index": "equities", "symbol": "TIPSMUSIC"}),
+            "sym_dates": ("corporates-pit", {"index": "equities", "symbol": "TIPSMUSIC", "from_date": f(t - timedelta(days=90)), "to_date": f(t)}),
+            "dates_ddmmyyyy_slash": ("corporates-pit", {"index": "equities", "from_date": (t - timedelta(days=7)).strftime("%d/%m/%Y"), "to_date": t.strftime("%d/%m/%Y")}),
           }
           with p.NSEAdapter(ctx) as nse:
               for name, (path, params) in tries.items():
                   try:
                       d = nse._api_get(path, params)
                       rows = d.get("data") if isinstance(d, dict) else d
-                      print(name, "rows", len(rows or []), "keys", list((rows or [{}])[0].keys())[:25] if rows else str(d)[:200])
-                      if rows: print(json.dumps(rows[0])[:600])
+                      print(name, "ROWS", len(rows or []))
+                      if rows:
+                          print(name, "KEYS", sorted(rows[0].keys()))
+                          ds = sorted({str(r.get("date"))[:11] for r in rows})
+                          print(name, "DATES", ds[:3], ds[-3:])
+                          for r in rows[:3]: print(name, "ROW", {k: r.get(k) for k in ("symbol","personCategory","acqMode","tdpTransactionType","secAcq","secVal","buyValue","sellValue","acqtoDt","date")})
                   except Exception as e:
                       print(name, "ERR", type(e).__name__, str(e)[:200])
           PY
