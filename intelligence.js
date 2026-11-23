@@ -814,9 +814,19 @@
       </tbody></table></div>`;
   }
 
+  // 2.9.62: backtest of the exit rule on every logged entry.
+  function backtestTable(bt) {
+    if (!bt || !(bt.rows || []).length) return '';
+    const R = v => num(v) === null ? '—' : `${num(v) > 0 ? '+' : ''}${num(v).toFixed(2)}R`, rate = v => num(v) === null ? '—' : num(v).toFixed(0) + '%';
+    return `<h2 class="day">Backtest: your exit rule on every entry the screener logged</h2>
+      <p class="note">${esc(bt.metric)}. Open trades are marked to the last close, so this changes as the quarter runs: read the closed count before trusting a row. "Stop only" holds with the first stop and no trailing, for comparison. Evidence only: no rule changes from it.</p>
+      <div class="tscroll"><table><thead><tr><th>Entries</th><th class="r">Trades</th><th class="r">Closed / open</th><th class="r">Win rate</th><th class="r">Avg</th><th class="r">Total</th><th class="r">Profit factor</th><th class="r">Reached +1R</th><th class="r">Stop only</th></tr></thead><tbody>
+      ${bt.rows.map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n">${r.closed} / ${r.open}</td><td class="r n">${rate(r.winRate)}</td><td class="r n ${cls(r.avgR)}">${R(r.avgR)}</td><td class="r n ${cls(r.totalR)}">${R(r.totalR)}</td><td class="r n">${num(r.profitFactor) === null ? '—' : num(r.profitFactor).toFixed(2)}</td><td class="r n">${rate(r.reached1R)}</td><td class="r n ${cls(r.stopOnlyAvgR)}">${R(r.stopOnlyAvgR)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  }
   function viewScore() {
     const sc = S.data.scorecard || { rows: [] };
-    return `<p class="note">${esc(sc.metric)}. This checks the core idea behind the buckets: did stocks with a strong Q1 reaction keep drifting? It fills in as more results are tracked; treat small samples as anecdotes.</p>
+    return `${backtestTable(sc.backtest)}<h2 class="day">Q1 reaction vs what came next</h2><p class="note">${esc(sc.metric)}. This checks the core idea behind the buckets: did stocks with a strong Q1 reaction keep drifting? It fills in as more results are tracked; treat small samples as anecdotes.</p>
       <div class="tscroll"><table><thead><tr><th>Group</th><th class="r">Stocks</th><th class="r">Average</th><th class="r">Median</th><th class="r">Positive</th></tr></thead><tbody>
       ${sc.rows.map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n ${cls(r.avg)}">${pct(r.avg)}</td><td class="r n ${cls(r.median)}">${pct(r.median)}</td><td class="r n">${num(r.winRate) === null ? '—' : num(r.winRate).toFixed(0) + '%'}</td></tr>`).join('')}
       </tbody></table></div>
@@ -861,7 +871,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.61';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.62';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

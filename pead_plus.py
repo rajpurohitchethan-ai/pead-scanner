@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.61"
+MODULE_VERSION = "2.9.62"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -136,8 +136,11 @@ def _chart(f, reaction_idx: int | None, points: int = 75) -> dict[str, Any]:
         marker = reaction_idx - (len(f) - len(tail))
     vol = tail["Volume"].tolist() if "Volume" in tail else []
     vols = [int(v) if v is not None and v == v else None for v in vol]      # 2.9.23: volume bars
-    return {"from": tail["Date"].iloc[0].date().isoformat(), "to": tail["Date"].iloc[-1].date().isoformat(),
-            "close": closes, "ema21": ema21, "reactionIndex": marker, "volume": vols}
+    d0 = tail["Date"].iloc[0].date()
+    # 2.9.62: day offsets from "from", so a session can be matched to its date (backtest)
+    days = [(d.date() - d0).days for d in tail["Date"].tolist()]
+    return {"from": d0.isoformat(), "to": tail["Date"].iloc[-1].date().isoformat(),
+            "close": closes, "ema21": ema21, "reactionIndex": marker, "volume": vols, "days": days}
 
 
 def strong_hands(f, ri: int, pre_close: Any) -> dict[str, Any] | None:
@@ -2746,6 +2749,107 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     wins = [r for r in rs if r > 0]
     return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
             "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.62 Backtest (owner: "go for all", 23 Nov 2026): every entry the screener
+# logged (tradeLog) replayed through the owner's exit rule on daily closes.
+# Evidence only: it changes no rule.
+# ---------------------------------------------------------------------------
+SIGNAL_NAMES = {"ENTRY_EARLY": "Early entry (result day)", "ENTRY_PULLBACK": "Pullback entry",
+                "ENTRY_BREAKOUT": "Box breakout"}
+
+
+def backtest_trades(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One trade per event: the full entry, else the starter. Needs the chart's
+    session dates (2.9.62); an event without them is skipped, never guessed."""
+    out = []
+    for ev in events:
+        plus = ev.get("plus") or {}
+        log, ch = plus.get("tradeLog") or ev.get("tradeLog") or {}, plus.get("chart") or {}
+        t = log.get("full") or log.get("starter")
+        if not isinstance(t, dict) or not ch.get("days") or not ch.get("from"):
+            continue
+        try:
+            d0 = date.fromisoformat(ch["from"])
+        except ValueError:
+            continue
+        closes = ch.get("close") or []
+        dates = [(d0 + timedelta(days=int(k))).isoformat() for k in ch["days"]]
+        if len(dates) != len(closes) or any(c is None for c in closes):
+            continue
+        sim = simulate_exit_rule(dates, [float(c) for c in closes], t.get("date"), _num(t.get("entry")), _num(t.get("sl")))
+        if sim:
+            out.append({"symbol": ev.get("symbol"), "signal": t.get("signal"), "entryDate": t.get("date"),
+                        "liquid": (plus.get("liquidity") or {}).get("pass"), **sim})
+    return out
+
+
+def _ema_series(closes: list[float], n: int) -> list[float]:
+    k, out = 2 / (n + 1), []
+    for c in closes:
+        out.append(c if not out else out[-1] + k * (c - out[-1]))
+    return out
+
+
+def simulate_exit_rule(dates: list[str], closes: list[float], entry_date: str, entry: float, sl: float) -> dict[str, Any] | None:
+    """The owner's exit rule on daily closes: the initial stop holds until a
+    close at +1R, then the stop is cost; after +1R a close under the 10 EMA
+    sells half and a close under the 20 EMA (or cost) sells the rest. Exits
+    fill at that close. Open parts are marked to the last close."""
+    if not dates or len(dates) != len(closes) or entry is None or sl is None or entry <= sl:
+        return None
+    start = next((i for i, d in enumerate(dates) if d >= str(entry_date)[:10]), None)
+    if start is None:
+        return None
+    risk, e10, e20 = entry - sl, _ema_series(closes, 10), _ema_series(closes, 20)
+    left, got, one_r, half_on, exit_on, how = 1.0, 0.0, False, None, None, None
+    for i in range(start, len(closes)):
+        c = closes[i]
+        if not one_r:
+            if c < sl:
+                got, left, exit_on, how = got + (c - entry) / risk, 0.0, dates[i], "STOP"
+                break
+            if c >= entry + risk:
+                one_r = True
+            continue
+        if c < entry or c < e20[i]:
+            got, exit_on, how = got + left * (c - entry) / risk, dates[i], "COST" if c < entry else "EMA20"
+            left = 0.0
+            break
+        if left == 1.0 and c < e10[i]:
+            got, left, half_on = got + 0.5 * (c - entry) / risk, 0.5, dates[i]
+    r = got + left * (closes[-1] - entry) / risk
+    # For comparison: the initial stop only, no trailing (first close under it, else today)
+    hit = next((c for c in closes[start:] if c < sl), None)
+    plain = (hit if hit is not None else closes[-1]) - entry
+    return {"r": _r2(r), "open": left > 0, "oneR": one_r, "halfOn": half_on, "exitOn": exit_on, "how": how,
+            "stopOnlyR": _r2(plain / risk),
+            "sessions": len(closes) - start}
+
+
+def backtest_rules(trades: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """trades: {signal, liquid, r, open, oneR, stopOnlyR}. Rows by signal type."""
+    if not trades:
+        return None
+
+    def row(label, ts):
+        rs = [t["r"] for t in ts if t.get("r") is not None]
+        if not rs:
+            return None
+        wins, losses = [r for r in rs if r > 0], [r for r in rs if r <= 0]
+        so = [t["stopOnlyR"] for t in ts if t.get("stopOnlyR") is not None]
+        return {"group": label, "n": len(rs), "closed": sum(not t["open"] for t in ts), "open": sum(bool(t["open"]) for t in ts),
+                "winRate": _r2(len(wins) / len(rs) * 100), "avgR": _r2(sum(rs) / len(rs)),
+                "totalR": _r2(sum(rs)), "profitFactor": _r2(sum(wins) / -sum(losses)) if losses and sum(losses) < 0 else None,
+                "reached1R": _r2(sum(bool(t["oneR"]) for t in ts) / len(ts) * 100),
+                "stopOnlyAvgR": _r2(sum(so) / len(so)) if so else None}
+
+    rows = [row("All logged entries", trades), row("Liquid only", [t for t in trades if t.get("liquid")])]
+    for sig in sorted({t.get("signal") or "?" for t in trades}):
+        rows.append(row(SIGNAL_NAMES.get(sig, sig), [t for t in trades if (t.get("signal") or "?") == sig]))
+    return {"metric": "Each entry the screener logged this quarter, run through your exit rule on daily closes (R = one planned risk)",
+            "rows": [r for r in rows if r and r["n"] >= 1]}
 
 
 # ---------------------------------------------------------------------------

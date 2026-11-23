@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.61"
+ENGINE_VERSION = "2.9.62"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -8668,6 +8668,11 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
          "q1Setup": it["plus"].get("q1Setup")}
         for it in items
     ])
+    try:                                                              # 2.9.62
+        backtest = pead_plus.backtest_rules(pead_plus.backtest_trades(items))
+    except Exception as exc:
+        print(f"Backtest skipped: {type(exc).__name__}: {exc}")
+        backtest = None
     try:                                                              # 2.9.19
         runup = pead_plus.runup_scorecard([
             {"runup20": (it.get("priceContext") or {}).get("pre20dPct"),
@@ -8755,7 +8760,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "counts": counts,
         "regime": regime,
         "sectors": sorted(sectors.values(), key=lambda r: (-(r.get("relativeToMarket") or -999), r["sector"])),
-        "scorecard": card | {"timing": timing, "runup": runup},
+        "scorecard": card | {"timing": timing, "runup": runup, "backtest": backtest},
         "positions": positions,
         "closedPositions": closed_positions(),                         # 2.9.28
         "closedSummary": pead_plus.closed_summary(closed_positions()),

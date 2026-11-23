@@ -4179,3 +4179,45 @@ class TradeJournalTests(unittest.TestCase):
         raw = [{"symbol": "Q", "status": "CLOSED", "entryDate": "2026-10-01", "entryPrice": 100, "stop": 90,
                 "exitDate": "2026-10-05", "exitPrice": 95, "qty": 50}]
         self.assertNotIn("qty", json.dumps(self.journal(raw)))
+
+
+class BacktestTests(unittest.TestCase):
+    """2.9.62 (23 Nov 2026): logged entries replayed through the owner's exit rule."""
+
+    D = [f"2026-10-{d:02d}" for d in range(1, 31)]
+
+    def sim(self, closes, entry=100.0, sl=90.0, on="2026-10-21"):
+        import pead_plus
+        pad = [100.0] * (len(self.D) - len(closes))
+        return pead_plus.simulate_exit_rule(self.D, pad + closes, on, entry, sl)
+
+    def test_stop_before_one_r(self):
+        r = self.sim([100, 95, 89, 120, 120, 120, 120, 120, 120, 120])
+        self.assertEqual((r["how"], r["exitOn"], r["r"], r["open"]), ("STOP", "2026-10-23", -1.1, False))
+
+    def test_one_r_then_cost_exit(self):
+        r = self.sim([100, 111, 112, 99.5, 120, 120, 120, 120, 120, 120])
+        self.assertTrue(r["oneR"])
+        self.assertIn(r["how"], ("COST", "EMA20"))
+        self.assertFalse(r["open"])
+
+    def test_open_trade_marked_to_last_close(self):
+        r = self.sim([100, 102, 104, 106, 108, 109, 109, 108, 109, 109])
+        self.assertTrue(r["open"])
+        self.assertAlmostEqual(r["r"], 0.9)
+
+    def test_no_dates_no_trade(self):
+        import pead_plus
+        ev = {"symbol": "X", "plus": {"tradeLog": {"full": {"date": "2026-10-21", "entry": 100, "sl": 90, "signal": "ENTRY_PULLBACK"}},
+                                      "chart": {"from": "2026-10-01", "close": [100.0] * 5}}}
+        self.assertEqual(pead_plus.backtest_trades([ev]), [])
+        self.assertIsNone(pead_plus.backtest_rules([]))
+
+    def test_summary_rows(self):
+        import pead_plus
+        trades = [{"signal": "ENTRY_PULLBACK", "liquid": True, "r": 2.0, "open": False, "oneR": True, "stopOnlyR": 1.0},
+                  {"signal": "ENTRY_BREAKOUT", "liquid": False, "r": -1.0, "open": False, "oneR": False, "stopOnlyR": -1.0}]
+        rows = {r["group"]: r for r in pead_plus.backtest_rules(trades)["rows"]}
+        self.assertEqual(rows["All logged entries"]["profitFactor"], 2.0)
+        self.assertEqual(rows["Liquid only"]["n"], 1)
+        self.assertIn("Pullback entry", rows)
