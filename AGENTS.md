@@ -528,3 +528,7 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 
 2.9.71 (owner, 23 Nov 2026) - shadow portfolio
 - master/shadow_log.json: each newly logged screener entry (tradeLog full, else starter) is stored on its entry day with the Radar grade it had that day (never back-dated, never rewritten). pead_plus.shadow_view replays them through the owner's exit rule (backtest_trades) -> intelligence.json 'shadow': rows for grade A and B at entry, and the A trades. Scorecard shows it next to the owner's closed trades. Starts 23 Nov 2026: grades of older entries are unknown. Tests: ShadowPortfolioTests.
+
+2.9.72 (owner, 23 Nov 2026) - insider and promoter trades
+- NSEAdapter.insider_trades: NSE corporates-pit (SEBI PIT disclosures), last 7 days, every 6 hours (INSIDER_EVERY_MIN), kept 45 days in holdings_watch.json 'insider'. parse_insider_rows keeps promoters / promoter group / directors / key managers and only open-market buys and sells and pledge creation / release (ESOP, gifts, inter-se transfers left out). Field names (acqName, personCategory, acqMode, tdpTransactionType, secAcq, secVal, acqtoDt, afterAcqSharesPer) are NSE's documented ones; verify on the first live run (log line 'Insider trades: N rows').
+- plus.insider {label BUYING|SELLING, buyValue, sellValue, pledge, rows}; card tags 'Promoter buying/selling', 'Shares pledged' and an 'Insiders' line. Display only. Tests: InsiderTradeTests.

@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.71"
+MODULE_VERSION = "2.9.72"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2751,6 +2751,68 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     wins = [r for r in rs if r > 0]
     return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
             "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.72 Insider and promoter trades (owner, 23 Nov 2026): SEBI PIT
+# disclosures (NSE corporates-pit). Promoters, promoter group, directors and
+# key managers; open-market buys and sells and pledges. Display only.
+# ---------------------------------------------------------------------------
+INSIDER_PEOPLE = ("promoter", "director", "key managerial", "kmp", "designated person")
+
+
+def _pit_date(*vals: Any) -> str | None:
+    """First parseable date among the PIT fields ("19-Nov-2026", "19-Nov-2026 18:02", "2026-11-19")."""
+    for v in vals:
+        head = str(v or "").strip().split(" ")[0]
+        for fmt in ("%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d"):
+            try:
+                return _dt.strptime(head, fmt).date().isoformat()
+            except ValueError:
+                continue
+    return None
+
+
+def parse_insider_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """NSE PIT rows -> {symbol, date, person, role, kind BUY|SELL|PLEDGE|REVOKE, qty, value, afterPct}.
+    ESOP allotments, gifts and inter-se transfers are left out: they say nothing about the price."""
+    out = []
+    for r in rows or []:
+        if not isinstance(r, dict):
+            continue
+        sym = str(r.get("symbol") or "").strip().upper()
+        role = str(r.get("personCategory") or r.get("acqCategory") or "").strip()
+        mode = str(r.get("acqMode") or "").strip().lower()
+        tx = str(r.get("tdpTransactionType") or r.get("transactionType") or "").strip().lower()
+        if not sym or not any(k in role.lower() for k in INSIDER_PEOPLE):
+            continue
+        if "pledge" in tx or "pledge" in mode:
+            kind = "REVOKE" if ("revok" in tx or "release" in tx or "revok" in mode) else "PLEDGE"
+        elif "market" in mode and ("buy" in tx or "acqui" in tx or "purchase" in mode):
+            kind = "BUY"
+        elif "market" in mode and ("sell" in tx or "sale" in tx or "dispos" in tx or "sale" in mode):
+            kind = "SELL"
+        else:
+            continue
+        d = _pit_date(r.get("acqtoDt"), r.get("acqfromDt"), r.get("intimDt"), r.get("date"))
+        if not d:
+            continue
+        out.append({"symbol": sym, "date": d, "person": str(r.get("acqName") or "").strip() or None, "role": role,
+                    "kind": kind, "qty": _num(r.get("secAcq")), "value": _num(r.get("secVal")),
+                    "afterPct": _num(r.get("afterAcqSharesPer"))})
+    return out
+
+
+def insider_view(rows: list[dict[str, Any]], days: int = 45) -> dict[str, Any] | None:
+    if not rows:
+        return None
+    rows = sorted(rows, key=lambda d: str(d.get("date")), reverse=True)
+    val = lambda k: sum(_num(d.get("value")) or 0 for d in rows if d["kind"] == k)
+    buy, sell = val("BUY"), val("SELL")
+    pledged = any(d["kind"] == "PLEDGE" for d in rows)
+    label = "BUYING" if buy > sell else "SELLING" if sell > buy else None
+    return {"label": label, "buyValue": _r2(buy) if buy else None, "sellValue": _r2(sell) if sell else None,
+            "pledge": pledged, "rows": rows[:6]}
 
 
 # ---------------------------------------------------------------------------

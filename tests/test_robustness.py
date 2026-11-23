@@ -4363,3 +4363,29 @@ class ShadowPortfolioTests(unittest.TestCase):
         v = pead_plus.shadow_view(log, [self.item()])
         self.assertEqual((v["logged"], v["measured"], v["rows"][0]["group"]), (1, 1, "Grade A at entry"))
         self.assertAlmostEqual(v["trades"][0]["r"], 1.2)                 # (106 - 100) / 5, still open
+
+
+class InsiderTradeTests(unittest.TestCase):
+    """2.9.72 (23 Nov 2026): promoter / director trades and pledges from NSE PIT."""
+
+    ROWS = [{"symbol": "AAA", "personCategory": "Promoter Group", "acqMode": "Market Purchase", "tdpTransactionType": "Buy",
+             "acqName": "X Holdings", "secAcq": "50000", "secVal": "2500000", "acqtoDt": "19-Nov-2026", "afterAcqSharesPer": "52.1"},
+            {"symbol": "AAA", "personCategory": "Employees/Designated Employees", "acqMode": "ESOP", "tdpTransactionType": "Buy"},
+            {"symbol": "BBB", "personCategory": "Promoters", "acqMode": "Pledge Creation", "tdpTransactionType": "Pledge Creation", "acqtoDt": "20-Nov-2026"},
+            {"symbol": "CCC", "personCategory": "Director", "acqMode": "Market Sale", "tdpTransactionType": "Sell", "secVal": "900000",
+             "intimDt": "21-Nov-2026 18:02"},
+            {"symbol": "DDD", "personCategory": "Promoters", "acqMode": "Inter-se-Transfer", "tdpTransactionType": "Sell", "acqtoDt": "21-Nov-2026"}]
+
+    def test_parse(self):
+        import pead_plus
+        r = {d["symbol"]: d for d in pead_plus.parse_insider_rows(self.ROWS)}
+        self.assertEqual(set(r), {"AAA", "BBB", "CCC"})                  # ESOP and inter-se transfer left out
+        self.assertEqual((r["AAA"]["kind"], r["AAA"]["date"], r["AAA"]["value"]), ("BUY", "2026-11-19", 2500000.0))
+        self.assertEqual((r["BBB"]["kind"], r["CCC"]["kind"], r["CCC"]["date"]), ("PLEDGE", "SELL", "2026-11-21"))
+
+    def test_view(self):
+        import pead_plus
+        rows = pead_plus.parse_insider_rows(self.ROWS)
+        self.assertEqual(pead_plus.insider_view([d for d in rows if d["symbol"] == "AAA"])["label"], "BUYING")
+        self.assertTrue(pead_plus.insider_view([d for d in rows if d["symbol"] == "BBB"])["pledge"])
+        self.assertIsNone(pead_plus.insider_view([]))

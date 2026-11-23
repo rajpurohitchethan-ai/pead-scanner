@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.71"
+ENGINE_VERSION = "2.9.72"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1375,6 +1375,11 @@ class NSEAdapter:
         params = {"optionType": option_type, "from": start.strftime("%d-%m-%Y"), "to": end.strftime("%d-%m-%Y")}
         return self._call(option_type, lambda: self._api_get("historicalOR/bulk-block-short-deals", params),
                           symbol=option_type.upper(), raw_source="NSE_DEALS")
+
+    def insider_trades(self, start: date, end: date):
+        """2.9.72: SEBI (PIT) insider-trading disclosures, every company (NSE corporates-pit)."""
+        params = {"index": "equities", "from_date": start.strftime("%d-%m-%Y"), "to_date": end.strftime("%d-%m-%Y")}
+        return self._call("corporates_pit", lambda: self._api_get("corporates-pit", params), symbol="PIT", raw_source="NSE_DEALS")
 
     def integrated_filings(self, symbol: str, event_id: str | None = None):
         """NSE "Integrated Filing - Financials" index for one company (engine 2.6.1).
@@ -5875,6 +5880,9 @@ HOLDINGS_WATCH_EVERY_MIN = int(os.getenv("HOLDINGS_WATCH_EVERY_MIN", "110"))
 HOLDINGS_FILINGS_DAYS = 30
 HOLDINGS_DEALS_DAYS = 10
 RADAR_DEALS_DAYS = 30          # 2.9.64: bulk / block deals kept for every stock
+INSIDER_EVERY_MIN = 360        # 2.9.72: insider / promoter disclosures, fetched every 6 hours
+INSIDER_FETCH_DAYS = 7
+INSIDER_KEEP_DAYS = 45
 
 
 def _held_events(store: EventStore) -> dict[str, dict[str, Any]]:
@@ -6096,6 +6104,22 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
             cache["dealsAt"] = iso_now()
         except Exception as exc:
             print(f"Deals skipped: {type(exc).__name__}: {exc}")
+    if _due(cache.get("insiderAt"), INSIDER_EVERY_MIN):                    # 2.9.72 promoter / insider trades
+        try:
+            with NSEAdapter(ctx) as nse:
+                payload, _ = nse.insider_trades(today - timedelta(days=INSIDER_FETCH_DAYS), today)
+            rows = pead_plus.parse_insider_rows(_deal_rows(payload))
+            cutoff = (today - timedelta(days=INSIDER_KEEP_DAYS)).isoformat()
+            seen, keep = set(), []
+            for d in rows + (cache.get("insider") or []):
+                k = (d["symbol"], d["date"], d.get("person"), d.get("kind"), d.get("qty"))
+                if k not in seen and str(d.get("date")) >= cutoff:
+                    seen.add(k)
+                    keep.append(d)
+            cache["insider"], cache["insiderAt"] = keep, iso_now()
+            print(f"Insider trades: {len(rows)} rows fetched, {len(keep)} kept")
+        except Exception as exc:
+            print(f"Insider trades skipped: {type(exc).__name__}: {exc}")
     if _due((cache.get("global") or {}).get("at"), HOLDINGS_WATCH_EVERY_MIN):
         try:
             sectors = {(_plus_sector((e.get("derived") or {}).get("plus")), _sec_industry(e.get("security") or {}))
@@ -8738,6 +8762,11 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         for it in items:
             it["plus"]["smartMoney"] = pead_plus.smart_money(it.get("symbol"), it.get("reactionSession"), deliv,
                                                              by_sym.get(str(it.get("symbol") or "").upper()) or [])
+        ins_by: dict[str, list] = {}
+        for d_ in ((_eod_read(HOLDINGS_WATCH_PATH) or {}).get("insider") or [] if HOLDINGS_WATCH_PATH.exists() else []):
+            ins_by.setdefault(d_.get("symbol"), []).append(d_)
+        for it in items:                                               # 2.9.72
+            it["plus"]["insider"] = pead_plus.insider_view(ins_by.get(str(it.get("symbol") or "").upper()) or [])
     except Exception as exc:
         print(f"Smart money skipped: {type(exc).__name__}: {exc}")
     try:                                                              # 2.9.66 concall verdicts
