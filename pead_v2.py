@@ -5628,7 +5628,7 @@ def order_live_quotes(picks: list[tuple[dict[str, Any], str]], held: set[str]) -
 # times out from GitHub's runners and was capped at LIVE_QUOTE_MAX = 40).
 # ---------------------------------------------------------------------------
 UPSTOX_LTP_URL = "https://api.upstox.com/v3/market-quote/ltp"
-UPSTOX_BATCH = 500
+UPSTOX_BATCH = 200   # 500 keys make a ~12,000-character URL; the first live run got 1,237 of 1,603 (BHAGERIA missing)
 
 
 def upstox_token() -> str | None:

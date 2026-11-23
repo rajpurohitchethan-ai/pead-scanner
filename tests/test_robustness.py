@@ -4063,8 +4063,8 @@ class UpstoxLiveTests(unittest.TestCase):
         resp = mock.Mock(status_code=200); resp.json.return_value = {"data": {}}
         with mock.patch.object(p.requests, "get", return_value=resp) as get:
             p.upstox_ltp(isins, token="t")
-            self.assertEqual(get.call_count, 3)
-            self.assertEqual(len(get.call_args_list[0].kwargs["params"]["instrument_key"].split(",")), 500)
+            self.assertEqual(get.call_count, 7)                                   # 200 per request
+            self.assertEqual(len(get.call_args_list[0].kwargs["params"]["instrument_key"].split(",")), 200)
         bad = mock.Mock(status_code=401)
         with mock.patch.object(p.requests, "get", return_value=bad):
             with self.assertRaises(PermissionError):
