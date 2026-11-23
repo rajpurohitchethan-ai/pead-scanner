@@ -4389,3 +4389,22 @@ class InsiderTradeTests(unittest.TestCase):
         self.assertEqual(pead_plus.insider_view([d for d in rows if d["symbol"] == "AAA"])["label"], "BUYING")
         self.assertTrue(pead_plus.insider_view([d for d in rows if d["symbol"] == "BBB"])["pledge"])
         self.assertIsNone(pead_plus.insider_view([]))
+
+
+class PeerReadThroughTests(unittest.TestCase):
+    """2.9.73 (23 Nov 2026): industry peers' results for a company still to report."""
+
+    def it(self, sym, released, react=None, strength=None, ind="Cables"):
+        return {"symbol": sym, "industry": ind, "resultsReleased": released, "priceContext": {"resultDayPct": react},
+                "plus": {"strength": strength}}
+
+    def test_labels(self):
+        import pead_plus
+        items = [self.it("A", True, 5, "STRONG"), self.it("B", True, 3, "STRONG"), self.it("C", True, -1, "WEAK"),
+                 self.it("UP", False), self.it("LONE", False, ind="Ships"), self.it("S1", True, 4, "STRONG", "Ships")]
+        self.assertEqual(pead_plus.peer_readthrough(items), 1)
+        rt = items[3]["plus"]["readThrough"]
+        self.assertEqual((rt["reported"], rt["strong"], rt["medianReaction"], rt["label"]), (3, 2, 3, "STRONG"))
+        self.assertEqual(rt["peers"][0]["symbol"], "A")
+        self.assertIsNone(items[4]["plus"]["readThrough"])                # one reporter is not a read-through
+        self.assertNotIn("readThrough", items[0]["plus"])                 # reported companies get none

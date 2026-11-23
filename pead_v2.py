@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.72"
+ENGINE_VERSION = "2.9.73"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -8776,6 +8776,10 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
                                                                       it.get("resultDate"))
     except Exception as exc:
         print(f"Concall notes skipped: {type(exc).__name__}: {exc}")
+    try:                                                              # 2.9.73
+        pead_plus.peer_readthrough(items)
+    except Exception as exc:
+        print(f"Peer read-through skipped: {type(exc).__name__}: {exc}")
     try:                                                              # 2.9.63
         pead_plus.rs_ratings(items)
         sector_heat = pead_plus.sector_heat(items)

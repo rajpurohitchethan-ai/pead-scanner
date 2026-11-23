@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.72"
+MODULE_VERSION = "2.9.73"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2751,6 +2751,44 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     wins = [r for r in rs if r > 0]
     return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
             "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.73 Peer read-through (owner, 23 Nov 2026): for a company still to
+# report, how its industry peers' results and reactions went this quarter.
+# Display only.
+# ---------------------------------------------------------------------------
+def peer_readthrough(items: list[dict[str, Any]], min_reported: int = 2) -> int:
+    """plus.readThrough on every unreported item whose industry has >= min_reported reporters.
+    STRONG when half or more of the reporters had strong earnings and the median reaction is positive;
+    WEAK when under a quarter were strong and the median reaction is negative. Returns how many were set."""
+    by: dict[str, list[dict[str, Any]]] = {}
+    for it in items:
+        ind = str(it.get("industry") or "").strip()
+        if ind and it.get("resultsReleased"):
+            by.setdefault(ind, []).append(it)
+    n = 0
+    for it in items:
+        if it.get("resultsReleased") or not isinstance(it.get("plus"), dict):
+            continue
+        ind = str(it.get("industry") or "").strip()
+        rep = [r for r in by.get(ind, []) if r.get("symbol") != it.get("symbol")]
+        if len(rep) < min_reported:
+            it["plus"]["readThrough"] = None
+            continue
+        reacts = [_num((r.get("priceContext") or {}).get("resultDayPct")) for r in rep]
+        reacts = [x for x in reacts if x is not None]
+        strong = sum(1 for r in rep if (r.get("plus") or {}).get("strength") == "STRONG")
+        med = _r2(median(reacts)) if reacts else None
+        share = strong / len(rep)
+        label = ("STRONG" if share >= 0.5 and med is not None and med > 0 else
+                 "WEAK" if share < 0.25 and med is not None and med < 0 else "MIXED")
+        top = sorted(rep, key=lambda r: -(_num((r.get("priceContext") or {}).get("resultDayPct")) or -999))[:4]
+        it["plus"]["readThrough"] = {"industry": ind, "reported": len(rep), "strong": strong, "medianReaction": med, "label": label,
+                                     "peers": [{"symbol": r.get("symbol"), "reaction": _r2(_num((r.get("priceContext") or {}).get("resultDayPct"))),
+                                                "strength": (r.get("plus") or {}).get("strength")} for r in top]}
+        n += 1
+    return n
 
 
 # ---------------------------------------------------------------------------

@@ -336,6 +336,12 @@
     const word = { BUY: 'bought', SELL: 'sold', PLEDGE: 'pledged', REVOKE: 'released a pledge on' };
     return `<p class="meta smart">Insiders: ${ins.rows.map(d => `${esc(d.person || d.role)} (${esc(d.role)}) ${word[d.kind] || ''} ${num(d.qty) !== null ? num(d.qty).toLocaleString('en-IN') + ' shares' : ''}${cr(d.value)} on ${dt(d.date)}`).join('<br>')}</p>`;
   }
+  // 2.9.73: how the company's industry peers' results went this quarter (for stocks still to report).
+  function readLine(rt) {
+    if (!rt) return '';
+    const tone = { STRONG: 'good', WEAK: 'bad', MIXED: 'warn' }[rt.label] || '';
+    return `<p class="meta smart"><span class="tag ${tone}">Peers ${esc(rt.label.toLowerCase())}</span> ${rt.strong} of ${rt.reported} ${esc(rt.industry)} companies that reported had strong earnings; median reaction ${pct(rt.medianReaction)}. Best: ${rt.peers.map(x => `${esc(x.symbol)} ${pct(x.reaction)}`).join(', ')}.</p>`;
+  }
   function card(it) {
     const p = P(it), x1 = px(it), plan = p.plan || {};
     const slimNote = p.slim ? '<p class="meta">Below the liquidity test: chart and checklists are left out of the page to keep it light on phones.</p>' : '';
@@ -352,6 +358,7 @@
     if (g) tags.push(`<span class="tag ${g[1]}" title="YoY growth vs last quarter: revenue ${p.growth.revenueDeltaPp ?? '—'} pp, profit ${p.growth.profitDeltaPp ?? '—'} pp">${g[0]}</span>`);
     if (num(p.rsRating) !== null) tags.push(`<span class="tag ${p.rsRating >= 80 ? 'good' : p.rsRating < 40 ? 'bad' : ''}" title="RS rating 1-99: 3-month move (counted twice) plus 6-month move, ranked against every stock">RS ${p.rsRating}</span>`);
     if (p.concallVerdict) tags.push(`<span class="tag ${{ POSITIVE: 'good', MIXED: 'warn', NEGATIVE: 'bad' }[p.concallVerdict.verdict] || ''}">Concall ${esc(p.concallVerdict.verdict.toLowerCase())}</span>`);
+    if (p.readThrough && p.readThrough.label !== 'MIXED') tags.push(`<span class="tag ${p.readThrough.label === 'STRONG' ? 'good' : 'bad'}">Peers ${p.readThrough.label === 'STRONG' ? 'reported strong' : 'reported weak'}</span>`);
     if (p.insider?.label) tags.push(`<span class="tag ${p.insider.label === 'BUYING' ? 'good' : 'bad'}">Promoter ${p.insider.label === 'BUYING' ? 'buying' : 'selling'}</span>`);
     if (p.insider?.pledge) tags.push('<span class="tag bad">Shares pledged</span>');
     if (p.smartMoney?.label) tags.push(`<span class="tag ${p.smartMoney.label === 'BUYING' ? 'good' : 'bad'}">Smart money ${p.smartMoney.label === 'BUYING' ? 'buying' : 'selling'}</span>`);
@@ -387,6 +394,7 @@
       ${verdictLine(p.concallVerdict)}
       ${smartLine(p.smartMoney)}
       ${insiderLine(p.insider)}
+      ${readLine(p.readThrough)}
       ${liveLine(p.live, pc.lastClose)}
       ${chart(it)}
       ${tvChart(it)}
@@ -909,11 +917,11 @@
     if (!list.length) return '';
     return `<section class="card gm prewatch"><h3>Strong stocks reporting this week <span class="meta">${list.length}</span></h3>
       <p class="meta">Reports within 7 days, liquid, RS 80+, within 10% of the 52-week high, not in Stage 4. The setup comes after the result: watch the reaction, do not buy before it.</p>
-      <div class="tscroll"><table class="sectbl"><thead><tr><th>Stock</th><th class="r">Reports</th><th class="r">RS</th><th class="r">vs 52w high</th><th class="r">1 month</th></tr></thead><tbody>
+      <div class="tscroll"><table class="sectbl"><thead><tr><th>Stock</th><th class="r">Reports</th><th class="r">RS</th><th class="r">vs 52w high</th><th class="r">1 month</th><th>Peers</th></tr></thead><tbody>
       ${list.map(it => { const n = daysTo(it.resultDate), r21 = num(px(it).ret_21d_pct);
         return `<tr><td><b>${esc(it.symbol)}</b>${heldPos(it) ? ' <span class="tag go">held</span>' : ''}<div class="meta">${esc(P(it).sectorKey || it.sector || '')}${px(it).stage?.stage === 2 ? ' · Stage 2' : ''}</div></td>
         <td class="r n">${n === 0 ? 'today' : n === 1 ? 'tomorrow' : dt(it.resultDate)}</td><td class="r n"><b class="up">${P(it).rsRating}</b></td>
-        <td class="r n">${pct(it.priceContext?.distanceFrom52wHighPct)}</td><td class="r n ${cls(r21)}">${pct(r21)}${r21 !== null && r21 > 20 ? '<div class="meta warn-t">run-up over 20%: drift has been weaker</div>' : ''}</td></tr>`; }).join('')}
+        <td class="r n">${pct(it.priceContext?.distanceFrom52wHighPct)}</td><td class="r n ${cls(r21)}">${pct(r21)}${r21 !== null && r21 > 20 ? '<div class="meta warn-t">run-up over 20%: drift has been weaker</div>' : ''}</td><td>${P(it).readThrough ? `<span class="tag ${{ STRONG: 'good', WEAK: 'bad', MIXED: 'warn' }[P(it).readThrough.label]}">${P(it).readThrough.strong}/${P(it).readThrough.reported} strong</span>` : '—'}</td></tr>`; }).join('')}
       </tbody></table></div></section>`;
   }
   function viewWatch() {
@@ -1044,7 +1052,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.72';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.73';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
