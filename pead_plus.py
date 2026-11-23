@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.62"
+MODULE_VERSION = "2.9.63"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2749,6 +2749,57 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     wins = [r for r in rs if r > 0]
     return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
             "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.63 RS rating and sector rotation (owner: "go for all", 23 Nov 2026).
+# Display and filter only: no grade or plan rule uses them.
+# ---------------------------------------------------------------------------
+def rs_ratings(items: list[dict[str, Any]]) -> int:
+    """RS rating 1-99: percentile rank of 2 x the 3-month return plus the
+    6-month return (the latest quarter counts twice), across every stock with
+    both. A stock missing either gets none. Returns how many were rated."""
+    scored = []
+    for it in items:
+        px = (it.get("plus") or {}).get("price") or {}
+        r63, r126 = _num(px.get("ret_63d_pct")), _num(px.get("ret_126d_pct"))
+        if r63 is not None and r126 is not None:
+            scored.append((2 * r63 + r126, it))
+        elif isinstance(it.get("plus"), dict):
+            it["plus"]["rsRating"] = None
+    scored.sort(key=lambda t: t[0])
+    n = len(scored)
+    for i, (_, it) in enumerate(scored):
+        it["plus"]["rsRating"] = max(1, min(99, int(i / (n - 1) * 98) + 1)) if n > 1 else None
+    return n
+
+
+def sector_heat(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Median 1-week, 1-month and 3-month return and median RS rating per
+    sector, liquid stocks only, sectors with 3 or more such stocks."""
+    by: dict[str, list[dict[str, Any]]] = {}
+    for it in items:
+        plus = it.get("plus") or {}
+        if (plus.get("liquidity") or {}).get("pass") is not True:
+            continue
+        k = str(plus.get("sectorKey") or it.get("sector") or "").strip()
+        if k and k not in ("-", "—", "Unknown"):                   # no sector is not a sector
+            by.setdefault(k, []).append(it)
+
+    def med(vals):
+        v = [x for x in vals if x is not None]
+        return _r2(median(v)) if v else None
+
+    rows = []
+    for k, its in by.items():
+        if len(its) < 3:
+            continue
+        px = [(i.get("plus") or {}).get("price") or {} for i in its]
+        rows.append({"sector": k, "n": len(its), "w1": med([_num(x.get("ret_5d_pct")) for x in px]),
+                     "m1": med([_num(x.get("ret_21d_pct")) for x in px]), "m3": med([_num(x.get("ret_63d_pct")) for x in px]),
+                     "rs": med([_num((i.get("plus") or {}).get("rsRating")) for i in its])})
+    rows.sort(key=lambda r: (r["rs"] is None, -(r["rs"] or 0)))
+    return rows
 
 
 # ---------------------------------------------------------------------------

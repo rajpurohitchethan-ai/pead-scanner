@@ -440,6 +440,7 @@
     ['near', 'Near entry', it => ['NEAR_ENTRY', 'PULLBACK_ZONE'].includes(P(it).plan?.signal)],
     ['stage2', 'Stage 2', it => px(it).stage?.stage === 2],
     ['hands', 'Strong hands', it => P(it).hands?.label === 'STRONG'],
+    ['rs80', 'RS 80+', it => num(P(it).rsRating) !== null && P(it).rsRating >= 80],
     ['strong', 'Strong earnings', it => P(it).strength === 'STRONG'],
     ['risk5', 'Risk up to 5%', it => num(grade(it).riskNowPct) !== null && grade(it).riskNowPct <= 5],
     ['high', 'Near 52-week high', it => num(it.priceContext?.distanceFrom52wHighPct) !== null && it.priceContext.distanceFrom52wHighPct >= -10],
@@ -450,6 +451,7 @@
   const SCR_COLS = [
     ['sym', 'Stock', it => it.symbol, 'text'],
     ['grade', 'Grade', it => grade(it).score],
+    ['rs', 'RS', it => num(P(it).rsRating)],
     ['signal', 'Signal', it => -(RADAR[P(it).plan?.signal] ?? 99)],
     ['stage', 'Stage', it => px(it).stage?.stage === 2 ? 2 : px(it).stage?.stage === 4 ? -1 : px(it).stage ? 0 : null],
     ['hands', 'Hands', it => P(it).hands?.known ? P(it).hands.passed / P(it).hands.known : null],
@@ -486,6 +488,7 @@
       switch (k) {
         case 'sym': return `<td class="scr-sym"><b>${esc(it.symbol)}</b>${heldPos(it) ? ' <span class="tag go">held</span>' : ''}<span>${esc(P(it).sectorKey || it.sector || '')}</span></td>`;
         case 'grade': return `<td><span class="gpill g${g.tier}">${g.tier} ${g.score}</span></td>`;
+        case 'rs': { const r = num(P(it).rsRating); return `<td class="n">${r === null ? '—' : `<b class="${r >= 80 ? 'up' : r < 40 ? 'down' : ''}">${r}</b>`}</td>`; }
         case 'signal': return `<td><span class="tag ${s[1]}">${esc(s[0])}</span></td>`;
         case 'stage': return `<td>${sg ? `<span class="tag ${sg.stage === 2 ? 'good' : sg.stage === 4 ? 'bad' : ''}">${sg.stage === 2 ? 'Stage 2' : sg.stage === 4 ? 'Stage 4' : 'No'}</span>` : '—'}</td>`;
         case 'hands': return `<td>${h && HANDS[h.label] ? `<span class="tag ${HANDS[h.label][1]}">${h.passed}/${h.known}</span>` : '—'}</td>`;
@@ -803,12 +806,25 @@
       <p class="meta">Ranked by 3-month move. Laggards in a sector whose reporters reacted well have more room to catch up.</p>`;
   }
 
+  // 2.9.63: sector rotation heatmap (median return of liquid stocks; RS = median RS rating).
+  function heatMap() {
+    const rows = S.data.sectorHeat || [];
+    if (!rows.length) return '';
+    const shade = v => { const n = num(v); if (n === null) return ''; const a = Math.min(1, Math.abs(n) / 12) * 0.55 + 0.08;
+      return `background:${n >= 0 ? `rgba(30,142,62,${a.toFixed(2)})` : `rgba(200,50,50,${a.toFixed(2)})`}`; };
+    const rsShade = v => { const n = num(v); return n === null ? '' : shade((n - 50) / 3); };
+    return `<h2 class="day">Sector rotation</h2>
+      <p class="note">Median move of the liquid stocks in each sector. Money moving in shows as green spreading from 3 months to 1 week. RS is the sector's median RS rating (1-99). Display only.</p>
+      <div class="tscroll"><table class="sectbl heatmap"><thead><tr><th>Sector</th><th class="r">RS</th><th class="r">1 week</th><th class="r">1 month</th><th class="r">3 months</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${esc(r.sector)} <span class="meta">(${r.n})</span></td><td class="r n" style="${rsShade(r.rs)}">${num(r.rs) === null ? '—' : Math.round(r.rs)}</td>${['w1', 'm1', 'm3'].map(k => `<td class="r n" style="${shade(r[k])}">${pct(r[k])}</td>`).join('')}</tr>`).join('')}
+      </tbody></table></div>`;
+  }
   function viewSectors() {
     const rows = (S.data.sectors || []).filter(r => !S.q || r.sector.toLowerCase().includes(S.q.toLowerCase()));
     if (!rows.length) return '<div class="empty">Sector data appears once prices are tracked.</div>';
     const max = Math.max(10, ...rows.map(r => Math.abs(num(r.relativeToMarket) ?? 0)));
     const bar = v => { const n = num(v); if (n === null) return '—'; const w = Math.abs(n) / max * 50; return `<div class="bar" title="${pct(n)} vs market"><i style="left:${n >= 0 ? 50 : 50 - w}%;width:${w}%;background:${n >= 0 ? 'var(--gain)' : 'var(--loss)'}"></i><i style="left:50%;width:1px;background:var(--ink-3)"></i></div>`; };
-    return `<p class="note">Tailwind combines how tracked peers moved over 3 months versus the whole universe, and how many peers that already reported had strong earnings. Checklist: five sector questions (demand, orders &amp; capex, earnings, peer confirmation, market strength), scored only where the data exists. Favour: five signs a sector is losing favour (relative weakness, poor reaction to good results, failed breakouts, shrinking participation, paying less for growth); "out of favour" with growing results is sentiment, "deteriorating" means results are weakening too. Tap a sector for details.</p>
+    return `${heatMap()}<h2 class="day">Sector checklist</h2><p class="note">Tailwind combines how tracked peers moved over 3 months versus the whole universe, and how many peers that already reported had strong earnings. Checklist: five sector questions (demand, orders &amp; capex, earnings, peer confirmation, market strength), scored only where the data exists. Favour: five signs a sector is losing favour (relative weakness, poor reaction to good results, failed breakouts, shrinking participation, paying less for growth); "out of favour" with growing results is sentiment, "deteriorating" means results are weakening too. Tap a sector for details.</p>
       <div class="tscroll"><table class="sectbl"><thead><tr><th>Sector</th><th class="hide-sm">3-month vs market</th><th class="r">Relative</th><th>Favour</th><th class="r hide-sm">Reported</th><th class="r hide-sm">Strong</th><th class="r">Checklist</th><th class="hide-sm">Tailwind</th></tr></thead><tbody>
       ${rows.map(r => `<tr class="srow" role="button" tabindex="0" data-sector="${esc(r.sector)}" aria-expanded="${S.open.has('sector:' + r.sector)}"><td><span class="chev-s" aria-hidden="true">${S.open.has('sector:' + r.sector) ? '▾' : '▸'}</span> ${esc(r.sector)} <span class="meta">(${r.stocks})</span></td><td class="hide-sm">${bar(r.relativeToMarket)}</td><td class="r n ${cls(r.relativeToMarket)}">${pct(r.relativeToMarket)}</td><td>${favTag(r.favour)}</td><td class="r n hide-sm">${r.declared}</td><td class="r n hide-sm">${r.strongResults}</td><td class="r n">${r.checklist && r.checklist.measured ? `${r.checklist.score}/${r.checklist.measured}` : '—'}</td><td class="hide-sm">${r.tailwind ? `<span class="tag ${TAIL_TONE[r.tailwind] || ''}">${r.tailwind.toLowerCase()}</span>` : '—'}</td></tr>${S.open.has('sector:' + r.sector) ? `<tr class="sdetail"><td colspan="8"><p class="meta">${r.index ? `<b>${esc(r.index.name)}</b> 1W ${pct(r.index.ret1w)} · 1M ${pct(r.index.ret1m)}${num((S.data.regime || {}).index1w) !== null ? ` (NIFTY 500 1W ${pct(S.data.regime.index1w)})` : ''}. ` : ''}<button type="button" data-act="sector-results" data-sector="${esc(r.sector)}">Show its ${r.declared} declared results</button></p>${favourBlock(r.favour)}${r.checklist ? `<div class="td"><div class="td-h"><b>Sector checklist</b> <span class="meta">${r.checklist.score} of ${r.checklist.measured} measured pass</span></div>${checklistChips(r.checklist)}</div>` : ''}${sectorPeers(r.sector)}</td></tr>` : ''}`).join('')}
       </tbody></table></div>`;
@@ -871,7 +887,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.62';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.63';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

@@ -4221,3 +4221,36 @@ class BacktestTests(unittest.TestCase):
         self.assertEqual(rows["All logged entries"]["profitFactor"], 2.0)
         self.assertEqual(rows["Liquid only"]["n"], 1)
         self.assertIn("Pullback entry", rows)
+
+
+class RsRatingTests(unittest.TestCase):
+    """2.9.63 (23 Nov 2026): RS rating 1-99 and sector rotation."""
+
+    def item(self, sym, r63, r126, sector="A", liquid=True, r5=1.0, r21=2.0):
+        return {"symbol": sym, "sector": sector, "plus": {"liquidity": {"pass": liquid}, "sectorKey": sector,
+                "price": {"ret_63d_pct": r63, "ret_126d_pct": r126, "ret_5d_pct": r5, "ret_21d_pct": r21}}}
+
+    def test_rank_and_missing(self):
+        import pead_plus
+        items = [self.item("LOW", -10, -20), self.item("MID", 5, 5), self.item("TOP", 30, 40), self.item("NONE", None, 10)]
+        self.assertEqual(pead_plus.rs_ratings(items), 3)
+        r = {i["symbol"]: i["plus"]["rsRating"] for i in items}
+        self.assertEqual((r["LOW"], r["TOP"]), (1, 99))
+        self.assertTrue(1 < r["MID"] < 99)
+        self.assertIsNone(r["NONE"])                       # missing stays missing
+
+    def test_recent_quarter_weighs_double(self):
+        import pead_plus
+        items = [self.item("RECENT", 20, 0), self.item("OLD", 0, 30), self.item("X", -5, -5)]
+        pead_plus.rs_ratings(items)
+        r = {i["symbol"]: i["plus"]["rsRating"] for i in items}
+        self.assertGreater(r["RECENT"], r["OLD"])          # 40 vs 30
+
+    def test_sector_heat_liquid_and_size(self):
+        import pead_plus
+        items = [self.item(f"A{i}", i, i) for i in range(3)] + [self.item("B1", 1, 1, "B"), self.item("B2", 1, 1, "B"),
+                 self.item("B3", 1, 1, "B", liquid=False)]
+        pead_plus.rs_ratings(items)
+        rows = pead_plus.sector_heat(items)
+        self.assertEqual([r["sector"] for r in rows], ["A"])   # B has only 2 liquid stocks
+        self.assertEqual(rows[0]["m3"], 1)

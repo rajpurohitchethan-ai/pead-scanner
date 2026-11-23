@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.62"
+ENGINE_VERSION = "2.9.63"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -8661,6 +8661,12 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         regime["note"] = f"Index data is stale (last {as_of}); market regime not shown."
     regime["index"] = index_cache.get("index")
     regime["asOf"] = as_of
+    try:                                                              # 2.9.63
+        pead_plus.rs_ratings(items)
+        sector_heat = pead_plus.sector_heat(items)
+    except Exception as exc:
+        print(f"RS rating skipped: {type(exc).__name__}: {exc}")
+        sector_heat = []
     timing = pead_plus.entry_timing_scorecard([e.get("tradeLog") for e in stored_events])
     card = pead_plus.scorecard([
         {"q1Return": (it["plus"].get("price") or {}).get("q1_reaction_return_pct"),
@@ -8761,6 +8767,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "regime": regime,
         "sectors": sorted(sectors.values(), key=lambda r: (-(r.get("relativeToMarket") or -999), r["sector"])),
         "scorecard": card | {"timing": timing, "runup": runup, "backtest": backtest},
+        "sectorHeat": sector_heat,
         "positions": positions,
         "closedPositions": closed_positions(),                         # 2.9.28
         "closedSummary": pead_plus.closed_summary(closed_positions()),

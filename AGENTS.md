@@ -491,3 +491,7 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 - pead_plus.backtest_trades / simulate_exit_rule / backtest_rules: every entry the screener logged this quarter (tradeLog: the full entry, else the starter; one per stock) replayed through the owner's exit rule on daily closes; exits fill at the close; open parts marked to the last close. "Stop only" (first stop, no trailing) is shown beside it. EMAs are computed over the 75-session chart window.
 - The chart now carries "days" (offsets from "from") so each close has its date. Charts built before 2.9.62 have no "days" and are skipped until their price is rebuilt: never guessed from the holiday calendar (it was one session off: a special session).
 - intelligence.json scorecard.backtest; shown first on the Scorecard tab. Evidence only: no rule changes from it. Tests: BacktestTests.
+
+2.9.63 (owner: "go for all", 23 Nov 2026) - RS rating and sector rotation
+- pead_plus.rs_ratings: RS rating 1-99 = percentile rank of (2 x 3-month return + 6-month return) across every stock with both; missing either -> none. plus.rsRating. Screener: RS column and an "RS 80+" filter.
+- pead_plus.sector_heat: per sector (3+ liquid stocks) the median 1-week, 1-month, 3-month return and median RS rating -> intelligence.json "sectorHeat"; heatmap on the Sectors tab. Display and filter only: no grade or plan rule uses either. Tests: RsRatingTests.
