@@ -196,6 +196,11 @@ def main() -> int:
     except (OSError, ValueError, AttributeError):
         pass
     print(f"Watching {len(watch)} stocks. Phone alerts: {'on' if topic else 'off (NTFY_TOPIC not set)'}.")
+    if topic and "hello" not in sent:                       # 2.9.67: one quiet "alerts are running" a day
+        held = len((_PAGE or {}).get("positions") or [])
+        sent.update(send_alerts([("hello", "PEAD live alerts running",
+                                  f"Watching {len(watch)} stocks and {held} open trades every 5 minutes until 3:30 pm. "
+                                  "Exit and entry alerts come here.", "low")], sent, topic))
     while True:
         now = datetime.now(IST)
         if not market_open(now):

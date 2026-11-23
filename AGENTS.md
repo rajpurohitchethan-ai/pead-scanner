@@ -507,3 +507,5 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 2.9.66 (owner: "go for all", 23 Nov 2026) - concall verdict
 - master/concall_notes.json {"symbols": {SYM: {date, verdict POSITIVE|MIXED|NEGATIVE, summary, points[<=5], guidance, source URL}}}, written by the "PEAD radar evening check" scheduled task after reading the call's transcript or outcome filing. Never guessed: no transcript read, no note.
 - pead_plus.concall_verdict keeps a note only when dated on or after this quarter's result. plus.concallVerdict; card tag and note. Display only. Tests: ConcallVerdictTests.
+
+2.9.67 (23 Nov 2026) - live_prices.py sends one low-priority "PEAD live alerts running" message a day when the job starts with NTFY_TOPIC set (key "hello"), so the owner knows alerts work.
