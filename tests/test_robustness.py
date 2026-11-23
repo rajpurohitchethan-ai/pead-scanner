@@ -4318,3 +4318,17 @@ class PartialExitTests(unittest.TestCase):
         view, _ = pead_plus.position_view(pos, None, None, date(2026, 11, 23))
         self.assertEqual(view["partialExits"][0]["fraction"], 0.43)
         self.assertNotIn("qty", view["partialExits"][0])            # quantities never leave the phone
+
+
+class RegimeAlertTests(unittest.TestCase):
+    """2.9.69 (23 Nov 2026): push when the market turns risk-off or back."""
+
+    def test_only_changes_touching_risk_off(self):
+        import pead_plus
+        off = {"label": "RISK-OFF", "note": "Index below 50 & 200 DMA.", "ret20dPct": -4.2, "index": "NIFTY 500"}
+        self.assertEqual(pead_plus.regime_alert("RISK-ON", off)[0], "Market turned risk-off")
+        self.assertIn("-4.2%", pead_plus.regime_alert("MIXED", off)[1])
+        self.assertEqual(pead_plus.regime_alert("RISK-OFF", {"label": "MIXED"})[0], "Market back to mixed")
+        self.assertIsNone(pead_plus.regime_alert("RISK-ON", {"label": "MIXED"}))
+        self.assertIsNone(pead_plus.regime_alert(None, off))              # first run: remember, do not push
+        self.assertIsNone(pead_plus.regime_alert("RISK-OFF", off))

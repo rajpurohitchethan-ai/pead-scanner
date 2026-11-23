@@ -518,3 +518,6 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 - My trades opens with a blotter: one row per trade with the live price, P&L and what the rule says now (tradeAction mirrors the 3 pm alert logic; the rule still acts on the close). Card detail (setup, strength, sector, hands, filings) folds under "Setup, strength and filings"; the evening news read stays open.
 - positions.json "partialExits" [{date, price, fraction, note}] (no quantities) pass through position_view; the blotter shows "Half sold; hold rest". Tests: PartialExitTests.
 - Radar rows on phones: symbol and tags on one line, the figures below.
+
+2.9.69 (owner, 23 Nov 2026) - market regime push
+- notify_regime_change(): after intelligence.json is written, a change of the regime label into or out of RISK-OFF is pushed to ntfy (NTFY_TOPIC, now also given to the engine step in scan.yml). The last label lives in master/alert_state.json; the first run only remembers it. Advisory: no rule changes. Tests: RegimeAlertTests.

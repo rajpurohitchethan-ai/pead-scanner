@@ -92,6 +92,7 @@ jobs:
           SOURCE_RETRY_ATTEMPTS: "3"
           SOURCE_DELAY_SEC: "1.25"
           UPSTOX_TOKEN: ${{ secrets.UPSTOX_TOKEN }}   # 2.9.59: read-only live prices; never printed
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}       # 2.9.69: market regime push; never printed
         run: |
           APPROVE="${{ github.event.inputs.approve_baseline || '' }}"
           if [ "${{ github.event.inputs.force_publish || 'false' }}" = "true" ]; then

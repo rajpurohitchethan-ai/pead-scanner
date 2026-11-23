@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.68"
+MODULE_VERSION = "2.9.69"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2751,6 +2751,23 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     wins = [r for r in rs if r > 0]
     return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
             "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.69 Market regime change push (owner: 23 Nov 2026). Advisory only.
+# ---------------------------------------------------------------------------
+def regime_alert(old: Any, regime: dict[str, Any] | None) -> tuple[str, str, str] | None:
+    """(title, body, ntfy priority) when the label changes into or out of RISK-OFF."""
+    new = (regime or {}).get("label")
+    if not new or not old or new == old or "RISK-OFF" not in (old, new):
+        return None
+    r20 = _num((regime or {}).get("ret20dPct"))
+    idx = (regime or {}).get("index") or "NIFTY 500"
+    tail = f" {idx} {r20:+.1f}% over 20 days." if r20 is not None else ""
+    if new == "RISK-OFF":
+        return ("Market turned risk-off", f"{(regime or {}).get('note') or 'Index below its averages.'}{tail} "
+                "Size new trades smaller (0.5% risk) or skip them; open trades follow their own stops.", "high")
+    return (f"Market back to {new.lower()}", f"{(regime or {}).get('note') or ''}{tail} Normal sizing can resume.".strip(), "default")
 
 
 # ---------------------------------------------------------------------------

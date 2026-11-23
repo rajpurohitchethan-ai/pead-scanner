@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.68"
+ENGINE_VERSION = "2.9.69"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -8675,6 +8675,28 @@ def quality_gate(new_health: dict[str, Any], old_health: dict[str, Any], approve
     return len(reasons) == 0, reasons
 
 
+ALERT_STATE_PATH = MASTER_DIR / "alert_state.json"   # 2.9.69: last regime label pushed
+
+
+def notify_regime_change(regime: dict[str, Any] | None) -> None:
+    """Pushes to ntfy (NTFY_TOPIC secret) when the regime label moves into or out of RISK-OFF.
+    The label is remembered in master/alert_state.json; without a topic nothing is sent."""
+    label = (regime or {}).get("label")
+    if not label:
+        return
+    state = _eod_read(ALERT_STATE_PATH) or {} if ALERT_STATE_PATH.exists() else {}
+    msg = pead_plus.regime_alert(state.get("regime"), regime)
+    topic = (os.getenv("NTFY_TOPIC") or "").strip()
+    if msg and topic:
+        title, body, prio = msg
+        r = requests.post("https://ntfy.sh/" + topic, data=body.encode("utf-8"), timeout=15,
+                          headers={"Title": title.encode("utf-8"), "Priority": prio, "Tags": "warning" if prio == "high" else "ok"})
+        print(f"Regime alert sent: {title} ({r.status_code})")
+    if state.get("regime") != label:
+        state.update(regime=label, regimeAt=iso_now())
+        json_dump_atomic(ALERT_STATE_PATH, state)
+
+
 def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, approved_signature: str | None = None) -> tuple[bool, list[str]]:
     old = previous_health()
     old.pop("qualityGate", None)
@@ -8849,6 +8871,10 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
     json_dump_atomic(DATA_PATH, data_payload)
     # The dashboard feed is compact (no indentation) to keep it light on mobile.
     json_dump_atomic(INTELLIGENCE_PATH, intel_payload, compact=True)
+    try:                                                   # 2.9.69: push when the market turns risk-off (or back)
+        notify_regime_change(intel_payload.get("regime"))
+    except Exception as exc:
+        print(f"Regime alert skipped: {type(exc).__name__}")
     try:                                                   # 2.9.54: the slim copy the page loads
         page_main, page_more = pead_plus.page_payload(intel_payload)
         json_dump_atomic(PAGE_MORE_PATH, page_more, compact=True)      # the rest first: page.json points at it
