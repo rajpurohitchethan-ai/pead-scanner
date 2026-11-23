@@ -563,3 +563,6 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 
 2.9.79 (owner: 'add last 3 session scan results', 23 Nov 2026)
 - darvas_radar keeps hitDays [{date, close, changePct, volX}] for each hit; darvas.json 'sessions' = the last 8 session dates. The Darvas tab opens with 'Screener results, last 3 sessions': one list per session (newest open) of the stocks that passed the 4% screen at that close, with that day's move and volume and their signal now. DARVAS_REV 2.9.79 re-runs the scan once. Tests: DarvasSessionTests.
+
+2.9.80 (fix, 23 Nov 2026)
+- Insider / promoter trades were always empty: since May 2026 NSE takes PIT Reg 7 disclosures as XBRL and lists them on corporates-pit-gg (market-wide, one XBRL file a filing); corporates-pit is now an archive with nothing after Apr 2026. Every 6 hours the engine lists the last 45 days of filings, reads the XBRL of those for our stocks (holdings + every Radar stock; up to 150 files a run, the backlog continues next run; file names already read are kept in holdings_watch 'insiderRead') and keeps open-market buys / sells and pledges by promoters, directors and KMP as before. The holding % after the trade is not taken from XBRL (filers enter the ratio inconsistently). Tests: InsiderTradeTests.test_xbrl_filing.

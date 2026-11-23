@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.79"
+MODULE_VERSION = "2.9.80"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -3080,6 +3080,36 @@ def parse_insider_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         out.append({"symbol": sym, "date": d, "person": str(r.get("acqName") or "").strip() or None, "role": role,
                     "kind": kind, "qty": _num(r.get("secAcq")), "value": _num(r.get("secVal")),
                     "afterPct": _num(r.get("afterAcqSharesPer"))})
+    return out
+
+
+_PIT_FACT = _re.compile(r'<(?:[\w.-]+:)?(\w+)\b[^>]*?contextRef="([^"]+)"[^>]*>([^<]*)</')
+
+
+def parse_insider_xbrl(text: str, symbol: str | None = None) -> list[dict[str, Any]]:
+    """2.9.80: one NSE insider-trading XBRL filing (Reg 7(2), filed since May 2026) -> rows in the
+    old corporates-pit shape, so parse_insider_rows reads both. One row per disclosure context.
+    The holding % after the trade is left out: the XBRL gives it as a ratio that filers fill in
+    inconsistently (0.001 can mean 0.1% or 0.001%)."""
+    ctx: dict[str, dict[str, str]] = {}
+    for tag, ref, val in _PIT_FACT.findall(text or ""):
+        ctx.setdefault(ref, {})[tag] = val.strip()
+    main = next((c for c in ctx.values() if c.get("Symbol")), {})
+    sym = str(symbol or main.get("Symbol") or "").strip().upper()
+    out = []
+    for c in ctx.values():
+        if "CategoryOfPerson" not in c:
+            continue
+        if "equity" not in str(c.get("TypeOfInstrument") or "equity").lower():
+            continue
+        out.append({"symbol": sym, "personCategory": c.get("CategoryOfPerson"), "acqName": c.get("NameOfThePerson"),
+                    "acqMode": c.get("ModeOfAcquisitionOrDisposal"),
+                    "tdpTransactionType": c.get("SecuritiesAcquiredOrDisposedTransactionType"),
+                    "secAcq": c.get("SecuritiesAcquiredOrDisposedNumberOfSecurity"),
+                    "secVal": c.get("SecuritiesAcquiredOrDisposedValueOfSecurity"),
+                    "acqfromDt": c.get("DateOfAllotmentAdviceOrAcquisitionOfSharesOrSaleOfSharesSpecifyFromDate"),
+                    "acqtoDt": c.get("DateOfAllotmentAdviceOrAcquisitionOfSharesOrSaleOfSharesSpecifyToDate"),
+                    "intimDt": c.get("DateOfIntimationToCompany")})
     return out
 
 

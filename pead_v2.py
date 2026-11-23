@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.79"
+ENGINE_VERSION = "2.9.80"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1382,6 +1382,12 @@ class NSEAdapter:
         Not saved under raw/ (one file a stock every 6 hours would bloat the repo)."""
         params = {"index": "equities", "symbol": symbol}
         return with_retry(lambda: self._api_get("corporates-pit", params), source="NSE_PIT")
+
+    def insider_filings(self, start: date, end: date):
+        """2.9.80: since May 2026 NSE lists insider (PIT Reg 7) filings market-wide on corporates-pit-gg,
+        one XBRL file each; corporates-pit is now only the archive (nothing after Apr 2026)."""
+        params = {"index": "equities", "from_date": start.strftime("%d-%m-%Y"), "to_date": end.strftime("%d-%m-%Y")}
+        return with_retry(lambda: self._api_get("corporates-pit-gg", params), source="NSE_PIT")
 
     def integrated_filings(self, symbol: str, event_id: str | None = None):
         """NSE "Integrated Filing - Financials" index for one company (engine 2.6.1).
@@ -5883,7 +5889,8 @@ HOLDINGS_FILINGS_DAYS = 30
 HOLDINGS_DEALS_DAYS = 10
 RADAR_DEALS_DAYS = 30          # 2.9.64: bulk / block deals kept for every stock
 INSIDER_EVERY_MIN = 360        # 2.9.72: insider / promoter disclosures, fetched every 6 hours
-INSIDER_MAX_STOCKS = 60        # 2.9.75: holdings + liquid A/B Radar stocks, one query each
+INSIDER_MAX_STOCKS = 600       # 2.9.80: holdings + Radar stocks (filtered from one market-wide list)
+INSIDER_XML_MAX = 150          # 2.9.80: XBRL files read a run (newest first; the rest next run)
 INSIDER_KEEP_DAYS = 45
 
 
@@ -5964,13 +5971,12 @@ def attach_earnings_quality(items: list[dict[str, Any]], root: Path | None = Non
 
 
 def insider_symbols(held: set[str] | Any) -> list[str]:
-    """2.9.75: the stocks whose insider trades are fetched: holdings first, then the
-    liquid A/B Radar stocks of the last published page (best grade first)."""
+    """2.9.75: the stocks whose insider trades are read: holdings first, then the Radar
+    stocks of the last published page (best grade first; 2.9.80: all of them, not only A/B)."""
     out = [str(s).upper() for s in held or []]
     try:
         page = json.loads(PAGE_PATH.read_text(encoding="utf-8"))
-        ab = [it for it in page.get("items") or [] if ((it.get("plus") or {}).get("grade") or {}).get("tier") in ("A", "B")
-              and ((it.get("plus") or {}).get("liquidity") or {}).get("pass") is True]
+        ab = list(page.get("items") or [])                                 # 2.9.80: every Radar stock, best grade first
         ab.sort(key=lambda it: -(((it.get("plus") or {}).get("grade") or {}).get("score") or 0))
         out += [str(it.get("symbol") or "").upper() for it in ab]
     except (OSError, ValueError):
@@ -6168,25 +6174,38 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
             cache["dealsAt"] = iso_now()
         except Exception as exc:
             print(f"Deals skipped: {type(exc).__name__}: {exc}")
-    if _due(cache.get("insiderAt"), INSIDER_EVERY_MIN):                    # 2.9.72 promoter / insider trades
+    if _due(cache.get("insiderAt"), INSIDER_EVERY_MIN) or "insiderRead" not in cache:   # 2.9.72 / 2.9.80 insider trades
         try:
             cutoff = (today - timedelta(days=INSIDER_KEEP_DAYS)).isoformat()
-            rows, asked, failed = [], insider_symbols(held), 0
+            want, failed, rows = set(insider_symbols(held)), 0, []
             with NSEAdapter(ctx) as nse:
-                for sym_ in asked:
-                    try:
-                        rows += [r for r in pead_plus.parse_insider_rows(_deal_rows(nse.insider_trades(sym_))) if r["date"] >= cutoff]
-                    except Exception:
-                        failed += 1
-                    time.sleep(SOURCE_DELAY_SEC)
+                filings = _deal_rows(nse.insider_filings(today - timedelta(days=INSIDER_KEEP_DAYS), today))
+            name = lambda f: str(f.get("xmlFileName") or "").rsplit("/", 1)[-1]
+            listed = {name(f) for f in filings if name(f)}
+            read = set(cache.get("insiderRead") or []) & listed
+            todo = [f for f in filings if str(f.get("symbol") or "").upper() in want
+                    and name(f) and name(f) not in read]
+            for f in todo[:INSIDER_XML_MAX]:
+                try:
+                    raw = pead_plus.parse_insider_xbrl(_eod_get(str(f["xmlFileName"])), f.get("symbol"))
+                    rows += [r for r in pead_plus.parse_insider_rows(raw) if r["date"] >= cutoff]
+                    read.add(name(f))
+                except Exception:
+                    failed += 1
+                time.sleep(0.3)
+            cache["insiderRead"] = sorted(read)
+            asked = todo
             seen, keep = set(), []
             for d in rows + (cache.get("insider") or []):
                 k = (d["symbol"], d["date"], d.get("person"), d.get("kind"), d.get("qty"))
                 if k not in seen and str(d.get("date")) >= cutoff:
                     seen.add(k)
                     keep.append(d)
-            cache["insider"], cache["insiderAt"] = keep, iso_now()
-            print(f"Insider trades: {len(asked)} stocks asked ({failed} failed), {len(rows)} recent rows, {len(keep)} kept")
+            cache["insider"] = keep
+            if len(todo) <= INSIDER_XML_MAX:                               # backlog left: read on at the next run
+                cache["insiderAt"] = iso_now()
+            print(f"Insider trades: {len(filings)} filings listed, {len(asked)} to read for our stocks "
+                  f"({failed} failed), {len(rows)} recent trades, {len(keep)} kept")
         except Exception as exc:
             print(f"Insider trades skipped: {type(exc).__name__}: {exc}")
     if _due((cache.get("global") or {}).get("at"), HOLDINGS_WATCH_EVERY_MIN):

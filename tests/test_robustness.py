@@ -4391,6 +4391,39 @@ class InsiderTradeTests(unittest.TestCase):
         self.assertIsNone(pead_plus.insider_view([]))
 
 
+    XML = ('<xbrli:xbrl><in-bse-co:Symbol contextRef="MainI">AAA</in-bse-co:Symbol>'
+           '<in-bse-co:TypeOfInstrument contextRef="Disclosure1">Equity</in-bse-co:TypeOfInstrument>'
+           '<in-bse-co:CategoryOfPerson contextRef="Disclosure1">Promoter Group</in-bse-co:CategoryOfPerson>'
+           '<in-bse-co:NameOfThePerson contextRef="Disclosure1">X Holdings</in-bse-co:NameOfThePerson>'
+           '<in-bse-co:SecuritiesAcquiredOrDisposedNumberOfSecurity contextRef="Disclosure1" unitRef="shares" decimals="INF">33500'
+           '</in-bse-co:SecuritiesAcquiredOrDisposedNumberOfSecurity>'
+           '<in-bse-co:SecuritiesAcquiredOrDisposedValueOfSecurity contextRef="Disclosure1" unitRef="INR" decimals="0">4929500'
+           '</in-bse-co:SecuritiesAcquiredOrDisposedValueOfSecurity>'
+           '<in-bse-co:SecuritiesAcquiredOrDisposedTransactionType contextRef="Disclosure1">Buy</in-bse-co:SecuritiesAcquiredOrDisposedTransactionType>'
+           '<in-bse-co:DateOfAllotmentAdviceOrAcquisitionOfSharesOrSaleOfSharesSpecifyToDate contextRef="Disclosure1">2026-11-20'
+           '</in-bse-co:DateOfAllotmentAdviceOrAcquisitionOfSharesOrSaleOfSharesSpecifyToDate>'
+           '<in-bse-co:ModeOfAcquisitionOrDisposal contextRef="Disclosure1">Market Purchase</in-bse-co:ModeOfAcquisitionOrDisposal>'
+           '<in-bse-co:TypeOfInstrument contextRef="Disclosure2">Equity</in-bse-co:TypeOfInstrument>'
+           '<in-bse-co:CategoryOfPerson contextRef="Disclosure2">Promoter Group</in-bse-co:CategoryOfPerson>'
+           '<in-bse-co:ModeOfAcquisitionOrDisposal contextRef="Disclosure2">Gift</in-bse-co:ModeOfAcquisitionOrDisposal>'
+           '<in-bse-co:SecuritiesAcquiredOrDisposedTransactionType contextRef="Disclosure2">Buy</in-bse-co:SecuritiesAcquiredOrDisposedTransactionType>'
+           '<in-bse-co:DateOfIntimationToCompany contextRef="Disclosure2">2026-11-21</in-bse-co:DateOfIntimationToCompany>'
+           '</xbrli:xbrl>')
+
+    def test_xbrl_filing(self):
+        """2.9.80: NSE's XBRL insider filings (since May 2026) read like the old rows."""
+        import pead_plus
+        raw = pead_plus.parse_insider_xbrl(self.XML)
+        self.assertEqual(len(raw), 2)
+        rows = pead_plus.parse_insider_rows(raw)                         # the gift is left out
+        self.assertEqual(len(rows), 1)
+        r = rows[0]
+        self.assertEqual((r["symbol"], r["kind"], r["date"], r["value"], r["person"]),
+                         ("AAA", "BUY", "2026-11-20", 4929500.0, "X Holdings"))
+        self.assertIsNone(r["afterPct"])
+        self.assertEqual(pead_plus.parse_insider_xbrl(""), [])
+
+
 class PeerReadThroughTests(unittest.TestCase):
     """2.9.73 (23 Nov 2026): industry peers' results for a company still to report."""
 
