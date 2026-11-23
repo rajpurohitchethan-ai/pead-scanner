@@ -509,3 +509,4 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 - pead_plus.concall_verdict keeps a note only when dated on or after this quarter's result. plus.concallVerdict; card tag and note. Display only. Tests: ConcallVerdictTests.
 
 2.9.67 (23 Nov 2026) - live_prices.py sends one low-priority "PEAD live alerts running" message a day when the job starts with NTFY_TOPIC set (key "hello"), so the owner knows alerts work.
+- Same day: EOD_REPLAY_REV 2.9.55 -> 2.9.67 so every chart is rebuilt once with "days" (the backtest was empty: no chart had them).

@@ -8001,7 +8001,7 @@ def eod_replay_order(events: list[dict[str, Any]], held: set[str], turnover) -> 
 
 # 2.9.55: bump to try every stock still behind the newest file once more after
 # a fix to the replay path (renamed symbols' own NSE prices were rejected).
-EOD_REPLAY_REV = "2.9.55"
+EOD_REPLAY_REV = "2.9.67"   # 2.9.67: rebuild every chart once so it carries session dates (backtest)
 
 
 def replay_eod(store: "EventStore", *, budget_seconds: float | None = None) -> dict[str, int]:
