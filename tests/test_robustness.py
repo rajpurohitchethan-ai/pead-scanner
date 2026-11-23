@@ -4054,21 +4054,34 @@ class UpstoxLiveTests(unittest.TestCase):
         from unittest import mock
         import os
         with mock.patch.dict(os.environ, {"UPSTOX_TOKEN": ""}), mock.patch.object(p.requests, "get") as get:
-            self.assertEqual(p.upstox_ltp(["INE053A01029"]), {})
+            self.assertEqual(p.upstox_ltp([("INDHOTEL", "INE053A01029")]), {})
             get.assert_not_called()
 
-    def test_batches_of_500_and_rejected_token(self):
+    def test_symbol_beats_an_out_of_date_isin(self):
+        keys = {"symbol": {"BHAGERIA": "NSE_EQ|INE354C01027"}, "isin": {"INE053A01029": "NSE_EQ|INE053A01029"}}
+        self.assertEqual(p.upstox_key_for("BHAGERIA", "INE354C01019", keys), "NSE_EQ|INE354C01027")
+        self.assertEqual(p.upstox_key_for("NEWSYM", "INE053A01029", keys), "NSE_EQ|INE053A01029")
+        self.assertEqual(p.upstox_key_for("NOPE", "INE999X01010", keys), "NSE_EQ|INE999X01010")
+        self.assertIsNone(p.upstox_key_for("NOPE", "", keys))
+
+    def test_batches_and_results_keyed_by_symbol(self):
         from unittest import mock
-        isins = [f"INE{n:06d}01011" for n in range(1203)]
-        resp = mock.Mock(status_code=200); resp.json.return_value = {"data": {}}
-        with mock.patch.object(p.requests, "get", return_value=resp) as get:
-            p.upstox_ltp(isins, token="t")
-            self.assertEqual(get.call_count, 7)                                   # 200 per request
-            self.assertEqual(len(get.call_args_list[0].kwargs["params"]["instrument_key"].split(",")), 200)
+        stocks = [(f"S{n}", f"INE{n:06d}01011") for n in range(450)]
+        def fake(url, params, headers, timeout):
+            r = mock.Mock(status_code=200)
+            r.json.return_value = {"data": {k: {"last_price": 10.0, "instrument_token": k, "cp": 9.0}
+                                            for k in params["instrument_key"].split(",")}}
+            return r
+        with mock.patch.object(p, "upstox_instrument_keys", return_value={"symbol": {}, "isin": {}}), \
+             mock.patch.object(p.requests, "get", side_effect=fake) as get:
+            out = p.upstox_ltp(stocks, token="t")
+        self.assertEqual(get.call_count, 3)                                       # 200 per request
+        self.assertEqual(len(out), 450)
+        self.assertEqual(out["S7"]["price"], 10.0)
         bad = mock.Mock(status_code=401)
-        with mock.patch.object(p.requests, "get", return_value=bad):
+        with mock.patch.object(p, "upstox_instrument_keys", return_value={}), mock.patch.object(p.requests, "get", return_value=bad):
             with self.assertRaises(PermissionError):
-                p.upstox_ltp(isins[:3], token="t")
+                p.upstox_ltp(stocks[:3], token="t")
 
     def test_token_reaches_only_the_engine_and_live_steps(self):
         wf = (Path(__file__).resolve().parents[1] / ".github/workflows/scan.yml").read_text(encoding="utf-8")

@@ -30,7 +30,7 @@ def market_open(now: datetime) -> bool:
 
 
 def watch_list() -> dict[str, str]:
-    """{ISIN: SYMBOL} for every stock in page.json (falls back to intelligence.json)."""
+    """{SYMBOL: ISIN} for every stock in page.json (falls back to intelligence.json)."""
     for name in ("page.json", "intelligence.json"):
         try:
             data = json.loads((ROOT / name).read_text(encoding="utf-8"))
@@ -40,18 +40,16 @@ def watch_list() -> dict[str, str]:
     out: dict[str, str] = {}
     for it in (data or {}).get("items") or []:
         isin = str(it.get("eventId") or "").split("|")[0].strip().upper()
-        if isin.startswith("IN") and it.get("symbol"):
-            out[isin] = str(it["symbol"])
-    for pos in (data or {}).get("positions") or []:
-        pass  # holdings are already among page.json's items
+        if it.get("symbol"):
+            out[str(it["symbol"]).upper()] = isin if isin.startswith("IN") else ""
     return out
 
 
 def snapshot(watch: dict[str, str], prices: dict[str, dict], now: datetime) -> dict:
     return {"generatedAt": now.astimezone(ZoneInfo("UTC")).isoformat(timespec="seconds").replace("+00:00", "Z"),
             "source": "UPSTOX", "count": len(prices),
-            "prices": {watch[i]: [round(q["price"], 2), q.get("prevClose"), q.get("volume")]
-                       for i, q in prices.items() if i in watch}}
+            "prices": {sym: [round(q["price"], 2), q.get("prevClose"), q.get("volume")]
+                       for sym, q in prices.items() if sym in watch}}
 
 
 def git(*args: str) -> int:
@@ -90,7 +88,7 @@ def main() -> int:
             git("pull", "-q", "--rebase", "origin", os.getenv("GITHUB_REF_NAME", "main"))
             watch, loaded = watch_list() or watch, time.time()
         try:
-            prices = p.upstox_ltp(list(watch))
+            prices = p.upstox_ltp(list(watch.items()))
             LIVE_PATH.write_text(json.dumps(snapshot(watch, prices, now), separators=(",", ":")) + "\n", encoding="utf-8")
             print(f"{now:%H:%M} IST: {len(prices)} prices")
             push(now)

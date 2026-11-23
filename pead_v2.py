@@ -5651,22 +5651,74 @@ def parse_upstox_ltp(payload: Any) -> dict[str, dict[str, Any]]:
     return out
 
 
-def upstox_ltp(isins: list[str], token: str | None = None, timeout: int = 20) -> dict[str, dict[str, Any]]:
-    """Last traded price for NSE stocks by ISIN, 500 per request. Raises on a
-    rejected token so the caller can fall back and say why."""
+UPSTOX_INSTRUMENTS_URL = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz"
+_UPSTOX_KEYS: dict[str, dict[str, str]] = {}
+
+
+def upstox_instrument_keys(timeout: int = 60) -> dict[str, dict[str, str]]:
+    """Upstox's public NSE instrument list (no token): {"symbol": {SYMBOL: key},
+    "isin": {ISIN: key}} for the NSE_EQ segment. Looked up by trading symbol
+    because a stored ISIN can be out of date after a split or face-value change
+    (BHAGERIA: INE354C01019 stored, INE354C01027 trading; 366 of 1,603 stocks
+    got no price when looked up by stored ISIN)."""
+    if _UPSTOX_KEYS:
+        return _UPSTOX_KEYS
+    import gzip
+    resp = requests.get(UPSTOX_INSTRUMENTS_URL, timeout=timeout)
+    resp.raise_for_status()
+    rows = json.loads(gzip.decompress(resp.content))
+    by_sym: dict[str, str] = {}
+    by_isin: dict[str, str] = {}
+    for r in rows if isinstance(rows, list) else []:
+        if not isinstance(r, dict) or r.get("segment") != "NSE_EQ" or not r.get("instrument_key"):
+            continue
+        sym = normalize_symbol(r.get("trading_symbol"))
+        if sym and (sym not in by_sym or r.get("instrument_type") == "EQ"):
+            by_sym[sym] = r["instrument_key"]
+        if r.get("isin"):
+            by_isin[str(r["isin"]).upper()] = r["instrument_key"]
+    _UPSTOX_KEYS.update({"symbol": by_sym, "isin": by_isin})
+    return _UPSTOX_KEYS
+
+
+def upstox_key_for(symbol: str | None, isin: str | None, keys: dict[str, dict[str, str]] | None) -> str | None:
+    """Trading symbol first, then the stored ISIN, then NSE_EQ|ISIN as is."""
+    keys = keys or {}
+    sym, isin = normalize_symbol(symbol), str(isin or "").strip().upper()
+    return ((keys.get("symbol") or {}).get(sym) if sym else None) or ((keys.get("isin") or {}).get(isin) if isin else None) \
+        or (f"NSE_EQ|{isin}" if isin.startswith("IN") else None)
+
+
+def upstox_ltp(stocks: list[tuple[str | None, str | None]], token: str | None = None, timeout: int = 20) -> dict[str, dict[str, Any]]:
+    """Last traded price for NSE stocks given (symbol, ISIN) pairs, UPSTOX_BATCH
+    per request. Returns {SYMBOL or ISIN as given: quote}. Raises
+    PermissionError on a rejected token so the caller can fall back and say why."""
     token = token or upstox_token()
     if not token:
         return {}
-    keys = sorted({str(i).strip().upper() for i in isins if str(i or "").strip().upper().startswith("IN")})
+    try:
+        keys = upstox_instrument_keys()
+    except Exception as exc:
+        print(f"Upstox instrument list unavailable ({type(exc).__name__}); using stored ISINs")
+        keys = {}
+    want: dict[str, str] = {}                                  # instrument key -> caller's id
+    for sym, isin in stocks:
+        key = upstox_key_for(sym, isin, keys)
+        if key:
+            want.setdefault(key, normalize_symbol(sym) or str(isin).upper())
     out: dict[str, dict[str, Any]] = {}
-    for i in range(0, len(keys), UPSTOX_BATCH):
-        batch = keys[i:i + UPSTOX_BATCH]
-        resp = requests.get(UPSTOX_LTP_URL, params={"instrument_key": ",".join(f"NSE_EQ|{k}" for k in batch)},
+    ks = sorted(want)
+    for i in range(0, len(ks), UPSTOX_BATCH):
+        batch = ks[i:i + UPSTOX_BATCH]
+        resp = requests.get(UPSTOX_LTP_URL, params={"instrument_key": ",".join(batch)},
                             headers={"Accept": "application/json", "Authorization": f"Bearer {token}"}, timeout=timeout)
         if resp.status_code == 401:
             raise PermissionError("Upstox rejected the token (HTTP 401): it may have expired or been revoked")
         resp.raise_for_status()
-        out.update(parse_upstox_ltp(resp.json()))
+        for isin, q in parse_upstox_ltp(resp.json()).items():
+            who = want.get(f"NSE_EQ|{isin}")
+            if who:
+                out[who] = q
     return out
 
 
@@ -5690,16 +5742,15 @@ def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
     if not picks:
         return 0
     if upstox_token():                                   # 2.9.59: every pick in a few requests
-        isin_of = {id(e): str((e.get("security") or {}).get("isin") or "").upper() for e, _ in picks}
         try:
-            prices = upstox_ltp([v for v in isin_of.values() if v])
+            prices = upstox_ltp([(sym, (e.get("security") or {}).get("isin")) for e, sym in picks])
         except Exception as exc:
             prices = {}
             print(f"Upstox live prices skipped: {type(exc).__name__}: {exc}")
         at = iso_now()
         rest = []
         for e, sym in picks:
-            q = prices.get(isin_of[id(e)])
+            q = prices.get(normalize_symbol(sym))
             if q:
                 e["live"] = {"price": q["price"], "at": at, "source": "UPSTOX"}
                 store.save(e)
