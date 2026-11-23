@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.70"
+MODULE_VERSION = "2.9.71"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2751,6 +2751,56 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     wins = [r for r in rs if r > 0]
     return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
             "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.71 Shadow portfolio (owner, 23 Nov 2026): every entry the screener logs
+# is remembered with the grade it had THAT day (master/shadow_log.json), then
+# run through the owner's exit rule. Grade A is the "follow the screener
+# perfectly" book. Evidence only.
+# ---------------------------------------------------------------------------
+def shadow_update(log: dict[str, Any], items: list[dict[str, Any]], today: date) -> int:
+    """Adds today's newly logged entries with today's grade. Never rewrites an
+    older row (the grade at entry must not drift). Returns how many were added."""
+    added = 0
+    for it in items:
+        plus = it.get("plus") or {}
+        tl, g = plus.get("tradeLog") or {}, plus.get("grade") or {}
+        t = tl.get("full") or tl.get("starter")
+        if not isinstance(t, dict) or t.get("date") != today.isoformat() or not g.get("tier"):
+            continue
+        key = f"{str(it.get('symbol') or '').upper()}|{t['date']}"
+        if key in log:
+            continue
+        log[key] = {"symbol": str(it.get("symbol") or "").upper(), "date": t["date"], "entry": _num(t.get("entry")),
+                    "sl": _num(t.get("sl")), "signal": t.get("signal"), "tier": g.get("tier"), "score": g.get("score")}
+        added += 1
+    return added
+
+
+def shadow_view(log: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Each logged entry replayed on its chart; rows by grade at entry, plus the A-grade trades."""
+    if not log:
+        return None
+    by_sym = {str(i.get("symbol") or "").upper(): i for i in items}
+    trades = []
+    for row in log.values():
+        it = by_sym.get(row.get("symbol"))
+        if not it:
+            continue
+        ev = {"symbol": row["symbol"], "plus": {"chart": (it.get("plus") or {}).get("chart"),
+                                                "liquidity": (it.get("plus") or {}).get("liquidity"),
+                                                "tradeLog": {"full": {"date": row["date"], "entry": row["entry"], "sl": row["sl"], "signal": row.get("signal")}}}}
+        for t in backtest_trades([ev]):
+            trades.append({**t, "tier": row.get("tier"), "score": row.get("score")})
+    out = {"since": min(r["date"] for r in log.values()), "logged": len(log), "measured": len(trades), "rows": []}
+    for tier in ("A", "B"):
+        rows = (backtest_rules([t for t in trades if t["tier"] == tier]) or {}).get("rows") or []
+        if rows:
+            out["rows"].append({**rows[0], "group": f"Grade {tier} at entry"})
+    out["trades"] = sorted([{k: t.get(k) for k in ("symbol", "entryDate", "signal", "tier", "score", "r", "open", "oneR", "how", "exitOn")}
+                            for t in trades if t["tier"] == "A"], key=lambda t: str(t.get("entryDate")), reverse=True)[:40]
+    return out
 
 
 # ---------------------------------------------------------------------------

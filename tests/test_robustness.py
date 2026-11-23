@@ -4332,3 +4332,34 @@ class RegimeAlertTests(unittest.TestCase):
         self.assertIsNone(pead_plus.regime_alert("RISK-ON", {"label": "MIXED"}))
         self.assertIsNone(pead_plus.regime_alert(None, off))              # first run: remember, do not push
         self.assertIsNone(pead_plus.regime_alert("RISK-OFF", off))
+
+
+class ShadowPortfolioTests(unittest.TestCase):
+    """2.9.71 (23 Nov 2026): entries kept with the grade they had that day."""
+
+    def item(self, tier="A", day="2026-11-23"):
+        dates = [f"2026-11-{d:02d}" for d in range(1, 26)]
+        from datetime import date as _d
+        d0 = _d(2026, 11, 1)
+        return {"symbol": "AAA", "plus": {"grade": {"tier": tier, "score": 80}, "liquidity": {"pass": True},
+                "tradeLog": {"full": {"date": day, "entry": 100, "sl": 95, "signal": "ENTRY_PULLBACK"}},
+                "chart": {"from": "2026-11-01", "days": [(_d.fromisoformat(x) - d0).days for x in dates],
+                          "close": [100.0] * 22 + [101.0, 103.0, 106.0]}}}
+
+    def test_grade_frozen_at_entry(self):
+        import pead_plus
+        from datetime import date
+        log = {}
+        self.assertEqual(pead_plus.shadow_update(log, [self.item("A")], date(2026, 11, 23)), 1)
+        self.assertEqual(pead_plus.shadow_update(log, [self.item("C")], date(2026, 11, 23)), 0)   # later grade ignored
+        self.assertEqual(log["AAA|2026-11-23"]["tier"], "A")
+        self.assertEqual(pead_plus.shadow_update({}, [self.item("A", "2026-11-20")], date(2026, 11, 23)), 0)  # no back-dating
+
+    def test_view(self):
+        import pead_plus
+        from datetime import date
+        log = {}
+        pead_plus.shadow_update(log, [self.item()], date(2026, 11, 23))
+        v = pead_plus.shadow_view(log, [self.item()])
+        self.assertEqual((v["logged"], v["measured"], v["rows"][0]["group"]), (1, 1, "Grade A at entry"))
+        self.assertAlmostEqual(v["trades"][0]["r"], 1.2)                 # (106 - 100) / 5, still open

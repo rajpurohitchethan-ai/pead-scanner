@@ -970,9 +970,26 @@
       ${bt.rows.map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n">${r.closed} / ${r.open}</td><td class="r n">${rate(r.winRate)}</td><td class="r n ${cls(r.avgR)}">${R(r.avgR)}</td><td class="r n ${cls(r.totalR)}">${R(r.totalR)}</td><td class="r n">${num(r.profitFactor) === null ? '—' : num(r.profitFactor).toFixed(2)}</td><td class="r n">${rate(r.reached1R)}</td><td class="r n ${cls(r.stopOnlyAvgR)}">${R(r.stopOnlyAvgR)}</td></tr>`).join('')}
       </tbody></table></div>`;
   }
+  // 2.9.71: the shadow book (every logged entry with the grade it had that day, through your exit rule).
+  function shadowBlock() {
+    const sh = S.data.shadow;
+    if (!sh) return '';
+    const R = v => num(v) === null ? '—' : `${num(v) > 0 ? '+' : ''}${num(v).toFixed(2)}R`, rate = v => num(v) === null ? '—' : num(v).toFixed(0) + '%';
+    const js = (S.data.journal || {}).stats || {};
+    const rows = sh.rows || [];
+    return `<h2 class="day">Shadow portfolio: the screener followed perfectly</h2>
+      <p class="note">Every entry the screener logs from ${dt(sh.since)} is kept with the grade it had that day and run through your exit rule on daily closes. ${sh.measured} of ${sh.logged} logged entries have prices to measure. Compare it with your own trades: the gap is what timing and discretion cost or add.</p>
+      ${rows.length ? `<div class="tscroll"><table><thead><tr><th>Book</th><th class="r">Trades</th><th class="r">Closed / open</th><th class="r">Win rate</th><th class="r">Avg</th><th class="r">Total</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n">${r.closed} / ${r.open}</td><td class="r n">${rate(r.winRate)}</td><td class="r n ${cls(r.avgR)}">${R(r.avgR)}</td><td class="r n ${cls(r.totalR)}">${R(r.totalR)}</td></tr>`).join('')}
+      ${num(js.trades) ? `<tr><td><b>Your closed trades</b></td><td class="r n">${js.trades}</td><td class="r n">${js.trades} / 0</td><td class="r n">${rate(js.winRate)}</td><td class="r n ${cls(js.expectancyR)}">${R(js.expectancyR)}</td><td class="r n ${cls(js.totalR)}">${R(js.totalR)}</td></tr>` : ''}
+      </tbody></table></div>` : '<p class="meta">No measured shadow trades yet: entries appear from the next trigger.</p>'}
+      ${(sh.trades || []).length ? `<details class="about"><summary>Grade A shadow trades (${sh.trades.length})</summary><div class="tscroll"><table class="sectbl"><thead><tr><th>Stock</th><th class="r">Entered</th><th class="r">Result</th><th>Now</th></tr></thead><tbody>
+        ${sh.trades.map(t => `<tr><td><b>${esc(t.symbol)}</b> <span class="gpill gA">A ${t.score ?? ''}</span></td><td class="r n">${dt(t.entryDate)}</td><td class="r n ${cls(t.r)}">${R(t.r)}</td><td>${t.open ? (t.oneR ? 'Open, past +1R' : 'Open') : `Closed ${dt(t.exitOn)} (${esc(({ STOP: 'stop', COST: 'cost', EMA20: '20 EMA' })[t.how] || t.how || '')})`}</td></tr>`).join('')}
+        </tbody></table></div></details>` : ''}`;
+  }
   function viewScore() {
     const sc = S.data.scorecard || { rows: [] };
-    return `${backtestTable(sc.backtest)}<h2 class="day">Q1 reaction vs what came next</h2><p class="note">${esc(sc.metric)}. This checks the core idea behind the buckets: did stocks with a strong Q1 reaction keep drifting? It fills in as more results are tracked; treat small samples as anecdotes.</p>
+    return `${shadowBlock()}${backtestTable(sc.backtest)}<h2 class="day">Q1 reaction vs what came next</h2><p class="note">${esc(sc.metric)}. This checks the core idea behind the buckets: did stocks with a strong Q1 reaction keep drifting? It fills in as more results are tracked; treat small samples as anecdotes.</p>
       <div class="tscroll"><table><thead><tr><th>Group</th><th class="r">Stocks</th><th class="r">Average</th><th class="r">Median</th><th class="r">Positive</th></tr></thead><tbody>
       ${sc.rows.map(r => `<tr><td>${esc(r.group)}</td><td class="r n">${r.n}</td><td class="r n ${cls(r.avg)}">${pct(r.avg)}</td><td class="r n ${cls(r.median)}">${pct(r.median)}</td><td class="r n">${num(r.winRate) === null ? '—' : num(r.winRate).toFixed(0) + '%'}</td></tr>`).join('')}
       </tbody></table></div>
@@ -1017,7 +1034,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.70';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.71';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

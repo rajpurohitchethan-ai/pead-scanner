@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.70"
+ENGINE_VERSION = "2.9.71"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -8676,6 +8676,7 @@ def quality_gate(new_health: dict[str, Any], old_health: dict[str, Any], approve
 
 
 ALERT_STATE_PATH = MASTER_DIR / "alert_state.json"   # 2.9.69: last regime label pushed
+SHADOW_LOG_PATH = MASTER_DIR / "shadow_log.json"     # 2.9.71: entries with the grade they had that day
 
 
 def notify_regime_change(regime: dict[str, Any] | None) -> None:
@@ -8833,6 +8834,14 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
                 it_["plus"]["grade"] = pead_plus.radar_grade(it_, min_mcap_cr=MIN_MCAP_CR, last_price=lv.get("price"))
             except Exception as exc:
                 print(f"Radar grade {it_.get('symbol')} skipped: {type(exc).__name__}: {exc}")
+    shadow = None
+    try:                                                              # 2.9.71 shadow portfolio
+        slog = _eod_read(SHADOW_LOG_PATH) or {} if SHADOW_LOG_PATH.exists() else {}
+        if pead_plus.shadow_update(slog, items, now_ist().date()):
+            json_dump_atomic(SHADOW_LOG_PATH, slog)
+        shadow = pead_plus.shadow_view(slog, items)
+    except Exception as exc:
+        print(f"Shadow portfolio skipped: {type(exc).__name__}: {exc}")
     try:
         positions = position_views(items, now_ist().date())         # 2.9.12
     except Exception as exc:
@@ -8856,6 +8865,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "sectors": sorted(sectors.values(), key=lambda r: (-(r.get("relativeToMarket") or -999), r["sector"])),
         "scorecard": card | {"timing": timing, "runup": runup, "backtest": backtest},
         "sectorHeat": sector_heat,
+        "shadow": shadow,
         "positions": positions,
         "closedPositions": closed_positions(),                         # 2.9.28
         "closedSummary": pead_plus.closed_summary(closed_positions()),

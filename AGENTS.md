@@ -525,3 +525,6 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 2.9.70 (owner, 23 Nov 2026) - money after costs, tax estimate, spreadsheet export (page only)
 - My trades: 'Money after costs' for the financial year from the quantities on the device: gross P&L, Groww delivery charges + STT (rates from groww.in/pricing/stocks, 23 Nov 2026; one order a side), net P&L and a short-term gains estimate at 20.8% (s.111A 20% + 4% cess). Partial sales use fraction x the bought quantity.
 - 'Download all trades' builds a CSV in the browser (closed, partial sales, open) with the device quantities; nothing is uploaded. Update COST in intelligence.js if Groww's rates or the tax rate change.
+
+2.9.71 (owner, 23 Nov 2026) - shadow portfolio
+- master/shadow_log.json: each newly logged screener entry (tradeLog full, else starter) is stored on its entry day with the Radar grade it had that day (never back-dated, never rewritten). pead_plus.shadow_view replays them through the owner's exit rule (backtest_trades) -> intelligence.json 'shadow': rows for grade A and B at entry, and the A trades. Scorecard shows it next to the owner's closed trades. Starts 23 Nov 2026: grades of older entries are unknown. Tests: ShadowPortfolioTests.
