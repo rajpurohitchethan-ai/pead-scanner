@@ -30,23 +30,9 @@ jobs:
               tr = getattr(cl, "_transport", None)
               ss = getattr(tr, "_session", None)
               get = (lambda u: ss.get(u, follow_redirects=True)) if ss is not None else (lambda u: tr.request(u))
-              seen = set()
-              for page in ("https://www.nseindia.com/companies-listing/corporate-filings-insider-trading",):
-                  try:
-                      h = get(page).text
-                  except Exception as e:
-                      print("page ERR", e); continue
-                  print("page", len(h))
-                  srcs = re.findall(r'src="([^"]+\.js[^"]*)"', h)
-                  print("scripts", srcs[:40])
-                  for m in re.findall(r'(?:api/|/api/)[A-Za-z0-9_\-/]+', h): seen.add(m)
-                  for js in srcs:
-                      u = js if js.startswith("http") else "https://www.nseindia.com" + js
-                      try:
-                          t = get(u).text
-                      except Exception as e:
-                          print("js ERR", u, e); continue
-                      for m in re.findall(r'["\'](?:/api/)?([A-Za-z0-9_\-]*(?:pit|insider|Pit|Insider|PIT|xbrl)[A-Za-z0-9_\-/]*)["\'?]', t):
-                          seen.add(m)
-              print("found", sorted(seen)[:120])
+              for js in ("/dist/js/components/corporate-filing/csps/insider-trading-csp.js?v=20112026", "/dist/js/sections/corporate-filings.js?v=20112026"):
+                  t = get("https://www.nseindia.com" + js).text
+                  print("JS", js, len(t))
+                  for m in re.finditer(r'corporates-pit|api/|Archive|from_date|xbrl', t):
+                      print("  ..", t[max(0, m.start()-220): m.start()+260].replace("\n", " "))
           PY
