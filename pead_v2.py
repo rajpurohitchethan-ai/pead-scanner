@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.74"
+ENGINE_VERSION = "2.9.75"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -1376,10 +1376,12 @@ class NSEAdapter:
         return self._call(option_type, lambda: self._api_get("historicalOR/bulk-block-short-deals", params),
                           symbol=option_type.upper(), raw_source="NSE_DEALS")
 
-    def insider_trades(self, start: date, end: date):
-        """2.9.72: SEBI (PIT) insider-trading disclosures, every company (NSE corporates-pit)."""
-        params = {"index": "equities", "from_date": start.strftime("%d-%m-%Y"), "to_date": end.strftime("%d-%m-%Y")}
-        return self._call("corporates_pit", lambda: self._api_get("corporates-pit", params), symbol="PIT", raw_source="NSE_DEALS")
+    def insider_trades(self, symbol: str):
+        """2.9.72: SEBI (PIT) insider-trading disclosures of one company (NSE corporates-pit).
+        2.9.75: the market-wide (date-only) query returns no rows; only the per-symbol query answers.
+        Not saved under raw/ (one file a stock every 6 hours would bloat the repo)."""
+        params = {"index": "equities", "symbol": symbol}
+        return with_retry(lambda: self._api_get("corporates-pit", params), source="NSE_PIT")
 
     def integrated_filings(self, symbol: str, event_id: str | None = None):
         """NSE "Integrated Filing - Financials" index for one company (engine 2.6.1).
@@ -5881,7 +5883,7 @@ HOLDINGS_FILINGS_DAYS = 30
 HOLDINGS_DEALS_DAYS = 10
 RADAR_DEALS_DAYS = 30          # 2.9.64: bulk / block deals kept for every stock
 INSIDER_EVERY_MIN = 360        # 2.9.72: insider / promoter disclosures, fetched every 6 hours
-INSIDER_FETCH_DAYS = 7
+INSIDER_MAX_STOCKS = 60        # 2.9.75: holdings + liquid A/B Radar stocks, one query each
 INSIDER_KEEP_DAYS = 45
 
 
@@ -5912,6 +5914,21 @@ def _plus_sector(pl: dict[str, Any] | None) -> str | None:
     if isinstance(s_, dict):
         s_ = s_.get("sector")
     return s_ if isinstance(s_, str) else None
+
+
+def insider_symbols(held: set[str] | Any) -> list[str]:
+    """2.9.75: the stocks whose insider trades are fetched: holdings first, then the
+    liquid A/B Radar stocks of the last published page (best grade first)."""
+    out = [str(s).upper() for s in held or []]
+    try:
+        page = json.loads(PAGE_PATH.read_text(encoding="utf-8"))
+        ab = [it for it in page.get("items") or [] if ((it.get("plus") or {}).get("grade") or {}).get("tier") in ("A", "B")
+              and ((it.get("plus") or {}).get("liquidity") or {}).get("pass") is True]
+        ab.sort(key=lambda it: -(((it.get("plus") or {}).get("grade") or {}).get("score") or 0))
+        out += [str(it.get("symbol") or "").upper() for it in ab]
+    except (OSError, ValueError):
+        pass
+    return [s for s in dict.fromkeys(out) if s][:INSIDER_MAX_STOCKS]
 
 
 def _due(stamp: Any, minutes: int) -> bool:
@@ -6106,10 +6123,15 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
             print(f"Deals skipped: {type(exc).__name__}: {exc}")
     if _due(cache.get("insiderAt"), INSIDER_EVERY_MIN):                    # 2.9.72 promoter / insider trades
         try:
-            with NSEAdapter(ctx) as nse:
-                payload, _ = nse.insider_trades(today - timedelta(days=INSIDER_FETCH_DAYS), today)
-            rows = pead_plus.parse_insider_rows(_deal_rows(payload))
             cutoff = (today - timedelta(days=INSIDER_KEEP_DAYS)).isoformat()
+            rows, asked, failed = [], insider_symbols(held), 0
+            with NSEAdapter(ctx) as nse:
+                for sym_ in asked:
+                    try:
+                        rows += [r for r in pead_plus.parse_insider_rows(_deal_rows(nse.insider_trades(sym_))) if r["date"] >= cutoff]
+                    except Exception:
+                        failed += 1
+                    time.sleep(SOURCE_DELAY_SEC)
             seen, keep = set(), []
             for d in rows + (cache.get("insider") or []):
                 k = (d["symbol"], d["date"], d.get("person"), d.get("kind"), d.get("qty"))
@@ -6117,7 +6139,7 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
                     seen.add(k)
                     keep.append(d)
             cache["insider"], cache["insiderAt"] = keep, iso_now()
-            print(f"Insider trades: {len(rows)} rows fetched, {len(keep)} kept")
+            print(f"Insider trades: {len(asked)} stocks asked ({failed} failed), {len(rows)} recent rows, {len(keep)} kept")
         except Exception as exc:
             print(f"Insider trades skipped: {type(exc).__name__}: {exc}")
     if _due((cache.get("global") or {}).get("at"), HOLDINGS_WATCH_EVERY_MIN):
