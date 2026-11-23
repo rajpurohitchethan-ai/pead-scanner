@@ -8739,6 +8739,9 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
     ])
     try:                                                              # 2.9.62
         backtest = pead_plus.backtest_rules(pead_plus.backtest_trades(items))
+        if backtest:                                                   # 2.9.67: how many logged entries it covers
+            backtest["logged"] = sum(1 for it in items if (it["plus"].get("tradeLog") or {}).get("full")
+                                     or (it["plus"].get("tradeLog") or {}).get("starter"))
     except Exception as exc:
         print(f"Backtest skipped: {type(exc).__name__}: {exc}")
         backtest = None
