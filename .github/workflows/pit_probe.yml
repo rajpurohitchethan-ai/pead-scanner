@@ -33,6 +33,6 @@ jobs:
               for js in ("/dist/js/components/corporate-filing/csps/insider-trading-csp.js?v=20112026", "/dist/js/sections/corporate-filings.js?v=20112026"):
                   t = get("https://www.nseindia.com" + js).text
                   print("JS", js, len(t))
-                  for m in re.finditer(r'corporates-pit|api/|Archive|from_date|xbrl', t):
+                  for m in re.finditer(r"filterPageName==='insidertrading'|filterPageName===\"insidertrading\"|apiName=.corporates-pit|corporates-pit-|InsiderTradingArchive|pitXbrl|pit-xbrl|xbrl-pit", t):
                       print("  ..", t[max(0, m.start()-220): m.start()+260].replace("\n", " "))
           PY
