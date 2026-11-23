@@ -23,19 +23,19 @@ jobs:
       - name: Probe
         run: |
           python - <<'PY'
-          import json, collections, pead_v2, pead_plus
+          import json, pead_v2, pead_plus
+          from datetime import date, timedelta
           ctx = pead_v2.RunContext() if hasattr(pead_v2, 'RunContext') else None
+          t = date.today(); f = t - timedelta(days=60)
           with pead_v2.NSEAdapter(ctx) as nse:
-              for s in ("RELIANCE", "DCI", "RAMCOIND", "INFY"):
-                  try:
-                      p = nse.insider_trades(s)
-                  except Exception as e:
-                      print(s, "ERR", type(e).__name__, e); continue
-                  rows = pead_v2._deal_rows(p)
-                  print("==", s, type(p).__name__, list(p.keys()) if isinstance(p, dict) else None, "rows", len(rows),
-                        "parsed", len(pead_plus.parse_insider_rows(rows)))
-                  for r in rows[:2]:
-                      print(json.dumps(r)[:1500])
-                  for k in ("personCategory", "acqMode", "tdpTransactionType", "transactionType", "secType"):
-                      print(" ", k, collections.Counter(str(r.get(k)) for r in rows).most_common(8))
+              for s in ("RELIANCE", "RAMCOIND", "GROWW", "AONESTEELS", "SEJALLTD"):
+                  for extra in ({}, {"from_date": f.strftime("%d-%m-%Y"), "to_date": t.strftime("%d-%m-%Y")}):
+                      try:
+                          p = nse._api_get("corporates-pit", {"index": "equities", "symbol": s, **extra})
+                      except Exception as e:
+                          print(s, extra and "dated", "ERR", type(e).__name__, e); continue
+                      rows = pead_v2._deal_rows(p)
+                      ds = sorted(pead_plus._pit_date(r.get("acqtoDt"), r.get("intimDt"), r.get("date")) or "" for r in rows)
+                      print("==", s, "dated" if extra else "plain", "rows", len(rows), "dates", ds[:1], ds[-1:],
+                            "parsed", len(pead_plus.parse_insider_rows(rows)))
           PY
