@@ -4089,3 +4089,46 @@ class UpstoxLiveTests(unittest.TestCase):
         live = (Path(__file__).resolve().parents[1] / ".github/workflows/live.yml").read_text(encoding="utf-8")
         self.assertIn("secrets.UPSTOX_TOKEN", live)
         self.assertNotIn("echo $UPSTOX_TOKEN", live + wf)
+
+
+class PhoneAlertTests(unittest.TestCase):
+    """2.9.60 (23 Nov 2026): instant phone alerts from the live job (ntfy)."""
+
+    PAGE = {"positions": [
+        {"symbol": "AAA", "entryPrice": 100.0, "initialStop": 92.0, "oneR": 108.0, "oneRHit": True, "halfStop": 110.0, "restStop": 104.0},
+        {"symbol": "BBB", "entryPrice": 100.0, "initialStop": 92.0, "oneR": 108.0, "oneRHit": False}],
+        "items": [
+            {"symbol": "CCC", "plus": {"liquidity": {"pass": True}, "grade": {"tier": "A", "score": 80},
+                                       "plan": {"signal": "NEAR_ENTRY", "entry": 50.0, "sl": 47.0}, "price": {}}},
+            {"symbol": "DDD", "plus": {"liquidity": {"pass": True}, "grade": {"tier": "B", "score": 60},
+                                       "plan": {"signal": "NEAR_ENTRY", "entry": 50.0, "sl": 47.0}, "price": {}}},
+            {"symbol": "EEE", "plus": {"liquidity": {"pass": True}, "grade": {"tier": "A", "score": 75},
+                                       "plan": {"signal": "ENTRY_EARLY", "entry": 50.0, "sl": 47.0}, "price": {}}}]}
+
+    def keys(self, prices):
+        import live_prices as lp
+        return [k for k, *_ in lp.alerts_for(self.PAGE, {s: {"price": v} for s, v in prices.items()})]
+
+    def test_trade_alerts_follow_the_exit_rule(self):
+        self.assertEqual(self.keys({"AAA": 108.0}), ["AAA:half"])          # under the 10 EMA, above the 20 EMA
+        self.assertEqual(self.keys({"AAA": 103.0}), ["AAA:rest"])          # under the 20 EMA / cost
+        self.assertEqual(self.keys({"AAA": 112.0}), [])
+        self.assertEqual(self.keys({"BBB": 91.0}), ["BBB:stop"])           # before +1R only the stop counts
+        self.assertEqual(self.keys({"BBB": 108.5}), ["BBB:1r"])
+
+    def test_entry_alerts_only_for_a_or_stage_two_b_and_not_chased(self):
+        self.assertEqual(self.keys({"CCC": 50.5, "DDD": 50.5}), ["CCC:entry"])   # B without Stage 2 is left out
+        self.assertEqual(self.keys({"CCC": 52.0}), [])                            # 4% above the trigger: do not chase
+        self.assertEqual(self.keys({"CCC": 49.0}), [])
+
+    def test_once_a_day_and_capped(self):
+        from unittest import mock
+        import live_prices as lp
+        found = [("AAA:half", "t", "b", "default"), ("CCC:entry", "t", "b", "default"), ("EEE:entry", "t", "b", "default")]
+        ok = mock.Mock(status_code=200)
+        with mock.patch("requests.post", return_value=ok) as post:
+            sent = lp.send_alerts(found, {"AAA:half"}, "topic")
+            self.assertEqual(sent, ["CCC:entry", "EEE:entry"])                       # AAA:half already sent today
+            with mock.patch.object(lp, "MAX_ENTRY_ALERTS", 1):
+                self.assertEqual(lp.send_alerts(found, set(), "topic"), ["AAA:half", "CCC:entry"])
+            self.assertEqual(lp.send_alerts(found, set(), None), [])                 # no topic: nothing sent
