@@ -23,3 +23,14 @@ jobs:
           p ohlc_v3 "https://api.upstox.com/v3/market-quote/ohlc?instrument_key=$K&interval=1d"
           p quotes_v2 "https://api.upstox.com/v2/market-quote/quotes?instrument_key=NSE_EQ%7CINE053A01029"
           p candles_v3 "https://api.upstox.com/v3/historical-candle/NSE_EQ%7CINE053A01029/days/1/2026-11-21/2026-11-14"
+      - name: Instrument list
+        run: |
+          curl -sS -m 60 -o nse.json.gz "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz" -w 'HTTP %{http_code} size %{size_download}\n'
+          python3 - <<'PY'
+          import gzip, json
+          rows = json.loads(gzip.decompress(open("nse.json.gz","rb").read()))
+          eq = [r for r in rows if r.get("segment") == "NSE_EQ"]
+          print("rows", len(rows), "NSE_EQ", len(eq), "keys", sorted(eq[0].keys()))
+          for s in ("BHAGERIA", "INDHOTEL", "SEJALLTD", "TIPSMUSIC"):
+              print([{k: r.get(k) for k in ("trading_symbol","isin","instrument_key","instrument_type")} for r in eq if r.get("trading_symbol") == s])
+          PY
