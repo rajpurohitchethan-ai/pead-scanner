@@ -1,0 +1,45 @@
+name: PIT probe (temporary)
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            pead_v2.py
+            pead_plus.py
+            master/nse_holidays.json
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet pandas requests "httpx[http2]" h2 "nse[server]"
+      - name: Try request forms
+        run: |
+          python - <<'PY'
+          import pead_v2 as p, json
+          from datetime import date, timedelta
+          ctx = p.SourceContext(raw=p.RawCache(), log=p.FetchLogger())
+          t = date.today()
+          f = lambda d: d.strftime("%d-%m-%Y")
+          tries = {
+            "dates_7d": ("corporates-pit", {"index": "equities", "from_date": f(t - timedelta(days=7)), "to_date": f(t)}),
+            "dates_30d": ("corporates-pit", {"index": "equities", "from_date": f(t - timedelta(days=30)), "to_date": f(t)}),
+            "no_dates": ("corporates-pit", {"index": "equities"}),
+            "symbol": ("corporates-pit", {"index": "equities", "symbol": "RELIANCE"}),
+            "period_1m": ("corporates-pit", {"index": "equities", "period": "1M"}),
+          }
+          with p.NSEAdapter(ctx) as nse:
+              for name, (path, params) in tries.items():
+                  try:
+                      d = nse._api_get(path, params)
+                      rows = d.get("data") if isinstance(d, dict) else d
+                      print(name, "rows", len(rows or []), "keys", list((rows or [{}])[0].keys())[:25] if rows else str(d)[:200])
+                      if rows: print(json.dumps(rows[0])[:600])
+                  except Exception as e:
+                      print(name, "ERR", type(e).__name__, str(e)[:200])
+          PY
