@@ -4005,3 +4005,32 @@ class RepositoryGrowthTests(unittest.TestCase):
         wf = (Path(__file__).resolve().parents[1] / ".github/workflows/scan.yml").read_text(encoding="utf-8")
         checkout = wf[wf.index("actions/checkout@v4"):wf.index("Set up Python")]
         self.assertIn("fetch-depth: 1", checkout)
+
+
+class TimeStopTests(unittest.TestCase):
+    """2.9.58 (owner-approved 23 Nov 2026): advisory time stop. Never moves the
+    stop and never says sell."""
+
+    POS = {"symbol": "ABC", "entryDate": "2026-10-26", "entryPrice": 100.0, "stop": 92.0}
+
+    def item(self, close, session):
+        return {"symbol": "ABC", "resultDayLow": 93.0, "priceContext": {"lastClose": close},
+                "plus": {"price": {"ema10": 99.0, "ema20": 98.0, "last_session": session}}}
+
+    def test_flag_after_fifteen_sessions_under_half_r(self):
+        import pead_plus as pp
+        self.assertEqual(pp.sessions_held("2026-10-26", "2026-11-16"), 15)
+        v, _ = pp.position_view(self.POS, self.item(102.0, "2026-11-16"), None, date(2026, 11, 16))
+        self.assertTrue(v["timeStop"])
+        self.assertEqual((v["status"], v["swingStop"]), ("HOLD", 92.0))          # status and stop unchanged
+        self.assertIn("Not a sell signal", v["note"])
+
+    def test_no_flag_early_or_when_working(self):
+        import pead_plus as pp
+        v, _ = pp.position_view(self.POS, self.item(102.0, "2026-11-13"), None, date(2026, 11, 13))
+        self.assertFalse(v["timeStop"])                                          # 14 sessions
+        v, _ = pp.position_view(self.POS, self.item(105.0, "2026-11-16"), None, date(2026, 11, 16))
+        self.assertFalse(v["timeStop"])                                          # +0.63R: working
+        v, st = pp.position_view(self.POS, self.item(109.0, "2026-11-05"), None, date(2026, 11, 5))
+        v, _ = pp.position_view(self.POS, self.item(102.0, "2026-11-16"), st, date(2026, 11, 16))
+        self.assertFalse(v["timeStop"])                                          # reached +1R earlier

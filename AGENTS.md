@@ -463,3 +463,8 @@ Engine 2.9.57 (owner-approved, 23 Nov 2026): stop the repository growing
 - scan.yml checks out with fetch-depth 1. Rebasing a rejected push still works: the new remote commits' parent is the commit the run started from.
 - This stops most of the growth; it does not shrink the 7.8 GB already in history. Doing that needs a history rewrite and a force push to main (owner's decision, not done).
 - Tests: RepositoryGrowthTests.
+
+Engine 2.9.58 (owner-approved 23 Nov 2026): time stop + close alert
+- position_view adds sessionsHeld (weekdays after the entry day up to the last session; exchange holidays are not known in pead_plus, so it can read one or two high) and timeStop: true after TIME_STOP_SESSIONS = 15 sessions when the trade never closed at +1R, is under TIME_STOP_MAX_R = +0.5R and is HOLD / BELOW_ENTRY. ADVISORY ONLY: it never changes status or any stop, and the note says "Not a sell signal". My trades shows a "Time stop" tag (or "N sessions held").
+- Scheduled task "PEAD close alert" (weekdays 19:07 IST, push): after the evening end-of-day file, downloads intelligence.json and master/positions.json with gh api (raw media type; no clone) and sends one line per open trade, flagging closes below the 10 EMA (sell half) or the 20 EMA / cost / stop (sell all), +1R reached (stop to cost) and time stops. The US page stays separate (owner, 23 Nov).
+- Tests: TimeStopTests.

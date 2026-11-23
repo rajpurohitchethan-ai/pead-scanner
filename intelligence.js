@@ -574,7 +574,7 @@
         const lv = (l, v, k = '') => `<div class="lv ${k}"><span>${l}</span><b>${v}</b></div>`;
         return `<article class="card"><div class="head"><div><h2 class="sym">${esc(p.symbol)}</h2><div class="co">Bought ${dt(p.entryDate)} at ${inr(p.entryPrice)}</div></div>
           <div class="score"><div class="v ${cls(p.pnlPct)}">${pct(p.pnlPct)}</div><div class="l">${num(p.rNow) !== null ? num(p.rNow).toFixed(2) + 'R' : ''}</div></div></div>
-          <div class="tags"><span class="tag ${st[1]}">${esc(st[0])}</span></div>
+          <div class="tags"><span class="tag ${st[1]}">${esc(st[0])}</span>${p.timeStop ? `<span class="tag watch" title="Advisory: ${p.sessionsHeld} sessions without reaching +1R. Not a sell signal.">Time stop: ${p.sessionsHeld} sessions</span>` : (num(p.sessionsHeld) !== null ? `<span class="tag">${p.sessionsHeld} sessions held</span>` : '')}</div>
           <div class="meta">${priceState(!!p.live, p.at)} ${inr(p.last)}${p.live && num(p.lastClose) !== null ? ` · prev close ${inr(p.lastClose)} · <span class="${cls(dayPct(p.last, p.lastClose))}">day ${pct(dayPct(p.last, p.lastClose))}</span>` : ''}</div>
           <p class="plan-why">${esc(p.note || '')}</p>
           ${rBar(p)}<div class="levels">${lv(p.oneRHit ? 'Sell half below (10 EMA)' : 'Stop now', inr(p.oneRHit ? p.halfStop : p.swingStop), 's')}${lv(p.oneRHit ? 'Sell rest below (20 EMA / cost)' : 'After +1R: stop at', inr(p.oneRHit ? p.restStop : p.entryPrice), 's')}
@@ -826,7 +826,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.57';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.58';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

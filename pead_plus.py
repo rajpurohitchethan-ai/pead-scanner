@@ -18,7 +18,7 @@ None when its inputs are missing, so the dashboard shows "—".
 from __future__ import annotations
 
 import math
-from datetime import date
+from datetime import date, timedelta
 from statistics import median
 from typing import Any
 
@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.57"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.58"   # must equal pead_v2.ENGINE_VERSION (install check)
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -1975,6 +1975,27 @@ def sector_favour(items: list[dict[str, Any]], sectors: dict[str, dict[str, Any]
             it.setdefault("plus", {})["favour"] = {"status": status, "label": FAVOUR_LABELS[status], "note": note,
                                                    "sector": name, "bad": bad, "warn": warn, "measured": len(measured)}
 
+TIME_STOP_SESSIONS = 15     # 2.9.58: advisory flag after this many sessions ...
+TIME_STOP_MAX_R = 0.5       # ... while the trade is under +0.5R and never reached +1R
+
+
+def sessions_held(entry_date: Any, last_session: Any) -> int | None:
+    """Trading sessions after the entry day up to the last session (weekdays;
+    exchange holidays are not known here, so it can be one or two high)."""
+    try:
+        a = date.fromisoformat(str(entry_date)[:10])
+        b = date.fromisoformat(str(last_session)[:10])
+    except ValueError:
+        return None
+    if b <= a:
+        return 0
+    n, d = 0, a + timedelta(days=1)
+    while d <= b:
+        n += d.weekday() < 5
+        d += timedelta(days=1)
+    return n
+
+
 def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[str, Any] | None,
                   today: date) -> tuple[dict[str, Any], dict[str, Any]]:
     """Returns (view for the page, updated state to persist)."""
@@ -2060,6 +2081,17 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
     else:
         view["status"], view["note"] = "HOLD", (f"Hold. Stop {stop0:,.2f} until a close at +1R ({one_r:,.2f}); then the stop "
                                                 f"moves to cost, half goes on a close below the 10 EMA and the rest below the 20 EMA.")
+    # 2.9.58 time stop (owner-approved 23 Nov 2026): ADVISORY only. A trade that
+    # after TIME_STOP_SESSIONS sessions has never closed at +1R and is under
+    # +TIME_STOP_MAX_R is tying up money that a fresh setup could use. It never
+    # moves the stop and never says "sell".
+    held = sessions_held(pos.get("entryDate"), sess)
+    view["sessionsHeld"] = held
+    view["timeStop"] = bool(held is not None and held >= TIME_STOP_SESSIONS and not one_r_hit
+                            and r_now is not None and r_now < TIME_STOP_MAX_R and view.get("status") in ("HOLD", "BELOW_ENTRY"))
+    if view["timeStop"]:
+        view["note"] += (f" Time stop: {held} sessions without reaching +1R ({r_now:+.1f}R now). Not a sell signal: "
+                         f"worth asking whether this money would work harder in a fresh setup.")
     if exit_hit and not exit_now and view.get("status") != "NO_DATA":
         try:
             d = date.fromisoformat(str(exit_hit.get("date"))[:10])
