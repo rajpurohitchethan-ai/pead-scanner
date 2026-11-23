@@ -790,6 +790,21 @@
       <div class="links">${[['screener', 'Screener'], ['tradingview', 'TradingView'], ['nse', 'NSE'], ['bse', 'BSE']].filter(([k]) => P(it).links?.[k]).map(([k, l]) => `<a href="${esc(P(it).links[k])}" target="_blank" rel="noopener">${l}</a>`).join('')}</div></div>`;
   }
 
+  // 2.9.65: strong stocks reporting within 7 days (pre-results watchlist). Display only.
+  function preResults() {
+    const list = upcoming().filter(it => { const n = daysTo(it.resultDate), rs = num(P(it).rsRating), hi = num(it.priceContext?.distanceFrom52wHighPct);
+      return n !== null && n >= 0 && n <= 7 && liquidOk(it) && rs !== null && rs >= 80 && hi !== null && hi >= -10 && px(it).stage?.stage !== 4; })
+      .sort((a, b) => P(b).rsRating - P(a).rsRating || String(a.resultDate).localeCompare(String(b.resultDate)));
+    if (!list.length) return '';
+    return `<section class="card gm prewatch"><h3>Strong stocks reporting this week <span class="meta">${list.length}</span></h3>
+      <p class="meta">Reports within 7 days, liquid, RS 80+, within 10% of the 52-week high, not in Stage 4. The setup comes after the result: watch the reaction, do not buy before it.</p>
+      <div class="tscroll"><table class="sectbl"><thead><tr><th>Stock</th><th class="r">Reports</th><th class="r">RS</th><th class="r">vs 52w high</th><th class="r">1 month</th></tr></thead><tbody>
+      ${list.map(it => { const n = daysTo(it.resultDate), r21 = num(px(it).ret_21d_pct);
+        return `<tr><td><b>${esc(it.symbol)}</b>${heldPos(it) ? ' <span class="tag go">held</span>' : ''}<div class="meta">${esc(P(it).sectorKey || it.sector || '')}${px(it).stage?.stage === 2 ? ' · Stage 2' : ''}</div></td>
+        <td class="r n">${n === 0 ? 'today' : n === 1 ? 'tomorrow' : dt(it.resultDate)}</td><td class="r n"><b class="up">${P(it).rsRating}</b></td>
+        <td class="r n">${pct(it.priceContext?.distanceFrom52wHighPct)}</td><td class="r n ${cls(r21)}">${pct(r21)}${r21 !== null && r21 > 20 ? '<div class="meta warn-t">run-up over 20%: drift has been weaker</div>' : ''}</td></tr>`; }).join('')}
+      </tbody></table></div></section>`;
+  }
   function viewWatch() {
     let list = upcoming().filter(matches);
     if (S.bucket !== 'ALL') list = list.filter(it => (P(it).bucket?.code || 'NONE') === S.bucket);
@@ -805,7 +820,7 @@
       const d = daysTo(k);
       html += `<h2 class="day">${k === 'Date not announced' ? k : new Date(k + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}<small>${rows.length} ${rows.length === 1 ? 'company' : 'companies'}${d === 0 ? ', today' : d === 1 ? ', tomorrow' : d !== null && d > 1 ? `, in ${d} days` : ''}</small></h2>${hdr}<div class="ledger">${rows.map(ledgerRow).join('')}</div>`;
     }
-    return html + (all > list.length ? `<p class="foot">${all - list.length} illiquid companies hidden.</p>` : '');
+    return preResults() + html + (all > list.length ? `<p class="foot">${all - list.length} illiquid companies hidden.</p>` : '');
   }
 
   function sectorPeers(sector) {
@@ -900,7 +915,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.64';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.65';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

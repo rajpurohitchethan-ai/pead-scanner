@@ -500,3 +500,6 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 - refresh_eod also keeps DELIV_PER (EQ series) from NSE's sec_bhavdata_full file as day["deliv"]; stored days without it are fetched once more. load_delivery() -> {date: {SYMBOL: %}}.
 - Bulk / block deals are kept for every stock (holdings_watch.json "radarDeals", 30 days); holdings keep their own 10-day list.
 - pead_plus.smart_money: result-session delivery %, the usual (median of 3+ stored sessions before it), last 5 sessions, deals and net deal quantity. "BUYING" when delivery is high (>= 1.3x usual and >= 50%) or net deals are buys, with no net selling; "SELLING" on net deal selling. plus.smartMoney; card line and tag; Screener filter "Smart money buying". Display and filter only. Tests: SmartMoneyTests.
+
+2.9.65 (owner: "go for all", 23 Nov 2026) - pre-results watchlist
+- Upcoming watchlist tab opens with "Strong stocks reporting this week": reports within 7 days, liquid, RS 80+, within 10% of the 52-week high, not Stage 4; sorted by RS. A 1-month run-up over 20% is flagged (the run-up scorecard shows weaker drift). Page only; no buy before the result. Late in the season (23 Nov) no stock qualifies: expected.
