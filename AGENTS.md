@@ -495,3 +495,8 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 2.9.63 (owner: "go for all", 23 Nov 2026) - RS rating and sector rotation
 - pead_plus.rs_ratings: RS rating 1-99 = percentile rank of (2 x 3-month return + 6-month return) across every stock with both; missing either -> none. plus.rsRating. Screener: RS column and an "RS 80+" filter.
 - pead_plus.sector_heat: per sector (3+ liquid stocks) the median 1-week, 1-month, 3-month return and median RS rating -> intelligence.json "sectorHeat"; heatmap on the Sectors tab. Display and filter only: no grade or plan rule uses either. Tests: RsRatingTests.
+
+2.9.64 (owner: "go for all", 23 Nov 2026) - smart money
+- refresh_eod also keeps DELIV_PER (EQ series) from NSE's sec_bhavdata_full file as day["deliv"]; stored days without it are fetched once more. load_delivery() -> {date: {SYMBOL: %}}.
+- Bulk / block deals are kept for every stock (holdings_watch.json "radarDeals", 30 days); holdings keep their own 10-day list.
+- pead_plus.smart_money: result-session delivery %, the usual (median of 3+ stored sessions before it), last 5 sessions, deals and net deal quantity. "BUYING" when delivery is high (>= 1.3x usual and >= 50%) or net deals are buys, with no net selling; "SELLING" on net deal selling. plus.smartMoney; card line and tag; Screener filter "Smart money buying". Display and filter only. Tests: SmartMoneyTests.

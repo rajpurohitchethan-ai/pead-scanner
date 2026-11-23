@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.63"
+ENGINE_VERSION = "2.9.64"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5874,6 +5874,7 @@ HOLDINGS_WATCH_PATH = MASTER_DIR / "holdings_watch.json"   # 2.9.15: filings / d
 HOLDINGS_WATCH_EVERY_MIN = int(os.getenv("HOLDINGS_WATCH_EVERY_MIN", "110"))
 HOLDINGS_FILINGS_DAYS = 30
 HOLDINGS_DEALS_DAYS = 10
+RADAR_DEALS_DAYS = 30          # 2.9.64: bulk / block deals kept for every stock
 
 
 def _held_events(store: EventStore) -> dict[str, dict[str, Any]]:
@@ -6064,12 +6065,15 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
     held = set(events)
     if _due(cache.get("dealsAt"), HOLDINGS_WATCH_EVERY_MIN):
         try:
-            deals = []
+            deals, radar = [], []
             with NSEAdapter(ctx) as nse:
                 for opt, kind in (("bulk_deals", "BULK"), ("block_deals", "BLOCK"), ("short_selling", "SHORT")):
                     try:
                         payload, _ = nse.deals(opt, today - timedelta(days=HOLDINGS_DEALS_DAYS), today)
-                        deals += pead_plus.parse_deal_rows(_deal_rows(payload), kind, held)
+                        rows_ = _deal_rows(payload)
+                        deals += pead_plus.parse_deal_rows(rows_, kind, held)
+                        if kind != "SHORT":                              # 2.9.64: smart money on every stock
+                            radar += pead_plus.parse_deal_rows(rows_, kind, None)
                     except Exception as exc:
                         print(f"Deals {opt} failed: {type(exc).__name__}: {exc}")
             old = [d for d in cache.get("deals") or [] if d.get("symbol") in held
@@ -6081,6 +6085,14 @@ def refresh_holdings_watch(store: EventStore, ctx: SourceContext) -> dict[str, A
                     seen.add(k)
                     merged.append(d)
             cache["deals"] = merged
+            cutoff = (today - timedelta(days=RADAR_DEALS_DAYS)).isoformat()
+            seen, keep = set(), []
+            for d in radar + (cache.get("radarDeals") or []):
+                k = (d["symbol"], d["date"], d["kind"], d.get("client"), d.get("side"), d.get("qty"))
+                if k not in seen and str(d.get("date")) >= cutoff:
+                    seen.add(k)
+                    keep.append(d)
+            cache["radarDeals"] = keep
             cache["dealsAt"] = iso_now()
         except Exception as exc:
             print(f"Deals skipped: {type(exc).__name__}: {exc}")
@@ -7732,6 +7744,27 @@ def parse_nse_bhav(text: str) -> dict[str, list[float | None]]:
     return out
 
 
+def parse_nse_deliv(text: str) -> dict[str, float]:
+    """2.9.64: DELIV_PER (delivery % of traded quantity) from the same
+    sec_bhavdata_full file, EQ series only (other series settle in full)."""
+    lines = [ln for ln in (text or "").splitlines() if ln.strip()]
+    if not lines:
+        return {}
+    head = [h.strip().upper() for h in lines[0].split(",")]
+    if "SYMBOL" not in head or "SERIES" not in head or "DELIV_PER" not in head:
+        return {}
+    i_s, i_r, i_d = head.index("SYMBOL"), head.index("SERIES"), head.index("DELIV_PER")
+    out: dict[str, float] = {}
+    for ln in lines[1:]:
+        c = [x.strip() for x in ln.split(",")]
+        if len(c) <= max(i_s, i_r, i_d) or c[i_r].upper() != "EQ":
+            continue
+        v = safe_num(c[i_d])
+        if v is not None and 0 <= v <= 100:
+            out[normalize_symbol(c[i_s])] = v
+    return out
+
+
 def parse_bse_bhav(text: str) -> dict[str, list[float | None]]:
     """BhavCopy_BSE_CM_0_0_0_YYYYMMDD_F_0000.CSV -> {scrip code: [open, high, low, close, prevClose, volume]}."""
     lines = [ln for ln in (text or "").splitlines() if ln.strip()]
@@ -7806,12 +7839,13 @@ def refresh_eod(now: datetime | None = None) -> dict[str, int]:
         if day is None:
             day = {"date": d.isoformat(), "nse": {}, "bse": {}, "bseTries": 0}
         changed = False
-        if not day.get("nse") and budget > 0:
+        if (not day.get("nse") or "deliv" not in day) and budget > 0:   # 2.9.64: older days lack delivery %
             budget -= 1
             try:
-                rows = parse_nse_bhav(_eod_get(f"https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{d:%d%m%Y}.csv"))
+                text = _eod_get(f"https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{d:%d%m%Y}.csv")
+                rows = parse_nse_bhav(text)
                 if len(rows) >= 1000:
-                    day["nse"], changed = rows, True
+                    day["nse"], day["deliv"], changed = rows, parse_nse_deliv(text), True
                     stats["fetched"] += 1
                 else:
                     stats["failed"] += 1
@@ -7861,6 +7895,17 @@ def load_eod(root: Path | None = None) -> list[dict[str, Any]]:
             start = i
     _EOD_CACHE[key] = days[start:]
     return _EOD_CACHE[key]
+
+
+def load_delivery(root: Path | None = None) -> dict[str, dict[str, float]]:
+    """2.9.64: {date: {SYMBOL: delivery %}} from the stored end-of-day files."""
+    out = {}
+    root = root or EOD_DIR
+    for f in sorted(root.glob("*.json")) if root.exists() else []:
+        day = _eod_read(f) or {}
+        if day.get("date") and isinstance(day.get("deliv"), dict) and day["deliv"]:
+            out[str(day["date"])] = day["deliv"]
+    return out
 
 
 def sessions_between(a: date, b: date, holidays: set[date]) -> int:
@@ -8661,6 +8706,17 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         regime["note"] = f"Index data is stale (last {as_of}); market regime not shown."
     regime["index"] = index_cache.get("index")
     regime["asOf"] = as_of
+    try:                                                              # 2.9.64 smart money
+        deliv = load_delivery()
+        radar_deals = (_eod_read(HOLDINGS_WATCH_PATH) or {}).get("radarDeals") or [] if HOLDINGS_WATCH_PATH.exists() else []
+        by_sym: dict[str, list] = {}
+        for d_ in radar_deals:
+            by_sym.setdefault(d_.get("symbol"), []).append(d_)
+        for it in items:
+            it["plus"]["smartMoney"] = pead_plus.smart_money(it.get("symbol"), it.get("reactionSession"), deliv,
+                                                             by_sym.get(str(it.get("symbol") or "").upper()) or [])
+    except Exception as exc:
+        print(f"Smart money skipped: {type(exc).__name__}: {exc}")
     try:                                                              # 2.9.63
         pead_plus.rs_ratings(items)
         sector_heat = pead_plus.sector_heat(items)

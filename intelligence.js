@@ -313,6 +313,15 @@
   }
 
   // ---------- setup card ----------
+  // 2.9.64: delivery % and bulk / block deals.
+  function smartLine(sm) {
+    if (!sm) return '';
+    const bits = [];
+    if (num(sm.reactionDelivPct) !== null) bits.push(`result-day delivery <b class="${sm.highDelivery ? 'up' : ''}">${num(sm.reactionDelivPct).toFixed(0)}%</b>${num(sm.usualDelivPct) !== null ? ` (usual ${num(sm.usualDelivPct).toFixed(0)}%)` : ''}`);
+    if (num(sm.recentDelivPct) !== null) bits.push(`last 5 sessions ${num(sm.recentDelivPct).toFixed(0)}%`);
+    const deals = (sm.deals || []).map(d => `${d.kind === 'BLOCK' ? 'Block' : 'Bulk'} ${String(d.side || '').toLowerCase().startsWith('b') ? 'buy' : 'sell'} ${num(d.qty) !== null ? num(d.qty).toLocaleString('en-IN') : ''}${num(d.price) !== null ? ' @ ' + inr(d.price) : ''}${d.client ? ' by ' + esc(d.client) : ''} (${dt(d.date)})`);
+    return `<p class="meta smart">Smart money: ${bits.join(' · ') || 'no delivery data yet'}${deals.length ? `<br>${deals.join('<br>')}` : ''}</p>`;
+  }
   function card(it) {
     const p = P(it), x1 = px(it), plan = p.plan || {};
     const slimNote = p.slim ? '<p class="meta">Below the liquidity test: chart and checklists are left out of the page to keep it light on phones.</p>' : '';
@@ -327,6 +336,8 @@
     const GROWTH = { ACCELERATING: ['Growth accelerating', 'good'], DECELERATING: ['Growth slowing', 'warn'], STEADY: ['Growth steady', ''] };
     const g = p.growth && GROWTH[p.growth.label];
     if (g) tags.push(`<span class="tag ${g[1]}" title="YoY growth vs last quarter: revenue ${p.growth.revenueDeltaPp ?? '—'} pp, profit ${p.growth.profitDeltaPp ?? '—'} pp">${g[0]}</span>`);
+    if (num(p.rsRating) !== null) tags.push(`<span class="tag ${p.rsRating >= 80 ? 'good' : p.rsRating < 40 ? 'bad' : ''}" title="RS rating 1-99: 3-month move (counted twice) plus 6-month move, ranked against every stock">RS ${p.rsRating}</span>`);
+    if (p.smartMoney?.label) tags.push(`<span class="tag ${p.smartMoney.label === 'BUYING' ? 'good' : 'bad'}">Smart money ${p.smartMoney.label === 'BUYING' ? 'buying' : 'selling'}</span>`);
     if (x1.hv_label) tags.push(`<span class="tag good" title="Highest volume on the result session">${esc(x1.hv_label)}</span>`);
     if (liq.pass === false) tags.push(`<span class="tag bad">${esc(liq.label)}</span>`);
     const m = p.margins || {}, v = p.valuation || {};
@@ -356,6 +367,7 @@
       <div class="tags">${(P(it).themes || []).map(t => `<span class="tag theme">${esc(t)}</span>`).join('')}${tags.join('')}</div>
       <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? dt(it.reactionWindowStart) + '–' : ''}${dt(it.reactionSession)}` : ''}${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? ' (filed in market hours)' : ''}${num(pc.lastClose) !== null ? `, ${p.live && num(p.live.price) !== null ? 'prev close' : 'last close'} ${inr(pc.lastClose)}${oldClose(it)}` : ''}</div>
       ${concallLine(p.concall)}
+      ${smartLine(p.smartMoney)}
       ${liveLine(p.live, pc.lastClose)}
       ${chart(it)}
       ${tvChart(it)}
@@ -441,6 +453,7 @@
     ['stage2', 'Stage 2', it => px(it).stage?.stage === 2],
     ['hands', 'Strong hands', it => P(it).hands?.label === 'STRONG'],
     ['rs80', 'RS 80+', it => num(P(it).rsRating) !== null && P(it).rsRating >= 80],
+    ['smart', 'Smart money buying', it => P(it).smartMoney?.label === 'BUYING'],
     ['strong', 'Strong earnings', it => P(it).strength === 'STRONG'],
     ['risk5', 'Risk up to 5%', it => num(grade(it).riskNowPct) !== null && grade(it).riskNowPct <= 5],
     ['high', 'Near 52-week high', it => num(it.priceContext?.distanceFrom52wHighPct) !== null && it.priceContext.distanceFrom52wHighPct >= -10],
@@ -887,7 +900,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.63';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.64';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

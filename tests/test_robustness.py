@@ -4254,3 +4254,41 @@ class RsRatingTests(unittest.TestCase):
         rows = pead_plus.sector_heat(items)
         self.assertEqual([r["sector"] for r in rows], ["A"])   # B has only 2 liquid stocks
         self.assertEqual(rows[0]["m3"], 1)
+
+
+class SmartMoneyTests(unittest.TestCase):
+    """2.9.64 (23 Nov 2026): delivery % and bulk / block deals."""
+
+    BHAV = ("SYMBOL, SERIES, DATE1, PREV_CLOSE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, LAST_PRICE, CLOSE_PRICE, AVG_PRICE, "
+            "TTL_TRD_QNTY, TURNOVER_LACS, NO_OF_TRADES, DELIV_QTY, DELIV_PER\n"
+            "AAA, EQ, 20-Nov-2026, 10, 10, 11, 9, 10.5, 10.5, 10.2, 1000, 1, 10, 600, 60.00\n"
+            "AAA, BE, 20-Nov-2026, 10, 10, 11, 9, 10.5, 10.5, 10.2, 50, 1, 10, -, -\n"
+            "BBB, EQ, 20-Nov-2026, 10, 10, 11, 9, 10.5, 10.5, 10.2, 1000, 1, 10, -, -\n")
+
+    def test_parse_delivery(self):
+        self.assertEqual(p.parse_nse_deliv(self.BHAV), {"AAA": 60.0})       # missing stays missing
+        self.assertEqual(p.parse_nse_deliv("SYMBOL,SERIES\nAAA,EQ\n"), {})
+
+    def test_high_delivery_and_deals(self):
+        import pead_plus
+        deliv = {f"2026-10-{d:02d}": {"AAA": 40.0} for d in (10, 13, 14, 15)}
+        deliv["2026-10-16"] = {"AAA": 72.0}
+        sm = pead_plus.smart_money("AAA", "2026-10-16", deliv,
+                                   [{"symbol": "AAA", "date": "2026-10-17", "kind": "BULK", "side": "BUY", "qty": 50000, "price": 10}])
+        self.assertEqual((sm["reactionDelivPct"], sm["usualDelivPct"], sm["highDelivery"], sm["label"]), (72.0, 40.0, True, "BUYING"))
+        sell = pead_plus.smart_money("AAA", "2026-10-16", deliv,
+                                     [{"symbol": "AAA", "date": "2026-10-17", "kind": "BLOCK", "side": "SELL", "qty": 9, "price": 10}])
+        self.assertEqual(sell["label"], "SELLING")
+
+    def test_nothing_known_is_none(self):
+        import pead_plus
+        self.assertIsNone(pead_plus.smart_money("ZZZ", "2026-10-16", {"2026-10-16": {"AAA": 50.0}}, []))
+        few = pead_plus.smart_money("AAA", "2026-10-16", {"2026-10-16": {"AAA": 90.0}}, [])
+        self.assertIsNone(few["usualDelivPct"])                               # under 3 sessions: no "usual"
+        self.assertFalse(few["highDelivery"])
+
+    def test_deals_for_every_stock(self):
+        import pead_plus
+        rows = [{"BD_SYMBOL": "AAA", "BD_DT_DATE": "17-Nov-2026", "BD_CLIENT_NAME": "X", "BD_BUY_SELL": "BUY", "BD_QTY_TRD": 5, "BD_TP_WATP": 1}]
+        self.assertEqual(len(pead_plus.parse_deal_rows(rows, "BULK", None)), 1)
+        self.assertEqual(pead_plus.parse_deal_rows(rows, "BULK", {"BBB"}), [])

@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.63"
+MODULE_VERSION = "2.9.64"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2182,14 +2182,14 @@ def holding_filings(rows: list[dict[str, Any]], limit: int = 12) -> list[dict[st
     return uniq[:limit]
 
 
-def parse_deal_rows(rows: list[dict[str, Any]], kind: str, symbols: set[str]) -> list[dict[str, Any]]:
+def parse_deal_rows(rows: list[dict[str, Any]], kind: str, symbols: set[str] | None) -> list[dict[str, Any]]:
     """NSE bulk / block / short-selling report rows for the given symbols."""
     out = []
     for r in rows or []:
         if not isinstance(r, dict):
             continue
         sym = str(r.get("BD_SYMBOL") or r.get("SS_SYMBOL") or r.get("symbol") or "").strip().upper()
-        if sym not in symbols:
+        if not sym or (symbols is not None and sym not in symbols):      # None = every stock (2.9.64)
             continue
         raw_d = str(r.get("BD_DT_DATE") or r.get("SS_DATE") or r.get("date") or "")
         try:
@@ -2749,6 +2749,35 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     wins = [r for r in rs if r > 0]
     return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
             "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.64 Smart money (owner: "go for all", 23 Nov 2026): delivery % on the
+# result session against the stock's usual, and bulk / block deals. Display
+# and filter only.
+# ---------------------------------------------------------------------------
+HIGH_DELIVERY_X = 1.3        # result-session delivery at least 1.3x the usual ...
+HIGH_DELIVERY_MIN = 50.0     # ... and at least half the traded shares
+
+
+def smart_money(symbol: Any, reaction: Any, deliv: dict[str, dict[str, float]],
+                deals: list[dict[str, Any]]) -> dict[str, Any] | None:
+    sym, rd = str(symbol or "").upper(), str(reaction or "")[:10]
+    series = [(d, m[sym]) for d, m in sorted(deliv.items()) if sym in m]
+    react = next((v for d, v in series if d == rd), None)
+    before = [v for d, v in series if d < rd] if rd else []
+    usual = _r2(median(before)) if len(before) >= 3 else None
+    recent = [v for _, v in series[-5:]]
+    buys = [d for d in deals if d.get("side") in ("BUY", "B")]
+    sells = [d for d in deals if d.get("side") in ("SELL", "S")]
+    net = sum(_num(d.get("qty")) or 0 for d in buys) - sum(_num(d.get("qty")) or 0 for d in sells)
+    if react is None and not recent and not deals:
+        return None
+    high = bool(react is not None and usual and react >= usual * HIGH_DELIVERY_X and react >= HIGH_DELIVERY_MIN)
+    label = ("BUYING" if (high or net > 0) and net >= 0 else "SELLING" if net < 0 else None)
+    return {"reactionDelivPct": _r2(react), "usualDelivPct": usual, "recentDelivPct": _r2(median(recent)) if recent else None,
+            "highDelivery": high, "deals": sorted(deals, key=lambda d: str(d.get("date")), reverse=True)[:6],
+            "netDealQty": net if deals else None, "label": label}
 
 
 # ---------------------------------------------------------------------------
