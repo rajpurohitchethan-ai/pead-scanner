@@ -743,6 +743,23 @@
   const DV_LABEL = { REVERSAL: '10 EMA reversal', BREAKOUT: 'Breakout (extended)', WATCH: 'Near 10 EMA', CAUTION: 'Extended', FAILED: 'Failed' };
   const DV_ACTION = { REVERSAL: 'Buy tomorrow only above this candle\'s high; stop below its low.', BREAKOUT: 'Reversal and PDH done; wait for a pullback to the 10 EMA.',
     WATCH: 'Wait for a reversal candle at the 10 EMA.', CAUTION: 'Too far above the 10 EMA: no fresh entry.', FAILED: 'Lost the 20 EMA or not Stage 2: skip.' };
+  // 2.9.79: the 4% screen's list for each of the last 3 sessions, with what each stock is doing now.
+  function darvasSessions(dv, rows) {
+    const sess = (dv.sessions || []).slice(-3).reverse();
+    if (!sess.length) return '';
+    return `<h2 class="day">Screener results, last 3 sessions</h2>
+      <div class="dv-sess">${sess.map(d => {
+        const list = rows.map(r => ({ r, h: (r.hitDays || []).find(x => x.date === d) })).filter(x => x.h)
+          .sort((a, b) => num(b.h.changePct) - num(a.h.changePct));
+        return `<details class="dv-day" ${d === sess[0] ? 'open' : ''}><summary><b>${dt(d)}</b> <span class="meta">${list.length} stock${list.length === 1 ? '' : 's'}</span></summary>
+          ${list.length ? `<div class="tscroll"><table class="sectbl"><thead><tr><th>Stock</th><th class="r">That day</th><th class="r">Volume</th><th>Now</th></tr></thead><tbody>
+          ${list.map(({ r, h }) => `<tr><td><b>${esc(r.symbol)}</b>${heldPos(r) ? ' <span class="tag go">held</span>' : ''}<div class="meta">${esc(r.sector || '')}</div></td>
+            <td class="r n">${inr(h.close)}<div class="meta up">${pct(h.changePct)}</div></td>
+            <td class="r n">${num(h.volX) !== null ? num(h.volX).toFixed(1) + 'x' : '—'}<div class="meta">vs day before</div></td>
+            <td><span class="dv-sig ${r.signal}">${DV_LABEL[r.signal]}</span><div class="meta n">${inr(r.close)}, 10 EMA ${pct(r.distPct)}</div></td></tr>`).join('')}
+          </tbody></table></div>` : '<p class="meta">No stock passed the screen at this close.</p>'}</details>`;
+      }).join('')}</div>`;
+  }
   function viewDarvas() {
     const dv = S.data.darvas;
     if (!dv || !(dv.rows || []).length) return `<p class="empty">The Darvas radar fills after the next closing-price file (about 7 pm on trading days).</p>`;
@@ -755,6 +772,7 @@
     const rs = l => l ? `<span class="tag ${{ STRONG: 'good', POSITIVE: 'good', WEAK: 'bad' }[l] || ''}">${l.charAt(0) + l.slice(1).toLowerCase()}</span>` : '';
     return `<p class="note">Your 4% screen (up 4%+ on higher volume, top quarter of the range after a red day, at a 20-day high, above the 50-day average, market cap over ₹1,000 Cr) run on every stock at each close. Stocks stay ${8} sessions after a hit. Signals use your 10 EMA rules: buy the day after a reversal candle, only above its high, with risk to the stop at most 5% and the sector not weak. Trail with the 10 EMA. Data as of the ${dt(dv.asOf)} close; ${dv.scanned} stocks scanned.</p>
       <div class="chips">${Object.entries(counts).map(([k, n]) => `<span class="dv-sig ${k}">${DV_LABEL[k]} ${n}</span>`).join(' ')}</div>
+      ${darvasSessions(dv, rows)}
       <h2 class="day">Tomorrow's triggers</h2>
       ${trig.length ? trig.map(r => `<div class="dv-trig"><h3>${esc(r.symbol)} <span class="meta">${esc(r.name || '')}</span></h3>
         <div class="levels"><div class="lv e"><span>Buy above</span><b>${inr(r.entry)}</b></div><div class="lv s"><span>Stop</span><b>${inr(r.stop)}</b></div><div class="lv"><span>Risk</span><b>${num(r.riskPct).toFixed(1)}%</b></div><div class="lv"><span>Trail (10 EMA)</span><b>${inr(r.trail)}</b></div></div>
@@ -1130,7 +1148,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.78';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.79';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

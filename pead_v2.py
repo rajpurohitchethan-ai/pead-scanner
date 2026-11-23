@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.78"
+ENGINE_VERSION = "2.9.79"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -8198,7 +8198,7 @@ def event_nse_frame(event: dict[str, Any], days: list[dict[str, Any]], raw_root:
 
 
 DARVAS_PATH = MASTER_DIR / "darvas.json"
-DARVAS_REV = "2.9.78"
+DARVAS_REV = "2.9.79"   # a new rev re-runs the scan on the same close
 
 
 def darvas_scan(store: "EventStore", items: list[dict[str, Any]], heat: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -8232,6 +8232,7 @@ def darvas_scan(store: "EventStore", items: list[dict[str, Any]], heat: list[dic
             rows.append(row)
     rs = pead_plus.darvas_sector_rs(heat)
     out = {"rev": DARVAS_REV, "asOf": latest, "at": iso_now(), "scanned": scanned, "seconds": round(time.time() - started),
+           "sessions": [d["date"].isoformat() for d in days[-pead_plus.DARVAS_KEEP_SESSIONS:]],
            "sectorRs": rs, "rows": pead_plus.darvas_finish(rows, rs)}
     json_dump_atomic(DARVAS_PATH, out)
     print(f"Darvas radar: {len(rows)} stocks from {scanned} scanned in {out['seconds']}s (as of {latest})")

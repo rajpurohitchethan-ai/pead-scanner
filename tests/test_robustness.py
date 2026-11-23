@@ -4606,3 +4606,18 @@ class DarvasRadarTests(unittest.TestCase):
         d = {"positions": []}
         tg.apply_action(d, "bought|AAA|darvas", 101.0, date(2026, 11, 25), {"sl": 96.0})
         self.assertEqual((d["positions"][0]["strategy"], d["positions"][0]["stop"]), ("DARVAS", 96.0))
+
+
+class DarvasSessionTests(unittest.TestCase):
+    """2.9.79 (23 Nov 2026): each screener hit keeps that day's close, move and volume."""
+
+    def test_hit_days(self):
+        import pead_plus
+        t = DarvasRadarTests("test_screen_hits_the_breakout_day")
+        o, h, l, c, v = t.series()
+        dates = [f"d{i:03d}" for i in range(len(c))]
+        row = pead_plus.darvas_radar({"symbol": "AAA"}, dates, o, h, l, c, v)
+        hd = row["hitDays"][0]
+        self.assertEqual(hd["date"], dates[-1])
+        self.assertAlmostEqual(hd["changePct"], 5.0, places=1)
+        self.assertAlmostEqual(hd["volX"], 400000 / 150000, places=2)

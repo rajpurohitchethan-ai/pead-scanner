@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.78"
+MODULE_VERSION = "2.9.79"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2831,15 +2831,19 @@ def darvas_radar(stock: dict[str, Any], dates: list[str], o, h, l, c, v) -> dict
     n = len(c)
     if n < 22:
         return None
-    hits = [dates[i] for i in range(max(21, n - DARVAS_KEEP_SESSIONS), n) if darvas_hit(o, h, l, c, v, i)]
-    if not hits:
+    idx = [i for i in range(max(21, n - DARVAS_KEEP_SESSIONS), n) if darvas_hit(o, h, l, c, v, i)]
+    if not idx:
         return None
+    hits = [dates[i] for i in idx]
+    # 2.9.79: what each hit day looked like (the scan's own numbers), for the per-session lists
+    hit_days = [{"date": dates[i], "close": _r2(c[i]), "changePct": _r2((c[i] / c[i - 1] - 1) * 100),
+                 "volX": _r2(v[i] / v[i - 1]) if v[i - 1] else None} for i in idx]
     now, prev = darvas_signal(o, h, l, c, n - 1), darvas_signal(o, h, l, c, n - 2)
     if not now:
         return None
     triggered = bool(prev and prev["signal"] == "REVERSAL" and h[n - 1] > h[n - 2])
     r21 = (c[-1] / c[-22] - 1) * 100 if n >= 22 and c[-22] else None
-    return {**stock, **now, "hits": hits, "lastHit": hits[-1], "asOf": dates[-1], "ret1mPct": _r2(r21),
+    return {**stock, **now, "hits": hits, "hitDays": hit_days, "lastHit": hits[-1], "asOf": dates[-1], "ret1mPct": _r2(r21),
             "triggered": triggered, "triggerOf": _r2(h[n - 2]) if triggered else None,
             "triggerStop": _r2(l[n - 2] * 0.998) if triggered else None}
 
