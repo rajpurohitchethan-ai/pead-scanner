@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.58"
+ENGINE_VERSION = "2.9.59"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5619,6 +5619,57 @@ def order_live_quotes(picks: list[tuple[dict[str, Any], str]], held: set[str]) -
     return sorted(picks, key=key)
 
 
+# ---------------------------------------------------------------------------
+# 2.9.59 Upstox live prices (owner's read-only Analytics Token, 23 Nov 2026)
+#
+# The token is a GitHub Actions secret (UPSTOX_TOKEN); it is never written to
+# the repo or printed. One request answers up to 500 stocks by ISIN, so every
+# declared company with a plan gets a live price each run (NSE's quote API
+# times out from GitHub's runners and was capped at LIVE_QUOTE_MAX = 40).
+# ---------------------------------------------------------------------------
+UPSTOX_LTP_URL = "https://api.upstox.com/v3/market-quote/ltp"
+UPSTOX_BATCH = 500
+
+
+def upstox_token() -> str | None:
+    tok = (os.getenv("UPSTOX_TOKEN") or "").strip()
+    return tok or None
+
+
+def parse_upstox_ltp(payload: Any) -> dict[str, dict[str, Any]]:
+    """{"data": {"NSE_EQ:SYM": {"last_price", "instrument_token": "NSE_EQ|ISIN", "volume", "cp"}}}
+    -> {ISIN: {"price", "prevClose", "volume"}}. Rows without a positive price are left out."""
+    out: dict[str, dict[str, Any]] = {}
+    for row in ((payload or {}).get("data") or {}).values() if isinstance(payload, dict) else []:
+        if not isinstance(row, dict):
+            continue
+        key = str(row.get("instrument_token") or "")
+        isin = key.split("|", 1)[1].strip().upper() if "|" in key else ""
+        price = safe_num(row.get("last_price"))
+        if isin and price and price > 0:
+            out[isin] = {"price": price, "prevClose": safe_num(row.get("cp")), "volume": safe_num(row.get("volume"))}
+    return out
+
+
+def upstox_ltp(isins: list[str], token: str | None = None, timeout: int = 20) -> dict[str, dict[str, Any]]:
+    """Last traded price for NSE stocks by ISIN, 500 per request. Raises on a
+    rejected token so the caller can fall back and say why."""
+    token = token or upstox_token()
+    if not token:
+        return {}
+    keys = sorted({str(i).strip().upper() for i in isins if str(i or "").strip().upper().startswith("IN")})
+    out: dict[str, dict[str, Any]] = {}
+    for i in range(0, len(keys), UPSTOX_BATCH):
+        batch = keys[i:i + UPSTOX_BATCH]
+        resp = requests.get(UPSTOX_LTP_URL, params={"instrument_key": ",".join(f"NSE_EQ|{k}" for k in batch)},
+                            headers={"Accept": "application/json", "Authorization": f"Bearer {token}"}, timeout=timeout)
+        if resp.status_code == 401:
+            raise PermissionError("Upstox rejected the token (HTTP 401): it may have expired or been revoked")
+        resp.raise_for_status()
+        out.update(parse_upstox_ltp(resp.json()))
+    return out
+
+
 def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
     """2.7.0: during market hours, read the live NSE price of every declared
     company that has an entry plan (for the 3 pm entry alert and the card's
@@ -5638,6 +5689,27 @@ def refresh_live_quotes(store: EventStore, ctx: SourceContext) -> int:
     n = 0
     if not picks:
         return 0
+    if upstox_token():                                   # 2.9.59: every pick in a few requests
+        isin_of = {id(e): str((e.get("security") or {}).get("isin") or "").upper() for e, _ in picks}
+        try:
+            prices = upstox_ltp([v for v in isin_of.values() if v])
+        except Exception as exc:
+            prices = {}
+            print(f"Upstox live prices skipped: {type(exc).__name__}: {exc}")
+        at = iso_now()
+        rest = []
+        for e, sym in picks:
+            q = prices.get(isin_of[id(e)])
+            if q:
+                e["live"] = {"price": q["price"], "at": at, "source": "UPSTOX"}
+                store.save(e)
+                n += 1
+            else:
+                rest.append((e, sym))
+        print(f"Upstox live prices: {n} of {len(picks)}")
+        picks = rest
+        if not picks:
+            return n
     try:
         with NSEAdapter(ctx) as nse:
             for e, sym in order_live_quotes(picks, held)[:LIVE_QUOTE_MAX]:

@@ -826,7 +826,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.58';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.59';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -983,9 +983,48 @@
   // full file until the first run has written page.json. 'no-cache' revalidates, so an unchanged file
   // is not downloaded again.
   const getJson = f => fetch(f + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  // 2.9.59: live prices (Upstox, every 5 minutes in market hours) from live.json, laid over the
+  // published data. Plans and stops still use daily closes; only the price shown is live.
+  function applyLive(lv) {
+    const d = S.data;
+    if (!d || !lv || !lv.prices || !lv.generatedAt) return false;
+    const at = lv.generatedAt, ageMin = (Date.now() - new Date(at)) / 60000;
+    if (!(ageMin >= -5 && ageMin < 40)) return false;              // older than 40 minutes: not live any more
+    let changed = false;
+    for (const it of d.items || []) {
+      const q = lv.prices[it.symbol], pl = (it.plus = it.plus || {});
+      if (!q || num(q[0]) === null) continue;
+      if (pl.live && pl.live.at && String(pl.live.at) > String(at)) continue;
+      const entry = num(pl.plan && pl.plan.entry), price = num(q[0]);
+      const dist = entry ? (price - entry) / entry * 100 : null;
+      pl.live = { price, at, source: 'UPSTOX', entry, distancePct: dist,
+        state: dist === null ? null : dist >= 0 ? 'ABOVE_TRIGGER' : dist >= -2 ? 'NEAR_TRIGGER' : 'BELOW_TRIGGER' };
+      changed = true;
+    }
+    for (const p of d.positions || []) {
+      const q = lv.prices[p.symbol]; if (!q || num(q[0]) === null) continue;
+      const e = num(p.entryPrice), r = num(p.riskPerShare);
+      p.last = num(q[0]); p.live = true; p.at = at;
+      if (e) p.pnlPct = (p.last / e - 1) * 100;
+      if (e && r) p.rNow = (p.last - e) / r;
+      changed = true;
+    }
+    d.liveAt = at;
+    return changed;
+  }
+  function marketOpenIST() {
+    const n = new Date(Date.now() + (330 + new Date().getTimezoneOffset()) * 60000), m = n.getHours() * 60 + n.getMinutes();
+    return n.getDay() >= 1 && n.getDay() <= 5 && m >= 555 && m <= 935;
+  }
+  function pullLive(first) {
+    getJson('live.json').then(lv => {
+      if (applyLive(lv)) { const y = window.scrollY; render(); if (!first) window.scrollTo(0, y); }
+    }).catch(() => {});
+  }
+  setInterval(() => { if (S.data && marketOpenIST() && !document.hidden) pullLive(false); }, 5 * 60000);
   getJson('page.json').catch(() => getJson('intelligence.json'))
     .then(d => {
-      S.data = d; render();
+      S.data = d; render(); pullLive(true);
       if (!d.moreFile) return;
       // the illiquid rest arrives after the page is up; a mismatched file (another run) is ignored
       getJson(d.moreFile).then(m => {

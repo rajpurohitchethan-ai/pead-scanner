@@ -1,0 +1,43 @@
+name: Live prices
+# 2.9.59: Upstox live prices every 5 minutes in market hours -> live.json.
+# Started by the engine run (scan.yml, "Queue the next run") and by the
+# morning schedule below; stops at the close. Commits only live.json.
+on:
+  schedule:
+    - cron: "43 3 * * 1-5"    # 09:13 IST (GitHub may start it late; the engine run is the backup)
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: pead-live-prices
+  cancel-in-progress: false
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 1
+          sparse-checkout: |
+            pead_v2.py
+            pead_plus.py
+            live_prices.py
+            page.json
+            intelligence.json
+            live.json
+            master/nse_holidays.json
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install --quiet requests pandas
+      - name: Live prices until the close
+        env:
+          UPSTOX_TOKEN: ${{ secrets.UPSTOX_TOKEN }}
+        run: |
+          git config user.name "PEAD live bot"
+          git config user.email "actions@users.noreply.github.com"
+          python live_prices.py

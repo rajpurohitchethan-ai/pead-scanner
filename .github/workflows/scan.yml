@@ -91,6 +91,7 @@ jobs:
           UPCOMING_DAYS: "45"
           SOURCE_RETRY_ATTEMPTS: "3"
           SOURCE_DELAY_SEC: "1.25"
+          UPSTOX_TOKEN: ${{ secrets.UPSTOX_TOKEN }}   # 2.9.59: read-only live prices; never printed
         run: |
           APPROVE="${{ github.event.inputs.approve_baseline || '' }}"
           if [ "${{ github.event.inputs.force_publish || 'false' }}" = "true" ]; then
@@ -176,3 +177,13 @@ jobs:
           if [ "$waiting" -gt 0 ]; then echo "A run is already waiting: not queuing."; exit 0; fi
           gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/scan.yml/dispatches" -f ref="${GITHUB_REF_NAME}" -f 'inputs[mode]=run'
           echo "Next run queued."
+          # 2.9.59: keep the 5-minute live price job running in market hours
+          M=$(( 10#$(TZ=Asia/Kolkata date +%H) * 60 + 10#$(TZ=Asia/Kolkata date +%M) ))
+          if [ "$D" -le 5 ] && [ "$M" -ge 540 ] && [ "$M" -le 925 ]; then
+            busy=0
+            for st in queued in_progress pending waiting requested; do
+              n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/live.yml/runs?status=${st}&per_page=1" --jq '.total_count' || echo 0)
+              busy=$((busy + n))
+            done
+            [ "$busy" -eq 0 ] && gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/live.yml/dispatches" -f ref="${GITHUB_REF_NAME}" && echo "Live price job started." || true
+          fi

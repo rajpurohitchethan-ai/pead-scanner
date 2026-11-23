@@ -4034,3 +4034,45 @@ class TimeStopTests(unittest.TestCase):
         v, st = pp.position_view(self.POS, self.item(109.0, "2026-11-05"), None, date(2026, 11, 5))
         v, _ = pp.position_view(self.POS, self.item(102.0, "2026-11-16"), st, date(2026, 11, 16))
         self.assertFalse(v["timeStop"])                                          # reached +1R earlier
+
+
+class UpstoxLiveTests(unittest.TestCase):
+    """2.9.59 (23 Nov 2026): live prices from the owner's read-only Upstox token."""
+
+    def test_parse_ltp_by_isin(self):
+        payload = {"status": "success", "data": {
+            "NSE_EQ:INDHOTEL": {"last_price": 909.4, "instrument_token": "NSE_EQ|INE053A01029", "ltq": 1, "volume": 1538677, "cp": 912.0},
+            "NSE_EQ:RELIANCE": {"last_price": 1355.9, "instrument_token": "NSE_EQ|INE002A01018", "volume": 6982875, "cp": 1377.5},
+            "NSE_EQ:DEAD": {"last_price": 0, "instrument_token": "NSE_EQ|INE000000000"},
+            "BAD": "x"}}
+        out = p.parse_upstox_ltp(payload)
+        self.assertEqual(out["INE053A01029"], {"price": 909.4, "prevClose": 912.0, "volume": 1538677.0})
+        self.assertEqual(set(out), {"INE053A01029", "INE002A01018"})          # zero price left out
+        self.assertEqual(p.parse_upstox_ltp({"status": "error"}), {})
+
+    def test_no_token_no_call(self):
+        from unittest import mock
+        import os
+        with mock.patch.dict(os.environ, {"UPSTOX_TOKEN": ""}), mock.patch.object(p.requests, "get") as get:
+            self.assertEqual(p.upstox_ltp(["INE053A01029"]), {})
+            get.assert_not_called()
+
+    def test_batches_of_500_and_rejected_token(self):
+        from unittest import mock
+        isins = [f"INE{n:06d}01011" for n in range(1203)]
+        resp = mock.Mock(status_code=200); resp.json.return_value = {"data": {}}
+        with mock.patch.object(p.requests, "get", return_value=resp) as get:
+            p.upstox_ltp(isins, token="t")
+            self.assertEqual(get.call_count, 3)
+            self.assertEqual(len(get.call_args_list[0].kwargs["params"]["instrument_key"].split(",")), 500)
+        bad = mock.Mock(status_code=401)
+        with mock.patch.object(p.requests, "get", return_value=bad):
+            with self.assertRaises(PermissionError):
+                p.upstox_ltp(isins[:3], token="t")
+
+    def test_token_reaches_only_the_engine_and_live_steps(self):
+        wf = (Path(__file__).resolve().parents[1] / ".github/workflows/scan.yml").read_text(encoding="utf-8")
+        self.assertEqual(wf.count("secrets.UPSTOX_TOKEN"), 1)
+        live = (Path(__file__).resolve().parents[1] / ".github/workflows/live.yml").read_text(encoding="utf-8")
+        self.assertIn("secrets.UPSTOX_TOKEN", live)
+        self.assertNotIn("echo $UPSTOX_TOKEN", live + wf)
