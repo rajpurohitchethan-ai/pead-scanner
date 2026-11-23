@@ -135,6 +135,11 @@ def close_summary(page: dict, prices: dict[str, dict]) -> tuple[str, str] | None
             continue
         head = f"{sym} {inr(price)} ({(price / e - 1) * 100:+.1f}%)"
         part = bool(pos.get("partialExits"))
+        if str(pos.get("strategy") or "").upper() == "DARVAS":
+            tr = _f(pos.get("trailStop")) or s0
+            (acts if tr is not None and price < tr else holds).append(
+                f"{'EXIT' if tr is not None and price < tr else 'Hold'}: {head} Darvas, 10 EMA trail {inr(tr)}")
+            continue
         if pos.get("oneRHit"):
             if rest is not None and price < rest:
                 acts.append(f"SELL REST: {head} closed below {inr(rest)} (20 EMA / cost)")
@@ -170,6 +175,12 @@ def alerts_for(page: dict, prices: dict[str, dict]) -> list[tuple[str, str, str,
         if price is None or e is None:
             continue
         pnl = (price / e - 1) * 100
+        if str(pos.get("strategy") or "").upper() == "DARVAS":           # 2.9.78: 10 EMA trail
+            tr = _f(pos.get("trailStop")) or s0
+            if tr is not None and price < tr:
+                out.append((f"{sym}:stop", f"{sym} below its 10 EMA trail {inr(tr)}",
+                            f"Darvas trade {sym} {inr(price)} ({pnl:+.1f}%) is below the trail {inr(tr)}. If it CLOSES below, the rule says sell.", "high"))
+            continue
         if pos.get("oneRHit"):
             if rest is not None and price < rest:
                 out.append((f"{sym}:rest", f"{sym} below {inr(rest)} (20 EMA / cost)",
@@ -209,6 +220,20 @@ def alerts_for(page: dict, prices: dict[str, dict]) -> list[tuple[str, str, str,
                     + (", Stage 2" if stage.get("stage") == 2 else "") + ". Buy only 3:15-3:25 pm if it is still above, limit order."
                     + (" RULE CHECK: " + "; ".join(broken) + "." if broken else " Rule check: passes."),
                     "default"))
+    for r in ((page.get("darvas") or {}).get("rows") or []):              # 2.9.78 Darvas triggers
+        sym, entry, sl = str(r.get("symbol") or "").upper(), _f(r.get("entry")), _f(r.get("stop"))
+        if sym in held or entry is None or sl is None:
+            continue
+        q = prices.get(sym)
+        price = _f(q and q.get("price"))
+        if price is None or price < entry or price > entry * 1.03:
+            continue
+        risk = (price - sl) / price * 100
+        out.append((f"{sym}:darvas", f"Darvas: {sym} broke its reversal high {inr(entry)}",
+                    f"{sym} {inr(price)} is above the reversal candle's high {inr(entry)}. Stop {inr(sl)} (risk {risk:.1f}%), "
+                    f"trail the 10 EMA {inr(r.get('trail'))}. Sector {str(r.get('sectorRs') or 'n/a').lower()}."
+                    + (f" RULE CHECK: {len(page.get('positions') or [])} trades already open (limit {MAX_OPEN_TRADES})."
+                       if len(page.get("positions") or []) >= MAX_OPEN_TRADES else ""), "default"))
     return out
 
 
@@ -219,11 +244,11 @@ def send_alerts(found, sent: set[str], topic: str | None) -> list[str]:
     """Posts the ones not sent today; returns the keys posted."""
     import requests
     done = []
-    entries = sum(1 for k in sent if k.endswith(":entry"))
+    entries = sum(1 for k in sent if k.endswith(":entry") or k.endswith(":darvas"))
     for key, title, body, prio in found:
         if key in sent or not (topic or tg.configured()):
             continue
-        if key.endswith(":entry"):
+        if key.endswith(":entry") or key.endswith(":darvas"):
             if entries >= MAX_ENTRY_ALERTS:
                 continue
             entries += 1

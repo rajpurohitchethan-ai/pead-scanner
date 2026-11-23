@@ -56,7 +56,7 @@ def buttons_for(key: str) -> list[list[dict]]:
     sym, _, kind = key.partition(":")
     row = []
     if sym and kind:
-        anchor = f"#t-{sym}" if kind in ("half", "rest", "stop", "1r") else f"#s-{sym}"
+        anchor = f"#t-{sym}" if kind in ("half", "rest", "stop", "1r") else "#darvas" if kind == "darvas" else f"#s-{sym}"
         row.append({"text": "Open card", "url": PAGE_URL + anchor})
     if kind == "half":
         row.append({"text": "Sold half", "callback_data": f"sold|{sym}|half"})
@@ -64,6 +64,8 @@ def buttons_for(key: str) -> list[list[dict]]:
         row.append({"text": "Sold all", "callback_data": f"sold|{sym}|all"})
     if kind == "entry":
         row.append({"text": "I bought", "callback_data": f"bought|{sym}"})
+    if kind == "darvas":
+        row.append({"text": "I bought", "callback_data": f"bought|{sym}|darvas"})
     return [row] if row else []
 
 
@@ -109,8 +111,9 @@ def apply_action(doc: dict, action: str, price: float | None, today: date, plan:
         pos.update(status="CLOSED", exitDate=today.isoformat(), exitPrice=round(price, 2), exitVia="telegram",
                    exitNote="Recorded from Telegram at the live price" + (" (after a part sale)" if pos.get("partialExits") else ""))
         return f"Recorded: {sym} sold (all) at about ₹{price:,.2f} (live price). Send /fill {sym} PRICE with your fill to correct it."
-    if parts[0] == "bought" and len(parts) == 2:
+    if parts[0] == "bought" and len(parts) in (2, 3):
         sym = parts[1].upper()
+        darvas = len(parts) == 3 and parts[2] == "darvas"
         if _open(doc, sym):
             return f"{sym} is already an open trade."
         sl = (plan or {}).get("sl")
@@ -118,7 +121,8 @@ def apply_action(doc: dict, action: str, price: float | None, today: date, plan:
             return f"{sym}: no live price or stop to record. Tell Claude the buy price."
         doc.setdefault("positions", []).append({"symbol": sym, "entryDate": today.isoformat(), "entryPrice": round(price, 2),
                                                 "stop": sl, "status": "OPEN", "entryVia": "telegram",
-                                                "setup": f"Recorded from Telegram at the live price; screener stop {sl}. /fill corrects the price"})
+                                                **({"strategy": "DARVAS"} if darvas else {}),
+                                                "setup": f"Recorded from Telegram at the live price; {'Darvas reversal-candle' if darvas else 'screener'} stop {sl}. /fill corrects the price"})
         return f"Recorded: bought {sym} at about ₹{price:,.2f}, stop ₹{sl:,.2f}. Send /fill {sym} PRICE with your fill to correct it."
     return "Unknown button."
 
@@ -163,6 +167,8 @@ def _prices_from_page() -> tuple[dict, dict]:
         for it in page.get("items") or []:
             sym = str(it.get("symbol") or "").upper()
             plans[sym] = (it.get("plus") or {}).get("plan") or {}
+        for r in ((page.get("darvas") or {}).get("rows") or []):          # 2.9.78: Darvas stop for "I bought"
+            plans[str(r.get("symbol") or "").upper() + "|darvas"] = {"sl": r.get("stop")}
             lc = (it.get("priceContext") or {}).get("lastClose")
             if lc is not None:
                 prices.setdefault(sym, float(lc))
@@ -206,7 +212,8 @@ def poll(wait: int = 0, prices: dict | None = None) -> bool:
             data = str(cq.get("data") or "")
             sym = data.split("|")[1].upper() if "|" in data else ""
             before = json.dumps(doc, sort_keys=True)
-            reply = apply_action(doc, data, page_prices.get(sym), today, plans.get(sym))
+            reply = apply_action(doc, data, page_prices.get(sym), today,
+                                 plans.get(sym + "|darvas") if data.endswith("|darvas") else plans.get(sym))
             changed |= json.dumps(doc, sort_keys=True) != before
             try:
                 _call("answerCallbackQuery", {"callback_query_id": cq["id"], "text": reply[:190]}, timeout=10)

@@ -646,6 +646,12 @@
     const last = num(p.last), stop = num(p.swingStop) ?? num(p.initialStop), half = num(p.halfStop), rest = num(p.restStop), oneR = num(p.oneR);
     if (last === null) return ['No price', '', '—'];
     if (p.status === 'EXIT') return ['Exit', 'bad', `closed below ${inr(rest ?? stop)}`];
+    if (p.strategy === 'DARVAS') {
+      const tr = num(p.trailStop) ?? stop;
+      if (last < tr) return ['Exit if it closes here', 'bad', `10 EMA trail ${inr(tr)}`];
+      if (last < tr * 1.015) return ['Near 10 EMA trail', 'warn', `trail ${inr(tr)}`];
+      return ['Hold', 'good', `10 EMA trail ${inr(tr)}`];
+    }
     if (!p.oneRHit) {
       if (stop !== null && last < stop) return ['Exit if it closes here', 'bad', `stop ${inr(stop)}`];
       if (stop !== null && last < stop * 1.015) return ['Near stop', 'warn', `stop ${inr(stop)}`];
@@ -733,6 +739,36 @@
     a.download = `pead-trades-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
+  // 2.9.78: Darvas radar (the owner's 4% screen and 10 EMA rules), computed once a day from closing prices.
+  const DV_LABEL = { REVERSAL: '10 EMA reversal', BREAKOUT: 'Breakout (extended)', WATCH: 'Near 10 EMA', CAUTION: 'Extended', FAILED: 'Failed' };
+  const DV_ACTION = { REVERSAL: 'Buy tomorrow only above this candle\'s high; stop below its low.', BREAKOUT: 'Reversal and PDH done; wait for a pullback to the 10 EMA.',
+    WATCH: 'Wait for a reversal candle at the 10 EMA.', CAUTION: 'Too far above the 10 EMA: no fresh entry.', FAILED: 'Lost the 20 EMA or not Stage 2: skip.' };
+  function viewDarvas() {
+    const dv = S.data.darvas;
+    if (!dv || !(dv.rows || []).length) return `<p class="empty">The Darvas radar fills after the next closing-price file (about 7 pm on trading days).</p>`;
+    const q = (S.q || '').toUpperCase();
+    const rows = dv.rows.filter(r => !q || r.symbol.includes(q) || String(r.name || '').toUpperCase().includes(q));
+    const trig = rows.filter(r => r.entry !== null && r.entry !== undefined && !heldPos(r));
+    const fired = rows.filter(r => r.triggered);
+    const counts = rows.reduce((a, r) => (a[r.signal] = (a[r.signal] || 0) + 1, a), {});
+    const live = sym => { const it = (S.data.items || []).find(x => x.symbol === sym); return num(it && P(it).live?.last); };
+    const rs = l => l ? `<span class="tag ${{ STRONG: 'good', POSITIVE: 'good', WEAK: 'bad' }[l] || ''}">${l.charAt(0) + l.slice(1).toLowerCase()}</span>` : '';
+    return `<p class="note">Your 4% screen (up 4%+ on higher volume, top quarter of the range after a red day, at a 20-day high, above the 50-day average, market cap over ₹1,000 Cr) run on every stock at each close. Stocks stay ${8} sessions after a hit. Signals use your 10 EMA rules: buy the day after a reversal candle, only above its high, with risk to the stop at most 5% and the sector not weak. Trail with the 10 EMA. Data as of the ${dt(dv.asOf)} close; ${dv.scanned} stocks scanned.</p>
+      <div class="chips">${Object.entries(counts).map(([k, n]) => `<span class="dv-sig ${k}">${DV_LABEL[k]} ${n}</span>`).join(' ')}</div>
+      <h2 class="day">Tomorrow's triggers</h2>
+      ${trig.length ? trig.map(r => `<div class="dv-trig"><h3>${esc(r.symbol)} <span class="meta">${esc(r.name || '')}</span></h3>
+        <div class="levels"><div class="lv e"><span>Buy above</span><b>${inr(r.entry)}</b></div><div class="lv s"><span>Stop</span><b>${inr(r.stop)}</b></div><div class="lv"><span>Risk</span><b>${num(r.riskPct).toFixed(1)}%</b></div><div class="lv"><span>Trail (10 EMA)</span><b>${inr(r.trail)}</b></div></div>
+        <p class="meta">${esc(r.sector || '')} ${rs(r.sectorRs)} · screener hit ${r.hits.map(dt).join(', ')} · 1 month ${pct(r.ret1mPct)}${live(r.symbol) !== null ? ` · live ${inr(live(r.symbol))}` : ''}</p></div>`).join('')
+        : '<p class="meta">No reversal candle with risk at most 5% in a sector that is not weak. Nothing to buy tomorrow on this strategy.</p>'}
+      ${fired.length ? `<p class="note"><b>Triggered today:</b> ${fired.map(r => `${esc(r.symbol)} broke ${inr(r.triggerOf)} (stop ${inr(r.triggerStop)})`).join('; ')}.</p>` : ''}
+      <h2 class="day">Radar (${rows.length})</h2>
+      <div class="dv-list">${rows.map(r => `<div class="dv-row">
+        <div class="dv-top"><b class="dv-name">${esc(r.symbol)}</b>${heldPos(r) ? ' <span class="tag go">held</span>' : ''}<span class="dv-sig ${r.signal}">${DV_LABEL[r.signal]}</span>
+          <span class="dv-px n">${inr(r.close)} <small class="${cls(r.ret1mPct)}">1M ${pct(r.ret1mPct)}</small></span></div>
+        <div class="dv-sub">${esc(DV_ACTION[r.signal])}</div>
+        <div class="dv-sub n">10 EMA ${inr(r.ema10)} (${pct(r.distPct)}) · PDH ${inr(r.pdh)} · stop ${inr(r.stop)} (${num(r.riskPct).toFixed(1)}%)</div>
+        <div class="dv-sub">${esc(r.sector || '—')} ${rs(r.sectorRs)} · hit ${r.hits.map(dt).join(', ')}${r.newListing ? ' · recent listing' : ''}</div></div>`).join('')}</div>`;
+  }
   function viewTrades() {
     const list = S.data.positions || [];
     if (!list.length) return journalBlock() + closedBlock() + `<div class="empty">No open trades. Tell Claude when you buy, and the trade is tracked here against the screener's plan.</div>`;
@@ -744,7 +780,7 @@
         const pnl = qty && num(p.last) !== null ? (p.last - p.entryPrice) * qty : null;
         const atRisk = qty && num(p.swingStop) !== null ? (p.swingStop - p.entryPrice) * qty : null;
         const lv = (l, v, k = '') => `<div class="lv ${k}"><span>${l}</span><b>${v}</b></div>`;
-        return `<article class="card" id="t-${esc(p.symbol)}"><div class="head"><div><h2 class="sym">${esc(p.symbol)}</h2><div class="co">Bought ${dt(p.entryDate)} at ${inr(p.entryPrice)}</div></div>
+        return `<article class="card" id="t-${esc(p.symbol)}"><div class="head"><div><h2 class="sym">${esc(p.symbol)}${p.strategy === 'DARVAS' ? ' <span class="tag">Darvas</span>' : ''}</h2><div class="co">Bought ${dt(p.entryDate)} at ${inr(p.entryPrice)}</div></div>
           <div class="score"><div class="v ${cls(p.pnlPct)}">${pct(p.pnlPct)}</div><div class="l">${num(p.rNow) !== null ? num(p.rNow).toFixed(2) + 'R' : ''}</div></div></div>
           <div class="tags"><span class="tag ${st[1]}">${esc(st[0])}</span>${p.timeStop ? `<span class="tag watch" title="Advisory: ${p.sessionsHeld} sessions without reaching +1R. Not a sell signal.">Time stop: ${p.sessionsHeld} sessions</span>` : (num(p.sessionsHeld) !== null ? `<span class="tag">${p.sessionsHeld} sessions held</span>` : '')}</div>
           <div class="meta">${priceState(!!p.live, p.at)} ${inr(p.last)}${p.live && num(p.lastClose) !== null ? ` · prev close ${inr(p.lastClose)} · <span class="${cls(dayPct(p.last, p.lastClose))}">day ${pct(dayPct(p.last, p.lastClose))}</span>` : ''}</div>
@@ -850,6 +886,10 @@
     const qty = sym => { try { return num(localStorage.getItem('qty:' + sym)); } catch (e) { return null; } };
     const tiles = [['Trades closed', s.trades], ['Win rate', num(s.winRate) !== null ? Math.round(s.winRate) + '%' : '—'], ['Avg win', r(s.avgWinR)],
       ['Avg loss', r(s.avgLossR)], ['Per trade (expectancy)', r(s.expectancyR)], ['Profit factor', num(s.profitFactor) !== null ? num(s.profitFactor).toFixed(2) : '—']];
+    const bySt = J.byStrategy || {};
+    const stratTable = Object.keys(bySt).length > 1 || Object.keys(bySt).some(k => k !== 'PEAD') ? `<h4>By strategy</h4><div class="tscroll"><table class="sectbl"><thead><tr><th>Strategy</th><th class="r">Trades</th><th class="r">Win rate</th><th class="r">Per trade</th><th class="r">Total</th><th class="r">Days held</th></tr></thead><tbody>
+      ${Object.entries(bySt).map(([k, v]) => `<tr><td>${k === 'DARVAS' ? 'Darvas (10 EMA)' : 'PEAD (results)'}</td><td class="r n">${v.trades}</td><td class="r n">${num(v.winRate) !== null ? Math.round(v.winRate) + '%' : '—'}</td><td class="r n ${cls(v.expectancyR)}">${r(v.expectancyR)}</td><td class="r n ${cls(v.totalR)}">${r(v.totalR)}</td><td class="r n">${num(v.avgDays) ?? '—'}</td></tr>`).join('')}
+      </tbody></table></div>` : '';
     const rows = (J.mistakes || []).map(m => {
       const q = qty(m.symbol), rs = num(m.riskPerShare), rupees = q && rs && num(m.costR) !== null ? num(m.costR) * rs * q : null;
       const cost = num(m.costR) === null ? '<span class="meta">not measurable</span>'
@@ -860,6 +900,7 @@
     const costR = (J.mistakes || []).reduce((a, m) => a + (num(m.costR) > 0 ? num(m.costR) : 0), 0);
     return `<section class="card gm journal"><h3>Your trading journal</h3>
       <div class="jtiles">${tiles.map(([l, v]) => `<div><span>${l}</span><b class="n">${v}</b></div>`).join('')}</div>
+      ${stratTable}
       ${rows ? `<h4>Habits that changed the result <span class="meta">${costR > 0 ? `${costR.toFixed(2)}R cost so far` : ''}</span></h4>
       <div class="tscroll"><table class="sectbl"><thead><tr><th>Trade</th><th>What happened</th><th class="r">Effect</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="meta">R = one planned risk (entry minus stop). "Cost" compares with what the rule would have done: an early sale with today's price, an exit below the stop with the stop, a late exit with the close that gave the signal. Rupees use the quantity saved on this device.</p>` : '<p class="meta">No rule breaks recorded. Keep it that way.</p>'}
@@ -1089,7 +1130,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.77';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.78';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -1127,7 +1168,7 @@
     const fails = (sa.checks || []).filter(c => c.status === 'FAIL');
     const auditBanner = fails.length ? `<div class="install-bad"><b>Data check found ${fails.length} problem${fails.length > 1 ? 's' : ''}:</b> ${esc(fails.map(c => c.check).join('; '))}. Details in Data health.</div>` : '';
     $('season').innerHTML = installBanner() + auditBanner + `<strong>${decl.length}</strong> results declared, <strong>${act}</strong> with an actionable setup, <strong>${soon}</strong> companies reporting in the next 7 days.`;
-    $('c-setups').textContent = decl.length; $('c-radar').textContent = (() => { const r = radarAll().filter(it => !heldPos(it)); const a = r.filter(it => (P(it).grade || {}).tier === 'A').length; return a ? `${a} best · ${r.length}` : `${r.length}`; })(); $('c-trades').textContent = (d.positions || []).length; $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
+    $('c-setups').textContent = decl.length; $('c-radar').textContent = (() => { const r = radarAll().filter(it => !heldPos(it)); const a = r.filter(it => (P(it).grade || {}).tier === 'A').length; return a ? `${a} best · ${r.length}` : `${r.length}`; })(); $('c-trades').textContent = (d.positions || []).length; $('c-darvas').textContent = (() => { const r = (d.darvas || {}).rows || []; const t = r.filter(x => x.entry !== null && x.entry !== undefined).length; return r.length ? (t ? `${t} buy · ${r.length}` : `${r.length}`) : ''; })(); $('c-watch').textContent = upcoming().length; $('c-sectors').textContent = (d.sectors || []).length;
   }
 
   function chips() {
@@ -1173,7 +1214,7 @@
     if (strip && strip.scrollTo) strip.scrollTo({ left: Math.max(0, active.offsetLeft - strip.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2) });
     const fresh = S.lastTab !== S.tab; S.lastTab = S.tab;
     $('view').classList.toggle('enter', fresh);
-    $('view').innerHTML = { screen: viewScreen, setups: viewSetups, radar: viewRadar, trades: viewTrades, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
+    $('view').innerHTML = { screen: viewScreen, setups: viewSetups, radar: viewRadar, trades: viewTrades, darvas: viewDarvas, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
     foldNotes($('view'));
     if (S.hashTarget) { const el = document.getElementById(S.hashTarget); if (el) { el.scrollIntoView({ block: 'start' }); S.hashTarget = null; } }
   }
@@ -1252,6 +1293,7 @@
   // ---------- boot ----------
   S.tab = store.get('tab', 'screen'); if (!store.get('seenScreen', false)) { S.tab = 'screen'; store.set('seenScreen', true); }
   // 2.9.74: links from alerts: #t-SYMBOL opens that trade, #s-SYMBOL finds the stock in the screener.
+  if (location.hash === '#darvas') S.tab = 'darvas';
   const hashLink = (location.hash || '').match(/^#([ts])-([A-Za-z0-9&-]+)$/);
   if (hashLink) {
     S.tab = hashLink[1] === 't' ? 'trades' : 'screen';

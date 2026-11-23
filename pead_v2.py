@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.77"
+ENGINE_VERSION = "2.9.78"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -8174,6 +8174,70 @@ def _payload_symbol_ok(payload: Any, sec: dict[str, Any]) -> bool:
     return got in ok - {None, ""}
 
 
+def event_nse_frame(event: dict[str, Any], days: list[dict[str, Any]], raw_root: Path = RAW_DIR) -> Any:
+    """2.9.78: the stock's saved NSE OHLCV history (latest payload) with the end-of-day files on top."""
+    best = None
+    for folder in _raw_folders_for(event, raw_root / "nse_price"):
+        for f in folder.glob("*.json"):
+            try:
+                payload = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not _payload_symbol_ok(payload, event.get("security") or {}):
+                continue
+            fr = nse_history_to_frame(payload)
+            if fr is None or fr.empty:
+                continue
+            if best is None or (fr["Date"].iloc[-1], len(fr)) > (best["Date"].iloc[-1], len(best)):
+                best = fr
+    if best is None:
+        return None
+    sec = event.get("security") or {}
+    frame, _ = overlay_eod(best, sec.get("nseSymbol"), sec.get("bseCode"), days)
+    return frame
+
+
+DARVAS_PATH = MASTER_DIR / "darvas.json"
+DARVAS_REV = "2.9.78"
+
+
+def darvas_scan(store: "EventStore", items: list[dict[str, Any]], heat: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """2.9.78: the owner's 4% screen + 10 EMA signals over every stock of at least Rs 1,000 Cr,
+    once per new end-of-day file (cached in master/darvas.json)."""
+    days = load_eod()
+    if not days:
+        return None
+    latest = days[-1]["date"].isoformat()
+    state = _eod_read(DARVAS_PATH) or {} if DARVAS_PATH.exists() else {}
+    if state.get("asOf") == latest and state.get("rev") == DARVAS_REV:
+        return state
+    started, rows, scanned = time.time(), [], 0
+    for it in items:
+        mc = safe_num(it.get("marketCapCr"))
+        if mc is None or mc < pead_plus.DARVAS_MIN_MCAP_CR or not it.get("symbol"):
+            continue
+        ev = store.load(it.get("eventId"))
+        if not ev:
+            continue
+        fr = event_nse_frame(ev, days)
+        if fr is None or len(fr) < 22:
+            continue
+        scanned += 1
+        col = lambda k: [None if x != x else float(x) for x in fr[k].tolist()]
+        row = pead_plus.darvas_radar({"symbol": it["symbol"], "name": it.get("name"),
+                                      "sector": (it.get("plus") or {}).get("sectorKey") or it.get("sector"),
+                                      "marketCapCr": mc, "eventId": it.get("eventId")},
+                                     [d.date().isoformat() for d in fr["Date"]], col("Open"), col("High"), col("Low"), col("Close"), col("Volume"))
+        if row:
+            rows.append(row)
+    rs = pead_plus.darvas_sector_rs(heat)
+    out = {"rev": DARVAS_REV, "asOf": latest, "at": iso_now(), "scanned": scanned, "seconds": round(time.time() - started),
+           "sectorRs": rs, "rows": pead_plus.darvas_finish(rows, rs)}
+    json_dump_atomic(DARVAS_PATH, out)
+    print(f"Darvas radar: {len(rows)} stocks from {scanned} scanned in {out['seconds']}s (as of {latest})")
+    return out
+
+
 def rebuild_plus_from_raw(store: EventStore, event: dict[str, Any], raw_root: Path = RAW_DIR,
                           any_source: bool = False) -> bool:
     """Recompute price analytics from the newest saved price payload (NSE OHLC
@@ -8941,6 +9005,11 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
             except Exception as exc:
                 print(f"Radar grade {it_.get('symbol')} skipped: {type(exc).__name__}: {exc}")
     shadow = None
+    darvas = None
+    try:                                                              # 2.9.78 Darvas radar
+        darvas = darvas_scan(store, items, sector_heat)
+    except Exception as exc:
+        print(f"Darvas radar skipped: {type(exc).__name__}: {exc}")
     try:                                                              # 2.9.71 shadow portfolio
         slog = _eod_read(SHADOW_LOG_PATH) or {} if SHADOW_LOG_PATH.exists() else {}
         if pead_plus.shadow_update(slog, items, now_ist().date()):
@@ -8972,6 +9041,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "scorecard": card | {"timing": timing, "runup": runup, "backtest": backtest},
         "sectorHeat": sector_heat,
         "shadow": shadow,
+        "darvas": darvas,
         "positions": positions,
         "closedPositions": closed_positions(),                         # 2.9.28
         "closedSummary": pead_plus.closed_summary(closed_positions()),

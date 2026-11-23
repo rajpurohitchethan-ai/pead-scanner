@@ -4535,3 +4535,74 @@ class PretradeAndCloseTests(unittest.TestCase):
         self.assertIn("Hold: H2", body)
         page["positions"][0]["partialExits"] = [{"fraction": 0.5}]
         self.assertIn("Hold: H0", lp.close_summary(page, {"H0": {"price": 115.0}})[1])
+
+
+class DarvasRadarTests(unittest.TestCase):
+    """2.9.78 (23 Nov 2026): the owner's 4% screen and 10 EMA rules on the engine's own prices."""
+
+    def series(self, n=60):
+        # a steady uptrend (Stage 2), a red day, then a +5% day at a 20-day high on more volume
+        c = [100 + i * 0.5 for i in range(n - 2)]
+        o = [x - 0.2 for x in c]
+        h = [x + 0.6 for x in c]
+        l = [x - 0.8 for x in c]
+        v = [200000.0] * (n - 2)
+        last = c[-1]
+        o += [last + 0.3, last - 0.2]; c += [last - 0.1, (last - 0.1) * 1.05]
+        h += [last + 0.5, c[-1] + 0.2]; l += [last - 0.6, last - 0.3]; v += [150000.0, 400000.0]
+        return o, h, l, c, v
+
+    def test_screen_hits_the_breakout_day(self):
+        import pead_plus
+        o, h, l, c, v = self.series()
+        self.assertTrue(pead_plus.darvas_hit(o, h, l, c, v, len(c) - 1))
+        self.assertFalse(pead_plus.darvas_hit(o, h, l, c, v, len(c) - 2))        # the red day itself
+        v2 = v[:-1] + [100000.0]
+        self.assertFalse(pead_plus.darvas_hit(o, h, l, c, v2, len(c) - 1))       # volume not above 1 lakh / yesterday
+
+    def test_radar_row_and_signals(self):
+        import pead_plus
+        o, h, l, c, v = self.series()
+        dates = [f"d{i:03d}" for i in range(len(c))]
+        row = pead_plus.darvas_radar({"symbol": "AAA", "sector": "Pharma"}, dates, o, h, l, c, v)
+        self.assertEqual(row["hits"], [dates[-1]])
+        self.assertEqual(row["signal"], "BREAKOUT")                               # low tagged the zone, closed above the prior high, now >2% over the 10 EMA
+        rows = pead_plus.darvas_finish([dict(row, signal="REVERSAL", riskPct=4.0)], {"Pharma": {"label": "WEAK"}})
+        self.assertIsNone(rows[0]["entry"])                                       # weak sector: no entry
+        rows = pead_plus.darvas_finish([dict(row, signal="REVERSAL", riskPct=4.0)], {"Pharma": {"label": "POSITIVE"}})
+        self.assertEqual(rows[0]["entry"], row["pdh"])
+
+    def test_failed_below_20_ema(self):
+        import pead_plus
+        c = [100 + i for i in range(40)] + [100.0]
+        sig = pead_plus.darvas_signal(c, [x + 1 for x in c], [x - 1 for x in c], c, len(c) - 1)
+        self.assertEqual(sig["signal"], "FAILED")
+
+    def test_darvas_position_exits_on_the_10_ema(self):
+        import pead_plus
+        from datetime import date
+        pos = {"symbol": "D", "entryDate": "2026-11-10", "entryPrice": 100, "stop": 95, "status": "OPEN", "strategy": "DARVAS"}
+        item = {"symbol": "D", "priceContext": {"lastClose": 101.0}, "plus": {"price": {"last_session": "2026-11-20", "ema10": 102.0, "ema20": 99.0}}}
+        view, _ = pead_plus.position_view(pos, item, {}, date(2026, 11, 20))
+        self.assertEqual((view["strategy"], view["status"], view["trailStop"]), ("DARVAS", "EXIT", 102.0))
+
+    def test_journal_by_strategy(self):
+        import pead_plus
+        raw = [{"symbol": "P", "status": "CLOSED", "entryDate": "2026-10-01", "entryPrice": 100, "stop": 90, "exitDate": "2026-10-09", "exitPrice": 120},
+               {"symbol": "D", "status": "CLOSED", "strategy": "DARVAS", "entryDate": "2026-10-01", "entryPrice": 100, "stop": 95, "exitDate": "2026-10-05", "exitPrice": 95}]
+        j = pead_plus.trade_journal(raw, {}, {}, [])
+        self.assertEqual(set(j["byStrategy"]), {"PEAD", "DARVAS"})
+        self.assertEqual(j["byStrategy"]["DARVAS"]["losses"], 1)
+
+    def test_live_darvas_alert_and_button(self):
+        import live_prices as lp
+        import telegram_bot as tg
+        from datetime import date
+        page = {"positions": [], "items": [], "darvas": {"rows": [{"symbol": "AAA", "entry": 100.0, "stop": 96.0, "trail": 97.0, "sectorRs": "POSITIVE"}]}}
+        keys = [a[0] for a in lp.alerts_for(page, {"AAA": {"price": 101.0}})]
+        self.assertEqual(keys, ["AAA:darvas"])
+        self.assertEqual(lp.alerts_for(page, {"AAA": {"price": 104.0}}), [])     # more than 3% above: no chase
+        self.assertEqual(tg.buttons_for("AAA:darvas")[0][-1]["callback_data"], "bought|AAA|darvas")
+        d = {"positions": []}
+        tg.apply_action(d, "bought|AAA|darvas", 101.0, date(2026, 11, 25), {"sl": 96.0})
+        self.assertEqual((d["positions"][0]["strategy"], d["positions"][0]["stop"]), ("DARVAS", 96.0))

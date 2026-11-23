@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.77"
+MODULE_VERSION = "2.9.78"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2059,6 +2059,23 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
                  "halfStop": _r2(half), "restStop": _r2(rest), "ema10": e10, "ema20": e20, "halfHit": half_hit,
                  "rNow": _r2(r_now), "pnlPct": _r2(_pct(last, entry)) if last is not None else None,
                  "peakClose": _r2(_num(st.get("peakClose"))), "oneRHit": one_r_hit})
+    view["strategy"] = str(pos.get("strategy") or "PEAD").upper()
+    if view["strategy"] == "DARVAS":
+        # 2.9.78 Darvas trades follow the owner's Darvas rules: stop below the reversal-candle low,
+        # trailed with the 10 EMA (daily close): exit on a close below the higher of the two.
+        trail = max(stop0, e10) if e10 is not None else stop0
+        view.update({"swingStop": _r2(trail), "positionStop": _r2(trail), "restStop": _r2(trail), "halfStop": None,
+                     "oneRHit": False, "halfHit": False, "trailStop": _r2(trail)})
+        if last is None:
+            view["note"] = "No price for this stock yet."
+        elif close is not None and close < trail:
+            view["status"], view["note"] = "EXIT", (f"Darvas trade: closed at {close:,.2f}, below "
+                                                    f"{'the 10 EMA' if e10 is not None and trail == e10 else 'the stop'} {trail:,.2f}: sell.")
+        else:
+            view["status"], view["note"] = "HOLD", (f"Darvas trade: hold while it closes above "
+                                                    f"{'the 10 EMA' if e10 is not None and trail == e10 else 'the stop'} {trail:,.2f}.")
+        view["sessionsHeld"], view["timeStop"] = sessions_held(pos.get("entryDate"), sess), False
+        return view, st
     if last is None:
         view["note"] = "No price for this stock yet."
     elif close is not None and close < rest:
@@ -2754,6 +2771,110 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 # ---------------------------------------------------------------------------
+# 2.9.78 Darvas radar (owner, 23 Nov 2026): the owner's second strategy, moved
+# from its own dashboard into this page. The 4% screen is the owner's Chartink
+# scan (8 conditions, transcribed 18 Oct 2026); the signals are the owner's
+# 10 EMA rules from the Darvas daily update. Computed from the engine's own
+# daily prices, so no Chartink, TradingView or laptop is needed.
+# ---------------------------------------------------------------------------
+DARVAS_KEEP_SESSIONS = 8        # a screener hit stays on the radar this many sessions
+DARVAS_ZONE_PCT = 2.0           # 10 EMA zone: within 2%
+DARVAS_MAX_RISK_PCT = 5.0       # entry only when PDH-to-stop risk is at most 5%
+DARVAS_MIN_MCAP_CR = 1000.0
+
+
+def darvas_hit(o, h, l, c, v, i: int) -> bool:
+    """The 4% screen on session i (lists of open/high/low/close/volume, oldest first)."""
+    if i < 20 or None in (o[i], h[i], l[i], c[i], v[i], c[i - 1], o[i - 1], v[i - 1]):
+        return False
+    hi20 = max(x for x in h[i - 20:i] if x is not None)
+    sma50 = sum(c[i - 49:i + 1]) / 50 if i >= 49 and None not in c[i - 49:i + 1] else None
+    return (c[i] >= c[i - 1] * 1.04                       # 1 up 4% or more
+            and v[i] > v[i - 1]                             # 2 volume above yesterday
+            and v[i] > 100000                               # 3 at least 1 lakh shares
+            and c[i] >= h[i] - (h[i] - l[i]) * 0.25         # 4 closes in the top quarter of the range
+            and c[i - 1] <= o[i - 1]                        # 5 yesterday red or flat
+            and c[i] >= hi20                                # 6 at or above the prior 20-day high
+            and sma50 is not None and c[i] > sma50)         # 7 above the 50-day average (8: market cap, by the caller)
+
+
+def darvas_signal(o, h, l, c, i: int) -> dict[str, Any] | None:
+    """The owner's 10 EMA classification of session i."""
+    if i < 21 or None in (h[i], l[i], c[i], h[i - 1]):
+        return None
+    e10, e20 = _ema_series(c[:i + 1], 10)[-1], _ema_series(c[:i + 1], 20)[-1]
+    sma = lambda n: sum(c[i - n + 1:i + 1]) / n if i >= n - 1 else None
+    s50, s200 = sma(50), sma(200)
+    stage2 = bool(s50 and c[i] > s50 and (s200 is None or s50 > s200))
+    dist = (c[i] / e10 - 1) * 100
+    upper = c[i] >= l[i] + (h[i] - l[i]) / 2
+    tagged = l[i] <= e10 * (1 + DARVAS_ZONE_PCT / 100)
+    if not stage2 or c[i] < e20:
+        sig = "FAILED"
+    elif tagged and upper and c[i] > h[i - 1] and dist > DARVAS_ZONE_PCT:
+        sig = "BREAKOUT"
+    elif -DARVAS_ZONE_PCT <= dist <= DARVAS_ZONE_PCT and tagged and c[i] >= e10 and upper:
+        sig = "REVERSAL"
+    elif dist > DARVAS_ZONE_PCT:
+        sig = "CAUTION"
+    else:
+        sig = "WATCH"
+    stop = l[i] * 0.998
+    risk = (h[i] - stop) / h[i] * 100 if h[i] else None
+    return {"signal": sig, "close": _r2(c[i]), "high": _r2(h[i]), "low": _r2(l[i]), "ema10": _r2(e10), "ema20": _r2(e20),
+            "sma50": _r2(s50), "sma200": _r2(s200), "distPct": _r2(dist), "stage2": stage2, "pdh": _r2(h[i]),
+            "stop": _r2(stop), "riskPct": _r2(risk), "trail": _r2(e10), "newListing": s200 is None}
+
+
+def darvas_radar(stock: dict[str, Any], dates: list[str], o, h, l, c, v) -> dict[str, Any] | None:
+    """One stock's radar row when the 4% screen hit within the last DARVAS_KEEP_SESSIONS sessions."""
+    n = len(c)
+    if n < 22:
+        return None
+    hits = [dates[i] for i in range(max(21, n - DARVAS_KEEP_SESSIONS), n) if darvas_hit(o, h, l, c, v, i)]
+    if not hits:
+        return None
+    now, prev = darvas_signal(o, h, l, c, n - 1), darvas_signal(o, h, l, c, n - 2)
+    if not now:
+        return None
+    triggered = bool(prev and prev["signal"] == "REVERSAL" and h[n - 1] > h[n - 2])
+    r21 = (c[-1] / c[-22] - 1) * 100 if n >= 22 and c[-22] else None
+    return {**stock, **now, "hits": hits, "lastHit": hits[-1], "asOf": dates[-1], "ret1mPct": _r2(r21),
+            "triggered": triggered, "triggerOf": _r2(h[n - 2]) if triggered else None,
+            "triggerStop": _r2(l[n - 2] * 0.998) if triggered else None}
+
+
+def darvas_sector_rs(heat: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Sector strength against the whole market: median 1-week and 1-month move of the
+    sector's liquid stocks minus the median across sectors. Strong / Positive / Mixed / Weak."""
+    w = [r["w1"] for r in heat if r.get("w1") is not None]
+    m = [r["m1"] for r in heat if r.get("m1") is not None]
+    if not w or not m:
+        return {}
+    mw, mm = median(w), median(m)
+    out = {}
+    for r in heat:
+        if r.get("w1") is None or r.get("m1") is None:
+            continue
+        dw, dm = r["w1"] - mw, r["m1"] - mm
+        label = "STRONG" if dw > 1 and dm > 2 else "POSITIVE" if dw > 0 and dm > 0 else "WEAK" if dw < 0 and dm < 0 else "MIXED"
+        out[r["sector"]] = {"label": label, "w1Rel": _r2(dw), "m1Rel": _r2(dm)}
+    return out
+
+
+def darvas_finish(rows: list[dict[str, Any]], sector_rs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Sector label, entry (REVERSAL with risk <= 5% and sector not weak) and sort order."""
+    order = {"REVERSAL": 0, "BREAKOUT": 1, "WATCH": 2, "CAUTION": 3, "FAILED": 4}
+    for r in rows:
+        rs = sector_rs.get(r.get("sector") or "") or {}
+        r["sectorRs"] = rs.get("label")
+        ok = r["signal"] == "REVERSAL" and r.get("riskPct") is not None and r["riskPct"] <= DARVAS_MAX_RISK_PCT and rs.get("label") != "WEAK"
+        r["entry"] = r["pdh"] if ok else None
+    rows.sort(key=lambda r: (not r.get("triggered"), order.get(r["signal"], 9), -(r.get("ret1mPct") or -999)))
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # 2.9.76 Earnings quality (owner, 23 Nov 2026): from the same exchange XBRL
 # the result was read from. Display only: no grade or plan rule uses it.
 #   other income share of pre-tax profit, one-off (exceptional) items,
@@ -3289,6 +3410,7 @@ def trade_journal(raw: list[dict[str, Any]], state: dict[str, Any], last_price: 
                 tags.append({"code": "HELD_AFTER_SIGNAL", "costR": _r2((_num(hit.get("close")) - x) / risk) if x is not None else None,
                              "since": hit.get("date")})
             v["mistakes"], v["riskPerShare"] = tags, _r2(risk)
+            v["strategy"] = str(pos.get("strategy") or "PEAD").upper()        # 2.9.78
             closed.append(v)
         else:
             vw = views.get(sym) or {}
@@ -3302,18 +3424,20 @@ def trade_journal(raw: list[dict[str, Any]], state: dict[str, Any], last_price: 
         for m in t.get("mistakes") or []:
             mistakes.append({"symbol": t["symbol"], "open": bool(t.get("open")), "riskPerShare": t.get("riskPerShare"), **m,
                              "label": MISTAKES[m["code"]]})
-    rs = [_num(c.get("r")) for c in closed if _num(c.get("r")) is not None]
-    wins, losses = [r for r in rs if r > 0], [r for r in rs if r <= 0]
-    days = [c["days"] for c in closed if isinstance(c.get("days"), int)]
-    stats = {"trades": len(closed), "wins": len(wins), "losses": len(losses),
-             "winRate": _r2(len(wins) / len(rs) * 100) if rs else None,
-             "avgWinR": _r2(sum(wins) / len(wins)) if wins else None,
-             "avgLossR": _r2(sum(losses) / len(losses)) if losses else None,
-             "expectancyR": _r2(sum(rs) / len(rs)) if rs else None,
-             "totalR": _r2(sum(rs)) if rs else None,
-             "profitFactor": _r2(sum(wins) / abs(sum(losses))) if wins and losses and sum(losses) else None,
-             "avgDays": _r2(sum(days) / len(days)) if days else None}
-    return {"stats": stats, "mistakes": mistakes}
+    def stats_of(cs):
+        rs = [_num(c.get("r")) for c in cs if _num(c.get("r")) is not None]
+        wins, losses = [r for r in rs if r > 0], [r for r in rs if r <= 0]
+        days = [c["days"] for c in cs if isinstance(c.get("days"), int)]
+        return {"trades": len(cs), "wins": len(wins), "losses": len(losses),
+                "winRate": _r2(len(wins) / len(rs) * 100) if rs else None,
+                "avgWinR": _r2(sum(wins) / len(wins)) if wins else None,
+                "avgLossR": _r2(sum(losses) / len(losses)) if losses else None,
+                "expectancyR": _r2(sum(rs) / len(rs)) if rs else None,
+                "totalR": _r2(sum(rs)) if rs else None,
+                "profitFactor": _r2(sum(wins) / abs(sum(losses))) if wins and losses and sum(losses) else None,
+                "avgDays": _r2(sum(days) / len(days)) if days else None}
+    by = {k: stats_of([c for c in closed if c.get("strategy") == k]) for k in sorted({c.get("strategy") for c in closed})}
+    return {"stats": stats_of(closed), "byStrategy": by, "mistakes": mistakes}
 
 
 def rsi_series(closes: list[float], n: int = 14) -> list[float | None]:
