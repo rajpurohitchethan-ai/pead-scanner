@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.65"
+ENGINE_VERSION = "2.9.66"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -8717,6 +8717,13 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
                                                              by_sym.get(str(it.get("symbol") or "").upper()) or [])
     except Exception as exc:
         print(f"Smart money skipped: {type(exc).__name__}: {exc}")
+    try:                                                              # 2.9.66 concall verdicts
+        notes = (_eod_read(MASTER_DIR / "concall_notes.json") or {}).get("symbols") or {}
+        for it in items:
+            it["plus"]["concallVerdict"] = pead_plus.concall_verdict(notes.get(str(it.get("symbol") or "").upper()),
+                                                                      it.get("resultDate"))
+    except Exception as exc:
+        print(f"Concall notes skipped: {type(exc).__name__}: {exc}")
     try:                                                              # 2.9.63
         pead_plus.rs_ratings(items)
         sector_heat = pead_plus.sector_heat(items)

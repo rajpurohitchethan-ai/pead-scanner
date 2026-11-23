@@ -503,3 +503,7 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 
 2.9.65 (owner: "go for all", 23 Nov 2026) - pre-results watchlist
 - Upcoming watchlist tab opens with "Strong stocks reporting this week": reports within 7 days, liquid, RS 80+, within 10% of the 52-week high, not Stage 4; sorted by RS. A 1-month run-up over 20% is flagged (the run-up scorecard shows weaker drift). Page only; no buy before the result. Late in the season (23 Nov) no stock qualifies: expected.
+
+2.9.66 (owner: "go for all", 23 Nov 2026) - concall verdict
+- master/concall_notes.json {"symbols": {SYM: {date, verdict POSITIVE|MIXED|NEGATIVE, summary, points[<=5], guidance, source URL}}}, written by the "PEAD radar evening check" scheduled task after reading the call's transcript or outcome filing. Never guessed: no transcript read, no note.
+- pead_plus.concall_verdict keeps a note only when dated on or after this quarter's result. plus.concallVerdict; card tag and note. Display only. Tests: ConcallVerdictTests.

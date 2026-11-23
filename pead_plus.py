@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.65"
+MODULE_VERSION = "2.9.66"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2749,6 +2749,27 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     wins = [r for r in rs if r > 0]
     return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
             "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.66 Concall verdict (owner: "go for all", 23 Nov 2026): the evening check
+# reads the call (transcript or outcome filing) and writes
+# master/concall_notes.json {"symbols": {SYM: {date, verdict, summary, points,
+# guidance, source}}}. Display only: no grade or plan rule uses it.
+# ---------------------------------------------------------------------------
+CONCALL_VERDICTS = ("POSITIVE", "MIXED", "NEGATIVE")
+
+
+def concall_verdict(note: Any, result_date: Any) -> dict[str, Any] | None:
+    """A note counts only for this quarter's call: dated on or after the result."""
+    if not isinstance(note, dict) or note.get("verdict") not in CONCALL_VERDICTS:
+        return None
+    d, rd = str(note.get("date") or "")[:10], str(result_date or "")[:10]
+    if not d or (rd and d < rd):
+        return None
+    return {"date": d, "verdict": note["verdict"], "summary": note.get("summary"),
+            "points": [str(x) for x in (note.get("points") or [])][:5], "guidance": note.get("guidance"),
+            "source": note.get("source")}
 
 
 # ---------------------------------------------------------------------------

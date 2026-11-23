@@ -4292,3 +4292,16 @@ class SmartMoneyTests(unittest.TestCase):
         rows = [{"BD_SYMBOL": "AAA", "BD_DT_DATE": "17-Nov-2026", "BD_CLIENT_NAME": "X", "BD_BUY_SELL": "BUY", "BD_QTY_TRD": 5, "BD_TP_WATP": 1}]
         self.assertEqual(len(pead_plus.parse_deal_rows(rows, "BULK", None)), 1)
         self.assertEqual(pead_plus.parse_deal_rows(rows, "BULK", {"BBB"}), [])
+
+
+class ConcallVerdictTests(unittest.TestCase):
+    """2.9.66 (23 Nov 2026): concall verdicts from master/concall_notes.json."""
+
+    def test_this_quarter_only(self):
+        import pead_plus
+        note = {"date": "2026-11-19", "verdict": "POSITIVE", "summary": "Guided 20% growth", "points": ["a"] * 8}
+        v = pead_plus.concall_verdict(note, "2026-11-14")
+        self.assertEqual((v["verdict"], len(v["points"])), ("POSITIVE", 5))
+        self.assertIsNone(pead_plus.concall_verdict(note, "2026-11-20"))          # an older call
+        self.assertIsNone(pead_plus.concall_verdict({**note, "verdict": "GREAT"}, "2026-11-14"))
+        self.assertIsNone(pead_plus.concall_verdict(None, "2026-11-14"))

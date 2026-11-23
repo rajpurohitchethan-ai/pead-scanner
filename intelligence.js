@@ -322,6 +322,13 @@
     const deals = (sm.deals || []).map(d => `${d.kind === 'BLOCK' ? 'Block' : 'Bulk'} ${String(d.side || '').toLowerCase().startsWith('b') ? 'buy' : 'sell'} ${num(d.qty) !== null ? num(d.qty).toLocaleString('en-IN') : ''}${num(d.price) !== null ? ' @ ' + inr(d.price) : ''}${d.client ? ' by ' + esc(d.client) : ''} (${dt(d.date)})`);
     return `<p class="meta smart">Smart money: ${bits.join(' · ') || 'no delivery data yet'}${deals.length ? `<br>${deals.join('<br>')}` : ''}</p>`;
   }
+  // 2.9.66: what the concall said (read by Claude in the evening check).
+  function verdictLine(v) {
+    if (!v) return '';
+    const tone = { POSITIVE: 'good', MIXED: 'warn', NEGATIVE: 'bad' }[v.verdict] || '';
+    return `<div class="tnote"><div class="tnote-h"><span class="tag ${tone}">Concall ${esc(v.verdict.toLowerCase())}</span><span class="meta">${dt(v.date)}${v.source ? ` · <a href="${esc(v.source)}" target="_blank" rel="noopener">source</a>` : ''}</span></div>
+      ${v.summary ? `<p>${esc(v.summary)}</p>` : ''}${(v.points || []).length ? `<ul class="wl">${v.points.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${v.guidance ? `<p class="meta">Guidance: ${esc(v.guidance)}</p>` : ''}</div>`;
+  }
   function card(it) {
     const p = P(it), x1 = px(it), plan = p.plan || {};
     const slimNote = p.slim ? '<p class="meta">Below the liquidity test: chart and checklists are left out of the page to keep it light on phones.</p>' : '';
@@ -337,6 +344,7 @@
     const g = p.growth && GROWTH[p.growth.label];
     if (g) tags.push(`<span class="tag ${g[1]}" title="YoY growth vs last quarter: revenue ${p.growth.revenueDeltaPp ?? '—'} pp, profit ${p.growth.profitDeltaPp ?? '—'} pp">${g[0]}</span>`);
     if (num(p.rsRating) !== null) tags.push(`<span class="tag ${p.rsRating >= 80 ? 'good' : p.rsRating < 40 ? 'bad' : ''}" title="RS rating 1-99: 3-month move (counted twice) plus 6-month move, ranked against every stock">RS ${p.rsRating}</span>`);
+    if (p.concallVerdict) tags.push(`<span class="tag ${{ POSITIVE: 'good', MIXED: 'warn', NEGATIVE: 'bad' }[p.concallVerdict.verdict] || ''}">Concall ${esc(p.concallVerdict.verdict.toLowerCase())}</span>`);
     if (p.smartMoney?.label) tags.push(`<span class="tag ${p.smartMoney.label === 'BUYING' ? 'good' : 'bad'}">Smart money ${p.smartMoney.label === 'BUYING' ? 'buying' : 'selling'}</span>`);
     if (x1.hv_label) tags.push(`<span class="tag good" title="Highest volume on the result session">${esc(x1.hv_label)}</span>`);
     if (liq.pass === false) tags.push(`<span class="tag bad">${esc(liq.label)}</span>`);
@@ -367,6 +375,7 @@
       <div class="tags">${(P(it).themes || []).map(t => `<span class="tag theme">${esc(t)}</span>`).join('')}${tags.join('')}</div>
       <div class="meta">Result ${dt(it.resultDate)}${it.reactionSession ? `, reaction ${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? dt(it.reactionWindowStart) + '–' : ''}${dt(it.reactionSession)}` : ''}${it.reactionWindowStart && it.reactionWindowStart !== it.reactionSession ? ' (filed in market hours)' : ''}${num(pc.lastClose) !== null ? `, ${p.live && num(p.live.price) !== null ? 'prev close' : 'last close'} ${inr(pc.lastClose)}${oldClose(it)}` : ''}</div>
       ${concallLine(p.concall)}
+      ${verdictLine(p.concallVerdict)}
       ${smartLine(p.smartMoney)}
       ${liveLine(p.live, pc.lastClose)}
       ${chart(it)}
@@ -915,7 +924,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.65';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.66';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
