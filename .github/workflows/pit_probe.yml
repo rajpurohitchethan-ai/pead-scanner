@@ -1,0 +1,41 @@
+name: PIT probe
+# Temporary: shows the shape of NSE corporates-pit rows (public data) so the insider parser can be fixed.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            pead_v2.py
+            pead_plus.py
+            requirements.txt
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet -r requirements.txt || python -m pip install --quiet 'httpx[http2]' requests pandas nse
+      - name: Probe
+        run: |
+          python - <<'PY'
+          import json, collections, pead_v2, pead_plus
+          ctx = pead_v2.RunContext() if hasattr(pead_v2, 'RunContext') else None
+          with pead_v2.NSEAdapter(ctx) as nse:
+              for s in ("RELIANCE", "DCI", "RAMCOIND", "INFY"):
+                  try:
+                      p = nse.insider_trades(s)
+                  except Exception as e:
+                      print(s, "ERR", type(e).__name__, e); continue
+                  rows = pead_v2._deal_rows(p)
+                  print("==", s, type(p).__name__, list(p.keys()) if isinstance(p, dict) else None, "rows", len(rows),
+                        "parsed", len(pead_plus.parse_insider_rows(rows)))
+                  for r in rows[:2]:
+                      print(json.dumps(r)[:1500])
+                  for k in ("personCategory", "acqMode", "tdpTransactionType", "transactionType", "secType"):
+                      print(" ", k, collections.Counter(str(r.get(k)) for r in rows).most_common(8))
+          PY
