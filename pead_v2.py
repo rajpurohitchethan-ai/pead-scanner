@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.56"
+ENGINE_VERSION = "2.9.57"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -6527,6 +6527,83 @@ def previous_quarter_reaction(store: EventStore, event: dict[str, Any]) -> date 
     return None
 
 
+# 2.9.57 (17-23 Nov 2026): the repository grew to 7.8 GB. Every run fetched
+# ~46 full one-year price histories again and kept every copy (raw/nse_price +
+# raw/bse_price: 23,971 files, 1.46 GB in the tree, ~5 MB a run on disk), though
+# the daily end-of-day files (2.9.51) already keep every stored history current.
+EOD_REFETCH_DAYS = float(os.getenv("EOD_REFETCH_DAYS", "7"))   # a full history at least this often
+FRESH_RESULT_DAYS = 3        # results this recent keep the hourly refresh (reaction day, early drift)
+
+
+def eod_keeps_current(event: dict[str, Any], *, released: bool, result_date: date | None, age_hours: float) -> bool:
+    """True when the daily files already carry this stock's history to the
+    newest stored session, its full history is under EOD_REFETCH_DAYS old and its
+    result is not in the first FRESH_RESULT_DAYS: no new full download is needed."""
+    if age_hours >= EOD_REFETCH_DAYS * 24:
+        return False
+    if released and result_date is not None and 0 <= (now_ist().date() - result_date).days <= FRESH_RESULT_DAYS:
+        return False
+    if close_only_range(event):
+        return False
+    days = load_eod()
+    if not days:
+        return False
+    last = str(((event.get("plus") or {}).get("price") or {}).get("last_session") or "")[:10]
+    return bool(last) and last >= days[-1]["date"].isoformat()
+
+
+def prune_price_raw(store: EventStore, raw_root: Path = RAW_DIR) -> dict[str, int]:
+    """Delete superseded saved price histories. Kept: every file a stored value
+    points at (rawRef: the trace from a figure back to its source) and, per
+    stock folder and source, the history with the latest session (the one
+    rebuild_plus_from_raw uses). Each history covers ~420 days, so an older copy
+    adds nothing."""
+    refs: set[str] = set()
+    for e in store.all():
+        for fv in (e.get("fields") or {}).values():
+            if isinstance(fv, dict):
+                if fv.get("rawRef"):
+                    refs.add(str(fv["rawRef"]))
+                for h in fv.get("history") or []:
+                    if isinstance(h, dict) and h.get("rawRef"):
+                        refs.add(str(h["rawRef"]))
+        for v in (e.get("fetch") or {}).values():
+            if isinstance(v, dict) and v.get("rawRef"):
+                refs.add(str(v["rawRef"]))
+    out = {"deleted": 0, "kept": 0, "bytes": 0}
+    for base, kind in ((raw_root / "nse_price", "NSE"), (raw_root / "bse_price", "BSE")):
+        if not base.exists():
+            continue
+        for folder in base.iterdir():
+            files = sorted(folder.glob("*.json")) if folder.is_dir() else []
+            loose = [f for f in files
+                     if (str(f.relative_to(raw_root.parent)) if raw_root.parent in f.parents else str(f)) not in refs]
+            if len(loose) <= 1:                    # nothing that could be superseded: no need to read the files
+                out["kept"] += len(files)
+                continue
+            best, best_key = None, None
+            for f in files:
+                try:
+                    payload = json.loads(f.read_text(encoding="utf-8"))
+                    fr = nse_history_to_frame(payload) if kind == "NSE" else bse_history_to_frame(payload)
+                except Exception:
+                    continue
+                if fr is None or fr.empty:
+                    continue
+                key = (fr["Date"].iloc[-1], len(fr), f.name)
+                if best_key is None or key > best_key:
+                    best, best_key = f, key
+            for f in files:
+                rel = str(f.relative_to(raw_root.parent)) if raw_root.parent in f.parents else str(f)
+                if f == best or rel in refs or best is None:
+                    out["kept"] += 1
+                    continue
+                out["bytes"] += f.stat().st_size
+                f.unlink()
+                out["deleted"] += 1
+    return out
+
+
 def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -> None:
     # Entry/reaction tracking needs fresher prices than valuation/fundamental
     # enrichment. Recently released results are refreshed at most once per hour;
@@ -6546,6 +6623,8 @@ def enrich_price(event: dict[str, Any], store: EventStore, ctx: SourceContext) -
             recent_released = 0 <= result_age <= DASHBOARD_RESULT_DAYS
         threshold = RECENT_RESULT_PRICE_REFRESH_HOURS if recent_released else 4
         if age_hours < threshold:
+            return
+        if eod_keeps_current(event, released=released, result_date=result_date, age_hours=age_hours):
             return
     reaction_date, timing = reaction_session(filing_ts, result_date)
     if reaction_date:
@@ -8966,6 +9045,10 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
         print(f"End-of-day replay skipped: {type(exc).__name__}: {exc}")
     replayed = replay_plus(store)
     print(f"Analytics replayed from saved price files for {replayed} events")
+    try:                                                   # 2.9.57: keep the repository from growing
+        print("Superseded price histories removed:", prune_price_raw(store))
+    except Exception as exc:
+        print(f"Price history pruning skipped: {type(exc).__name__}: {exc}")
     print(f"Reactions measured from saved prices: {replay_missing_reactions(store)}")   # 2.9.43
     score_stats = score_all(store)
     print("Scoring:", score_stats)

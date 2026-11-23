@@ -50,7 +50,7 @@ jobs:
           # behind another one otherwise starts from the old event store and
           # loses its work (or overwrites the newer data) when it pushes.
           ref: ${{ github.ref_name }}
-          fetch-depth: 0
+          fetch-depth: 1    # 2.9.57: the full history is 7.8 GB; the engine needs only the tip
 
       - name: Set up Python
         uses: actions/setup-python@v5

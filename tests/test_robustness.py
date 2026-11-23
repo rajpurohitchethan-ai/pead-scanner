@@ -111,7 +111,7 @@ class _StoreCase(unittest.TestCase):
         return e["eventId"]
 
 
-from datetime import date  # noqa: E402
+from datetime import date, timedelta  # noqa: E402
 
 
 class InferredPeriodTests(_StoreCase):
@@ -3954,3 +3954,54 @@ class ExitSignalRememberedTests(unittest.TestCase):
         import pead_plus as pp
         v, st = pp.position_view(self.POS, self.item(830.0, "2026-10-15"), None, date(2026, 10, 16))
         self.assertNotIn("exitHit", st)
+
+
+class RepositoryGrowthTests(unittest.TestCase):
+    """2.9.57 (23 Nov 2026): the repository reached 7.8 GB. Every run fetched
+    ~46 one-year price histories again and kept every copy, though the daily
+    end-of-day files already keep stored histories current."""
+
+    def test_prune_keeps_the_newest_and_referenced_histories(self):
+        import pandas as pd
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "raw"
+            folder = root / "nse_price" / "INE000X01011_2026-09-30"
+            folder.mkdir(parents=True)
+            def hist(last_day):
+                days = pd.bdate_range(end=last_day, periods=30)
+                return [{"chSymbol": "ABC", "chSeries": "EQ", "mtimestamp": d.strftime("%d-%b-%Y"), "chOpeningPrice": 10,
+                         "chTradeHighPrice": 11, "chTradeLowPrice": 9, "chClosingPrice": 10, "chTotTradedQty": 100}
+                        for d in days]          # saved NSE histories are plain lists of day records
+            for name, day in (("equity_history-a.json", "2026-11-10"), ("equity_history-b.json", "2026-11-20"),
+                              ("equity_history-c.json", "2026-11-05"), ("equity_history-d.json", "2026-11-12")):
+                (folder / name).write_text(json.dumps(hist(day)))
+            frame = p.nse_history_to_frame(json.loads((folder / "equity_history-b.json").read_text()))
+            self.assertFalse(frame is None or frame.empty, "test payload must parse")
+            store = p.EventStore(Path(td) / "events")
+            e = store.ensure_event(security={"symbol": "ABC", "nseSymbol": "ABC"}, period_end=date(2026, 9, 30))
+            ref = str(Path("raw") / "nse_price" / "INE000X01011_2026-09-30" / "equity_history-c.json")
+            store.merge_field(e, "result_day_low", 9.0, source="NSE_PRICE", raw_ref=ref)
+            store.save(e)
+            out = p.prune_price_raw(store, raw_root=root)
+            left = sorted(f.name for f in folder.glob("*.json"))
+            self.assertEqual(left, ["equity_history-b.json", "equity_history-c.json"])   # newest + the one a value points at
+            self.assertEqual(out["deleted"], 2)
+
+    def test_no_refetch_while_the_daily_files_keep_it_current(self):
+        from unittest import mock
+        day = {"date": p.now_ist().date() - timedelta(days=1), "nse": {}, "bse": {}}
+        e = {"plus": {"price": {"last_session": day["date"].isoformat()}}, "fields": {}}
+        old_result = p.now_ist().date() - timedelta(days=20)
+        with mock.patch.object(p, "load_eod", return_value=[day]):
+            self.assertTrue(p.eod_keeps_current(e, released=True, result_date=old_result, age_hours=30))
+            self.assertFalse(p.eod_keeps_current(e, released=True, result_date=old_result, age_hours=24 * 8))     # weekly full refresh
+            self.assertFalse(p.eod_keeps_current(e, released=True, result_date=p.now_ist().date(), age_hours=30))  # fresh result: hourly
+            stale = {"plus": {"price": {"last_session": (day["date"] - timedelta(days=3)).isoformat()}}, "fields": {}}
+            self.assertFalse(p.eod_keeps_current(stale, released=True, result_date=old_result, age_hours=30))
+        with mock.patch.object(p, "load_eod", return_value=[]):
+            self.assertFalse(p.eod_keeps_current(e, released=True, result_date=old_result, age_hours=30))
+
+    def test_engine_checkout_is_shallow(self):
+        wf = (Path(__file__).resolve().parents[1] / ".github/workflows/scan.yml").read_text(encoding="utf-8")
+        checkout = wf[wf.index("actions/checkout@v4"):wf.index("Set up Python")]
+        self.assertIn("fetch-depth: 1", checkout)
