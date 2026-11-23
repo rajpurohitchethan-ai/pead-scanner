@@ -28,7 +28,8 @@ jobs:
           with pead_v2.NSEAdapter(ctx) as nse:
               cl = nse.client
               tr = getattr(cl, "_transport", None)
-              get = (lambda u: tr.request(u)) if tr is not None else (lambda u: cl._req(u))
+              ss = getattr(tr, "_session", None)
+              get = (lambda u: ss.get(u, follow_redirects=True)) if ss is not None else (lambda u: tr.request(u))
               seen = set()
               for page in ("https://www.nseindia.com/companies-listing/corporate-filings-insider-trading",):
                   try:
