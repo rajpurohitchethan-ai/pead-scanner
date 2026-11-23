@@ -586,28 +586,55 @@
   // symbol, date, price only); quantity is kept in this browser only.
   const POS = { HOLD: ['Hold', 'go'], TRAILING: ['Trailing (past +1R)', 'go'], BELOW_ENTRY: ['Below entry', 'watch'],
     SELL_HALF: ['Sell half: closed below the 10 EMA', 'warn'], EXIT_SWING: ['Exit', 'bad'], EXIT: ['Exit: closed below the stop', 'bad'], NO_DATA: ['Waiting for data', 'pending'] };
+  // 2.9.68: one line per trade with what the rule says right now (live price; the rule acts on the close).
+  function tradeAction(p) {
+    const last = num(p.last), stop = num(p.swingStop) ?? num(p.initialStop), half = num(p.halfStop), rest = num(p.restStop), oneR = num(p.oneR);
+    if (last === null) return ['No price', '', '—'];
+    if (p.status === 'EXIT') return ['Exit', 'bad', `closed below ${inr(rest ?? stop)}`];
+    if (!p.oneRHit) {
+      if (stop !== null && last < stop) return ['Exit if it closes here', 'bad', `stop ${inr(stop)}`];
+      if (stop !== null && last < stop * 1.015) return ['Near stop', 'warn', `stop ${inr(stop)}`];
+      if (oneR !== null && last >= oneR) return ['+1R: stop to cost on close', 'good', `cost ${inr(p.entryPrice)}`];
+      return ['Hold', '', `stop ${inr(stop)}, +1R ${inr(oneR)}`];
+    }
+    if (rest !== null && last < rest) return ['Sell rest if it closes here', 'bad', `20 EMA / cost ${inr(rest)}`];
+    const soldPart = (p.partialExits || []).length > 0;
+    if (soldPart) return ['Half sold; hold rest', 'good', `rest below ${inr(rest)}`];
+    if (half !== null && last < half) return [p.halfHit ? 'Half due; hold rest' : 'Sell half if it closes here', p.halfHit ? 'warn' : 'bad', `rest below ${inr(rest)}`];
+    if (half !== null && last < half * 1.01) return ['Near 10 EMA', 'warn', `half below ${inr(half)}`];
+    return ['Hold', 'good', `half below ${inr(half)}`];
+  }
+  function blotter(list) {
+    const order = { bad: 0, warn: 1, good: 2, '': 3 };
+    const rows = list.map(p => ({ p, a: tradeAction(p) })).sort((x, y) => order[x.a[1]] - order[y.a[1]]);
+    return `<section class="blotter" aria-label="What each trade needs now"><div class="bl-h"><span>Trade</span><span class="r">Price</span><span>Rule now</span></div>
+      ${rows.map(({ p, a }) => `<a class="bl-row" href="#t-${esc(p.symbol)}"><span class="bl-sym">${esc(p.symbol)}<small>${p.live ? 'live' : 'close'} ${p.at ? new Date(p.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}</small></span>
+        <span class="r n">${inr(p.last)}<small class="${cls(p.pnlPct)}">${pct(p.pnlPct)}</small></span>
+        <span class="bl-act"><b class="act ${a[1]}">${esc(a[0])}</b><small>${a[2]}</small></span></a>`).join('')}
+      <p class="meta">Live prices; your rule acts on the daily close. Tap a trade for its full card.</p></section>`;
+  }
   function viewTrades() {
     const list = S.data.positions || [];
     if (!list.length) return journalBlock() + closedBlock() + `<div class="empty">No open trades. Tell Claude when you buy, and the trade is tracked here against the screener's plan.</div>`;
     return `<p class="note">Your open trades, checked every hour against the screener's plan: stop 1% under the result-day low until a close at +1R, then the stop moves to cost. After that, half is sold on a close below the 10 EMA and the rest on a close below the 20 EMA. Everything is judged on daily closing prices. Quantity stays on this device only.</p>
-      ${tradesRisk(list)}${heatBlock(list)}<div class="grid">${list.map(p => {
+      ${blotter(list)}${tradesRisk(list)}${heatBlock(list)}<div class="grid">${list.map(p => {
         const st = POS[p.status] || [p.status, ''];
         let qty = null; try { qty = num(localStorage.getItem('qty:' + p.symbol)); } catch (e) { /* storage blocked */ }
         const money = v => v === null ? '—' : `${v >= 0 ? '+' : '−'}₹${Math.abs(Math.round(v)).toLocaleString('en-IN')}`;
         const pnl = qty && num(p.last) !== null ? (p.last - p.entryPrice) * qty : null;
         const atRisk = qty && num(p.swingStop) !== null ? (p.swingStop - p.entryPrice) * qty : null;
         const lv = (l, v, k = '') => `<div class="lv ${k}"><span>${l}</span><b>${v}</b></div>`;
-        return `<article class="card"><div class="head"><div><h2 class="sym">${esc(p.symbol)}</h2><div class="co">Bought ${dt(p.entryDate)} at ${inr(p.entryPrice)}</div></div>
+        return `<article class="card" id="t-${esc(p.symbol)}"><div class="head"><div><h2 class="sym">${esc(p.symbol)}</h2><div class="co">Bought ${dt(p.entryDate)} at ${inr(p.entryPrice)}</div></div>
           <div class="score"><div class="v ${cls(p.pnlPct)}">${pct(p.pnlPct)}</div><div class="l">${num(p.rNow) !== null ? num(p.rNow).toFixed(2) + 'R' : ''}</div></div></div>
           <div class="tags"><span class="tag ${st[1]}">${esc(st[0])}</span>${p.timeStop ? `<span class="tag watch" title="Advisory: ${p.sessionsHeld} sessions without reaching +1R. Not a sell signal.">Time stop: ${p.sessionsHeld} sessions</span>` : (num(p.sessionsHeld) !== null ? `<span class="tag">${p.sessionsHeld} sessions held</span>` : '')}</div>
           <div class="meta">${priceState(!!p.live, p.at)} ${inr(p.last)}${p.live && num(p.lastClose) !== null ? ` · prev close ${inr(p.lastClose)} · <span class="${cls(dayPct(p.last, p.lastClose))}">day ${pct(dayPct(p.last, p.lastClose))}</span>` : ''}</div>
-          <p class="plan-why">${esc(p.note || '')}</p>
+          <p class="plan-why">${esc(p.note || '')}</p>${(p.partialExits || []).map(x => `<p class="note"><b>Sold ${num(x.fraction) !== null ? Math.round(num(x.fraction) * 100) + '%' : 'part'}</b> on ${dt(x.date)} at ${inr(x.price)}.</p>`).join('')}
           ${rBar(p)}<div class="levels">${lv(p.oneRHit ? 'Sell half below (10 EMA)' : 'Stop now', inr(p.oneRHit ? p.halfStop : p.swingStop), 's')}${lv(p.oneRHit ? 'Sell rest below (20 EMA / cost)' : 'After +1R: stop at', inr(p.oneRHit ? p.restStop : p.entryPrice), 's')}
             ${lv(p.oneRHit ? '+1R reached' : '+1R (stop to cost)', inr(p.oneR), 'e')}${lv('+2R', inr(p.twoR))}</div>
           <p class="qty">Risk at entry ${num(p.riskPct) !== null ? num(p.riskPct).toFixed(1) + '%' : '—'} (${inr(p.riskPerShare)} a share). Result-day low ${inr(p.resultDayLow)}. 10 EMA ${inr(p.ema10)}, 20 EMA ${inr(p.ema20)}.</p>${stageLine(p.stage)}
           <div class="sizing"><label>Quantity <input type="number" min="0" step="1" inputmode="numeric" class="pos-qty" data-sym="${esc(p.symbol)}" value="${qty ?? ''}"></label>
             ${qty ? `<span class="meta">P&amp;L ${money(pnl)} · at the stop ${money(atRisk)}</span>` : '<span class="meta">enter quantity for rupee P&amp;L</span>'}</div>
-          ${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${p.rsSector ? rsLine(null, p.rsSector) : ''}${p.sectorFavour && p.sectorFavour.status !== 'NOT_ENOUGH' ? `<p class="meta"><b>Sector:</b> ${esc(p.sectorFavour.sector)} ${favTag(p.sectorFavour)} ${esc(p.sectorFavour.note)}</p>` : ''}${handsStrip(p.hands)}${rsiBlock(p.watch && p.watch.rsi)}${noteBlock(p.notes)}${watchBlock(p.watch)}</article>`;
+          ${noteBlock(p.notes)}<details class="more"><summary>Setup, strength and filings</summary>${p.setup ? `<p class="note">${esc(p.setup)}</p>` : ''}${p.rsSector ? rsLine(null, p.rsSector) : ''}${p.sectorFavour && p.sectorFavour.status !== 'NOT_ENOUGH' ? `<p class="meta"><b>Sector:</b> ${esc(p.sectorFavour.sector)} ${favTag(p.sectorFavour)} ${esc(p.sectorFavour.note)}</p>` : ''}${handsStrip(p.hands)}${rsiBlock(p.watch && p.watch.rsi)}${watchBlock(p.watch)}</details></article>`;
       }).join('')}</div>
       <details class="td qtx"><summary>Move quantities to another device</summary>
         <p class="meta">Quantities stay in this browser only (the repo is public). Copy them here and paste them on your other phone or laptop.</p>
@@ -925,7 +952,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.66';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.68';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -946,7 +973,7 @@
   }
   function header() {
     const d = S.data, r = d.regime || {}, c = d.counts || {};
-    $('sub').textContent = `${d.liveQuarter || 'Live quarter'} results season, updated ${d.generatedAt ? new Date(d.generatedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}`;
+    $('sub').textContent = `${d.liveQuarter || 'Live quarter'} season, updated ${d.generatedAt ? new Date(d.generatedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}`;
     const tone = { 'RISK-ON': 'on', MIXED: 'mixed', 'RISK-OFF': 'off' }[r.label] || '';
     const br = r.breadth || {}, ad = r.advanceDecline, fl = r.flows;
     const crs = v => { const n = num(v); return n === null ? '—' : `${n >= 0 ? '+' : '−'}₹${Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`; };
@@ -979,6 +1006,17 @@
     box.innerHTML = keys.map(k => `<button type="button" class="chip" data-bucket="${k}" aria-pressed="${S.bucket === k}">${labels[k] || k}${k !== 'ALL' ? ` <span class="n">${counts[k]}</span>` : ''}</button>`).join('');
   }
 
+  // 2.9.68: a long explanation at the top of a tab folds into "How to read this" (one tap to open).
+  function foldNotes(root) {
+    const p = [...root.children].slice(0, 4).find(el => el.matches('p.note:not(.warn-t)'));
+    if (!p || p.textContent.length < 140) return;
+    const d = document.createElement('details');
+    d.className = 'about';
+    d.innerHTML = '<summary>How to read this</summary>';
+    p.replaceWith(d);
+    p.className = '';
+    d.appendChild(p);
+  }
   function render() {
     if (!S.data) return;
     header(); chips();
@@ -999,6 +1037,7 @@
     const fresh = S.lastTab !== S.tab; S.lastTab = S.tab;
     $('view').classList.toggle('enter', fresh);
     $('view').innerHTML = { screen: viewScreen, setups: viewSetups, radar: viewRadar, trades: viewTrades, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
+    foldNotes($('view'));
   }
 
   // ---------- events ----------

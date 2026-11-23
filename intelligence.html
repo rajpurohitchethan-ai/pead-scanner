@@ -6,7 +6,7 @@
 <title>PEAD Radar</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
 <style>
 :root{
   --paper:#EEF1F5; --sheet:#FFFFFF; --sheet-2:#F5F7FA; --line:#D6DCE5; --line-2:#E6EAF0;
@@ -244,26 +244,134 @@ td.r,th.r{text-align:right}
 .scr-detail-in{position:sticky;left:0;width:min(100vw - 34px,1086px);padding:10px 10px 14px;animation:detail-in .22s ease-out}
 @media (max-width:640px){.scr-chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-right:-16px;padding-right:16px}.scr-chips::-webkit-scrollbar{display:none}.scr-chip{white-space:nowrap;flex:0 0 auto}}
 .scr-more{display:block;width:100%;margin-top:8px;border:1px solid var(--line);background:var(--sheet);border-radius:10px;padding:9px;cursor:pointer}
+
+/* ===== 2.9.68 design pass: one family (Archivo), condensed tabular figures, quiet chrome ===== */
+:root{
+  --paper:#EFF2F1; --sheet:#FFFFFF; --sheet-2:#F6F8F7; --line:#D5DCDA; --line-2:#E5EAE8;
+  --ink:#102033; --ink-2:#4B5A6A; --ink-3:#7B8794;
+  --gain:#0A7A52; --gain-bg:#E1F2EA; --loss:#B8322A; --loss-bg:#FAE8E6;
+  --act:#1F4E8C; --act-bg:#E3ECF7; --watch:#9A6200; --watch-bg:#FAF0DC;
+  --grid:#E2E7E5; --price:#102033; --ema:#8D99A3;
+  --num:"Archivo", "Arial Narrow", sans-serif; --text:"Archivo", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#0C1520; --sheet:#121E2B; --sheet-2:#172534; --line:#26384A; --line-2:#1E2E3E;
+  --ink:#E6EDF3; --ink-2:#A9B6C2; --ink-3:#7C8B99;
+  --gain:#39C08C; --gain-bg:#103226; --loss:#EF7B6E; --loss-bg:#3A1C1A;
+  --act:#8DB4F0; --act-bg:#1B2E4A; --watch:#E2B055; --watch-bg:#382A12; --grid:#1E2E3E; --price:#E6EDF3; --ema:#6E7E8C; } }
+:root[data-theme="dark"]{
+  --paper:#0C1520; --sheet:#121E2B; --sheet-2:#172534; --line:#26384A; --line-2:#1E2E3E;
+  --ink:#E6EDF3; --ink-2:#A9B6C2; --ink-3:#7C8B99;
+  --gain:#39C08C; --gain-bg:#103226; --loss:#EF7B6E; --loss-bg:#3A1C1A;
+  --act:#8DB4F0; --act-bg:#1B2E4A; --watch:#E2B055; --watch-bg:#382A12; --grid:#1E2E3E; --price:#E6EDF3; --ema:#6E7E8C; }
+body{font:15px/1.5 var(--text);font-variation-settings:"wdth" 100;background:var(--paper)}
+.n,.score .v,.lv b,.fact .big,.big,td.n,.r.n,.tab .c,.jtiles b{font-family:var(--num);font-variation-settings:"wdth" 78;font-variant-numeric:tabular-nums;letter-spacing:0}
+.wrap{padding:0 16px 64px}
+/* app bar */
+.appbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 -16px;padding:10px 16px;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.brand h1{margin:0;font-size:21px;font-weight:800;font-variation-settings:"wdth" 118;letter-spacing:-.01em;line-height:1.1}
+#sub{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.theme-btn{margin:0;flex:none;border:1px solid var(--line);background:var(--sheet);border-radius:8px;padding:5px 10px;font-size:12.5px;color:var(--ink-2)}
+/* market strip */
+.mkt{margin:2px 0 10px;border:1px solid var(--line);background:var(--sheet);border-radius:10px}
+.mkt summary{list-style:none;cursor:pointer;padding:9px 12px;font-size:13.5px;color:var(--ink-2);display:flex;gap:8px;align-items:center}
+.mkt summary::-webkit-details-marker{display:none}
+.mkt summary::after{content:"Details";margin-left:auto;flex:none;font-size:12px;color:var(--act);font-weight:600}
+.mkt[open] summary::after{content:"Hide"}
+.mkt summary b{color:var(--ink)}
+.mkt .internals{display:flex;flex-direction:column;gap:4px;margin:0;padding:0 12px 10px;font-size:12.5px;color:var(--ink-2);opacity:1}
+.mkt #regime{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.mkt[open] #regime{white-space:normal}
+.season{margin:0 0 4px;font-size:14px;color:var(--ink-2)}
+.install-bad{background:var(--watch-bg);color:var(--ink);border-left:3px solid var(--watch);border-radius:8px;padding:8px 12px;margin:0 0 8px;font-size:13px}
+.install-bad b{color:var(--watch)}
+.install-wait{border-radius:8px;padding:8px 12px;font-size:13px}
+/* tabs: underline bar, sticky under the app bar */
+.tabs{position:sticky;top:60px;z-index:19;gap:0;margin:10px -16px 14px;padding:0 10px;background:var(--paper);border-bottom:1px solid var(--line)}
+.tab{border-radius:0;padding:11px 10px 10px;font-weight:600;font-size:14px;color:var(--ink-3);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{background:none;color:var(--ink);border-bottom-color:var(--ink)}
+.tab .c{font-weight:500;font-size:12.5px;opacity:1;color:var(--ink-3);margin-left:4px}
+/* controls */
+.controls input[type=search],.controls select,.toggle{border-radius:8px;padding:8px 11px;font-size:14px}
+.chip,.scr-chip{border-radius:8px}
+.scr-chip[aria-pressed="true"]{background:var(--act);border-color:var(--act);color:#fff}
+/* how-to-read disclosure (long notes fold away) */
+details.about{margin:0 0 12px;font-size:13px;color:var(--ink-2)}
+details.about summary{cursor:pointer;color:var(--act);font-weight:600;list-style:none;display:inline-flex;gap:6px;align-items:center}
+details.about summary::-webkit-details-marker{display:none}
+details.about summary::before{content:"";width:14px;height:14px;border-radius:50%;border:1.5px solid currentColor;background:radial-gradient(circle at 50% 30%,currentColor 1.4px,transparent 1.6px),linear-gradient(currentColor,currentColor) 50% 70%/1.5px 5px no-repeat;flex:none}
+details.about p{margin:6px 0 0;max-width:72ch;line-height:1.5}
+/* copy bar */
+.copybar{gap:6px;margin:0 0 10px}
+.copybar button{font-size:12.5px;padding:5px 9px;border-radius:7px;background:transparent}
+/* cards and tags */
+.card{border-radius:10px;padding:14px 14px 12px 17px;box-shadow:none}
+.card::before{width:3px}
+.tag{border-radius:6px;font-size:12px;padding:2px 7px}
+.gpill{border-radius:5px}
+.sym{font-size:20px;font-weight:750;font-variation-settings:"wdth" 108}
+.ledger,.scr-wrap,.mkt{border-radius:10px}
+.plan{border-radius:8px}
+.note{font-size:13px}
+h2.day{font-size:15px;font-weight:700;margin:22px 0 8px}
+.foot{font-size:12px}
+@media (max-width:640px){ .brand h1{font-size:19px} .tabs{top:44px} .tab{font-size:13.5px;padding:10px 9px} }
+
+.brand{flex-direction:column;align-items:flex-start;gap:0}
+#sub{white-space:normal}
+.card.heat h3,.card.gm h3{margin-top:0}
+.card.heat{padding-top:12px}
+@media (max-width:640px){
+  .row.radar-row{grid-template-columns:repeat(3,minmax(0,1fr)) 14px;row-gap:8px;column-gap:10px}
+  .row.radar-row>div:first-child{grid-column:1/-1}
+  .radar-row .nm{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+  .radar-row .nm .tag{white-space:nowrap}
+  .tabs{top:58px}
+}
+
+/* My trades blotter */
+.blotter{background:var(--sheet);border:1px solid var(--line);border-radius:10px;margin:0 0 14px;overflow:hidden}
+.bl-h,.bl-row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr) minmax(0,1.6fr);gap:10px;align-items:center;padding:9px 12px}
+.bl-h{font-size:12px;color:var(--ink-3);background:var(--sheet-2);border-bottom:1px solid var(--line);padding-top:7px;padding-bottom:7px}
+.bl-row{border-top:1px solid var(--line-2);color:inherit;text-decoration:none}
+.bl-row:first-of-type{border-top:0}
+.bl-row:hover{background:var(--sheet-2)}
+.bl-row small{display:block;font-size:11.5px;color:var(--ink-3);font-weight:400}
+.bl-sym{font-weight:700;font-variation-settings:"wdth" 100;overflow:hidden;text-overflow:ellipsis}
+.bl-row .r small.up{color:var(--gain)}.bl-row .r small.down{color:var(--loss)}
+.act{display:inline-block;font-size:13px;font-weight:700;line-height:1.25}
+.act.bad{color:var(--loss)}.act.warn{color:var(--watch)}.act.good{color:var(--gain)}
+.bl-act small{font-family:var(--num);font-variation-settings:"wdth" 82}
+.blotter .meta{margin:0;padding:8px 12px;border-top:1px solid var(--line-2);font-size:12px}
+details.more{margin-top:10px;border-top:1px solid var(--line-2);padding-top:8px}
+details.more>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--act);list-style:none}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"+ "}
+details.more[open]>summary::before{content:"− "}
+.card[id]{scroll-margin-top:110px}
+@media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important} }
 </style>
 </head>
 <body>
 <main class="wrap">
-  <header class="mast">
-    <h1>PEAD radar<small id="sub">Loading results season…</small></h1>
-    <div class="regime"><div id="regime"></div>
-    <div class="internals" id="internals"></div><button class="theme-btn" id="theme" type="button">Dark mode</button></div>
+  <header class="appbar">
+    <div class="brand"><h1>PEAD radar</h1><span id="sub">Loading results season…</span></div>
+    <button class="theme-btn" id="theme" type="button">Dark mode</button>
   </header>
+  <details class="mkt"><summary><span id="regime"></span></summary><div class="internals" id="internals"></div></details>
   <p class="season" id="season"></p>
 
   <nav class="tabs" role="tablist" aria-label="Views">
     <button class="tab" role="tab" data-tab="screen" aria-selected="true">Screener</button>
-    <button class="tab" role="tab" data-tab="setups" aria-selected="false">Declared results<span class="c" id="c-setups"></span></button>
+    <button class="tab" role="tab" data-tab="setups" aria-selected="false">Results<span class="c" id="c-setups"></span></button>
     <button class="tab" role="tab" data-tab="radar" aria-selected="false">Radar<span class="c" id="c-radar"></span></button>
     <button class="tab" role="tab" data-tab="trades" aria-selected="false">My trades<span class="c" id="c-trades"></span></button>
-    <button class="tab" role="tab" data-tab="watch" aria-selected="false">Upcoming watchlist<span class="c" id="c-watch"></span></button>
+    <button class="tab" role="tab" data-tab="watch" aria-selected="false">Upcoming<span class="c" id="c-watch"></span></button>
     <button class="tab" role="tab" data-tab="sectors" aria-selected="false">Sectors<span class="c" id="c-sectors"></span></button>
     <button class="tab" role="tab" data-tab="score" aria-selected="false">Scorecard</button>
-    <button class="tab" role="tab" data-tab="health" aria-selected="false">Data health</button>
+    <button class="tab" role="tab" data-tab="health" aria-selected="false">Health</button>
   </nav>
 
   <div class="controls" id="controls">
@@ -301,6 +409,6 @@ td.r,th.r{text-align:right}
 
   <p class="foot" id="foot">A mechanical screen, not advice. Levels appear only when a rule-based setup exists; missing data shows as —, never as zero.</p>
 </main>
-<script src="intelligence.js?v=105"></script>
+<script src="intelligence.js?v=106"></script>
 </body>
 </html>

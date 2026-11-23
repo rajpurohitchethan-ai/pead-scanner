@@ -510,3 +510,11 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 
 2.9.67 (23 Nov 2026) - live_prices.py sends one low-priority "PEAD live alerts running" message a day when the job starts with NTFY_TOPIC set (key "hello"), so the owner knows alerts work.
 - Same day: EOD_REPLAY_REV 2.9.55 -> 2.9.67 so every chart is rebuilt once with "days" (the backtest was empty: no chart had them).
+
+2.9.68 (owner: "make it more professional", 23 Nov 2026) - design pass
+- One typeface, Archivo (Google Fonts, variable width): text at normal width, figures condensed (wdth 78) with tabular numerals. New quieter palette tokens (light and dark).
+- Slim sticky app bar; the market regime is one line that opens for breadth / advance-decline / FII-DII; data-check banner is an amber note; underline tab bar (shorter names: Results, Upcoming, Health), sticky under the app bar.
+- foldNotes(): a long explanation near the top of a tab folds into "How to read this".
+- My trades opens with a blotter: one row per trade with the live price, P&L and what the rule says now (tradeAction mirrors the 3 pm alert logic; the rule still acts on the close). Card detail (setup, strength, sector, hands, filings) folds under "Setup, strength and filings"; the evening news read stays open.
+- positions.json "partialExits" [{date, price, fraction, note}] (no quantities) pass through position_view; the blotter shows "Half sold; hold rest". Tests: PartialExitTests.
+- Radar rows on phones: symbol and tags on one line, the figures below.

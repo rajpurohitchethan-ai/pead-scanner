@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.66"
+MODULE_VERSION = "2.9.68"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2018,6 +2018,8 @@ def position_view(pos: dict[str, Any], item: dict[str, Any] | None, state: dict[
                             "last": last, "lastClose": close, "live": bool(live.get("price")), "at": live.get("at"),
                             "ema21": _num(px.get("ema21")), "ema63": _num(px.get("ema63")), "status": "NO_DATA",
                             "note": "Waiting for prices."}
+    if isinstance(pos.get("partialExits"), list):                    # 2.9.68: e.g. half sold on the 10 EMA rule
+        view["partialExits"] = [{k: x.get(k) for k in ("date", "price", "fraction", "note")} for x in pos["partialExits"] if isinstance(x, dict)]
     if entry is None or stop0 is None or entry <= stop0:
         view["note"] = "Entry or stop missing."
         return view, st

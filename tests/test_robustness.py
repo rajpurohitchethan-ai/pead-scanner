@@ -4305,3 +4305,16 @@ class ConcallVerdictTests(unittest.TestCase):
         self.assertIsNone(pead_plus.concall_verdict(note, "2026-11-20"))          # an older call
         self.assertIsNone(pead_plus.concall_verdict({**note, "verdict": "GREAT"}, "2026-11-14"))
         self.assertIsNone(pead_plus.concall_verdict(None, "2026-11-14"))
+
+
+class PartialExitTests(unittest.TestCase):
+    """2.9.68 (23 Nov 2026): a partial sale (no quantity) reaches the page."""
+
+    def test_partial_exit_passes_through(self):
+        import pead_plus
+        from datetime import date
+        pos = {"symbol": "X", "entryDate": "2026-10-01", "entryPrice": 100, "stop": 90, "status": "OPEN",
+               "partialExits": [{"date": "2026-11-23", "price": 120, "fraction": 0.43, "qty": 5}]}
+        view, _ = pead_plus.position_view(pos, None, None, date(2026, 11, 23))
+        self.assertEqual(view["partialExits"][0]["fraction"], 0.43)
+        self.assertNotIn("qty", view["partialExits"][0])            # quantities never leave the phone
