@@ -4459,3 +4459,43 @@ class TelegramBotTests(unittest.TestCase):
             for k, v in old.items():
                 if v is not None:
                     os.environ[k] = v
+
+
+class EarningsQualityTests(unittest.TestCase):
+    """2.9.76 (23 Nov 2026): earnings quality from the result XBRL."""
+
+    DOC = b"""<?xml version="1.0"?><xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:c="http://x">
+    <xbrli:context id="OneD"><xbrli:period><xbrli:startDate>2026-07-01</xbrli:startDate><xbrli:endDate>2026-09-30</xbrli:endDate></xbrli:period></xbrli:context>
+    <xbrli:context id="H1"><xbrli:period><xbrli:startDate>2026-04-01</xbrli:startDate><xbrli:endDate>2026-09-30</xbrli:endDate></xbrli:period></xbrli:context>
+    <xbrli:context id="PYQ"><xbrli:period><xbrli:startDate>2025-07-01</xbrli:startDate><xbrli:endDate>2025-09-30</xbrli:endDate></xbrli:period></xbrli:context>
+    <xbrli:context id="NowI"><xbrli:period><xbrli:instant>2026-09-30</xbrli:instant></xbrli:period></xbrli:context>
+    <xbrli:context id="MarI"><xbrli:period><xbrli:instant>2026-03-31</xbrli:instant></xbrli:period></xbrli:context>
+    <c:NatureOfReportStandaloneConsolidated contextRef="OneD">Consolidated</c:NatureOfReportStandaloneConsolidated>
+    <c:ProfitBeforeTax contextRef="OneD" unitRef="INR">1000000000</c:ProfitBeforeTax>
+    <c:ProfitBeforeTax contextRef="PYQ" unitRef="INR">500000000</c:ProfitBeforeTax>
+    <c:OtherIncome contextRef="OneD" unitRef="INR">400000000</c:OtherIncome>
+    <c:ExceptionalItemsBeforeTax contextRef="OneD" unitRef="INR">0</c:ExceptionalItemsBeforeTax>
+    <c:ProfitLoss contextRef="H1" unitRef="INR">1500000000</c:ProfitLoss>
+    <c:CashFlowsFromUsedInOperatingActivities contextRef="H1" unitRef="INR">-200000000</c:CashFlowsFromUsedInOperatingActivities>
+    <c:TradeReceivablesCurrent contextRef="NowI" unitRef="INR">900000000</c:TradeReceivablesCurrent>
+    <c:TradeReceivablesCurrent contextRef="MarI" unitRef="INR">500000000</c:TradeReceivablesCurrent>
+    </xbrli:xbrl>"""
+
+    def test_facts_pick_the_right_periods(self):
+        import pead_plus
+        from datetime import date
+        f = pead_plus.xbrl_quality_facts(self.DOC, date(2026, 9, 30))
+        self.assertEqual((f["pbt"], f["otherIncome"], f["patH1"], f["cfoH1"]), (100.0, 40.0, 150.0, -20.0))
+        self.assertEqual((f["recvNow"], f["recvMar"], f["basis"]), (90.0, 50.0, "CONSOLIDATED"))
+        self.assertIsNone(pead_plus.xbrl_quality_facts(self.DOC, date(2026, 6, 30))["pbt"])   # another quarter: nothing
+
+    def test_flags(self):
+        import pead_plus
+        from datetime import date
+        q = pead_plus.earnings_quality(pead_plus.xbrl_quality_facts(self.DOC, date(2026, 9, 30)), 10)
+        self.assertEqual(q["label"], "WEAK")
+        self.assertEqual(len(q["flags"]), 3)                  # other income 40%, negative cash, receivables +80%
+        self.assertNotIn("oneOffPct", q)                      # zero one-offs: nothing to say
+        clean = pead_plus.earnings_quality({"pbt": 100, "otherIncome": 5, "exceptional": 0}, 10)
+        self.assertEqual((clean["label"], clean["flags"]), ("CLEAN", []))
+        self.assertIsNone(pead_plus.earnings_quality({"pbt": -5, "otherIncome": 5}, 10))   # a loss: not judged

@@ -544,3 +544,8 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 2.9.75 (23 Nov 2026) - insider trades: per-stock queries
 - Probe (pit_probe.yml, removed): NSE corporates-pit returns no rows for market-wide queries (dates only, no dates, period); only index=equities&symbol=X answers (all of that company's disclosures). Field names confirmed: acqName, personCategory, acqMode, tdpTransactionType, secAcq, secVal, acqtoDt, intimDt, date, afterAcqSharesPer.
 - insider_symbols(): holdings + liquid A/B Radar stocks of the last page.json, at most 60, one query each every 6 hours; rows older than 45 days dropped. Not saved under raw/.
+
+2.9.76 (owner, 23 Nov 2026) - earnings quality
+- pead_plus.xbrl_quality_facts reads, from the stored exchange XBRL (raw/nse_xbrl/ISIN_period), the quarter's OtherIncome, ExceptionalItemsBeforeTax, ProfitBeforeTax and ProfitLoss (80-100 day context ending at the period), half-year CashFlowsFromUsedInOperatingActivities and ProfitLoss (170-190 days; only when the filing has the half-year cash flow) and trade receivables at the period end and at 31 March. Other-period files in the folder give nothing (prior-year comparatives).
+- earnings_quality flags: other income > 30% of pre-tax profit; one-offs > 15% either way; half-year operating cash < 50% of profit (negative = hard flag); receivables growth since March > max(25%, revenue YoY + 20 points). CLEAN / WATCH (one flag) / WEAK (two+ or negative cash). Loss-makers (PBT <= 0) are not judged. Same basis as the result when both files exist.
+- master/quality_cache.json caches the facts per file (written only when it changes). plus.earningsQuality; card tag and line; Screener filter 'Clean earnings'. Display only. Tests: EarningsQualityTests.

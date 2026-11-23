@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.75"
+ENGINE_VERSION = "2.9.76"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5916,6 +5916,53 @@ def _plus_sector(pl: dict[str, Any] | None) -> str | None:
     return s_ if isinstance(s_, str) else None
 
 
+QUALITY_CACHE_PATH = MASTER_DIR / "quality_cache.json"   # 2.9.76: facts per XBRL file (files are content-addressed)
+
+
+def attach_earnings_quality(items: list[dict[str, Any]], root: Path | None = None) -> int:
+    """plus.earningsQuality from the stored exchange XBRL of each declared result (same basis
+    as the result when both exist). Facts are cached by file name. Returns how many were set."""
+    root = root or (RAW_DIR / "nse_xbrl")
+    cache = _eod_read(QUALITY_CACHE_PATH) or {} if QUALITY_CACHE_PATH.exists() else {}
+    seen, n = set(), 0
+    for it in items:
+        plus = it.get("plus")
+        if not isinstance(plus, dict):
+            continue
+        plus["earningsQuality"] = None
+        isin, _, period = str(it.get("eventId") or "").partition("|")
+        if not it.get("resultsReleased") or not isin or not period:
+            continue
+        try:
+            pend = date.fromisoformat(period)
+        except ValueError:
+            continue
+        folder = root / f"{isin}_{period}"
+        found = []
+        for f in sorted(folder.glob("xbrl-*.xml")) if folder.exists() else []:
+            key = f"{folder.name}/{f.name}"
+            seen.add(key)
+            if key not in cache:
+                try:
+                    cache[key] = pead_plus.xbrl_quality_facts(f.read_bytes(), pend)
+                except OSError:
+                    cache[key] = None
+            fx = cache[key]
+            if fx and fx.get("pbt") is not None:
+                found.append(fx)
+        if not found:
+            continue
+        want = str(it.get("financialBasis") or "").upper()
+        fx = next((x for x in found if x.get("basis") == want), found[0])
+        plus["earningsQuality"] = pead_plus.earnings_quality(fx, it.get("revenueYoY"))
+        n += plus["earningsQuality"] is not None
+    kept = {k: v for k, v in sorted(cache.items()) if k in seen}       # only files still in use
+    before = _eod_read(QUALITY_CACHE_PATH) if QUALITY_CACHE_PATH.exists() else None
+    if kept != before:                                                 # rewrite only on a change (repo size)
+        json_dump_atomic(QUALITY_CACHE_PATH, kept, compact=True)
+    return n
+
+
 def insider_symbols(held: set[str] | Any) -> list[str]:
     """2.9.75: the stocks whose insider trades are fetched: holdings first, then the
     liquid A/B Radar stocks of the last published page (best grade first)."""
@@ -8798,6 +8845,10 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
                                                                       it.get("resultDate"))
     except Exception as exc:
         print(f"Concall notes skipped: {type(exc).__name__}: {exc}")
+    try:                                                              # 2.9.76
+        print(f"Earnings quality: {attach_earnings_quality(items)} results checked")
+    except Exception as exc:
+        print(f"Earnings quality skipped: {type(exc).__name__}: {exc}")
     try:                                                              # 2.9.73
         pead_plus.peer_readthrough(items)
     except Exception as exc:

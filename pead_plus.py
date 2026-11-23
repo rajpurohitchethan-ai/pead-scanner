@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.75"
+MODULE_VERSION = "2.9.76"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2751,6 +2751,123 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     wins = [r for r in rs if r > 0]
     return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
             "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.76 Earnings quality (owner, 23 Nov 2026): from the same exchange XBRL
+# the result was read from. Display only: no grade or plan rule uses it.
+#   other income share of pre-tax profit, one-off (exceptional) items,
+#   cash conversion (half-year operating cash flow / half-year profit),
+#   receivables growth since March against revenue growth.
+# ---------------------------------------------------------------------------
+QUALITY_OTHER_INCOME_MAX = 30.0     # % of pre-tax profit
+QUALITY_ONE_OFF_MAX = 15.0          # % of pre-tax profit (either sign)
+QUALITY_CASH_MIN = 0.5              # operating cash flow / profit, half year
+QUALITY_RECEIVABLES_GAP = 20.0      # receivables growth above revenue growth, points
+
+
+def xbrl_quality_facts(doc: bytes, period_end: date) -> dict[str, Any] | None:
+    """Quarter, half-year and balance-sheet facts needed for the quality check (crore).
+    Non-dimensional contexts only. Returns None for an unreadable document."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(doc)
+    except Exception:
+        return None
+    loc = lambda t: t.rsplit("}", 1)[-1].split(":")[-1]
+    ctx, facts, basis = {}, [], ""
+    for el in root.iter():
+        name = loc(el.tag)
+        if name == "context":
+            info = {"start": None, "end": None, "instant": None, "dim": False}
+            for x in el.iter():
+                n = loc(x.tag)
+                if n in ("startDate", "endDate", "instant"):
+                    try:
+                        info[{"startDate": "start", "endDate": "end", "instant": "instant"}[n]] = date.fromisoformat((x.text or "").strip()[:10])
+                    except ValueError:
+                        pass
+                elif n in ("explicitMember", "typedMember"):
+                    info["dim"] = True
+            ctx[el.attrib.get("id")] = info
+            continue
+        cref = el.attrib.get("contextRef")
+        if not cref:
+            continue
+        if "NatureOfReport" in name or "StandaloneConsolidated" in name:
+            basis = (el.text or "").strip().upper()
+            continue
+        if el.attrib.get("unitRef") is None:
+            continue
+        try:
+            v = float((el.text or "").replace(",", "").strip())
+        except ValueError:
+            continue
+        facts.append((name, cref, v))
+
+    def pick(names, kind):
+        for nm in names:
+            for n, c, v in facts:
+                info = ctx.get(c) or {}
+                if n != nm or info.get("dim"):
+                    continue
+                if kind == "q" and info.get("start") and info.get("end") and 80 <= (info["end"] - info["start"]).days <= 100 \
+                        and abs((info["end"] - period_end).days) <= 3:
+                    return v / 1e7
+                if kind == "h" and info.get("start") and info.get("end") and 170 <= (info["end"] - info["start"]).days <= 190 \
+                        and abs((info["end"] - period_end).days) <= 3:
+                    return v / 1e7
+                if kind == "now" and info.get("instant") and abs((info["instant"] - period_end).days) <= 3:
+                    return v / 1e7
+                if kind == "mar" and info.get("instant") and info["instant"].month == 3 and info["instant"].day == 31 \
+                        and 150 <= (period_end - info["instant"]).days <= 280:
+                    return v / 1e7
+        return None
+
+    def recv(kind):
+        cur, non, tot = pick(["TradeReceivablesCurrent"], kind), pick(["TradeReceivablesNoncurrent"], kind), pick(["TradeReceivables"], kind)
+        return tot if tot is not None else (cur + (non or 0) if cur is not None else None)
+
+    return {"basis": "CONSOLIDATED" if "CONSOLIDATED" in basis else "STANDALONE" if "STANDALONE" in basis else None,
+            "otherIncome": pick(["OtherIncome"], "q"), "exceptional": pick(["ExceptionalItemsBeforeTax", "ExceptionalItems"], "q"),
+            "pbt": pick(["ProfitBeforeTax"], "q"), "pat": pick(["ProfitLoss"], "q"),
+            "cfoH1": pick(["CashFlowsFromUsedInOperatingActivities", "CashFlowsFromUsedInOperatingActivitiesBeforeExtraordinaryItems"], "h"),
+            "patH1": pick(["ProfitLoss"], "h"), "pbtH1": pick(["ProfitBeforeTax"], "h"),
+            "recvNow": recv("now"), "recvMar": recv("mar")}
+
+
+def earnings_quality(f: dict[str, Any] | None, revenue_yoy: Any = None) -> dict[str, Any] | None:
+    """Flags and a label (CLEAN / WATCH / WEAK) from xbrl_quality_facts. Missing parts stay missing."""
+    if not f:
+        return None
+    pbt, flags, checks = _num(f.get("pbt")), [], {}
+    if pbt is not None and pbt > 0:
+        oi, ex = _num(f.get("otherIncome")), _num(f.get("exceptional"))
+        if oi is not None:
+            checks["otherIncomePct"] = _r2(oi / pbt * 100)
+            if checks["otherIncomePct"] > QUALITY_OTHER_INCOME_MAX:
+                flags.append(f"Other income is {checks['otherIncomePct']:.0f}% of pre-tax profit")
+        if ex is not None and ex != 0:
+            checks["oneOffPct"] = _r2(ex / pbt * 100)
+            if abs(checks["oneOffPct"]) > QUALITY_ONE_OFF_MAX:
+                flags.append(f"One-off items {'add' if ex > 0 else 'cut'} {abs(checks['oneOffPct']):.0f}% of pre-tax profit")
+    cfo, ph = _num(f.get("cfoH1")), _num(f.get("patH1"))
+    if cfo is not None and ph is not None and ph > 0:
+        checks["cashConversion"] = _r2(cfo / ph)
+        if cfo < 0:
+            flags.append("Operating cash flow negative for the half year while profitable")
+        elif checks["cashConversion"] < QUALITY_CASH_MIN:
+            flags.append(f"Only {checks['cashConversion'] * 100:.0f}% of half-year profit came in as cash")
+    rn, rm, ry = _num(f.get("recvNow")), _num(f.get("recvMar")), _num(revenue_yoy)
+    if rn is not None and rm and rm > 0:
+        checks["receivablesGrowthPct"] = _r2((rn / rm - 1) * 100)
+        if ry is not None and checks["receivablesGrowthPct"] > max(25.0, ry + QUALITY_RECEIVABLES_GAP):
+            flags.append(f"Receivables up {checks['receivablesGrowthPct']:.0f}% since March against revenue {ry:+.0f}%")
+    if not checks:
+        return None
+    hard = any("negative" in x for x in flags)
+    label = "WEAK" if hard or len(flags) >= 2 else "WATCH" if flags else "CLEAN"
+    return {"label": label, "flags": flags, "basis": f.get("basis"), **checks}
 
 
 # ---------------------------------------------------------------------------

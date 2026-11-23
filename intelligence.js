@@ -342,6 +342,17 @@
     const tone = { STRONG: 'good', WEAK: 'bad', MIXED: 'warn' }[rt.label] || '';
     return `<p class="meta smart"><span class="tag ${tone}">Peers ${esc(rt.label.toLowerCase())}</span> ${rt.strong} of ${rt.reported} ${esc(rt.industry)} companies that reported had strong earnings; median reaction ${pct(rt.medianReaction)}. Best: ${rt.peers.map(x => `${esc(x.symbol)} ${pct(x.reaction)}`).join(', ')}.</p>`;
   }
+  // 2.9.76: earnings quality from the result filing itself.
+  function qualityLine(q) {
+    if (!q) return '';
+    const tone = { CLEAN: 'good', WATCH: 'warn', WEAK: 'bad' }[q.label] || '';
+    const bits = [];
+    if (num(q.otherIncomePct) !== null) bits.push(`other income ${num(q.otherIncomePct).toFixed(0)}% of pre-tax profit`);
+    if (num(q.oneOffPct) !== null) bits.push(`one-offs ${num(q.oneOffPct) > 0 ? '+' : ''}${num(q.oneOffPct).toFixed(0)}%`);
+    if (num(q.cashConversion) !== null) bits.push(`cash conversion ${(num(q.cashConversion) * 100).toFixed(0)}% (half year)`);
+    if (num(q.receivablesGrowthPct) !== null) bits.push(`receivables ${pct(q.receivablesGrowthPct)} since March`);
+    return `<p class="meta smart"><span class="tag ${tone}">Earnings ${q.label === 'CLEAN' ? 'clean' : q.label === 'WATCH' ? 'check' : 'weak'}</span> ${(q.flags || []).map(esc).join('; ') || 'No warning signs'}. <span class="meta">${bits.join(', ')}</span></p>`;
+  }
   function card(it) {
     const p = P(it), x1 = px(it), plan = p.plan || {};
     const slimNote = p.slim ? '<p class="meta">Below the liquidity test: chart and checklists are left out of the page to keep it light on phones.</p>' : '';
@@ -358,6 +369,7 @@
     if (g) tags.push(`<span class="tag ${g[1]}" title="YoY growth vs last quarter: revenue ${p.growth.revenueDeltaPp ?? '—'} pp, profit ${p.growth.profitDeltaPp ?? '—'} pp">${g[0]}</span>`);
     if (num(p.rsRating) !== null) tags.push(`<span class="tag ${p.rsRating >= 80 ? 'good' : p.rsRating < 40 ? 'bad' : ''}" title="RS rating 1-99: 3-month move (counted twice) plus 6-month move, ranked against every stock">RS ${p.rsRating}</span>`);
     if (p.concallVerdict) tags.push(`<span class="tag ${{ POSITIVE: 'good', MIXED: 'warn', NEGATIVE: 'bad' }[p.concallVerdict.verdict] || ''}">Concall ${esc(p.concallVerdict.verdict.toLowerCase())}</span>`);
+    if (p.earningsQuality && p.earningsQuality.label !== 'CLEAN') tags.push(`<span class="tag ${p.earningsQuality.label === 'WEAK' ? 'bad' : 'warn'}">Earnings ${p.earningsQuality.label === 'WEAK' ? 'quality weak' : 'quality: check'}</span>`);
     if (p.readThrough && p.readThrough.label !== 'MIXED') tags.push(`<span class="tag ${p.readThrough.label === 'STRONG' ? 'good' : 'bad'}">Peers ${p.readThrough.label === 'STRONG' ? 'reported strong' : 'reported weak'}</span>`);
     if (p.insider?.label) tags.push(`<span class="tag ${p.insider.label === 'BUYING' ? 'good' : 'bad'}">Promoter ${p.insider.label === 'BUYING' ? 'buying' : 'selling'}</span>`);
     if (p.insider?.pledge) tags.push('<span class="tag bad">Shares pledged</span>');
@@ -394,6 +406,7 @@
       ${verdictLine(p.concallVerdict)}
       ${smartLine(p.smartMoney)}
       ${insiderLine(p.insider)}
+      ${qualityLine(p.earningsQuality)}
       ${readLine(p.readThrough)}
       ${liveLine(p.live, pc.lastClose)}
       ${chart(it)}
@@ -481,6 +494,7 @@
     ['hands', 'Strong hands', it => P(it).hands?.label === 'STRONG'],
     ['rs80', 'RS 80+', it => num(P(it).rsRating) !== null && P(it).rsRating >= 80],
     ['smart', 'Smart money buying', it => P(it).smartMoney?.label === 'BUYING'],
+    ['clean', 'Clean earnings', it => P(it).earningsQuality?.label === 'CLEAN'],
     ['strong', 'Strong earnings', it => P(it).strength === 'STRONG'],
     ['risk5', 'Risk up to 5%', it => num(grade(it).riskNowPct) !== null && grade(it).riskNowPct <= 5],
     ['high', 'Near 52-week high', it => num(it.priceContext?.distanceFrom52wHighPct) !== null && it.priceContext.distanceFrom52wHighPct >= -10],
@@ -1052,7 +1066,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.75';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.76';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
