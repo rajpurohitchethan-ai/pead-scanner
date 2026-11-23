@@ -86,6 +86,76 @@ def inr(v) -> str:
     return f"₹{v:,.2f}"
 
 
+MAX_OPEN_TRADES = 5            # the owner's limit: 4-5 open trades
+MAX_ABOVE_TRIGGER_PCT = 3.0    # do not buy more than 3% above the trigger
+MAX_RISK_PCT = 10.0            # pead_plus.MAX_RISK_PCT
+
+
+def pretrade_problems(page: dict, it: dict, price: float | None, now: datetime | None = None) -> list[str]:
+    """2.9.77 pre-trade check: which of the owner's rules a buy at this price would break."""
+    plus = it.get("plus") or {}
+    plan, grade = plus.get("plan") or {}, plus.get("grade") or {}
+    entry, sl = _f(plan.get("entry")), _f(plan.get("sl"))
+    pos = page.get("positions") or []
+    sector = plus.get("sectorKey") or it.get("sector")
+    out = []
+    if len(pos) >= MAX_OPEN_TRADES:
+        out.append(f"{len(pos)} trades already open (limit {MAX_OPEN_TRADES})")
+    same = [p_.get("symbol") for p_ in pos if sector and (p_.get("sector") == sector)]
+    if same:
+        out.append(f"already holding {', '.join(same)} in {sector}")
+    if grade.get("tier") not in ("A", "B"):
+        out.append(f"grade {grade.get('tier') or '?'}, not A or B")
+    if (plus.get("liquidity") or {}).get("pass") is not True:
+        out.append("not liquid enough")
+    if price is not None and entry is not None:
+        if price < entry:
+            out.append(f"below the trigger {inr(entry)}")
+        elif price > entry * (1 + MAX_ABOVE_TRIGGER_PCT / 100):
+            out.append(f"{(price / entry - 1) * 100:.1f}% above the trigger (max {MAX_ABOVE_TRIGGER_PCT:.0f}%)")
+    if price is not None and sl is not None and price > sl and (price - sl) / price * 100 > MAX_RISK_PCT:
+        out.append(f"risk {(price - sl) / price * 100:.1f}% to the stop (max {MAX_RISK_PCT:.0f}%)")
+    if ((page.get("regime") or {}).get("label")) == "RISK-OFF":
+        out.append("market is risk-off: half size at most")
+    now = now or datetime.now(IST)
+    if not ((15, 15) <= (now.hour, now.minute) <= (15, 25)):
+        out.append("outside 3:15-3:25 pm: the close has not confirmed it yet")
+    return out
+
+
+def close_summary(page: dict, prices: dict[str, dict]) -> tuple[str, str] | None:
+    """2.9.77: one message after 3:30 pm with what the rule says on the closing price for every trade."""
+    acts, holds = [], []
+    for pos in page.get("positions") or []:
+        sym = str(pos.get("symbol") or "").upper()
+        price = _f((prices.get(sym) or {}).get("price")) or _f(pos.get("last"))
+        e, s0, r1 = _f(pos.get("entryPrice")), _f(pos.get("initialStop")), _f(pos.get("oneR"))
+        half, rest = _f(pos.get("halfStop")), _f(pos.get("restStop"))
+        if price is None or e is None:
+            continue
+        head = f"{sym} {inr(price)} ({(price / e - 1) * 100:+.1f}%)"
+        part = bool(pos.get("partialExits"))
+        if pos.get("oneRHit"):
+            if rest is not None and price < rest:
+                acts.append(f"SELL REST: {head} closed below {inr(rest)} (20 EMA / cost)")
+            elif half is not None and price < half and not part and not pos.get("halfHit"):
+                acts.append(f"SELL HALF: {head} closed below the 10 EMA {inr(half)}; rest below {inr(rest)}")
+            else:
+                holds.append(f"Hold: {head}, {'half sold, ' if part else ''}{'rest' if part else 'half'} below {inr(rest if part else half)}")
+        else:
+            if s0 is not None and price < s0:
+                acts.append(f"EXIT: {head} closed below the stop {inr(s0)}")
+            elif r1 is not None and price >= r1:
+                acts.append(f"+1R: {head} closed at/above {inr(r1)}; stop moves to cost {inr(e)}")
+            else:
+                holds.append(f"Hold: {head}, stop {inr(s0)}, +1R {inr(r1)}")
+    if not acts and not holds:
+        return None
+    title = f"Close check: {len(acts)} action{'s' if len(acts) != 1 else ''}" if acts else "Close check: all hold"
+    body = "\n".join(acts + holds) + "\nLast traded price at 3:30 pm; NSE's official close can differ slightly (tonight's check confirms)."
+    return title, body
+
+
 def alerts_for(page: dict, prices: dict[str, dict]) -> list[tuple[str, str, str, str]]:
     """(key, title, body, priority) for every condition met at these prices."""
     out = []
@@ -133,9 +203,11 @@ def alerts_for(page: dict, prices: dict[str, dict]) -> list[tuple[str, str, str,
             continue                                   # more than 3% above: do not chase
         risk = (price - sl) / price * 100
         stage = (plus.get("price") or {}).get("stage") or {}
+        broken = pretrade_problems(page, it, price)                    # 2.9.77: the owner's own rules
         out.append((f"{sym}:entry", f"{sym} at its trigger {inr(entry)} ({grade.get('tier')} {grade.get('score')})",
                     f"{sym} {inr(price)} is above its trigger {inr(entry)}. Stop {inr(sl)} (risk {risk:.1f}%)"
-                    + (", Stage 2" if stage.get("stage") == 2 else "") + ". Buy only 3:15-3:25 pm if it is still above, limit order.",
+                    + (", Stage 2" if stage.get("stage") == 2 else "") + ". Buy only 3:15-3:25 pm if it is still above, limit order."
+                    + (" RULE CHECK: " + "; ".join(broken) + "." if broken else " Rule check: passes."),
                     "default"))
     return out
 
@@ -211,6 +283,18 @@ def main() -> int:
     while True:
         now = datetime.now(IST)
         if not market_open(now):
+            # 2.9.77: after the close, one summary of what the rule says for every trade
+            if (topic or tg.configured()) and "close" not in sent and p.is_trading_day(now.date()) and (now.hour, now.minute) >= (15, 30):
+                try:
+                    closing = p.upstox_ltp(list(watch.items()))
+                    msg = close_summary(_PAGE, closing)
+                    if msg:
+                        prio = "default" if msg[0].endswith("all hold") else "high"
+                        sent.update(send_alerts([("close", msg[0], msg[1], prio)], sent, topic))
+                        LIVE_PATH.write_text(json.dumps(snapshot(watch, closing, now, sent), separators=(",", ":")) + "\n", encoding="utf-8")
+                        push(now)
+                except Exception as exc:
+                    print(f"Close summary not sent: {type(exc).__name__}")
             print(f"{now:%H:%M} IST: market closed, stopping.")
             return 0
         if time.time() - started > MAX_MINUTES * 60:

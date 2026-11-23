@@ -4499,3 +4499,39 @@ class EarningsQualityTests(unittest.TestCase):
         clean = pead_plus.earnings_quality({"pbt": 100, "otherIncome": 5, "exceptional": 0}, 10)
         self.assertEqual((clean["label"], clean["flags"]), ("CLEAN", []))
         self.assertIsNone(pead_plus.earnings_quality({"pbt": -5, "otherIncome": 5}, 10))   # a loss: not judged
+
+
+class PretradeAndCloseTests(unittest.TestCase):
+    """2.9.77 (23 Nov 2026): rule check on entry alerts; summary after the close."""
+
+    def page(self, n_open=2, regime="RISK-ON"):
+        pos = [{"symbol": f"H{i}", "sector": "Hotels" if i == 0 else f"S{i}", "entryPrice": 100, "initialStop": 90, "oneR": 110,
+                "oneRHit": i == 0, "halfStop": 120, "restStop": 112, "last": 125} for i in range(n_open)]
+        return {"positions": pos, "regime": {"label": regime}}
+
+    def item(self, sector="Pharma", tier="A"):
+        return {"symbol": "NEW", "plus": {"sectorKey": sector, "grade": {"tier": tier}, "liquidity": {"pass": True},
+                                          "plan": {"entry": 100, "sl": 95}}}
+
+    def test_pretrade(self):
+        import live_prices as lp
+        from datetime import datetime
+        at = datetime(2026, 11, 24, 15, 20, tzinfo=lp.IST)
+        self.assertEqual(lp.pretrade_problems(self.page(), self.item(), 101.0, at), [])
+        bad = lp.pretrade_problems(self.page(6, "RISK-OFF"), self.item("Hotels", "C"), 104.0, datetime(2026, 11, 24, 11, 0, tzinfo=lp.IST))
+        text = " | ".join(bad)
+        for part in ("6 trades already open", "already holding H0 in Hotels", "grade C", "4.0% above the trigger",
+                     "risk-off", "outside 3:15-3:25"):
+            self.assertIn(part, text)
+
+    def test_close_summary(self):
+        import live_prices as lp
+        page = self.page(3)
+        prices = {"H0": {"price": 111.0}, "H1": {"price": 89.0}, "H2": {"price": 100.0}}
+        title, body = lp.close_summary(page, prices)
+        self.assertEqual(title, "Close check: 2 actions")
+        self.assertIn("SELL REST: H0", body)                 # past +1R, below the 20 EMA / cost 112
+        self.assertIn("EXIT: H1", body)                      # under the 90 stop
+        self.assertIn("Hold: H2", body)
+        page["positions"][0]["partialExits"] = [{"fraction": 0.5}]
+        self.assertIn("Hold: H0", lp.close_summary(page, {"H0": {"price": 115.0}})[1])

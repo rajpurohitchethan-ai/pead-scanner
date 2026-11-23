@@ -353,6 +353,29 @@
     if (num(q.receivablesGrowthPct) !== null) bits.push(`receivables ${pct(q.receivablesGrowthPct)} since March`);
     return `<p class="meta smart"><span class="tag ${tone}">Earnings ${q.label === 'CLEAN' ? 'clean' : q.label === 'WATCH' ? 'check' : 'weak'}</span> ${(q.flags || []).map(esc).join('; ') || 'No warning signs'}. <span class="meta">${bits.join(', ')}</span></p>`;
   }
+  // 2.9.77: pre-trade check: your own rules against a buy at the latest price (same rules as the entry alerts).
+  function pretradeBlock(it) {
+    const p = P(it), plan = p.plan || {};
+    if (num(plan.entry) === null || heldPos(it)) return '';
+    const price = num(p.live?.last) ?? num(it.priceContext?.lastClose), entry = num(plan.entry), sl = num(plan.sl);
+    const pos = S.data.positions || [], sector = p.sectorKey || it.sector, g = p.grade || {};
+    const t = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })), hm = t.getHours() * 60 + t.getMinutes();
+    const same = pos.filter(x => sector && x.sector === sector).map(x => x.symbol);
+    const above = price !== null && entry ? (price / entry - 1) * 100 : null, risk = price !== null && sl !== null && price > sl ? (price - sl) / price * 100 : null;
+    const checks = [
+      [pos.length < 5, `Open trades: ${pos.length} of 5`],
+      [!same.length, same.length ? `Already holding ${same.join(', ')} in ${sector}` : 'No other trade in this sector'],
+      [['A', 'B'].includes(g.tier), `Grade ${g.tier || '?'}${['A', 'B'].includes(g.tier) ? '' : ' (A or B only)'}`],
+      [p.liquidity?.pass === true, p.liquidity?.pass === true ? 'Liquid enough' : 'Not liquid enough'],
+      [above !== null && above >= 0 && above <= 3, above === null ? 'No price yet' : above < 0 ? `Below the trigger ${inr(entry)}` : `${above.toFixed(1)}% above the trigger (max 3%)`],
+      [risk !== null && risk <= 10, risk === null ? 'Risk unknown' : `Risk ${risk.toFixed(1)}% to the stop (max 10%)`],
+      [S.data.regime?.label !== 'RISK-OFF', S.data.regime?.label === 'RISK-OFF' ? 'Market risk-off: half size at most' : 'Market not risk-off'],
+      [hm >= 915 && hm <= 925, hm >= 915 && hm <= 925 ? 'Inside 3:15-3:25 pm' : 'Outside 3:15-3:25 pm: wait for the close to confirm'],
+    ];
+    const bad = checks.filter(c => !c[0]).length;
+    return `<details class="pretrade ${bad ? 'fail' : 'pass'}"><summary>${bad ? `Rule check: ${bad} rule${bad > 1 ? 's' : ''} broken at ${inr(price)}` : `Rule check: passes at ${inr(price)}`}</summary>
+      <ul>${checks.map(([ok, txt]) => `<li class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${esc(txt)}</li>`).join('')}</ul></details>`;
+  }
   function card(it) {
     const p = P(it), x1 = px(it), plan = p.plan || {};
     const slimNote = p.slim ? '<p class="meta">Below the liquidity test: chart and checklists are left out of the page to keep it light on phones.</p>' : '';
@@ -392,7 +415,7 @@
     const levels = num(plan.entry) !== null ? `<div class="levels">
         ${lv('Entry above', inr(plan.entry), 'e')}${lv('Stop loss', inr(plan.sl), 's')}
         ${lv('Risk', pct(plan.riskPct).replace('+', ''))}${lv('Trail swing / position', `${inr(plan.tslSwing, 0)} / ${inr(plan.tslPosition, 0)}`)}
-      </div><p class="qty">The stop stands until a close at +1R, then moves to cost. After that: sell half on a close below the 10 EMA and the rest on a close below the 20 EMA.</p>${sizing(plan)}` : '';
+      </div><p class="qty">The stop stands until a close at +1R, then moves to cost. After that: sell half on a close below the 10 EMA and the rest on a close below the 20 EMA.</p>${sizing(plan)}${pretradeBlock(it)}` : '';
     const reasons = (it.reasons || []).slice(0, 6), risks = (it.risks || []).slice(0, 6);
     const links = p.links || {};
     const linkHtml = [['screener', 'Screener'], ['tradingview', 'TradingView'], ['nse', 'NSE'], ['bse', 'BSE']]
@@ -1066,7 +1089,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.76';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.77';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
