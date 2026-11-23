@@ -23,24 +23,16 @@ jobs:
       - name: Probe
         run: |
           python - <<'PY'
-          import json, collections, pead_v2
+          import re, pead_v2
           from datetime import date, timedelta
           ctx = pead_v2.RunContext() if hasattr(pead_v2, 'RunContext') else None
-          t = date.today(); f = t - timedelta(days=60)
-          dd = {"from_date": f.strftime("%d-%m-%Y"), "to_date": t.strftime("%d-%m-%Y")}
+          t = date.today(); f = t - timedelta(days=3)
           with pead_v2.NSEAdapter(ctx) as nse:
-              for q in ({"index": "equities", "symbol": "RAMCOIND", **dd}, {"index": "equities", "symbol": "RELIANCE", **dd},
-                        {"index": "equities", "symbol": "GROWW"}, {"index": "equities", **dd}):
-                  try:
-                      p = nse._api_get("corporates-pit-gg", q)
-                  except Exception as e:
-                      print("== ERR", q, type(e).__name__, e); continue
-                  rows = pead_v2._deal_rows(p)
-                  print("==", q.get("symbol", "ALL"), sorted(q), type(p).__name__, list(p.keys())[:12] if isinstance(p, dict) else None, "rows", len(rows))
-                  for r in rows[:2]:
-                      print("ROW", json.dumps(r)[:1800])
-                  if rows:
-                      for k in list(rows[0].keys()):
-                          c = collections.Counter(str(r.get(k))[:40] for r in rows)
-                          if 1 < len(c) <= 12: print("  ", k, c.most_common(8))
+              rows = pead_v2._deal_rows(nse._api_get("corporates-pit-gg", {"index": "equities", "from_date": f.strftime("%d-%m-%Y"), "to_date": t.strftime("%d-%m-%Y")}))
+          print("rows", len(rows))
+          for r in rows[:3]:
+              x = pead_v2._eod_get(r["xmlFileName"])
+              print("== XML", r["symbol"], len(x))
+              for m in re.finditer(r"<([A-Za-z0-9_\-]+:[A-Za-z0-9_]+)([^>]*)>([^<]{0,120})</", x):
+                  print("  ", m.group(1), "|", re.sub(r"\s+", " ", m.group(2))[:70], "|", m.group(3).strip())
           PY
