@@ -1052,7 +1052,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.73';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.74';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -1138,6 +1138,7 @@
     $('view').classList.toggle('enter', fresh);
     $('view').innerHTML = { screen: viewScreen, setups: viewSetups, radar: viewRadar, trades: viewTrades, watch: viewWatch, sectors: viewSectors, score: viewScore, health: viewHealth }[S.tab]();
     foldNotes($('view'));
+    if (S.hashTarget) { const el = document.getElementById(S.hashTarget); if (el) { el.scrollIntoView({ block: 'start' }); S.hashTarget = null; } }
   }
 
   // ---------- events ----------
@@ -1212,7 +1213,14 @@
   $('theme').addEventListener('click', () => { const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); const next = cur === 'dark' ? 'light' : 'dark'; store.set('theme', next); applyTheme(next); });
 
   // ---------- boot ----------
-  S.tab = store.get('tab', 'screen'); if (!store.get('seenScreen', false)) { S.tab = 'screen'; store.set('seenScreen', true); } S.liquid = store.get('liquid', true); S.sort = store.get('sort', 'conviction');
+  S.tab = store.get('tab', 'screen'); if (!store.get('seenScreen', false)) { S.tab = 'screen'; store.set('seenScreen', true); }
+  // 2.9.74: links from alerts: #t-SYMBOL opens that trade, #s-SYMBOL finds the stock in the screener.
+  const hashLink = (location.hash || '').match(/^#([ts])-([A-Za-z0-9&-]+)$/);
+  if (hashLink) {
+    S.tab = hashLink[1] === 't' ? 'trades' : 'screen';
+    if (hashLink[1] === 's') { S.q = hashLink[2].toUpperCase(); const qi = $('q'); if (qi) qi.value = S.q; }
+    S.hashTarget = hashLink[1] === 't' ? 't-' + hashLink[2].toUpperCase() : null;
+  } S.liquid = store.get('liquid', true); S.sort = store.get('sort', 'conviction');
   S.dir = store.get('dir', 'desc');
   if (!$('sort').querySelector(`option[value="${S.sort}"]`)) S.sort = 'conviction';
   $('liquid').checked = S.liquid; $('sort').value = S.sort; showDir();

@@ -4408,3 +4408,54 @@ class PeerReadThroughTests(unittest.TestCase):
         self.assertEqual(rt["peers"][0]["symbol"], "A")
         self.assertIsNone(items[4]["plus"]["readThrough"])                # one reporter is not a read-through
         self.assertNotIn("readThrough", items[0]["plus"])                 # reported companies get none
+
+
+class TelegramBotTests(unittest.TestCase):
+    """2.9.74 (23 Nov 2026): Telegram buttons record trades (no quantities)."""
+
+    def doc(self):
+        return {"positions": [{"symbol": "GROWW", "entryDate": "2026-10-16", "entryPrice": 200.8, "stop": 188.75, "status": "OPEN"}]}
+
+    def test_buttons(self):
+        import telegram_bot as tg
+        kb = tg.buttons_for("GROWW:half")[0]
+        self.assertEqual([b["text"] for b in kb], ["Open card", "Sold half", "Sold all"])
+        self.assertTrue(kb[0]["url"].endswith("#t-GROWW"))
+        self.assertEqual([b["text"] for b in tg.buttons_for("DIVISLAB:entry")[0]], ["Open card", "I bought"])
+        self.assertEqual(tg.buttons_for("hello"), [])
+
+    def test_sold_half_then_fill_then_all(self):
+        import telegram_bot as tg
+        from datetime import date
+        d, today = self.doc(), date(2026, 11, 24)
+        self.assertIn("half sold", tg.apply_action(d, "sold|GROWW|half", 216.8, today))
+        self.assertIn("already", tg.apply_action(d, "sold|GROWW|half", 216.9, today))    # a second tap is ignored
+        self.assertEqual(d["positions"][0]["partialExits"][0]["fraction"], 0.5)
+        self.assertTrue(tg.apply_fill(d, "groww", 216.73, today)[1])
+        self.assertEqual(d["positions"][0]["partialExits"][0]["price"], 216.73)
+        tg.apply_action(d, "sold|GROWW|all", 214.0, today)
+        self.assertEqual((d["positions"][0]["status"], d["positions"][0]["exitPrice"]), ("CLOSED", 214.0))
+        self.assertIn("no open trade", tg.apply_action(d, "sold|GROWW|all", 214.0, today))
+        self.assertNotIn("qty", json.dumps(d))
+
+    def test_bought_needs_price_and_stop(self):
+        import telegram_bot as tg
+        from datetime import date
+        d = self.doc()
+        self.assertIn("no live price", tg.apply_action(d, "bought|DIVISLAB", None, date(2026, 11, 24), {"sl": 10960.29}))
+        self.assertIn("Recorded", tg.apply_action(d, "bought|DIVISLAB", 11249.0, date(2026, 11, 24), {"sl": 10960.29}))
+        self.assertEqual(d["positions"][-1]["stop"], 10960.29)
+        self.assertIn("already", tg.apply_action(d, "bought|DIVISLAB", 11249.0, date(2026, 11, 24), {"sl": 10960.29}))
+
+    def test_not_configured_does_nothing(self):
+        import os
+        import telegram_bot as tg
+        old = {k: os.environ.pop(k, None) for k in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")}
+        try:
+            self.assertFalse(tg.configured())
+            self.assertFalse(tg.send("t", "b", "X:half"))
+            self.assertFalse(tg.poll())
+        finally:
+            for k, v in old.items():
+                if v is not None:
+                    os.environ[k] = v

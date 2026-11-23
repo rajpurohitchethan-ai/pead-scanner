@@ -83,6 +83,13 @@ jobs:
         if: github.event.inputs.mode == 'validate_financials'
         run: python pead_v2.py --validate-financials --limit 40
 
+      - name: Telegram buttons (record sales / buys tapped since the last run)
+        if: github.event_name == 'schedule' || github.event.inputs.mode == 'run' || github.event.inputs.mode == ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}   # 2.9.74: never printed
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python telegram_bot.py --poll --outside-market || true
+
       - name: Run persistent event engine
         if: github.event_name == 'schedule' || github.event.inputs.mode == 'run' || github.event.inputs.mode == ''
         env:

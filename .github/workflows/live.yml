@@ -24,6 +24,9 @@ jobs:
             pead_v2.py
             pead_plus.py
             live_prices.py
+            telegram_bot.py
+            master/positions.json
+            master/telegram_state.json
             page.json
             intelligence.json
             live.json
@@ -38,6 +41,8 @@ jobs:
         env:
           UPSTOX_TOKEN: ${{ secrets.UPSTOX_TOKEN }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}      # 2.9.60: phone alerts (private topic name)
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}   # 2.9.74: never printed
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           git config user.name "PEAD live bot"
           git config user.email "actions@users.noreply.github.com"

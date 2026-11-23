@@ -17,6 +17,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pead_v2 as p
+import telegram_bot as tg
 
 ROOT = Path(__file__).resolve().parent
 LIVE_PATH = ROOT / "live.json"
@@ -148,19 +149,22 @@ def send_alerts(found, sent: set[str], topic: str | None) -> list[str]:
     done = []
     entries = sum(1 for k in sent if k.endswith(":entry"))
     for key, title, body, prio in found:
-        if key in sent or not topic:
+        if key in sent or not (topic or tg.configured()):
             continue
         if key.endswith(":entry"):
             if entries >= MAX_ENTRY_ALERTS:
                 continue
             entries += 1
+        ok = tg.send(title, body, key)                      # 2.9.74: Telegram with buttons (when configured)
         try:
-            r = requests.post(NTFY_URL + topic, data=body.encode("utf-8"), timeout=15,
-                              headers={"Title": title.encode("utf-8"), "Priority": prio, "Tags": "chart_with_upwards_trend"})
-            if r.status_code < 300:
-                done.append(key)
+            if topic:
+                r = requests.post(NTFY_URL + topic, data=body.encode("utf-8"), timeout=15,
+                                  headers={"Title": title.encode("utf-8"), "Priority": prio, "Tags": "chart_with_upwards_trend"})
+                ok = ok or r.status_code < 300
         except Exception as exc:
             print(f"Alert {key} not sent: {type(exc).__name__}")
+        if ok:
+            done.append(key)
     return done
 
 
@@ -170,6 +174,9 @@ def git(*args: str) -> int:
 
 def push(now: datetime) -> None:
     git("add", "live.json")
+    for f in ("master/positions.json", "master/telegram_state.json"):     # 2.9.74: Telegram button records
+        if (ROOT / f).exists():
+            git("add", f)
     if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=ROOT).returncode == 0:
         return
     git("commit", "-q", "-m", f"Live prices {now:%H:%M} IST")
@@ -196,7 +203,7 @@ def main() -> int:
     except (OSError, ValueError, AttributeError):
         pass
     print(f"Watching {len(watch)} stocks. Phone alerts: {'on' if topic else 'off (NTFY_TOPIC not set)'}.")
-    if topic and "hello" not in sent:                       # 2.9.67: one quiet "alerts are running" a day
+    if (topic or tg.configured()) and "hello" not in sent:                       # 2.9.67: one quiet "alerts are running" a day
         held = len((_PAGE or {}).get("positions") or [])
         sent.update(send_alerts([("hello", "PEAD live alerts running",
                                   f"Watching {len(watch)} stocks and {held} open trades every 5 minutes until 3:30 pm. "
@@ -214,7 +221,7 @@ def main() -> int:
             watch, loaded = watch_list() or watch, time.time()
         try:
             prices = p.upstox_ltp(list(watch.items()))
-            if topic:
+            if topic or tg.configured():
                 new = send_alerts(alerts_for(_PAGE, prices), sent, topic)
                 if new:
                     sent.update(new)
@@ -227,7 +234,19 @@ def main() -> int:
             return 1
         except Exception as exc:
             print(f"{now:%H:%M} IST: {type(exc).__name__}: {exc}")
-        time.sleep(max(30, EVERY - (time.time() - started) % EVERY))
+        wait_until = time.time() + max(30, EVERY - (time.time() - started) % EVERY)
+        while time.time() < wait_until:                     # 2.9.74: answer Telegram buttons within seconds
+            if not tg.configured():
+                time.sleep(max(1, wait_until - time.time()))
+                break
+            try:
+                last = {s: q["price"] for s, q in (prices or {}).items()} if "prices" in locals() else {}
+                if tg.poll(wait=int(min(25, max(1, wait_until - time.time()))), prices=last):
+                    push(datetime.now(IST))
+                    watch = watch_list() or watch
+            except Exception as exc:
+                print(f"Telegram poll: {type(exc).__name__}")
+                time.sleep(10)
 
 
 if __name__ == "__main__":

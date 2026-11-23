@@ -535,3 +535,8 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 
 2.9.73 (owner, 23 Nov 2026) - peer read-through
 - pead_plus.peer_readthrough: for each company still to report, its industry peers that already reported this quarter (2+ needed): how many had strong earnings, the median result-day reaction and the best four. STRONG = half or more strong and median reaction > 0; WEAK = under a quarter strong and median < 0; else MIXED. plus.readThrough; card tag and line; Peers column in 'Strong stocks reporting this week'. Display only. Tests: PeerReadThroughTests.
+
+2.9.74 (owner, 23 Nov 2026) - Telegram alerts with buttons
+- telegram_bot.py. Secrets TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (never written or printed; without them nothing runs). live_prices.send_alerts sends every alert to Telegram as well as ntfy, with buttons: Open card (page link #t-SYMBOL / #s-SYMBOL), Sold half / Sold all (trade alerts), I bought (entry alerts, stop = the screener's plan stop).
+- Taps and the commands /fill SYMBOL PRICE and /trades are read with getUpdates: by the live job between price rounds (answers within seconds in market hours) and by each engine run outside market hours (scan.yml step 'Telegram buttons', --outside-market). Only TELEGRAM_CHAT_ID is obeyed. Updates are confirmed at once; a second 'Sold half' the same day and a second 'I bought' are ignored. Records go to master/positions.json at the live price (marked via telegram; /fill corrects the price); a half sale is fraction 0.5, never a quantity. Offset in master/telegram_state.json.
+- The page opens #t-SYMBOL on My trades at that card and #s-SYMBOL in the Screener search. Tests: TelegramBotTests.
