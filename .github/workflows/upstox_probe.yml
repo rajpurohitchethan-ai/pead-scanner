@@ -1,0 +1,25 @@
+name: Upstox token probe
+# Temporary: checks that the UPSTOX_TOKEN secret exists and answers. Prints
+# HTTP status codes and prices only, never the token.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe
+        env:
+          UPSTOX_TOKEN: ${{ secrets.UPSTOX_TOKEN }}
+        run: |
+          if [ -z "$UPSTOX_TOKEN" ]; then echo "RESULT: secret UPSTOX_TOKEN is NOT set"; exit 0; fi
+          echo "secret present, length ${#UPSTOX_TOKEN}, starts with eyJ: $([ "${UPSTOX_TOKEN:0:3}" = "eyJ" ] && echo yes || echo NO)"
+          p() { echo "=== $1"; code=$(curl -sS -m 25 -o out.json -w '%{http_code}' -H "Accept: application/json" -H "Authorization: Bearer $UPSTOX_TOKEN" "$2" || echo ERR); echo "HTTP $code"; head -c 600 out.json; echo; }
+          K="NSE_EQ%7CINE002A01018,NSE_EQ%7CINE053A01029"
+          p ltp_v3 "https://api.upstox.com/v3/market-quote/ltp?instrument_key=$K"
+          p ltp_v2 "https://api.upstox.com/v2/market-quote/ltp?instrument_key=$K"
+          p ohlc_v3 "https://api.upstox.com/v3/market-quote/ohlc?instrument_key=$K&interval=1d"
+          p quotes_v2 "https://api.upstox.com/v2/market-quote/quotes?instrument_key=NSE_EQ%7CINE053A01029"
+          p candles_v3 "https://api.upstox.com/v3/historical-candle/NSE_EQ%7CINE053A01029/days/1/2026-11-21/2026-11-14"
