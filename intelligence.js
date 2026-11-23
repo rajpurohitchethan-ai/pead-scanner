@@ -613,6 +613,71 @@
         <span class="bl-act"><b class="act ${a[1]}">${esc(a[0])}</b><small>${a[2]}</small></span></a>`).join('')}
       <p class="meta">Live prices; your rule acts on the daily close. Tap a trade for its full card.</p></section>`;
   }
+  // 2.9.70: money after costs, the tax estimate and the spreadsheet export. Quantities never leave this device.
+  // Groww equity delivery, NSE (groww.in/pricing/stocks, checked 23 Nov 2026): brokerage 0.1% capped at Rs 20,
+  // minimum Rs 5 an order; STT 0.1% each side; exchange 0.00307%; SEBI 0.0001%; IPFT 0.0001%; stamp 0.015% on
+  // the buy; DP Rs 20 (16.5 + 3.5) a sell; GST 18% on brokerage, exchange, SEBI, IPFT and DP.
+  // Short-term gains on listed shares: 20% (s.111A, sales from 23 Jul 2024) plus 4% cess.
+  const COST = { brokPct: 0.001, brokMax: 20, brokMin: 5, stt: 0.001, exch: 0.0000307, sebi: 0.000001, ipft: 0.000001, stamp: 0.00015, dp: 20, gst: 0.18, stcg: 0.208 };
+  function orderCost(value, side) {
+    if (!(value > 0)) return 0;
+    const brok = Math.max(COST.brokMin, Math.min(COST.brokMax, value * COST.brokPct));
+    const fees = value * (COST.exch + COST.sebi + COST.ipft), dp = side === 'sell' ? COST.dp : 0;
+    return brok + fees + dp + (brok + fees + dp) * COST.gst + value * COST.stt + (side === 'buy' ? value * COST.stamp : 0);
+  }
+  const fyStart = d => { const x = new Date(d); const y = x.getMonth() >= 3 ? x.getFullYear() : x.getFullYear() - 1; return `${y}-04-01`; };
+  function tradeRows() {
+    const q = sym => { try { return num(localStorage.getItem('qty:' + sym)); } catch (e) { return null; } };
+    const rows = [];
+    for (const c of S.data.closedPositions || []) {
+      const n = q(c.symbol), gross = n ? (num(c.exitPrice) - num(c.entryPrice)) * n : null;
+      const cost = n ? orderCost(num(c.entryPrice) * n, 'buy') + orderCost(num(c.exitPrice) * n, 'sell') : null;
+      rows.push({ symbol: c.symbol, status: 'Closed', entryDate: c.entryDate, entryPrice: c.entryPrice, stop: c.stop, exitDate: c.exitDate, exitPrice: c.exitPrice,
+        r: c.r, pnlPct: c.pnlPct, qty: n, gross, cost, net: gross !== null ? gross - cost : null, note: c.exitNote || '' });
+    }
+    for (const p of S.data.positions || []) {
+      const n = q(p.symbol);
+      let soldQty = 0;
+      for (const x of p.partialExits || []) {
+        const sq = n && num(x.fraction) ? Math.round(n * num(x.fraction)) : null;
+        if (sq) soldQty += sq;
+        const gross = sq ? (num(x.price) - num(p.entryPrice)) * sq : null;
+        const cost = sq ? orderCost(num(p.entryPrice) * sq, 'buy') + orderCost(num(x.price) * sq, 'sell') : null;
+        rows.push({ symbol: p.symbol, status: `Part sold (${Math.round(num(x.fraction) * 100)}%)`, entryDate: p.entryDate, entryPrice: p.entryPrice, stop: p.initialStop,
+          exitDate: x.date, exitPrice: x.price, r: num(p.riskPerShare) ? (num(x.price) - num(p.entryPrice)) / num(p.riskPerShare) : null,
+          pnlPct: (num(x.price) / num(p.entryPrice) - 1) * 100, qty: sq, gross, cost, net: gross !== null ? gross - cost : null, note: x.note || '' });
+      }
+      const left = n ? n - soldQty : null, gross = left && num(p.last) !== null ? (num(p.last) - num(p.entryPrice)) * left : null;
+      rows.push({ symbol: p.symbol, status: 'Open', entryDate: p.entryDate, entryPrice: p.entryPrice, stop: p.initialStop, exitDate: '', exitPrice: p.last,
+        r: p.rNow, pnlPct: p.pnlPct, qty: left, gross, cost: left ? orderCost(num(p.entryPrice) * left, 'buy') : null, net: null, note: 'Open: price is the latest' });
+    }
+    return rows;
+  }
+  function moneyBlock() {
+    const rows = tradeRows(), fy = fyStart(Date.now());
+    const real = rows.filter(r => r.status !== 'Open' && r.net !== null && String(r.exitDate) >= fy);
+    const missing = rows.filter(r => r.status !== 'Open' && r.qty === null).map(r => r.symbol);
+    const rs = v => v === null ? '—' : `${v >= 0 ? '+' : '−'}₹${Math.abs(Math.round(v)).toLocaleString('en-IN')}`;
+    const gross = real.reduce((a, r) => a + r.gross, 0), cost = real.reduce((a, r) => a + r.cost, 0), net = gross - cost;
+    const tax = Math.max(0, net) * COST.stcg;
+    return `<section class="card gm money"><h3>Money after costs <span class="meta">this financial year, from ${dt(fy)}</span></h3>
+      ${real.length ? `<div class="jtiles"><div><span>Gross P&amp;L</span><b class="n ${cls(gross)}">${rs(gross)}</b></div><div><span>Charges and STT</span><b class="n">−₹${Math.round(cost).toLocaleString('en-IN')}</b></div>
+        <div><span>Net P&amp;L</span><b class="n ${cls(net)}">${rs(net)}</b></div><div><span>Tax estimate (STCG 20.8%)</span><b class="n">${net > 0 ? '₹' + Math.round(tax).toLocaleString('en-IN') : '₹0'}</b></div></div>`
+        : '<p class="meta">Enter quantities for your closed trades (in each card, or with "Move quantities") to see rupee figures.</p>'}
+      ${missing.length ? `<p class="meta">No quantity on this device for: ${esc([...new Set(missing)].join(', '))}. Rupee figures leave them out.</p>` : ''}
+      <p class="meta">Charges use Groww's delivery rates with one order a side; partial sales use the share of your bought quantity. The tax figure is an estimate before other income and set-offs; confirm with your CA.</p>
+      <button type="button" class="scr-chip" data-act="export-trades">Download all trades (spreadsheet)</button></section>`;
+  }
+  function exportTrades() {
+    const cols = [['symbol', 'Symbol'], ['status', 'Status'], ['entryDate', 'Bought'], ['entryPrice', 'Buy price'], ['stop', 'Initial stop'], ['exitDate', 'Sold'], ['exitPrice', 'Sell / last price'],
+      ['qty', 'Quantity'], ['r', 'R'], ['pnlPct', 'P&L %'], ['gross', 'Gross P&L'], ['cost', 'Charges'], ['net', 'Net P&L'], ['note', 'Note']];
+    const cell = v => { if (v === null || v === undefined) return ''; const s = typeof v === 'number' ? String(Math.round(v * 100) / 100) : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const csv = [cols.map(c => c[1]).join(','), ...tradeRows().map(r => cols.map(c => cell(r[c[0]])).join(','))].join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `pead-trades-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
   function viewTrades() {
     const list = S.data.positions || [];
     if (!list.length) return journalBlock() + closedBlock() + `<div class="empty">No open trades. Tell Claude when you buy, and the trade is tracked here against the screener's plan.</div>`;
@@ -640,7 +705,7 @@
         <p class="meta">Quantities stay in this browser only (the repo is public). Copy them here and paste them on your other phone or laptop.</p>
         <button type="button" data-act="qty-copy">Copy my quantities</button>
         <p><input id="qty-in" class="n" placeholder="HCLTECH=114;GROWW=750" autocomplete="off"> <button type="button" data-act="qty-apply">Apply</button></p>
-        <p class="meta" id="qty-msg"></p></details>${journalBlock()}${closedBlock()}${globalBlock()}`;
+        <p class="meta" id="qty-msg"></p></details>${journalBlock()}${moneyBlock()}${closedBlock()}${globalBlock()}`;
   }
   // 2.9.19: total rupee risk to the current stops over the trades with a quantity entered.
   function tradesRisk(list) {
@@ -952,7 +1017,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.69';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.70';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
@@ -1061,6 +1126,7 @@
       (navigator.clipboard ? navigator.clipboard.writeText(txt).then(() => done(true), () => done(false)) : done(false));
       return;
     }
+    if (e.target.closest('[data-act="export-trades"]')) { exportTrades(); return; }
     const qx = e.target.closest('[data-act="qty-copy"]');
     if (qx) {
       const out = (S.data.positions || []).map(p => { let q = null; try { q = localStorage.getItem('qty:' + p.symbol); } catch (err) { /* blocked */ } return q ? `${p.symbol}=${q}` : null; }).filter(Boolean).join(';');

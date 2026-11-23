@@ -521,3 +521,7 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 
 2.9.69 (owner, 23 Nov 2026) - market regime push
 - notify_regime_change(): after intelligence.json is written, a change of the regime label into or out of RISK-OFF is pushed to ntfy (NTFY_TOPIC, now also given to the engine step in scan.yml). The last label lives in master/alert_state.json; the first run only remembers it. Advisory: no rule changes. Tests: RegimeAlertTests.
+
+2.9.70 (owner, 23 Nov 2026) - money after costs, tax estimate, spreadsheet export (page only)
+- My trades: 'Money after costs' for the financial year from the quantities on the device: gross P&L, Groww delivery charges + STT (rates from groww.in/pricing/stocks, 23 Nov 2026; one order a side), net P&L and a short-term gains estimate at 20.8% (s.111A 20% + 4% cess). Partial sales use fraction x the bought quantity.
+- 'Download all trades' builds a CSV in the browser (closed, partial sales, open) with the device quantities; nothing is uploaded. Update COST in intelligence.js if Groww's rates or the tax rate change.
