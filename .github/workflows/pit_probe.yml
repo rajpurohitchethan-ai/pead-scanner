@@ -23,19 +23,29 @@ jobs:
       - name: Probe
         run: |
           python - <<'PY'
-          import json, pead_v2, pead_plus
-          from datetime import date, timedelta
+          import re, pead_v2
           ctx = pead_v2.RunContext() if hasattr(pead_v2, 'RunContext') else None
-          t = date.today(); f = t - timedelta(days=60)
           with pead_v2.NSEAdapter(ctx) as nse:
-              for s in ("RELIANCE", "RAMCOIND", "GROWW", "AONESTEELS", "SEJALLTD"):
-                  for extra in ({}, {"from_date": f.strftime("%d-%m-%Y"), "to_date": t.strftime("%d-%m-%Y")}):
+              cl = nse.client
+              tr = getattr(cl, "_transport", None)
+              get = (lambda u: tr.request(u)) if tr is not None else (lambda u: cl._req(u))
+              seen = set()
+              for page in ("https://www.nseindia.com/companies-listing/corporate-filings-insider-trading",):
+                  try:
+                      h = get(page).text
+                  except Exception as e:
+                      print("page ERR", e); continue
+                  print("page", len(h))
+                  srcs = re.findall(r'src="([^"]+\.js[^"]*)"', h)
+                  print("scripts", srcs[:40])
+                  for m in re.findall(r'(?:api/|/api/)[A-Za-z0-9_\-/]+', h): seen.add(m)
+                  for js in srcs:
+                      u = js if js.startswith("http") else "https://www.nseindia.com" + js
                       try:
-                          p = nse._api_get("corporates-pit", {"index": "equities", "symbol": s, **extra})
+                          t = get(u).text
                       except Exception as e:
-                          print(s, extra and "dated", "ERR", type(e).__name__, e); continue
-                      rows = pead_v2._deal_rows(p)
-                      ds = sorted(pead_plus._pit_date(r.get("acqtoDt"), r.get("intimDt"), r.get("date")) or "" for r in rows)
-                      print("==", s, "dated" if extra else "plain", "rows", len(rows), "dates", ds[:1], ds[-1:],
-                            "parsed", len(pead_plus.parse_insider_rows(rows)))
+                          print("js ERR", u, e); continue
+                      for m in re.findall(r'["\'](?:/api/)?([A-Za-z0-9_\-]*(?:pit|insider|Pit|Insider|PIT|xbrl)[A-Za-z0-9_\-/]*)["\'?]', t):
+                          seen.add(m)
+              print("found", sorted(seen)[:120])
           PY
