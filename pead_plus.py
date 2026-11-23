@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.59"   # must equal pead_v2.ENGINE_VERSION (install check)
+MODULE_VERSION = "2.9.61"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -2746,6 +2746,83 @@ def closed_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     wins = [r for r in rs if r > 0]
     return {"trades": len(rows), "wins": len(wins), "losses": len(rs) - len(wins),
             "totalR": _r2(sum(rs)) if rs else None, "avgR": _r2(sum(rs) / len(rs)) if rs else None}
+
+
+# ---------------------------------------------------------------------------
+# 2.9.61 Trade journal (owner-approved 23 Nov 2026): the owner's own numbers
+# and the habits that cost money, from master/positions.json (no quantities:
+# the page multiplies by the quantity kept on the phone).
+# ---------------------------------------------------------------------------
+MISTAKES = {
+    "SOLD_EARLY": "Sold before the stop with no exit signal",
+    "EXIT_BELOW_STOP": "Exit well below the stop",
+    "HELD_AFTER_SIGNAL": "Held after a closing exit signal",
+    "BOUGHT_EARLY": "Bought before the close confirmed the trigger",
+}
+
+
+def trade_journal(raw: list[dict[str, Any]], state: dict[str, Any], last_price: dict[str, float],
+                  open_views: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Stats over closed trades, and mistake tags for closed and open trades.
+    Costs are in R (one planned risk), measured, never guessed: an early sale
+    is compared with today's price, an exit below the stop with the stop, a
+    late exit with the close that gave the signal."""
+    closed, rows, mistakes = [], [], []
+    views = {str(v.get("symbol") or "").upper(): v for v in (open_views or [])}
+    for pos in raw or []:
+        if not isinstance(pos, dict):
+            continue
+        sym = str(pos.get("symbol") or "").upper()
+        e, s0 = _num(pos.get("entryPrice")), _num(pos.get("stop"))
+        if e is None or s0 is None or e <= s0:
+            continue
+        risk = e - s0
+        st = state.get(f"{sym}|{pos.get('entryDate')}") or {}
+        tags = []
+        if pos.get("entryTiming") == "before-confirmation":
+            tags.append({"code": "BOUGHT_EARLY", "costR": None})
+        hit = st.get("exitHit") if isinstance(st.get("exitHit"), dict) else None
+        if str(pos.get("status") or "OPEN").upper() == "CLOSED":
+            v = closed_trade_view(pos)
+            if not v:
+                continue
+            x = _num(pos.get("exitPrice"))
+            signal = bool(hit and str(hit.get("date") or "") <= str(pos.get("exitDate") or ""))
+            if x is not None and x < s0 and (s0 - x) / s0 > 0.01:
+                tags.append({"code": "EXIT_BELOW_STOP", "costR": _r2((s0 - x) / risk)})
+            elif x is not None and x > s0 and not st.get("oneRHit") and not signal:
+                now = _num(last_price.get(sym))
+                tags.append({"code": "SOLD_EARLY", "costR": _r2((now - x) / risk) if now is not None else None,
+                             "since": _r2(_pct(now, x)) if now is not None else None})
+            if signal and str(hit.get("date")) < str(pos.get("exitDate") or ""):
+                tags.append({"code": "HELD_AFTER_SIGNAL", "costR": _r2((_num(hit.get("close")) - x) / risk) if x is not None else None,
+                             "since": hit.get("date")})
+            v["mistakes"], v["riskPerShare"] = tags, _r2(risk)
+            closed.append(v)
+        else:
+            vw = views.get(sym) or {}
+            now = _num(vw.get("last")) or _num(last_price.get(sym))
+            if hit and now is not None and vw.get("status") != "NO_DATA":
+                tags.append({"code": "HELD_AFTER_SIGNAL", "costR": _r2((_num(hit.get("close")) - now) / risk), "since": hit.get("date"),
+                             "open": True})
+            if tags:
+                rows.append({"symbol": sym, "entryDate": pos.get("entryDate"), "open": True, "mistakes": tags, "riskPerShare": _r2(risk)})
+    for t in closed + rows:
+        for m in t.get("mistakes") or []:
+            mistakes.append({"symbol": t["symbol"], "open": bool(t.get("open")), "riskPerShare": t.get("riskPerShare"), **m,
+                             "label": MISTAKES[m["code"]]})
+    rs = [_num(c.get("r")) for c in closed if _num(c.get("r")) is not None]
+    wins, losses = [r for r in rs if r > 0], [r for r in rs if r <= 0]
+    days = [c["days"] for c in closed if isinstance(c.get("days"), int)]
+    stats = {"trades": len(closed), "wins": len(wins), "losses": len(losses),
+             "winRate": _r2(len(wins) / len(rs) * 100) if rs else None,
+             "avgWinR": _r2(sum(wins) / len(wins)) if wins else None,
+             "avgLossR": _r2(sum(losses) / len(losses)) if losses else None,
+             "expectancyR": _r2(sum(rs) / len(rs)) if rs else None,
+             "totalR": _r2(sum(rs)) if rs else None,
+             "profitFactor": _r2(sum(wins) / abs(sum(losses))) if wins and losses and sum(losses) else None,
+             "avgDays": _r2(sum(days) / len(days)) if days else None}
+    return {"stats": stats, "mistakes": mistakes}
 
 
 def rsi_series(closes: list[float], n: int = 14) -> list[float | None]:

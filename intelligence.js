@@ -563,9 +563,9 @@
     SELL_HALF: ['Sell half: closed below the 10 EMA', 'warn'], EXIT_SWING: ['Exit', 'bad'], EXIT: ['Exit: closed below the stop', 'bad'], NO_DATA: ['Waiting for data', 'pending'] };
   function viewTrades() {
     const list = S.data.positions || [];
-    if (!list.length) return closedBlock() + `<div class="empty">No open trades. Tell Claude when you buy, and the trade is tracked here against the screener's plan.</div>`;
+    if (!list.length) return journalBlock() + closedBlock() + `<div class="empty">No open trades. Tell Claude when you buy, and the trade is tracked here against the screener's plan.</div>`;
     return `<p class="note">Your open trades, checked every hour against the screener's plan: stop 1% under the result-day low until a close at +1R, then the stop moves to cost. After that, half is sold on a close below the 10 EMA and the rest on a close below the 20 EMA. Everything is judged on daily closing prices. Quantity stays on this device only.</p>
-      ${tradesRisk(list)}<div class="grid">${list.map(p => {
+      ${tradesRisk(list)}${heatBlock(list)}<div class="grid">${list.map(p => {
         const st = POS[p.status] || [p.status, ''];
         let qty = null; try { qty = num(localStorage.getItem('qty:' + p.symbol)); } catch (e) { /* storage blocked */ }
         const money = v => v === null ? '—' : `${v >= 0 ? '+' : '−'}₹${Math.abs(Math.round(v)).toLocaleString('en-IN')}`;
@@ -588,7 +588,7 @@
         <p class="meta">Quantities stay in this browser only (the repo is public). Copy them here and paste them on your other phone or laptop.</p>
         <button type="button" data-act="qty-copy">Copy my quantities</button>
         <p><input id="qty-in" class="n" placeholder="HCLTECH=114;GROWW=750" autocomplete="off"> <button type="button" data-act="qty-apply">Apply</button></p>
-        <p class="meta" id="qty-msg"></p></details>${closedBlock()}${globalBlock()}`;
+        <p class="meta" id="qty-msg"></p></details>${journalBlock()}${closedBlock()}${globalBlock()}`;
   }
   // 2.9.19: total rupee risk to the current stops over the trades with a quantity entered.
   function tradesRisk(list) {
@@ -671,6 +671,41 @@
       ${warn ? '<p class="meta"><b>What it means:</b> the trend is still up but each push is weaker. It is a warning, not an exit signal: keep the stop, do not add, and take it seriously if the price also loses the 20 EMA.</p>' : ''}</div>`;
   }
   // 2.9.28: closed trades (R and % from positions.json; rupees only from quantities on this device).
+  // 2.9.61: trade journal (stats and the habits that cost money) and portfolio heat.
+  function journalBlock() {
+    const J = S.data.journal; if (!J || !J.stats) return '';
+    const s = J.stats, r = v => num(v) === null ? '—' : `${num(v) > 0 ? '+' : ''}${num(v).toFixed(2)}R`;
+    const qty = sym => { try { return num(localStorage.getItem('qty:' + sym)); } catch (e) { return null; } };
+    const tiles = [['Trades closed', s.trades], ['Win rate', num(s.winRate) !== null ? Math.round(s.winRate) + '%' : '—'], ['Avg win', r(s.avgWinR)],
+      ['Avg loss', r(s.avgLossR)], ['Per trade (expectancy)', r(s.expectancyR)], ['Profit factor', num(s.profitFactor) !== null ? num(s.profitFactor).toFixed(2) : '—']];
+    const rows = (J.mistakes || []).map(m => {
+      const q = qty(m.symbol), rs = num(m.riskPerShare), rupees = q && rs && num(m.costR) !== null ? num(m.costR) * rs * q : null;
+      const cost = num(m.costR) === null ? '<span class="meta">not measurable</span>'
+        : `<b class="${num(m.costR) > 0 ? 'down' : 'up'}">${num(m.costR) > 0 ? 'cost ' : 'saved '}${Math.abs(num(m.costR)).toFixed(2)}R</b>${rupees !== null ? ` <span class="meta">≈ ₹${Math.abs(Math.round(rupees)).toLocaleString('en-IN')}</span>` : ''}`;
+      const extra = m.code === 'SOLD_EARLY' && num(m.since) !== null ? ` · ${pct(m.since)} since you sold` : m.code === 'HELD_AFTER_SIGNAL' && m.since ? ` · signal ${dt(m.since)}${m.open ? ', still held' : ''}` : '';
+      return `<tr><td><b>${esc(m.symbol)}</b>${m.open ? ' <span class="tag">open</span>' : ''}</td><td>${esc(m.label)}<div class="meta">${extra.replace(/^ · /, '')}</div></td><td class="r">${cost}</td></tr>`;
+    }).join('');
+    const costR = (J.mistakes || []).reduce((a, m) => a + (num(m.costR) > 0 ? num(m.costR) : 0), 0);
+    return `<section class="card gm journal"><h3>Your trading journal</h3>
+      <div class="jtiles">${tiles.map(([l, v]) => `<div><span>${l}</span><b class="n">${v}</b></div>`).join('')}</div>
+      ${rows ? `<h4>Habits that changed the result <span class="meta">${costR > 0 ? `${costR.toFixed(2)}R cost so far` : ''}</span></h4>
+      <div class="tscroll"><table class="sectbl"><thead><tr><th>Trade</th><th>What happened</th><th class="r">Effect</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="meta">R = one planned risk (entry minus stop). "Cost" compares with what the rule would have done: an early sale with today's price, an exit below the stop with the stop, a late exit with the close that gave the signal. Rupees use the quantity saved on this device.</p>` : '<p class="meta">No rule breaks recorded. Keep it that way.</p>'}
+    </section>`;
+  }
+  function heatBlock(list) {
+    if (!list.length) return '';
+    const sec = {}; let n = 0;
+    for (const p of list) { const k = p.sector || 'Unknown'; (sec[k] = sec[k] || []).push(p.symbol); n += 1; }
+    const doubles = Object.entries(sec).filter(([k, v]) => v.length > 1 && k !== 'Unknown');
+    const warn = [];
+    if (n >= 6) warn.push(`${n} open trades: above your 4-5 limit. Take no new trade until one closes.`);
+    else if (n === 5) warn.push('5 open trades: at your limit. A new trade means closing one first.');
+    for (const [k, v] of doubles) warn.push(`${v.length} trades in ${k} (${v.join(', ')}): one bad sector day hits them together.`);
+    return `<section class="card heat"><h3>Portfolio heat <span class="meta">${n} open · ${Object.keys(sec).length} sectors</span></h3>
+      <div class="heat-sec">${Object.entries(sec).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => `<span class="tag ${v.length > 1 ? 'warn' : ''}">${esc(k)} · ${v.length}</span>`).join('')}</div>
+      ${warn.length ? warn.map(w => `<p class="note warn-t">⚠ ${esc(w)}</p>`).join('') : '<p class="note">Within limits: at most one trade per sector, under 5 open.</p>'}</section>`;
+  }
   function closedBlock() {
     const rows = S.data.closedPositions || [], sm = S.data.closedSummary;
     if (!rows.length) return '';
@@ -826,7 +861,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.59';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.61';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];

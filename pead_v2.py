@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.59"
+ENGINE_VERSION = "2.9.61"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -5805,6 +5805,27 @@ def closed_positions() -> list[dict[str, Any]]:
     return sorted([r for r in out if r], key=lambda r: str(r.get("exitDate") or ""), reverse=True)
 
 
+def trade_journal_view(items: list[dict[str, Any]], open_views: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """2.9.61: stats and mistake tags over the owner's trades (pead_plus.trade_journal)."""
+    try:
+        data = json.loads(POSITIONS_PATH.read_text(encoding="utf-8"))
+        state = json.loads(POSITIONS_STATE_PATH.read_text(encoding="utf-8")) if POSITIONS_STATE_PATH.exists() else {}
+    except Exception:
+        return None
+    raw = data.get("positions") if isinstance(data, dict) else data
+    last = {}
+    for it in items or []:
+        sym = str(it.get("symbol") or "").upper()
+        v = safe_num(((it.get("plus") or {}).get("live") or {}).get("price")) or safe_num((it.get("priceContext") or {}).get("lastClose"))
+        if sym and v:
+            last[sym] = v
+    try:
+        return pead_plus.trade_journal(raw or [], state or {}, last, open_views)
+    except Exception as exc:
+        print(f"Trade journal skipped: {type(exc).__name__}: {exc}")
+        return None
+
+
 def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, Any]]:
     pos = open_positions()
     if not pos:
@@ -5829,6 +5850,7 @@ def position_views(items: list[dict[str, Any]], today: date) -> list[dict[str, A
         state[key] = st
         view["hands"] = ((it or {}).get("plus") or {}).get("hands")   # 2.9.45
         view["stage"] = (((it or {}).get("plus") or {}).get("price") or {}).get("stage")   # 2.9.48
+        view["sector"] = ((it or {}).get("plus") or {}).get("sectorKey") or (it or {}).get("sector")   # 2.9.61 portfolio heat
         try:                                                          # 2.9.15
             pl = (it or {}).get("plus") or {}
             sym = str(p_["symbol"]).upper()
@@ -8737,6 +8759,7 @@ def publish(store: EventStore, health: dict[str, Any], *, force: bool = False, a
         "positions": positions,
         "closedPositions": closed_positions(),                         # 2.9.28
         "closedSummary": pead_plus.closed_summary(closed_positions()),
+        "journal": trade_journal_view(items, positions),                 # 2.9.61
         "globalMarkets": global_markets_view(),                       # 2.9.15
         "marketNote": holdings_notes(now_ist().date()).get("market"),   # 2.9.18
         "thresholds": {

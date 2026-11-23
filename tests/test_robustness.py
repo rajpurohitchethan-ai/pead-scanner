@@ -4132,3 +4132,50 @@ class PhoneAlertTests(unittest.TestCase):
             with mock.patch.object(lp, "MAX_ENTRY_ALERTS", 1):
                 self.assertEqual(lp.send_alerts(found, set(), "topic"), ["AAA:half", "CCC:entry"])
             self.assertEqual(lp.send_alerts(found, set(), None), [])                 # no topic: nothing sent
+
+
+class TradeJournalTests(unittest.TestCase):
+    """2.9.61 (23 Nov 2026): trade journal stats and mistake tags."""
+
+    def journal(self, raw, state=None, last=None, views=None):
+        import pead_plus
+        return pead_plus.trade_journal(raw, state or {}, last or {}, views or [])
+
+    def test_stats_and_sold_early(self):
+        raw = [{"symbol": "WIN", "status": "CLOSED", "entryDate": "2026-10-01", "entryPrice": 100, "stop": 90,
+                "exitDate": "2026-10-05", "exitPrice": 105},
+               {"symbol": "LOSS", "status": "CLOSED", "entryDate": "2026-10-01", "entryPrice": 100, "stop": 90,
+                "exitDate": "2026-10-03", "exitPrice": 90}]
+        j = self.journal(raw, last={"WIN": 115})
+        s = j["stats"]
+        self.assertEqual((s["trades"], s["wins"], s["losses"]), (2, 1, 1))
+        self.assertAlmostEqual(s["expectancyR"], -0.25)
+        m = [x for x in j["mistakes"] if x["symbol"] == "WIN"][0]
+        self.assertEqual(m["code"], "SOLD_EARLY")
+        self.assertAlmostEqual(m["costR"], 1.0)          # (115 - 105) / 10
+        self.assertEqual(m["riskPerShare"], 10)
+        self.assertFalse([x for x in j["mistakes"] if x["symbol"] == "LOSS"])   # exit at the stop is the rule
+
+    def test_exit_below_stop_and_late_exit(self):
+        raw = [{"symbol": "GAP", "status": "CLOSED", "entryDate": "2026-10-01", "entryPrice": 100, "stop": 90,
+                "exitDate": "2026-10-06", "exitPrice": 85}]
+        state = {"GAP|2026-10-01": {"exitHit": {"date": "2026-10-04", "close": 89}}}
+        codes = {m["code"]: m for m in self.journal(raw, state)["mistakes"]}
+        self.assertAlmostEqual(codes["EXIT_BELOW_STOP"]["costR"], 0.5)
+        self.assertAlmostEqual(codes["HELD_AFTER_SIGNAL"]["costR"], 0.4)   # (89 - 85) / 10
+
+    def test_open_trade_held_after_signal_and_early_buy(self):
+        raw = [{"symbol": "OPN", "status": "OPEN", "entryDate": "2026-11-01", "entryPrice": 100, "stop": 90,
+                "entryTiming": "before-confirmation"}]
+        state = {"OPN|2026-11-01": {"exitHit": {"date": "2026-11-20", "close": 98}}}
+        j = self.journal(raw, state, views=[{"symbol": "OPN", "last": 95, "status": "HOLD"}])
+        codes = {m["code"]: m for m in j["mistakes"]}
+        self.assertIsNone(codes["BOUGHT_EARLY"]["costR"])
+        self.assertAlmostEqual(codes["HELD_AFTER_SIGNAL"]["costR"], 0.3)
+        self.assertTrue(codes["HELD_AFTER_SIGNAL"]["open"])
+        self.assertEqual(j["stats"]["trades"], 0)
+
+    def test_no_quantities_in_journal(self):
+        raw = [{"symbol": "Q", "status": "CLOSED", "entryDate": "2026-10-01", "entryPrice": 100, "stop": 90,
+                "exitDate": "2026-10-05", "exitPrice": 95, "qty": 50}]
+        self.assertNotIn("qty", json.dumps(self.journal(raw)))
