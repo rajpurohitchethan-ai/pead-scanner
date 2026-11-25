@@ -87,7 +87,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.81"
+ENGINE_VERSION = "2.9.82"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -7355,9 +7355,12 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
     # 2.9.81 (owner: "how was DCI suggested, a 600 Cr company"): below the ₹1,000 Cr rule there is no
     # entry signal and no trigger or stop anywhere on the page; the card says it is not tradable.
     _mc = safe_num(store.value(event, "market_cap_cr"))
-    if _mc is not None and _mc < MIN_MCAP_CR and plan.get("signal") in pead_plus.LIVE_PLAN_SIGNALS:
-        plan = {"signal": "BELOW_MCAP", "stage": None, "belowMcap": True,
-                "why": f"Market cap ₹{_mc:,.0f} Cr is below your ₹{MIN_MCAP_CR:,.0f} Cr rule: not tradable, shown for reference only."}
+    _small = _mc is not None and _mc < MIN_MCAP_CR
+    _below = {"signal": "BELOW_MCAP", "stage": None, "belowMcap": True,
+              "why": f"Market cap ₹{_mc:,.0f} Cr is below your ₹{MIN_MCAP_CR:,.0f} Cr rule: not tradable, shown for reference only."
+              if _small else ""}
+    if _small and plan.get("signal") in pead_plus.LIVE_PLAN_SIGNALS:
+        plan = dict(_below)
     if not close_only_range(event):                                 # 2.9.52: entries logged from a wrong range
         event["tradeLog"] = pead_plus.drop_stale_trade_log(event.get("tradeLog"), result_low)
     event["tradeLog"] = pead_plus.update_trade_log(event.get("tradeLog"), plan, last_price, now_ist().date())
@@ -7369,6 +7372,8 @@ def build_plus(store: EventStore, event: dict[str, Any], *, released: bool, resu
     if not plan.get("notTrading") and not close_only_range(event):
         plan = pead_plus.hold_triggered_entry(plan, event.get("tradeLog"), last_price, px,
                                               event.get("concall"), now_ist().date())
+    if _small and plan.get("signal") in pead_plus.LIVE_PLAN_SIGNALS:   # 2.9.82: an entry logged before 2.9.81 is not held either
+        plan = dict(_below)
     key = sector_key(sec)
     # 2.7.0 earnings acceleration: this quarter's YoY vs last quarter's YoY.
     prev_rev_yoy = store.value(event, "prev_q_revenue_yoy_pct")

@@ -564,6 +564,9 @@ Engine 2.9.59 (owner request, 23 Nov 2026): Upstox live prices
 2.9.79 (owner: 'add last 3 session scan results', 23 Nov 2026)
 - darvas_radar keeps hitDays [{date, close, changePct, volX}] for each hit; darvas.json 'sessions' = the last 8 session dates. The Darvas tab opens with 'Screener results, last 3 sessions': one list per session (newest open) of the stocks that passed the 4% screen at that close, with that day's move and volume and their signal now. DARVAS_REV 2.9.79 re-runs the scan once. Tests: DarvasSessionTests.
 
+2.9.82 (fix, 25 Nov 2026)
+- 2.9.81 left 7 small caps (DCI among them) on ENTRY_TRIGGERED: hold_triggered_entry re-held entries logged before 2.9.81. The BELOW_MCAP override now also runs after it.
+
 2.9.81 (owner rule enforced, 25 Nov 2026)
 - Owner: "How the hell DCI is been suggested, 600 cr company". The plan could show ENTRY_* signals, a trigger and a stop for stocks under the ₹1,000 Cr minimum (DCI ₹608 Cr showed "Breakout entry triggered" on the Screener though graded C). Now any live plan signal on a stock with known market cap below MIN_MCAP_CR becomes BELOW_MCAP ("Below ₹1,000 Cr: not tradable"), with no entry, stop or trade-log entry. Such stocks stay visible for reference (Radar's below-minimum list, Screener) but never as a setup; the Screener's "Setup alive" filter leaves them out.
 
