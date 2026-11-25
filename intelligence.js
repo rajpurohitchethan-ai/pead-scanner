@@ -75,7 +75,7 @@
     ENTRY_BREAKOUT: ['Breakout entry triggered', 'go'], ENTRY_TRIGGERED: ['In trade: entry triggered', 'go'], NEAR_ENTRY: ['Near entry', 'go'],
     PULLBACK_ZONE: ['In pullback zone', 'go'], WATCH: ['Watching the base', 'watch'],
     EXTENDED: ['Extended, wait for pullback', 'watch'], RISK_TOO_WIDE: ['Stop too wide', 'watch'],
-    WAIT_CONCALL: ['Waiting for concall', 'watch'],
+    WAIT_CONCALL: ['Waiting for concall', 'watch'], BELOW_MCAP: ['Below ₹1,000 Cr: not tradable', 'no'],
     NO_ENTRY: ['No entry', 'no'], DATA_PENDING: ['Data pending', 'pending'],
     WAIT_REACTION: ['Awaiting reaction session', 'pending'], WAIT_RESULT: ['Awaiting result', 'pending'],
   };
@@ -487,7 +487,7 @@
 
   // 2.9.9: Radar = reaction done, setup still alive, screener watching for an entry.
   const RADAR = { ENTRY_EARLY: 0, ENTRY_PULLBACK: 0, ENTRY_BREAKOUT: 0, ENTRY_TRIGGERED: 1, NEAR_ENTRY: 1, PULLBACK_ZONE: 2, WATCH: 3,
-    RISK_TOO_WIDE: 4, EXTENDED: 5, WAIT_CONCALL: 6 };
+    RISK_TOO_WIDE: 4, EXTENDED: 5, WAIT_CONCALL: 6, BELOW_MCAP: 7 };
   // 2.9.14: setups below the ₹1,000 Cr minimum (or with unknown market cap) are
   // listed separately, labelled, so a live setup is never silently hidden; they
   // still do not qualify as trade candidates.
@@ -509,7 +509,7 @@
   // 2.9.49: Screener (owner request: "one page, easy to access, like a stock screener"). One sortable
   // table of every liquid declared result with quick filters. Display only: same data as the Radar.
   const SCR_FILTERS = [
-    ['alive', 'Setup alive', it => (P(it).plan?.signal in RADAR) && !px(it).base_broken],
+    ['alive', 'Setup alive', it => (P(it).plan?.signal in RADAR) && P(it).plan?.signal !== 'BELOW_MCAP' && !px(it).base_broken],
     ['ab', 'Grade A or B', it => ['A', 'B'].includes(grade(it).tier)],
     ['entry', 'Entry now', it => /^ENTRY_(EARLY|PULLBACK|BREAKOUT)$/.test(P(it).plan?.signal || '')],
     ['near', 'Near entry', it => ['NEAR_ENTRY', 'PULLBACK_ZONE'].includes(P(it).plan?.signal)],
@@ -1148,7 +1148,7 @@
   }
 
   // ---------- header / chips ----------
-  const PAGE_VERSION = '2.9.80';   // must match the engine version (install check)
+  const PAGE_VERSION = '2.9.81';   // must match the engine version (install check)
   function installBanner() {
     const d = S.data || {}, ic = (d.health || {}).installCheck || {};
     const engine = ic.engine || (String(d.version || '').match(/(\d+\.\d+\.\d+)\s*$/) || [])[1];
