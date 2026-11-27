@@ -4654,3 +4654,49 @@ class DarvasSessionTests(unittest.TestCase):
         self.assertEqual(hd["date"], dates[-1])
         self.assertAlmostEqual(hd["changePct"], 5.0, places=1)
         self.assertAlmostEqual(hd["volX"], 400000 / 150000, places=2)
+
+
+class NseLibraryPinTests(unittest.TestCase):
+    """2.9.83 (27 Nov 2026): httpx 0.29 was released; scan.yml installed
+    "httpx[http2]" (latest) next to "nse[server]". nse 5.2 needs httpx~=0.28.1 and
+    has no "server" extra, so pip backtracked to nse 1.1.0 (2023), which has no
+    financial_results / lookup / board_meetings. From 26 Nov 22:16 IST every NSE
+    call failed (NSE_PRICE 0 ok / 417 failed, NSE_INDEX 0 / 56, nseUpcoming 0)
+    and the self-check only showed a WARN about NSE being 'switched off'."""
+
+    def test_workflow_pins_a_compatible_nse_and_httpx(self):
+        import re
+        wf = (Path(__file__).resolve().parents[1] / ".github/workflows/scan.yml").read_text(encoding="utf-8")
+        line = next(l for l in wf.splitlines() if "pip install" in l and "nse" in l)
+        self.assertNotIn("nse[server]", line)
+        self.assertRegex(line, r'"nse(\[http2\])?(~=|==|>=)5\.')
+        m = re.search(r'"httpx\[http2\]([^"]*)"', line)
+        self.assertTrue(m and m.group(1).startswith(("~=0.28", "==0.28", "<0.29")), line)
+
+    def test_library_check_names_missing_methods(self):
+        class Old:          # nse 1.1.0
+            def announcements(self): ...
+            def exit(self): ...
+        chk = p.nse_library_check(Old, version="1.1.0")
+        self.assertFalse(chk["ok"])
+        self.assertIn("financial_results", chk["missing"])
+        self.assertIn("lookup", chk["missing"])
+
+        class New:
+            pass
+        for m in p.NSE_REQUIRED_METHODS:
+            setattr(New, m, lambda self: None)
+        self.assertTrue(p.nse_library_check(New, version="5.2.0")["ok"])
+        self.assertFalse(p.nse_library_check(None, version=None)["ok"])
+
+    def test_self_audit_fails_a_broken_nse_library(self):
+        import pead_plus
+        health = {"installCheck": {"ok": True, "nseLibrary": {"ok": False, "version": "1.1.0",
+                                                              "missing": ["financial_results", "lookup"]}}}
+        out = pead_plus.self_audit([], {"asOf": "2026-11-27"}, health, date(2026, 11, 27))
+        chk = next(c for c in out["checks"] if c["check"].startswith("NSE library"))
+        self.assertEqual(chk["status"], "FAIL")
+        self.assertIn("1.1.0", chk["examples"][0])
+        health["installCheck"]["nseLibrary"] = {"ok": True, "version": "5.2.0", "missing": []}
+        out = pead_plus.self_audit([], {"asOf": "2026-11-27"}, health, date(2026, 11, 27))
+        self.assertEqual(next(c for c in out["checks"] if c["check"].startswith("NSE library"))["status"], "OK")

@@ -60,7 +60,9 @@ jobs:
       - name: Install PEAD v2 dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --upgrade pandas yfinance requests "httpx[http2]" h2 "nse[server]" bse
+          # 2.9.83: nse 5.2 needs httpx~=0.28.1 and has no "server" extra; an unpinned
+          # httpx 0.29 made pip fall back to nse 1.1.0 and every NSE call failed.
+          python -m pip install --upgrade pandas yfinance requests "httpx[http2]~=0.28.1" h2 "nse[http2]~=5.2" bse
 
       - name: Validate engine
         run: |

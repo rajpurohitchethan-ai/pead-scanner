@@ -66,6 +66,28 @@ try:
 except Exception:  # pragma: no cover
     BSE = None
 
+# 2.9.83: methods of the nse library the engine calls. An incompatible pin let
+# pip fall back to nse 1.1.0 (no financial_results / lookup / board_meetings) and
+# every NSE call failed for a day while the self-check only WARNed.
+NSE_REQUIRED_METHODS = ("financial_results", "announcements", "board_meetings",
+                        "lookup", "results_comparison", "exit")
+
+
+def nse_library_check(cls: Any = None, version: str | None = None) -> dict[str, Any]:
+    """{"ok", "version", "missing"} for the installed nse package (2.9.83)."""
+    if cls is None:
+        return {"ok": False, "version": version, "missing": ["nse package not importable"]}
+    missing = [m for m in NSE_REQUIRED_METHODS if not callable(getattr(cls, m, None))]
+    return {"ok": not missing, "version": version, "missing": missing}
+
+
+def _nse_version() -> str | None:
+    try:
+        from importlib.metadata import version as _v
+        return _v("nse")
+    except Exception:
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -87,7 +109,7 @@ SYMBOL_MASTER_PATH = MASTER_DIR / "symbols.json"
 V1_MIGRATION_MARKER_PATH = MASTER_DIR / "v1_migration_complete.json"
 
 SCHEMA_VERSION = "pead-event-v2.1"
-ENGINE_VERSION = "2.9.82"
+ENGINE_VERSION = "2.9.83"
 
 MIN_MCAP_CR = float(os.getenv("MIN_MCAP_CR", "1000"))
 DISCOVERY_LOOKBACK_DAYS = int(os.getenv("DISCOVERY_LOOKBACK_DAYS", "75"))
@@ -9528,7 +9550,8 @@ def run(*, skip_network: bool = False, force_publish: bool = False, approved_sig
     # Install check (2.6.0): every file must come from the same release.
     plus_v = getattr(pead_plus, "MODULE_VERSION", "missing")
     health["installCheck"] = {"engine": ENGINE_VERSION, "pead_plus": plus_v,
-                              "ok": plus_v == ENGINE_VERSION}
+                              "ok": plus_v == ENGINE_VERSION,
+                              "nseLibrary": nse_library_check(NSE, _nse_version())}   # 2.9.83
     health["integrity"] = {
         "signature": signature,
         "checked": integrity_stats["checked"],

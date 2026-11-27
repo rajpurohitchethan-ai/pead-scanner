@@ -42,7 +42,7 @@ NEAR_TRIGGER_PCT = 3.0
 EXTENDED_ABOVE_EMA21_PCT = 15.0
 MAX_RISK_PCT = 10.0
 SL_BUFFER_PCT = 1.0            # SL sits 1% under the result-day low / base
-MODULE_VERSION = "2.9.82"
+MODULE_VERSION = "2.9.83"
 STARTER_FRACTION = 1 / 3       # position size taken before the concall
 
 
@@ -1208,6 +1208,11 @@ def self_audit(items: list[dict[str, Any]], regime: dict[str, Any], health: dict
 
     ic = health.get("installCheck") or {}
     add("All files from the same release", [] if ic.get("ok", True) else [f"pead_plus {ic.get('pead_plus')} vs engine {ic.get('engine')}"], fail=True)
+    # 2.9.83: an incompatible install (nse 1.1.0) broke every NSE call for a day.
+    nl = ic.get("nseLibrary") or {}
+    add("NSE library installed with the methods the engine uses",
+        [] if nl.get("ok", True) else [f"nse {nl.get('version')} lacks {', '.join(nl.get('missing') or [])}"],
+        fail=True, note="Check the pip pins in scan.yml (nse / httpx).")
     # 2.9.4: a run that ran out of time or lost a source still publishes; say so.
     rg = health.get("runGuard") or {}
     guard_bad = ([f"stopped after {rg.get('budgetMin')} min"] if rg.get("budgetHit") else []) + \
